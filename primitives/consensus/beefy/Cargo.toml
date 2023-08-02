@@ -27,7 +27,7 @@ lazy_static = "1.4.0"
 
 [dev-dependencies]
 array-bytes = "6.1"
-sp-keystore = { version = "0.27.0", path = "../../keystore" }
+w3f-bls = { version = "0.1.3", features = ["std"]} 
 
 [features]
 default = ["std"]
@@ -42,7 +42,6 @@ std = [
 	"sp-mmr-primitives/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"sp-keystore/std"
 ]
 
 # Serde support without relying on std features.
@@ -52,4 +51,11 @@ serde = [
 	"sp-application-crypto/serde",
 	"sp-core/serde",
 	"sp-runtime/serde",
+]
+
+# This feature adds BLS crypto primitives. It should not be used in production since
+# the BLS implementation and interface may still be subject to significant change.
+bls-experimental = [
+ 	 "sp-core/bls-experimental",
+ 	 "sp-application-crypto/bls-experimental",	 
 ]

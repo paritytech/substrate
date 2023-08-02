@@ -92,3 +92,9 @@ disable_allocator = []
 #          host function to be supported by the host. Do *not* enable it for your
 #          runtime without first upgrading your host client!
 improved_panic_error_reporting = []
+
+# This feature adds BLS crypto primitives. It should not be used in production since
+# the BLS implementation and interface may still be subject to significant change.
+bls-experimental = [
+	 "sp-keystore/bls-experimental",
+]

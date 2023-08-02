@@ -97,7 +97,7 @@ pub mod test_utils {
 		ContractInfoOf, Nonce, PristineCode,
 	};
 	use codec::{Encode, MaxEncodedLen};
-	use frame_support::traits::fungible::{Inspect, InspectHold, Mutate};
+	use frame_support::traits::fungible::{InspectHold, Mutate};
 
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
 		let nonce = <Nonce<Test>>::mutate(|counter| {
@@ -113,7 +113,7 @@ pub mod test_utils {
 		let _ = <Test as Config>::Currency::set_balance(who, amount);
 	}
 	pub fn get_balance(who: &AccountIdOf<Test>) -> u64 {
-		<Test as Config>::Currency::balance(who)
+		<Test as Config>::Currency::free_balance(who)
 	}
 	pub fn get_balance_on_hold(
 		reason: &<Test as Config>::RuntimeHoldReason,
