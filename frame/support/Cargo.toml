@@ -73,7 +73,9 @@ std = [
 	"frame-support-procedural/std",
 	"log/std",
 	"environmental/std",
-	"sp-genesis-builder/std"
+	"sp-genesis-builder/std",
+	"frame-system/std",
+	"sp-debug-derive/std"
 ]
 runtime-benchmarks = [
 	"frame-system/runtime-benchmarks",
@@ -81,7 +83,9 @@ runtime-benchmarks = [
 	"sp-staking/runtime-benchmarks"
 ]
 try-runtime = [
-	"sp-debug-derive/force-debug"
+	"sp-debug-derive/force-debug",
+	"frame-system/try-runtime",
+	"sp-runtime/try-runtime"
 ]
 experimental = []
 # By default some types have documentation, `no-metadata-docs` allows to reduce the documentation

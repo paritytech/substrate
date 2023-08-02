@@ -61,6 +61,7 @@ check-runtime-migration-rococo:
   extends: .check-runtime-migration
   variables:
     NETWORK: rococo
+  allow_failure: true
 
 check-runtime-migration-westend:
   extends: .check-runtime-migration

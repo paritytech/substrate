@@ -43,5 +43,16 @@ std = [
 	"sp-core/std",
 	"pallet-asset-conversion/std",
 	"pallet-transaction-payment/std",
+	"pallet-assets/std",
+	"pallet-balances/std",
+	"sp-storage/std"
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-asset-conversion/try-runtime",
+	"pallet-assets/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-transaction-payment/try-runtime",
+	"sp-runtime/try-runtime"
+]
