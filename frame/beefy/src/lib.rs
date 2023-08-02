@@ -113,7 +113,7 @@ pub mod pallet {
 		type EquivocationReportSystem: OffenceReportSystem<
 			Option<Self::AccountId>,
 			// TODO: make below an enum that takes either `EquivocationProof` or
-			// `InvalidForkVoteProof`
+			// `InvalidForkCommitmentProof`
 			EquivocationEvidenceFor<Self>,
 		>;
 	}

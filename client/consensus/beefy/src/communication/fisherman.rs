@@ -238,7 +238,7 @@ where
 		Ok(())
 	}
 
-	/// Check `proof` for contained finalized block against expected payload.
+	/// Check `proof` for contained block against expected payload.
 	///
 	/// Note: this fn expects block referenced in `proof` to be finalized.
 	fn check_proof(&self, proof: BeefyVersionedFinalityProof<B>) -> Result<(), Error> {

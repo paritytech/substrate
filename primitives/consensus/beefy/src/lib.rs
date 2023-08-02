@@ -355,7 +355,8 @@ where
 {
 	let InvalidForkCommitmentProof { commitment, signatories, expected_payload } = proof;
 
-	// check that `payload` on the `vote` is different that the `expected_payload` (checked first since cheap failfast).
+	// check that `payload` on the `vote` is different that the `expected_payload` (checked first
+	// since cheap failfast).
 	if &commitment.payload != expected_payload {
 		// check check each signatory's signature on the commitment.
 		// if any are invalid, equivocation report is invalid
@@ -405,7 +406,8 @@ impl OpaqueKeyOwnershipProof {
 }
 
 sp_api::decl_runtime_apis! {
-	/// API necessary for BEEFY voters.
+	/// API necessary for BEEFY voters. Due to the significant conceptual
+	/// overlap, in large part, this is lifted from the GRANDPA API.
 	#[api_version(3)]
 	pub trait BeefyApi<AuthorityId> where
 		AuthorityId : Codec + RuntimeAppPublic,
