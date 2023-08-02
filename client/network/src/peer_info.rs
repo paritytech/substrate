@@ -43,11 +43,13 @@ use libp2p::{
 	Multiaddr, PeerId,
 };
 use log::{debug, error, trace};
+use parking_lot::Mutex;
 use smallvec::SmallVec;
 
 use std::{
-	collections::hash_map::Entry,
+	collections::{hash_map::Entry, HashSet},
 	pin::Pin,
+	sync::Arc,
 	task::{Context, Poll},
 	time::{Duration, Instant},
 };
@@ -67,6 +69,8 @@ pub struct PeerInfoBehaviour {
 	nodes_info: FnvHashMap<PeerId, NodeInfo>,
 	/// Interval at which we perform garbage collection in `nodes_info`.
 	garbage_collect: Pin<Box<dyn Stream<Item = ()> + Send>>,
+	/// Record keeping of external addresses. Data is queried by the `NetworkService`.
+	external_addresses: ExternalAddresses,
 }
 
 /// Information about a node we're connected to.
@@ -91,9 +95,31 @@ impl NodeInfo {
 	}
 }
 
+/// Utility struct for tracking external addresses. The data is shared with the `NetworkService`.
+#[derive(Debug, Clone, Default)]
+pub struct ExternalAddresses {
+	addresses: Arc<Mutex<HashSet<Multiaddr>>>,
+}
+
+impl ExternalAddresses {
+	/// Add an external address.
+	pub fn add(&mut self, addr: Multiaddr) {
+		self.addresses.lock().insert(addr);
+	}
+
+	/// Remove an external address.
+	pub fn remove(&mut self, addr: &Multiaddr) {
+		self.addresses.lock().remove(addr);
+	}
+}
+
 impl PeerInfoBehaviour {
 	/// Builds a new `PeerInfoBehaviour`.
-	pub fn new(user_agent: String, local_public_key: PublicKey) -> Self {
+	pub fn new(
+		user_agent: String,
+		local_public_key: PublicKey,
+		external_addresses: Arc<Mutex<HashSet<Multiaddr>>>,
+	) -> Self {
 		let identify = {
 			let cfg = IdentifyConfig::new("/substrate/1.0".to_string(), local_public_key)
 				.with_agent_version(user_agent)
@@ -107,6 +133,7 @@ impl PeerInfoBehaviour {
 			identify,
 			nodes_info: FnvHashMap::default(),
 			garbage_collect: Box::pin(interval(GARBAGE_COLLECT_INTERVAL)),
+			external_addresses: ExternalAddresses { addresses: external_addresses },
 		}
 	}
 
@@ -367,6 +394,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 			FromSwarm::ExpiredListenAddr(e) => {
 				self.ping.on_swarm_event(FromSwarm::ExpiredListenAddr(e));
 				self.identify.on_swarm_event(FromSwarm::ExpiredListenAddr(e));
+				self.external_addresses.remove(e.addr);
 			},
 			FromSwarm::NewExternalAddrCandidate(e) => {
 				self.ping.on_swarm_event(FromSwarm::NewExternalAddrCandidate(e));
@@ -375,6 +403,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 			FromSwarm::ExternalAddrConfirmed(e) => {
 				self.ping.on_swarm_event(FromSwarm::ExternalAddrConfirmed(e));
 				self.identify.on_swarm_event(FromSwarm::ExternalAddrConfirmed(e));
+				self.external_addresses.add(e.addr.clone());
 			},
 			FromSwarm::AddressChange(e @ AddressChange { peer_id, old, new, .. }) => {
 				self.ping.on_swarm_event(FromSwarm::AddressChange(e));

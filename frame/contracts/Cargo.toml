@@ -82,11 +82,34 @@ std = [
 	"log/std",
 	"rand/std",
 	"environmental/std",
+	"pallet-balances/std",
+	"pallet-insecure-randomness-collective-flip/std",
+	"pallet-proxy/std",
+	"pallet-timestamp/std",
+	"pallet-utility/std",
+	"sp-api/std",
+	"sp-keystore/std"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"rand",
 	"rand_pcg",
 	"wasm-instrument",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
+	"pallet-proxy/runtime-benchmarks",
+	"pallet-timestamp/runtime-benchmarks",
+	"pallet-utility/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks"
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-insecure-randomness-collective-flip/try-runtime",
+	"pallet-proxy/try-runtime",
+	"pallet-timestamp/try-runtime",
+	"pallet-utility/try-runtime",
+	"sp-runtime/try-runtime"
+]
