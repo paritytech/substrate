@@ -236,7 +236,7 @@ impl StakingInterface for StakingMock {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_era_stakers(
-		current_era: &EraIndex,
+		current_era: &sp_staking::EraIndex,
 		stash: &Self::AccountId,
 		exposures: Vec<(Self::AccountId, Self::Balance)>,
 	) {
@@ -244,7 +244,7 @@ impl StakingInterface for StakingMock {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_current_era(era: EraIndex) {
+	fn set_current_era(era: sp_staking::EraIndex) {
 		unreachable!();
 	}
 }
