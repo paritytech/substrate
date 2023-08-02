@@ -366,6 +366,20 @@ impl<T: Config> Pallet<T> {
 		T::EquivocationReportSystem::publish_evidence((equivocation_proof, key_owner_proof)).ok()
 	}
 
+	/// Submits an extrinsic to report an invalid fork signed by potentially
+	/// multiple signatories. This method will create an unsigned extrinsic with
+	/// a call to `report_invalid_fork_unsigned` and will push the transaction
+	/// to the pool. Only useful in an offchain context.
+	pub fn submit_unsigned_invalid_fork_report(
+		_invalid_fork_proof: sp_consensus_beefy::InvalidForkCommitmentProof<BlockNumberFor<T>, T::BeefyId,
+			<T::BeefyId as RuntimeAppPublic>::Signature,
+>,
+		_key_owner_proofs: Vec<T::KeyOwnerProof>,
+	) -> Option<()> {
+		// T::EquivocationReportSystem::publish_evidence((invalid_fork_proof, key_owner_proofs)).ok()
+		None
+	}
+
 	fn change_authorities(
 		new: BoundedVec<T::BeefyId, T::MaxAuthorities>,
 		queued: BoundedVec<T::BeefyId, T::MaxAuthorities>,

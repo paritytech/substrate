@@ -389,7 +389,7 @@ impl<AuthorityId> OnNewValidatorSet<AuthorityId> for () {
 /// the runtime API boundary this type is unknown and as such we keep this
 /// opaque representation, implementors of the runtime API will have to make
 /// sure that all usages of `OpaqueKeyOwnershipProof` refer to the same type.
-#[derive(Decode, Encode, PartialEq, TypeInfo)]
+#[derive(Decode, Encode, PartialEq, TypeInfo, Clone)]
 pub struct OpaqueKeyOwnershipProof(Vec<u8>);
 impl OpaqueKeyOwnershipProof {
 	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded
