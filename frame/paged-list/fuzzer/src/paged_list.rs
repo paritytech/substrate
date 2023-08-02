@@ -37,7 +37,7 @@ type Meta = MetaOf<Test, ()>;
 
 fn main() {
 	loop {
-		fuzz!(|data: (Vec<Op>, u8)| {
+		fuzz!(|data: (Vec<Op>, u16)| {
 			drain_append_work(data.0, data.1);
 		});
 	}
@@ -46,13 +46,13 @@ fn main() {
 /// Appends and drains random number of elements in random order and checks storage invariants.
 ///
 /// It also changes the maximal number of elements per page dynamically, hence the `page_size`.
-fn drain_append_work(ops: Vec<Op>, page_size: u8) {
+fn drain_append_work(ops: Vec<Op>, page_size: u16) {
 	if page_size == 0 {
 		return
 	}
 
 	TestExternalities::default().execute_with(|| {
-		ValuesPerNewPage::set(&page_size.into());
+		HeapSize::set(&(page_size as u32 * 4)); // `* 4` to convert from items to byte size.
 		let _g = StorageNoopGuard::default();
 		let mut total: i64 = 0;
 
@@ -70,6 +70,7 @@ fn drain_append_work(ops: Vec<Op>, page_size: u8) {
 		}
 
 		assert_eq!(List::drain().count(), total as usize);
+		assert_eq!(List::len(), total as u64);
 		// `StorageNoopGuard` checks that there is no storage leaked.
 	});
 }

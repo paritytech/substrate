@@ -52,8 +52,8 @@ pub type ValueIndex = u32;
 /// The metadata of this struct is stored in [`StoragePagedListMeta`]. The data is stored in
 /// [`Page`]s.
 ///
-/// Each [`Page`] holds at most `ValuesPerNewPage` values in its `values` vector. The last page is
-/// the only one that could have less than `ValuesPerNewPage` values.  
+/// Each [`Page`] holds at most `HeapSize` values in its `values` vector. The last page is
+/// the only one that could have less than `HeapSize` values.  
 /// **Iteration** happens by starting
 /// at [`first_page`][StoragePagedListMeta::first_page]/
 /// [`first_value_offset`][StoragePagedListMeta::first_value_offset] and incrementing these indices
@@ -62,7 +62,7 @@ pub type ValueIndex = u32;
 /// reduces the number of storage `read` calls on the overlay. **Appending** to the list happens by
 /// appending to the last page by utilizing [`sp_io::storage::append`]. It allows to directly extend
 /// the elements of `values` vector of the page without loading the whole vector from storage. A new
-/// page is instantiated once [`Page::next`] overflows `ValuesPerNewPage`. Its vector will also be
+/// page is instantiated once [`Page::next`] overflows `HeapSize`. Its vector will also be
 /// created through [`sp_io::storage::append`]. **Draining** advances the internal indices identical
 /// to Iteration. It additionally persists the increments to storage and thereby 'drains' elements.
 /// Completely drained pages are deleted from storage.
@@ -77,8 +77,8 @@ pub type ValueIndex = u32;
 ///   asymptotic case when using an `Appender`, and worse in all. For example when appending just
 ///   one value.
 /// - It does incur a read overhead on the host side as compared to a `StorageValue<Vec<V>>`.
-pub struct StoragePagedList<Prefix, Value, ValuesPerNewPage> {
-	_phantom: PhantomData<(Prefix, Value, ValuesPerNewPage)>,
+pub struct StoragePagedList<Prefix, Value, HeapSize> {
+	_phantom: PhantomData<(Prefix, Value, HeapSize)>,
 }
 
 /// The state of a [`StoragePagedList`].
@@ -88,7 +88,7 @@ pub struct StoragePagedList<Prefix, Value, ValuesPerNewPage> {
 	Encode, Decode, CloneNoBound, PartialEqNoBound, EqNoBound, DebugNoBound, DefaultNoBound,
 )]
 // todo ignore scale bounds
-pub struct StoragePagedListMeta<Prefix, Value, ValuesPerNewPage> {
+pub struct StoragePagedListMeta<Prefix, Value, HeapSize> {
 	/// The first page that could contain a value.
 	///
 	/// Can be >0 when pages were deleted.
@@ -106,17 +106,19 @@ pub struct StoragePagedListMeta<Prefix, Value, ValuesPerNewPage> {
 	///
 	/// Appending starts at this index. If the page does not hold a value at this index, then the
 	/// whole list is empty. The only case where this can happen is when both are `0`.
-	pub last_page_len: ValueIndex,
+	pub last_page_byte_offset: u32,
 
-	_phantom: PhantomData<(Prefix, Value, ValuesPerNewPage)>,
+	pub total_items: u64,
+
+	_phantom: PhantomData<(Prefix, Value, HeapSize)>,
 }
 
-impl<Prefix, Value, ValuesPerNewPage> frame_support::storage::StorageAppender<Value>
-	for StoragePagedListMeta<Prefix, Value, ValuesPerNewPage>
+impl<Prefix, Value, HeapSize> frame_support::storage::StorageAppender<Value>
+	for StoragePagedListMeta<Prefix, Value, HeapSize>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
-	ValuesPerNewPage: Get<u32>,
+	HeapSize: Get<u32>,
 {
 	fn append<EncodeLikeValue>(&mut self, item: EncodeLikeValue)
 	where
@@ -126,11 +128,11 @@ where
 	}
 }
 
-impl<Prefix, Value, ValuesPerNewPage> StoragePagedListMeta<Prefix, Value, ValuesPerNewPage>
+impl<Prefix, Value, HeapSize> StoragePagedListMeta<Prefix, Value, HeapSize>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
-	ValuesPerNewPage: Get<u32>,
+	HeapSize: Get<u32>,
 {
 	pub fn from_storage() -> Option<Self> {
 		let key = Self::key();
@@ -146,13 +148,14 @@ where
 	where
 		EncodeLikeValue: EncodeLike<Value>,
 	{
-		// Note: we use >= here in case someone decreased it in a runtime upgrade.
-		if self.last_page_len >= ValuesPerNewPage::get() {
+		let enc_size = item.encoded_size() as u32;
+		if (self.last_page_byte_offset.saturating_add(enc_size)) > HeapSize::get() {
 			self.last_page.saturating_inc();
-			self.last_page_len = 0;
+			self.last_page_byte_offset = 0;
 		}
 		let key = page_key::<Prefix>(self.last_page);
-		self.last_page_len.saturating_inc();
+		self.last_page_byte_offset.saturating_accrue(enc_size);
+		self.total_items.saturating_inc();
 		sp_io::storage::append(&key, item.encode());
 		self.store();
 	}
@@ -237,7 +240,7 @@ impl<V> Iterator for Page<V> {
 /// Iterates over values of a [`StoragePagedList`].
 ///
 /// Can optionally drain the iterated values.
-pub struct StoragePagedListIterator<Prefix, Value, ValuesPerNewPage> {
+pub struct StoragePagedListIterator<Prefix, Value, HeapSize> {
 	// Design: we put the Page into the iterator to have fewer storage look-ups. Yes, these
 	// look-ups would be cached anyway, but bugging the overlay on each `.next` call still seems
 	// like a poor trade-off than caching it in the iterator directly. Iterating and modifying is
@@ -245,31 +248,27 @@ pub struct StoragePagedListIterator<Prefix, Value, ValuesPerNewPage> {
 	// the iterator did not find any data upon setup or ran out of pages.
 	page: Option<Page<Value>>,
 	drain: bool,
-	meta: StoragePagedListMeta<Prefix, Value, ValuesPerNewPage>,
+	meta: StoragePagedListMeta<Prefix, Value, HeapSize>,
 }
 
-impl<Prefix, Value, ValuesPerNewPage> StoragePagedListIterator<Prefix, Value, ValuesPerNewPage>
+impl<Prefix, Value, HeapSize> StoragePagedListIterator<Prefix, Value, HeapSize>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
-	ValuesPerNewPage: Get<u32>,
+	HeapSize: Get<u32>,
 {
 	/// Read self from the storage.
-	pub fn from_meta(
-		meta: StoragePagedListMeta<Prefix, Value, ValuesPerNewPage>,
-		drain: bool,
-	) -> Self {
+	pub fn from_meta(meta: StoragePagedListMeta<Prefix, Value, HeapSize>, drain: bool) -> Self {
 		let page = Page::<Value>::from_storage::<Prefix>(meta.first_page, meta.first_value_offset);
 		Self { page, drain, meta }
 	}
 }
 
-impl<Prefix, Value, ValuesPerNewPage> Iterator
-	for StoragePagedListIterator<Prefix, Value, ValuesPerNewPage>
+impl<Prefix, Value, HeapSize> Iterator for StoragePagedListIterator<Prefix, Value, HeapSize>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
-	ValuesPerNewPage: Get<u32>,
+	HeapSize: Get<u32>,
 {
 	type Item = Value;
 
@@ -290,6 +289,7 @@ where
 				page.delete::<Prefix>();
 				self.meta.first_value_offset = 0;
 				self.meta.first_page.saturating_inc();
+				self.meta.total_items.saturating_dec();
 			}
 
 			debug_assert!(!self.drain || self.meta.first_page == page.index + 1);
@@ -304,6 +304,7 @@ where
 		} else {
 			if self.drain {
 				self.meta.first_value_offset.saturating_inc();
+				self.meta.total_items.saturating_dec();
 				self.meta.store();
 			}
 		}
@@ -311,15 +312,19 @@ where
 	}
 }
 
-impl<Prefix, Value, ValuesPerNewPage> frame_support::storage::StorageList<Value>
-	for StoragePagedList<Prefix, Value, ValuesPerNewPage>
+impl<Prefix, Value, HeapSize> frame_support::storage::StorageList<Value>
+	for StoragePagedList<Prefix, Value, HeapSize>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
-	ValuesPerNewPage: Get<u32>,
+	HeapSize: Get<u32>,
 {
-	type Iterator = StoragePagedListIterator<Prefix, Value, ValuesPerNewPage>;
-	type Appender = StoragePagedListMeta<Prefix, Value, ValuesPerNewPage>;
+	type Iterator = StoragePagedListIterator<Prefix, Value, HeapSize>;
+	type Appender = StoragePagedListMeta<Prefix, Value, HeapSize>;
+
+	fn len() -> u64 {
+		Self::read_meta().total_items
+	}
 
 	fn iter() -> Self::Iterator {
 		StoragePagedListIterator::from_meta(Self::read_meta(), false)
@@ -334,13 +339,13 @@ where
 	}
 }
 
-impl<Prefix, Value, ValuesPerNewPage> StoragePagedList<Prefix, Value, ValuesPerNewPage>
+impl<Prefix, Value, HeapSize> StoragePagedList<Prefix, Value, HeapSize>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
-	ValuesPerNewPage: Get<u32>,
+	HeapSize: Get<u32>,
 {
-	fn read_meta() -> StoragePagedListMeta<Prefix, Value, ValuesPerNewPage> {
+	fn read_meta() -> StoragePagedListMeta<Prefix, Value, HeapSize> {
 		// Use default here to not require a setup migration.
 		StoragePagedListMeta::from_storage().unwrap_or_default()
 	}
@@ -348,7 +353,7 @@ where
 	/// Provides a fast append iterator.
 	///
 	/// The list should not be modified while appending. Also don't call it recursively.
-	fn appender() -> StoragePagedListMeta<Prefix, Value, ValuesPerNewPage> {
+	fn appender() -> StoragePagedListMeta<Prefix, Value, HeapSize> {
 		Self::read_meta()
 	}
 
@@ -386,12 +391,12 @@ where
 	}
 }
 
-impl<Prefix, Value, ValuesPerNewPage> frame_support::storage::StoragePrefixedContainer
-	for StoragePagedList<Prefix, Value, ValuesPerNewPage>
+impl<Prefix, Value, HeapSize> frame_support::storage::StoragePrefixedContainer
+	for StoragePagedList<Prefix, Value, HeapSize>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
-	ValuesPerNewPage: Get<u32>,
+	HeapSize: Get<u32>,
 {
 	fn module_prefix() -> &'static [u8] {
 		StoragePagedListPrefix::<Prefix>::module_prefix()
@@ -416,7 +421,7 @@ pub(crate) mod mock {
 	pub use sp_io::{hashing::twox_128, TestExternalities};
 
 	parameter_types! {
-		pub const ValuesPerNewPage: u32 = 5;
+		pub const HeapSize: u32 = 20;
 		pub const MaxPages: Option<u32> = Some(20);
 	}
 
@@ -428,7 +433,7 @@ pub(crate) mod mock {
 		const STORAGE_PREFIX: &'static str = "foo";
 	}
 
-	pub type List = StoragePagedList<Prefix, u32, ValuesPerNewPage>;
+	pub type List = StoragePagedList<Prefix, u32, HeapSize>;
 }
 
 #[cfg(test)]
@@ -457,7 +462,7 @@ mod tests {
 			// all gone
 			assert_eq!(List::as_vec(), Vec::<u32>::new());
 			// Need to delete the metadata manually.
-			StoragePagedListMeta::<Prefix, u32, ValuesPerNewPage>::delete();
+			StoragePagedListMeta::<Prefix, u32, HeapSize>::delete();
 		});
 	}
 
@@ -528,12 +533,12 @@ mod tests {
 			assert_eq!(as_vec.len(), 4, "Second page contains 4");
 
 			let meta = sp_io::storage::get(&meta_key::<Prefix>()).expect("Meta should be present");
-			let meta: StoragePagedListMeta<Prefix, u32, ValuesPerNewPage> =
+			let meta: StoragePagedListMeta<Prefix, u32, HeapSize> =
 				Decode::decode(&mut &meta[..]).unwrap();
 			assert_eq!(meta.first_page, 0);
 			assert_eq!(meta.first_value_offset, 0);
 			assert_eq!(meta.last_page, 1);
-			assert_eq!(meta.last_page_len, 4);
+			assert_eq!(meta.last_page_byte_offset, 16);
 
 			let page = Page::<u32>::from_storage::<Prefix>(0, 0).unwrap();
 			assert_eq!(page.index, 0);

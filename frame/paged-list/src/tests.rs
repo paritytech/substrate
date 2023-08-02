@@ -30,6 +30,7 @@ fn append_one_works() {
 		PagedList::append_one(1);
 
 		assert_eq!(PagedList::iter().collect::<Vec<_>>(), vec![1]);
+		assert_eq!(PagedList::len(), 1);
 	});
 }
 
@@ -40,6 +41,7 @@ fn append_many_works() {
 		PagedList::append_many(0..3);
 
 		assert_eq!(PagedList::iter().collect::<Vec<_>>(), vec![0, 1, 2]);
+		assert_eq!(PagedList::len(), 3);
 	});
 }
 
@@ -55,6 +57,7 @@ fn appender_works() {
 		appender.append_many(2..4);
 
 		assert_eq!(PagedList::iter().collect::<Vec<_>>(), vec![0, 1, 2, 3]);
+		assert_eq!(PagedList::len(), 4);
 	});
 }
 
@@ -68,6 +71,7 @@ fn iter_works() {
 		assert_eq!(iter.next(), Some(0));
 		assert_eq!(iter.next(), Some(1));
 		assert_eq!(iter.collect::<Vec<_>>(), (2..10).collect::<Vec<_>>());
+		assert_eq!(PagedList::len(), 10);
 	});
 }
 
@@ -78,8 +82,10 @@ fn drain_works() {
 		PagedList::append_many(0..3);
 		PagedList::drain().next();
 		assert_eq!(PagedList::iter().collect::<Vec<_>>(), vec![1, 2], "0 is drained");
+		assert_eq!(PagedList::len(), 2);
 		PagedList::drain().peekable().peek();
 		assert_eq!(PagedList::iter().collect::<Vec<_>>(), vec![2], "Peeking removed 1");
+		assert_eq!(PagedList::len(), 1);
 	});
 }
 

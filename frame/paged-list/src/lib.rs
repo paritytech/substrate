@@ -94,22 +94,23 @@ pub mod pallet {
 		/// Note that this does not retroactively affect already created pages. This value can be
 		/// changed at any time without requiring a runtime migration.
 		#[pallet::constant]
-		type ValuesPerNewPage: Get<u32>;
+		type HeapSize: Get<u32>;
 	}
 
 	/// A storage paged list akin to what the FRAME macros would generate.
 	// Note that FRAME does natively support paged lists in storage.
-	pub type List<T, I> = StoragePagedList<
-		ListPrefix<T, I>,
-		<T as Config<I>>::Value,
-		<T as Config<I>>::ValuesPerNewPage,
-	>;
+	pub type List<T, I> =
+		StoragePagedList<ListPrefix<T, I>, <T as Config<I>>::Value, <T as Config<I>>::HeapSize>;
 }
 
 // This exposes the list functionality to other pallets.
 impl<T: Config<I>, I: 'static> StorageList<T::Value> for Pallet<T, I> {
 	type Iterator = <List<T, I> as StorageList<T::Value>>::Iterator;
 	type Appender = <List<T, I> as StorageList<T::Value>>::Appender;
+
+	fn len() -> u64 {
+		List::<T, I>::len()
+	}
 
 	fn iter() -> Self::Iterator {
 		List::<T, I>::iter()

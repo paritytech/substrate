@@ -168,6 +168,8 @@ pub trait StorageList<V: FullCodec> {
 	/// Append iterator for fast append operations.
 	type Appender: StorageAppender<V>;
 
+	fn len() -> u64;
+
 	/// List the elements in append order.
 	fn iter() -> Self::Iterator;
 
