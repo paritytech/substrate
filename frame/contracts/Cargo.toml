@@ -110,10 +110,11 @@ try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"pallet-balances/try-runtime",
+	"pallet-contracts/try-runtime",
 	"pallet-insecure-randomness-collective-flip/try-runtime",
 	"pallet-proxy/try-runtime",
 	"pallet-timestamp/try-runtime",
 	"pallet-utility/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]
 unsafe-debug = []
