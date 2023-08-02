@@ -66,7 +66,6 @@ use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
-// #[cfg(feature = "genesis-builder")]
 use frame_support::genesis_builder_helper::{build_config, create_default_config};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{

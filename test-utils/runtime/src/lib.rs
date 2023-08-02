@@ -1338,7 +1338,6 @@ mod tests {
 			let mut t = BasicExternalities::new_empty();
 			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).unwrap();
 			let r = BuildResult::decode(&mut &r[..]).unwrap();
-			log::info!("result: {:#?}", r);
 			assert_eq!(r, Err(
 				sp_runtime::RuntimeString::Owned(
 					"Invalid JSON blob: unknown field `babex`, expected one of `system`, `babe`, `substrateTest`, `balances` at line 3 column 9".to_string(),

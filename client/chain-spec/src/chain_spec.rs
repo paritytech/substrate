@@ -70,7 +70,7 @@ impl<G> Clone for GenesisSource<G> {
 
 impl<G: RuntimeGenesis> GenesisSource<G> {
 	fn resolve(&self) -> Result<Genesis<G>, String> {
-		/// helper container for deserializeing genesis from the JSON file (ChainSpec JSON file is
+		/// helper container for deserializing genesis from the JSON file (ChainSpec JSON file is
 		/// also supported here)
 		#[derive(Serialize, Deserialize)]
 		struct GenesisContainer<G> {
@@ -189,7 +189,7 @@ impl From<sp_core::storage::Storage> for RawGenesis {
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 enum Genesis<G> {
-	/// [Deprecated] Contains the JSON representation of G (the natuve type represting the runtime
+	/// [Deprecated] Contains the JSON representation of G (the native type representing the runtime
 	/// GenesisConfig struct) (will be removed with `ChainSpec::from_genesis`).
 	Runtime(G),
 	/// The genesis storage as raw data.
@@ -378,7 +378,7 @@ impl<G, E> ChainSpecBuilder<G, E> {
 			client_spec,
 			genesis: GenesisSource::GenesisBuilderApi(
 				self.genesis_build_action
-					.expect("with_genesis_patch or with_no_genesis_defaults must be called."),
+					.expect("with_genesis_config_patch or with_genesis_config must be called."),
 			),
 			code: self.code.expect("with code must be called.").into(),
 		}

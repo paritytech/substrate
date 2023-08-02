@@ -88,10 +88,10 @@ impl<'a> GenesisConfigBuilderRuntimeCaller<'a> {
 			.call(&mut ext, "GenesisBuilder_build_config", &config.to_string().encode())
 			.map_err(|e| format!("wasm call error {e}"))?;
 
-		let build_result = BuildResult::decode(&mut &call_result[..])
-			.map_err(|e| format!("scale codec error: {e}"))?;
+		BuildResult::decode(&mut &call_result[..])
+			.map_err(|e| format!("scale codec error: {e}"))??;
 
-		Ok(build_result.map(|_| ext.into_storages())?)
+		Ok(ext.into_storages())
 	}
 
 	/// Patch default `GenesisConfig` using given JSON patch and store it in the storage.
