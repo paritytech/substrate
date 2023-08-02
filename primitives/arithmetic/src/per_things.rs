@@ -496,8 +496,7 @@ where
 	(x / maximum) * part_n + c
 }
 
-/// Wrapper to make all the default name safe. Checking if &denon is zero should cover denom_n
-/// and denom_upper
+/// Checked compute of the error due to integer division in the expression `x / denom * numer`.
 fn checked_rational_mul_correction<N, P>(
 	x: N,
 	numer: P::Inner,
@@ -1858,7 +1857,6 @@ macro_rules! implement_per_thing {
 					$name::from_percent(100).checked_div(&$name::from_percent(100)),
 					Some($name::from_percent(100))
 				);
-                /// Division by zero
                 assert_eq!(
                     $name::from_percent(0).checked_div(&$name::from_percent(0)),
                     None
