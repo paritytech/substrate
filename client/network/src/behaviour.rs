@@ -20,7 +20,7 @@ use crate::{
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	event::DhtEvent,
 	peer_info,
-	peerset::PeersetHandle,
+	peer_store::PeerStoreHandle,
 	protocol::{CustomMessageOutcome, NotificationsSink, Protocol},
 	request_responses::{self, IfDisconnected, ProtocolConfig, RequestFailure},
 	types::ProtocolName,
@@ -173,7 +173,7 @@ impl<B: BlockT> Behaviour<B> {
 		local_public_key: PublicKey,
 		disco_config: DiscoveryConfig,
 		request_response_protocols: Vec<ProtocolConfig>,
-		peerset: PeersetHandle,
+		peer_store_handle: PeerStoreHandle,
 		connection_limits: ConnectionLimits,
 		external_addresses: Arc<Mutex<HashSet<Multiaddr>>>,
 	) -> Result<Self, request_responses::RegisterError> {
@@ -188,7 +188,7 @@ impl<B: BlockT> Behaviour<B> {
 			connection_limits: libp2p::connection_limits::Behaviour::new(connection_limits),
 			request_responses: request_responses::RequestResponsesBehaviour::new(
 				request_response_protocols.into_iter(),
-				peerset,
+				Box::new(peer_store_handle),
 			)?,
 		})
 	}
