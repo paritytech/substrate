@@ -226,7 +226,7 @@ where
 		// we move to the next minimum.
 		let mut min_index = 0;
 		// at this threshold we move to next index.
-		let threshold = targeted_sum.checked_div(&count_t).unwrap();
+		let threshold = targeted_sum / count_t;
 
 		if !per_round.is_zero() {
 			for _ in 0..count {

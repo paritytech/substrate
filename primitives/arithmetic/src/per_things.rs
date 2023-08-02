@@ -479,7 +479,7 @@ where
 	P::Inner: Into<N>,
 {
 	let maximum: N = P::ACCURACY.into();
-	let c = rational_mul_correction::<N, P>(x.clone(), P::ACCURACY, part, rounding).unwrap();
+	let c = rational_mul_correction::<N, P>(x.clone(), P::ACCURACY, part, rounding);
 	(x / part.into()).saturating_mul(maximum).saturating_add(c)
 }
 
@@ -492,34 +492,34 @@ where
 {
 	let maximum: N = P::ACCURACY.into();
 	let part_n: N = part.into();
-	let c = rational_mul_correction::<N, P>(x.clone(), part, P::ACCURACY, rounding).unwrap();
+	let c = rational_mul_correction::<N, P>(x.clone(), part, P::ACCURACY, rounding);
 	(x / maximum) * part_n + c
 }
 
 /// Wrapper to make all the default name safe. Checking if &denon is zero should cover denom_n
 /// and denom_upper
-fn rational_mul_correction<N, P>(
+fn checked_rational_mul_correction<N, P>(
 	x: N,
 	numer: P::Inner,
 	denom: P::Inner,
 	rounding: Rounding,
-) -> Option<N>
+) -> Result<N, &'static str>
 where
 	N: MultiplyArg + UniqueSaturatedInto<P::Inner>,
 	P: PerThing,
 	P::Inner: Into<N>,
 {
 	if P::Inner::is_zero(&denom) {
-		return None
+		return Err("Division by zero")
 	}
-	Some(unchecked_rational_mul_correction::<N, P>(x, numer, denom, rounding))
+	Ok(rational_mul_correction::<N, P>(x, numer, denom, rounding))
 }
 
 /// Compute the error due to integer division in the expression `x / denom * numer`.
 ///
 /// Take the remainder of `x / denom` and multiply by  `numer / denom`. The result can be added
 /// to `x / denom * numer` for an accurate result.
-fn unchecked_rational_mul_correction<N, P>(
+fn rational_mul_correction<N, P>(
 	x: N,
 	numer: P::Inner,
 	denom: P::Inner,
@@ -1050,14 +1050,12 @@ macro_rules! implement_per_thing {
 		impl CheckedDiv for $name {
 			#[inline]
 			fn checked_div(&self, rhs: &Self) -> Option<Self> {
-				let _p = self.0;
 				let q = rhs.0;
 
 				if q.is_zero() {
 					return None
 				}
 
-				//Some(Self::from_rational(p, q))
 				Some(*self / *rhs)
 			}
 		}
@@ -1586,9 +1584,80 @@ macro_rules! implement_per_thing {
 			}
 
 			#[test]
+			fn checked_rational_mul_correction_works() {
+				assert_eq!(
+					super::checked_rational_mul_correction::<$type, $name>(
+						<$type>::max_value(),
+						<$type>::max_value(),
+						<$type>::max_value(),
+						super::Rounding::NearestPrefDown,
+					),
+					Ok(0),
+				);
+				assert_eq!(
+					super::checked_rational_mul_correction::<$type, $name>(
+						<$type>::max_value() - 1,
+						<$type>::max_value(),
+						<$type>::max_value(),
+						super::Rounding::NearestPrefDown,
+					),
+					Ok(<$type>::max_value() - 1),
+				);
+				assert_eq!(
+					super::checked_rational_mul_correction::<$upper_type, $name>(
+						((<$type>::max_value() - 1) as $upper_type).pow(2),
+						<$type>::max_value(),
+						<$type>::max_value(),
+						super::Rounding::NearestPrefDown,
+					),
+					Ok(1),
+				);
+				// ((max^2 - 1) % max) * max / max == max - 1
+				assert_eq!(
+					super::checked_rational_mul_correction::<$upper_type, $name>(
+						(<$type>::max_value() as $upper_type).pow(2) - 1,
+						<$type>::max_value(),
+						<$type>::max_value(),
+						super::Rounding::NearestPrefDown,
+					),
+					Ok(<$upper_type>::from((<$type>::max_value() - 1))),
+				);
+				// (max % 2) * max / 2 == max / 2
+				assert_eq!(
+					super::checked_rational_mul_correction::<$upper_type, $name>(
+						(<$type>::max_value() as $upper_type).pow(2),
+						<$type>::max_value(),
+						2 as $type,
+						super::Rounding::NearestPrefDown,
+					),
+					Ok(<$type>::max_value() as $upper_type / 2),
+				);
+				// ((max^2 - 1) % max) * 2 / max == 2 (rounded up)
+				assert_eq!(
+					super::checked_rational_mul_correction::<$upper_type, $name>(
+						(<$type>::max_value() as $upper_type).pow(2) - 1,
+						2 as $type,
+						<$type>::max_value(),
+						super::Rounding::NearestPrefDown,
+					),
+					Ok(2),
+				);
+				// ((max^2 - 1) % max) * 2 / max == 1 (rounded down)
+				assert_eq!(
+					super::checked_rational_mul_correction::<$upper_type, $name>(
+						(<$type>::max_value() as $upper_type).pow(2) - 1,
+						2 as $type,
+						<$type>::max_value(),
+						super::Rounding::Down,
+					),
+					Ok(1),
+				);
+			}
+
+			#[test]
 			fn rational_mul_correction_works() {
 				assert_eq!(
-					super::unchecked_rational_mul_correction::<$type, $name>(
+					super::rational_mul_correction::<$type, $name>(
 						<$type>::max_value(),
 						<$type>::max_value(),
 						<$type>::max_value(),
@@ -1597,7 +1666,7 @@ macro_rules! implement_per_thing {
 					0,
 				);
 				assert_eq!(
-					super::unchecked_rational_mul_correction::<$type, $name>(
+					super::rational_mul_correction::<$type, $name>(
 						<$type>::max_value() - 1,
 						<$type>::max_value(),
 						<$type>::max_value(),
@@ -1606,7 +1675,7 @@ macro_rules! implement_per_thing {
 					<$type>::max_value() - 1,
 				);
 				assert_eq!(
-					super::unchecked_rational_mul_correction::<$upper_type, $name>(
+					super::rational_mul_correction::<$upper_type, $name>(
 						((<$type>::max_value() - 1) as $upper_type).pow(2),
 						<$type>::max_value(),
 						<$type>::max_value(),
@@ -1616,7 +1685,7 @@ macro_rules! implement_per_thing {
 				);
 				// ((max^2 - 1) % max) * max / max == max - 1
 				assert_eq!(
-					super::unchecked_rational_mul_correction::<$upper_type, $name>(
+					super::rational_mul_correction::<$upper_type, $name>(
 						(<$type>::max_value() as $upper_type).pow(2) - 1,
 						<$type>::max_value(),
 						<$type>::max_value(),
@@ -1626,7 +1695,7 @@ macro_rules! implement_per_thing {
 				);
 				// (max % 2) * max / 2 == max / 2
 				assert_eq!(
-					super::unchecked_rational_mul_correction::<$upper_type, $name>(
+					super::rational_mul_correction::<$upper_type, $name>(
 						(<$type>::max_value() as $upper_type).pow(2),
 						<$type>::max_value(),
 						2 as $type,
@@ -1636,7 +1705,7 @@ macro_rules! implement_per_thing {
 				);
 				// ((max^2 - 1) % max) * 2 / max == 2 (rounded up)
 				assert_eq!(
-					super::unchecked_rational_mul_correction::<$upper_type, $name>(
+					super::rational_mul_correction::<$upper_type, $name>(
 						(<$type>::max_value() as $upper_type).pow(2) - 1,
 						2 as $type,
 						<$type>::max_value(),
@@ -1646,7 +1715,7 @@ macro_rules! implement_per_thing {
 				);
 				// ((max^2 - 1) % max) * 2 / max == 1 (rounded down)
 				assert_eq!(
-					super::unchecked_rational_mul_correction::<$upper_type, $name>(
+					super::rational_mul_correction::<$upper_type, $name>(
 						(<$type>::max_value() as $upper_type).pow(2) - 1,
 						2 as $type,
 						<$type>::max_value(),
