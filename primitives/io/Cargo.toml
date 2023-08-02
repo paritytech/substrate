@@ -46,7 +46,6 @@ std = [
 	"bytes/std",
 	"sp-externalities/std",
 	"sp-core/std",
-	"sp-keystore",
 	"codec/std",
 	"sp-std/std",
 	"sp-trie/std",
@@ -60,6 +59,7 @@ std = [
 	"log",
 	"ed25519-dalek",
 	"ed25519",
+	"sp-keystore/std"
 ]
 
 with-tracing = [

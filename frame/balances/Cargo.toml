@@ -39,8 +39,21 @@ std = [
 	"scale-info/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"pallet-transaction-payment/std",
+	"sp-core/std",
+	"sp-io/std"
 ]
 # Enable support for setting the existential deposit to zero.
 insecure_zero_ed = []
-runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
-try-runtime = ["frame-support/try-runtime"]
+runtime-benchmarks = [
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks"
+]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-transaction-payment/try-runtime",
+	"sp-runtime/try-runtime"
+]
