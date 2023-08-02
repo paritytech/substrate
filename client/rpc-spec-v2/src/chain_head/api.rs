@@ -119,4 +119,17 @@ pub trait ChainHeadApi<Hash> {
 	/// This method is unstable and subject to change in the future.
 	#[method(name = "chainHead_unstable_unpin", blocking)]
 	fn chain_head_unstable_unpin(&self, follow_subscription: String, hash: Hash) -> RpcResult<()>;
+
+	/// Resumes a storage fetch started with `chainHead_storage` after it has generated an
+	/// `operationWaitingForContinue` event.
+	///
+	/// # Unstable
+	///
+	/// This method is unstable and subject to change in the future.
+	#[method(name = "chainHead_unstable_continue", blocking)]
+	fn chain_head_unstable_continue(
+		&self,
+		follow_subscription: String,
+		operation_id: String,
+	) -> RpcResult<()>;
 }

@@ -443,4 +443,12 @@ where
 			Err(_) => Err(ChainHeadRpcError::InvalidBlock.into()),
 		}
 	}
+
+	fn chain_head_unstable_continue(
+		&self,
+		follow_subscription: String,
+		operation_id: String,
+	) -> RpcResult<()> {
+		Ok(())
+	}
 }
