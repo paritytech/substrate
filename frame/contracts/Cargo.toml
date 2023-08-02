@@ -54,9 +54,6 @@ env_logger = "0.9"
 pretty_assertions = "1"
 wat = "1"
 
-# Include this package, so that `unsafe-debug` feature is included for testing.
-pallet-contracts = { path = ".", default-features = false, features = ["unsafe-debug"] }
-
 # Substrate Dependencies
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
@@ -86,7 +83,6 @@ std = [
 	"rand/std",
 	"environmental/std",
 	"pallet-balances/std",
-	"pallet-contracts/std", # needed because of self-dependency
 	"pallet-insecure-randomness-collective-flip/std",
 	"pallet-proxy/std",
 	"pallet-timestamp/std",
@@ -102,7 +98,6 @@ runtime-benchmarks = [
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
-	"pallet-contracts/runtime-benchmarks", # needed because of self-dependency
 	"pallet-proxy/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"pallet-utility/runtime-benchmarks",
@@ -112,7 +107,6 @@ try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"pallet-balances/try-runtime",
-	"pallet-contracts/try-runtime", # needed because of self-dependency
 	"pallet-insecure-randomness-collective-flip/try-runtime",
 	"pallet-proxy/try-runtime",
 	"pallet-timestamp/try-runtime",
