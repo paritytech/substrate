@@ -64,7 +64,7 @@ fn on_add_stakers_works() {
 		assert_eq!(VoterBagsList::get_score(&1).unwrap(), 100);
 
 		add_validator(10, 200);
-		assert_eq!(VoterBagsList::count(), 2); // 1x validator + 1x nominator
+		assert_eq!(VoterBagsList::count(), 2); // 1x nominator + 1x validator
 		assert_eq!(TargetBagsList::count(), 1);
 		assert_eq!(TargetBagsList::get_score(&10).unwrap(), 200);
 	})
@@ -113,6 +113,31 @@ fn on_remove_stakers_with_nominations_works() {
 		remove_staker(1);
 		assert!(!VoterBagsList::contains(&1));
 		assert_eq!(TargetBagsList::get_score(&10), Ok(200));
+	})
+}
+
+#[test]
+fn on_nominator_update_works() {
+	ExtBuilder::default().populate_lists().build_and_execute(|| {
+		assert_eq!(get_scores::<VoterBagsList>(), vec![(10, 100), (11, 100), (1, 100), (2, 100)]);
+		assert_eq!(get_scores::<TargetBagsList>(), vec![(10, 300), (11, 200)]);
+
+		add_validator(20, 50);
+		// removes nomination from 10 and adds nomination to new validator, 20.
+		update_nominations_of(2, vec![11, 20]);
+
+		// new voter (validator) 2 with 100 stake. note that the voter score is not updated
+		// automatically.
+		assert_eq!(
+			get_scores::<VoterBagsList>(),
+			vec![(10, 100), (11, 100), (1, 100), (2, 100), (20, 50)]
+		);
+
+		// target list has been updated:
+		// -100 score for 10
+		// +100 score for 11
+		// +100 score for 20
+		assert_eq!(get_scores::<TargetBagsList>(), vec![(10, 200), (11, 200), (20, 150)]);
 	})
 }
 

@@ -34,9 +34,10 @@ use libp2p::{
 	identity::PublicKey, kad::RecordKey, swarm::NetworkBehaviour, PeerId,
 };
 
+use parking_lot::Mutex;
 use sc_network_common::role::{ObservedRole, Roles};
 use sp_runtime::traits::Block as BlockT;
-use std::{collections::HashSet, time::Duration};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 pub use crate::request_responses::{InboundFailure, OutboundFailure, RequestId, ResponseFailure};
 
@@ -174,10 +175,15 @@ impl<B: BlockT> Behaviour<B> {
 		request_response_protocols: Vec<ProtocolConfig>,
 		peerset: PeersetHandle,
 		connection_limits: ConnectionLimits,
+		external_addresses: Arc<Mutex<HashSet<Multiaddr>>>,
 	) -> Result<Self, request_responses::RegisterError> {
 		Ok(Self {
 			substrate,
-			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
+			peer_info: peer_info::PeerInfoBehaviour::new(
+				user_agent,
+				local_public_key,
+				external_addresses,
+			),
 			discovery: disco_config.finish(),
 			connection_limits: libp2p::connection_limits::Behaviour::new(connection_limits),
 			request_responses: request_responses::RequestResponsesBehaviour::new(
