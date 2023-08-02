@@ -3531,7 +3531,8 @@ fn upload_code_works() {
 				phase: Phase::Initialization,
 				event: RuntimeEvent::Contracts(crate::Event::CodeStored {
 					code_hash,
-					deposit_held: deposit_expected
+					deposit_held: deposit_expected,
+					uploader: ALICE
 				}),
 				topics: vec![code_hash],
 			},]
@@ -3618,7 +3619,8 @@ fn remove_code_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::CodeStored {
 						code_hash,
-						deposit_held: deposit_expected
+						deposit_held: deposit_expected,
+						uploader: ALICE
 					}),
 					topics: vec![code_hash],
 				},
@@ -3626,7 +3628,8 @@ fn remove_code_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::CodeRemoved {
 						code_hash,
-						deposit_released: deposit_expected
+						deposit_released: deposit_expected,
+						remover: ALICE
 					}),
 					topics: vec![code_hash],
 				},
@@ -3665,7 +3668,8 @@ fn remove_code_wrong_origin() {
 				phase: Phase::Initialization,
 				event: RuntimeEvent::Contracts(crate::Event::CodeStored {
 					code_hash,
-					deposit_held: deposit_expected
+					deposit_held: deposit_expected,
+					uploader: ALICE
 				}),
 				topics: vec![code_hash],
 			},]
@@ -3764,7 +3768,8 @@ fn instantiate_with_zero_balance_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::CodeStored {
 						code_hash,
-						deposit_held: deposit_expected
+						deposit_held: deposit_expected,
+						uploader: ALICE
 					}),
 					topics: vec![code_hash],
 				},
@@ -3871,7 +3876,8 @@ fn instantiate_with_below_existential_deposit_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::CodeStored {
 						code_hash,
-						deposit_held: deposit_expected
+						deposit_held: deposit_expected,
+						uploader: ALICE
 					}),
 					topics: vec![code_hash],
 				},

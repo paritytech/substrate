@@ -249,7 +249,11 @@ impl<T: Config> WasmBlob<T> {
 					*stored_code_info = Some(self.code_info.clone());
 					<Pallet<T>>::deposit_event(
 						vec![code_hash],
-						Event::CodeStored { code_hash, deposit_held: deposit },
+						Event::CodeStored {
+							code_hash,
+							deposit_held: deposit,
+							uploader: self.code_info.owner.clone(),
+						},
 					);
 					Ok(deposit)
 				},
@@ -270,12 +274,13 @@ impl<T: Config> WasmBlob<T> {
 					BestEffort,
 				);
 				let deposit_released = code_info.deposit;
+				let remover = code_info.owner.clone();
 
 				*existing = None;
 				<PristineCode<T>>::remove(&code_hash);
 				<Pallet<T>>::deposit_event(
 					vec![code_hash],
-					Event::CodeRemoved { code_hash, deposit_released },
+					Event::CodeRemoved { code_hash, deposit_released, remover },
 				);
 				Ok(())
 			} else {
