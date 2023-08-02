@@ -737,32 +737,6 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::System(frame_system::Event::NewAccount {
-						// =======
-						// 						account: deposit_account.clone(),
-						// 					}),
-						// 					topics: vec![],
-						// 				},
-						// 				EventRecord {
-						// 					phase: Phase::Initialization,
-						// 					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
-						// 						account: deposit_account.clone(),
-						// 						free_balance: 132,
-						// 					}),
-						// 					topics: vec![],
-						// 				},
-						// 				EventRecord {
-						// 					phase: Phase::Initialization,
-						// 					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						// 						from: ALICE,
-						// 						to: deposit_account.clone(),
-						// 						amount: 132,
-						// 					}),
-						// 					topics: vec![],
-						// 				},
-						// 				EventRecord {
-						// 					phase: Phase::Initialization,
-						// 					event: RuntimeEvent::System(frame_system::Event::NewAccount {
-						// >>>>>>> jg/13643-contracts-migrate-to-fungible-traits
 						account: addr.clone()
 					}),
 					topics: vec![],
@@ -1230,32 +1204,6 @@ fn deploy_and_call_other_contract() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::System(frame_system::Event::NewAccount {
-						// =======
-						// 						account: deposit_account.clone(),
-						// 					}),
-						// 					topics: vec![],
-						// 				},
-						// 				EventRecord {
-						// 					phase: Phase::Initialization,
-						// 					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
-						// 						account: deposit_account.clone(),
-						// 						free_balance: 132,
-						// 					}),
-						// 					topics: vec![],
-						// 				},
-						// 				EventRecord {
-						// 					phase: Phase::Initialization,
-						// 					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						// 						from: ALICE,
-						// 						to: deposit_account.clone(),
-						// 						amount: 132,
-						// 					}),
-						// 					topics: vec![],
-						// 				},
-						// 				EventRecord {
-						// 					phase: Phase::Initialization,
-						// 					event: RuntimeEvent::System(frame_system::Event::NewAccount {
-						// >>>>>>> jg/13643-contracts-migrate-to-fungible-traits
 						account: callee_addr.clone()
 					}),
 					topics: vec![],

@@ -557,7 +557,6 @@ impl<T: Config> Ext<T> for ReservingExt {
 		match amount {
 			Deposit::Charge(amount) | Deposit::Refund(amount) if amount.is_zero() => return Ok(()),
 			Deposit::Charge(amount) => {
-				// <<<<<<< HEAD
 				System::<T>::inc_providers(contract);
 				// This could fail if the `origin` does not have enough liquidity. Ideally, though,
 				// this should have been checked before with `check_limit`.
@@ -584,10 +583,6 @@ impl<T: Config> Ext<T> for ReservingExt {
 						amount: *amount,
 					},
 				);
-				// =======
-				// 				T::Currency::transfer(origin, deposit_account, *amount, Preservation::Preserve)?;
-				// Ok(())
-				// >>>>>>> jg/13643-contracts-migrate-to-fungible-traits
 			},
 			Deposit::Refund(amount) => {
 				let transferred = T::Currency::transfer_on_hold(
