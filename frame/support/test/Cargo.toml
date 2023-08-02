@@ -49,16 +49,17 @@ std = [
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
-	"sp-state-machine",
 	"sp-std/std",
 	"sp-version/std",
 	"test-pallet/std",
+	"sp-state-machine/std"
 ]
 experimental = ["frame-support/experimental"]
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"frame-executive/try-runtime",
+	"sp-runtime/try-runtime"
 ]
 # WARNING:
 # Only CI runs with this feature enabled. This feature is for testing stuff related to the FRAME macros

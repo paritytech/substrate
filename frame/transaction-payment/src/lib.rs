@@ -67,7 +67,7 @@ use sp_runtime::{
 	transaction_validity::{
 		TransactionPriority, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
-	FixedPointNumber, FixedPointOperand, FixedU128, Perbill, Perquintill, RuntimeDebug,
+	FixedPointNumber, FixedU128, Perbill, Perquintill, RuntimeDebug,
 };
 use sp_std::prelude::*;
 pub use types::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
@@ -461,10 +461,7 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Pallet<T>
-where
-	BalanceOf<T>: FixedPointOperand,
-{
+impl<T: Config> Pallet<T> {
 	/// Query the data that we know about the fee of a given `call`.
 	///
 	/// This pallet is not and cannot be aware of the internals of a signed extension, for example
@@ -649,7 +646,6 @@ where
 impl<T> Convert<Weight, BalanceOf<T>> for Pallet<T>
 where
 	T: Config,
-	BalanceOf<T>: FixedPointOperand,
 {
 	/// Compute the fee for the specified weight.
 	///
@@ -678,7 +674,7 @@ pub struct ChargeTransactionPayment<T: Config>(#[codec(compact)] BalanceOf<T>);
 impl<T: Config> ChargeTransactionPayment<T>
 where
 	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
-	BalanceOf<T>: Send + Sync + FixedPointOperand,
+	BalanceOf<T>: Send + Sync,
 {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(fee: BalanceOf<T>) -> Self {
@@ -800,7 +796,7 @@ impl<T: Config> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
 
 impl<T: Config> SignedExtension for ChargeTransactionPayment<T>
 where
-	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand,
+	BalanceOf<T>: Send + Sync + From<u64>,
 	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
 	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
@@ -866,7 +862,6 @@ where
 impl<T: Config, AnyCall: GetDispatchInfo + Encode> EstimateCallFee<AnyCall, BalanceOf<T>>
 	for Pallet<T>
 where
-	BalanceOf<T>: FixedPointOperand,
 	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
 	fn estimate_call_fee(call: &AnyCall, post_info: PostDispatchInfo) -> BalanceOf<T> {

@@ -59,11 +59,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::traits::{
-	fungible::Inspect,
-	tokens::{Balance, ConversionFromAssetBalance},
-};
-use sp_runtime::{traits::Zero, FixedPointNumber, FixedPointOperand, FixedU128};
+use frame_support::traits::{fungible::Inspect, tokens::ConversionFromAssetBalance};
+use sp_runtime::{traits::Zero, FixedPointNumber, FixedU128};
 
 pub use pallet::*;
 pub use weights::WeightInfo;
@@ -111,11 +108,8 @@ pub mod pallet {
 		/// The origin permissioned to update an existiing conversion rate for an asset.
 		type UpdateOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
-		/// The units in which we record balances.
-		type Balance: Balance + FixedPointOperand;
-
 		/// The currency mechanism for this pallet.
-		type Currency: Inspect<Self::AccountId, Balance = Self::Balance>;
+		type Currency: Inspect<Self::AccountId>;
 
 		/// The type for asset kinds for which the conversion rate to native balance is set.
 		type AssetKind: Parameter + MaxEncodedLen;
@@ -230,7 +224,6 @@ pub mod pallet {
 impl<T> ConversionFromAssetBalance<BalanceOf<T>, AssetKindOf<T>, BalanceOf<T>> for Pallet<T>
 where
 	T: Config,
-	BalanceOf<T>: FixedPointOperand + Zero,
 {
 	type Error = pallet::Error<T>;
 
