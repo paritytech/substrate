@@ -907,7 +907,7 @@ where
 
 			#[cfg(feature = "unsafe-debug")]
 			let (code_hash, input_clone) = {
-				let code_hash = executable.code_hash().clone();
+				let code_hash = *executable.code_hash();
 				T::Debug::before_call(&code_hash, entry_point, &input_data);
 				(code_hash, input_data.clone())
 			};
