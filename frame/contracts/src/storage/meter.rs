@@ -599,6 +599,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 					Restriction::Free,
 					Fortitude::Polite,
 				)?;
+				// TODO: handle partial mutation rollback
 
 				Pallet::<T>::deposit_event(
 					vec![T::Hashing::hash_of(&contract), T::Hashing::hash_of(&origin)],

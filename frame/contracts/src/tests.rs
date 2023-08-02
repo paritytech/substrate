@@ -1,5 +1,4 @@
 // This file is part of Substrate.
-mod pallet_dummy;
 
 // Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
@@ -16,6 +15,8 @@ mod pallet_dummy;
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod pallet_dummy;
+
 use self::test_utils::{ensure_stored, expected_deposit, hash};
 use crate::{
 	self as pallet_contracts,
@@ -24,13 +25,14 @@ use crate::{
 		Result as ExtensionResult, RetVal, ReturnFlags, SysConfig,
 	},
 	exec::{Frame, Key},
+	migration::codegen::LATEST_MIGRATION_VERSION,
 	storage::DeletionQueueManager,
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeHash, CodeInfoOf, CollectEvents, Config, ContractInfo, ContractInfoOf,
 	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, HoldReason,
-	MigrationInProgress, NoopMigration, Origin, Pallet, PristineCode, Schedule,
+	MigrationInProgress, Origin, Pallet, PristineCode, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -40,7 +42,7 @@ use frame_support::{
 	parameter_types,
 	storage::child,
 	traits::{
-		fungible::{BalancedHold, Inspect, InspectHold, Mutate, MutateHold},
+		fungible::{BalancedHold, Inspect, Mutate, MutateHold},
 		tokens::Preservation,
 		ConstU32, ConstU64, Contains, OnIdle, OnInitialize, StorageVersion,
 	},
@@ -446,7 +448,6 @@ impl Config for Test {
 	type Time = Timestamp;
 	type Randomness = Randomness;
 	type Currency = Balances;
-	type Balance = u64;
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type CallFilter = TestFilter;
@@ -465,7 +466,7 @@ impl Config for Test {
 	type UnsafeUnstableInterface = UnstableInterface;
 	type MaxDebugBufferLen = ConstU32<{ 2 * 1024 * 1024 }>;
 	type RuntimeHoldReason = RuntimeHoldReason;
-	type Migrations = (NoopMigration<1>, NoopMigration<2>);
+	type Migrations = crate::migration::codegen::BenchMigrations;
 	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
 	type MaxDelegateDependencies = MaxDelegateDependencies;
 }
@@ -618,17 +619,20 @@ fn calling_plain_account_fails() {
 fn migration_on_idle_hooks_works() {
 	// Defines expectations of how many migration steps can be done given the weight limit.
 	let tests = [
-		(Weight::zero(), 0),
-		(<Test as Config>::WeightInfo::migrate() + 1.into(), 1),
-		(Weight::MAX, 2),
+		(Weight::zero(), LATEST_MIGRATION_VERSION - 2),
+		(<Test as Config>::WeightInfo::migrate() + 1.into(), LATEST_MIGRATION_VERSION - 1),
+		(Weight::MAX, LATEST_MIGRATION_VERSION),
 	];
 
 	for (weight, expected_version) in tests {
-		ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
-			MigrationInProgress::<Test>::set(Some(Default::default()));
-			Contracts::on_idle(System::block_number(), weight);
-			assert_eq!(StorageVersion::get::<Pallet<Test>>(), expected_version);
-		});
+		ExtBuilder::default()
+			.set_storage_version(LATEST_MIGRATION_VERSION - 2)
+			.build()
+			.execute_with(|| {
+				MigrationInProgress::<Test>::set(Some(Default::default()));
+				Contracts::on_idle(System::block_number(), weight);
+				assert_eq!(StorageVersion::get::<Pallet<Test>>(), expected_version);
+			});
 	}
 }
 
@@ -1616,15 +1620,16 @@ fn self_destruct_works() {
 		assert!(get_contract_checked(&addr).is_none());
 		assert_eq!(<Test as Config>::Currency::total_balance(&addr), 0);
 
-		// check that the beneficiary (django) got remaining balance
+		// Check that the beneficiary (django) got remaining balance.
 		assert_eq!(
 			<Test as Config>::Currency::free_balance(DJANGO),
 			1_000_000 + 100_000 + min_balance
 		);
 
-		// check that the Alice is missing Django's benefit
+		// Check that the Alice is missing Django's benefit. Within ALICE's total balance there's
+		// also the code upload deposit held.
 		assert_eq!(
-			<Test as Config>::Currency::free_balance(ALICE),
+			<Test as Config>::Currency::total_balance(&ALICE),
 			1_000_000 - (100_000 + min_balance)
 		);
 
@@ -3566,7 +3571,8 @@ fn upload_code_works() {
 				phase: Phase::Initialization,
 				event: RuntimeEvent::Contracts(crate::Event::CodeStored {
 					code_hash,
-					deposit_held: deposit_expected
+					deposit_held: deposit_expected,
+					uploader: ALICE
 				}),
 				topics: vec![code_hash],
 			},]
@@ -3653,7 +3659,8 @@ fn remove_code_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::CodeStored {
 						code_hash,
-						deposit_held: deposit_expected
+						deposit_held: deposit_expected,
+						uploader: ALICE
 					}),
 					topics: vec![code_hash],
 				},
@@ -3661,7 +3668,8 @@ fn remove_code_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::CodeRemoved {
 						code_hash,
-						deposit_released: deposit_expected
+						deposit_released: deposit_expected,
+						remover: ALICE
 					}),
 					topics: vec![code_hash],
 				},
@@ -3700,7 +3708,8 @@ fn remove_code_wrong_origin() {
 				phase: Phase::Initialization,
 				event: RuntimeEvent::Contracts(crate::Event::CodeStored {
 					code_hash,
-					deposit_held: deposit_expected
+					deposit_held: deposit_expected,
+					uploader: ALICE
 				}),
 				topics: vec![code_hash],
 			},]
@@ -3800,7 +3809,8 @@ fn instantiate_with_zero_balance_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::CodeStored {
 						code_hash,
-						deposit_held: deposit_expected
+						deposit_held: deposit_expected,
+						uploader: ALICE
 					}),
 					topics: vec![code_hash],
 				},
@@ -3896,7 +3906,8 @@ fn instantiate_with_below_existential_deposit_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::CodeStored {
 						code_hash,
-						deposit_held: deposit_expected
+						deposit_held: deposit_expected,
+						uploader: ALICE
 					}),
 					topics: vec![code_hash],
 				},
@@ -4270,18 +4281,10 @@ fn slash_cannot_kill_account() {
 		// Drop previous events
 		initialize_block(2);
 
-		// <<<<<<< HEAD
-		assert_eq!(<Test as Config>::Currency::total_balance_on_hold(&addr), meter_storage_deposit);
-		// =======
-		// We need to hold some balances in order to have something to slash. As slashing can only
-		// affect balances held under certain HoldReason.
-		// <Test as Config>::Currency::hold(
-		// 	&HoldReason::CodeUploadDepositReserve.into(),
-		// 	&addr,
-		// 	balance_held,
-		// )
-		// .unwrap();
-		// >>>>>>> jg/13643-contracts-migrate-to-fungible-traits
+		assert_eq!(
+			test_utils::get_balance_on_hold(&HoldReason::StorageDepositReserve.into(), &addr),
+			meter_storage_deposit
+		);
 
 		assert_eq!(
 			<Test as Config>::Currency::total_balance(&addr),
@@ -4289,10 +4292,10 @@ fn slash_cannot_kill_account() {
 		);
 
 		// Try to destroy the account of the contract by slashing the total balance.
-		// The account does not get destroyed because of the consumer reference.
-		// Slashing can for example happen if the contract takes part in staking.
+		// The account does not get destroyed because slashing only affects the balance held under
+		// certain `reason`. Slashing can for example happen if the contract takes part in staking.
 		let _ = <Test as Config>::Currency::slash(
-			&HoldReason::CodeUploadDepositReserve.into(),
+			&HoldReason::StorageDepositReserve.into(),
 			&addr,
 			<Test as Config>::Currency::total_balance(&addr),
 		);
@@ -5655,7 +5658,10 @@ fn native_dependency_deposit_works() {
 			let code_deposit = test_utils::get_code_deposit(&dummy_code_hash);
 			let deposit = base_deposit + lockup_deposit_percent.mul_ceil(code_deposit);
 			assert_eq!(test_utils::get_contract(&addr).storage_base_deposit(), deposit);
-			assert_eq!(test_utils::get_balance(&info.deposit_account()), deposit - ED);
+			assert_eq!(
+				test_utils::get_balance_on_hold(&HoldReason::StorageDepositReserve.into(), &addr),
+				deposit - ED
+			);
 		});
 	}
 }

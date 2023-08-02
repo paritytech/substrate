@@ -34,7 +34,7 @@ use sp_runtime::TryRuntimeError;
 use sp_runtime::{traits::Zero, FixedPointNumber, FixedU128, Saturating};
 use sp_std::prelude::*;
 
-pub mod old {
+mod old {
 	use super::*;
 
 	pub type BalanceOf<T, OldCurrency> = <OldCurrency as frame_support::traits::Currency<

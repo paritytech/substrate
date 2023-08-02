@@ -27,9 +27,7 @@ use codec::{Decode, Encode};
 #[cfg(feature = "try-runtime")]
 use environmental::Vec;
 #[cfg(feature = "try-runtime")]
-use frame_support::traits::fungible::Inspect;
-#[cfg(feature = "try-runtime")]
-use frame_support::traits::fungible::InspectHold;
+use frame_support::traits::fungible::{Inspect, InspectHold};
 use frame_support::{
 	codec,
 	pallet_prelude::*,
@@ -44,7 +42,7 @@ use sp_runtime::{traits::Zero, Saturating};
 #[cfg(feature = "try-runtime")]
 use sp_std::collections::btree_map::BTreeMap;
 
-pub mod old {
+mod old {
 	use super::*;
 
 	pub type BalanceOf<T, OldCurrency> = <OldCurrency as frame_support::traits::Currency<
@@ -160,20 +158,19 @@ where
 			let unreserved = code_info.deposit.saturating_sub(remaining);
 			let amount = BalanceOf::<T>::from(unreserved);
 
+			log::debug!(
+				target: LOG_TARGET,
+				"Holding {:?} on the code owner's account 0x{:?} for code {:?}.",
+				amount,
+				HexDisplay::from(&code_info.owner.encode()),
+				hash,
+			);
+
 			T::Currency::hold(
 				&HoldReason::CodeUploadDepositReserve.into(),
 				&code_info.owner,
 				amount,
 			)
-			.map(|_| {
-				log::debug!(
-					target: LOG_TARGET,
-					"{:?} held on the code owner's account 0x{:?} for code {:?}.",
-					amount,
-					HexDisplay::from(&code_info.owner.encode()),
-					hash,
-				);
-			})
 			.unwrap_or_else(|err| {
 				log::error!(
 					target: LOG_TARGET,

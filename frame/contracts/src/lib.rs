@@ -118,7 +118,6 @@ use frame_support::{
 	error::BadOrigin,
 	traits::{
 		fungible::{Inspect, Mutate, MutateHold},
-		tokens::Balance,
 		ConstU32, Contains, Get, Randomness, Time,
 	},
 	weights::Weight,
@@ -132,10 +131,7 @@ use pallet_contracts_primitives::{
 };
 use scale_info::TypeInfo;
 use smallvec::Array;
-use sp_runtime::{
-	traits::{Convert, Hash, Saturating, StaticLookup, Zero},
-	FixedPointOperand,
-};
+use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, Zero};
 use sp_std::{fmt::Debug, prelude::*};
 
 pub use crate::{
@@ -153,7 +149,8 @@ pub use crate::wasm::api_doc;
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = BoundedVec<u8, ConstU32<128>>;
-type BalanceOf<T> = <T as Config>::Balance;
+type BalanceOf<T> =
+	<<T as Config>::Currency as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
@@ -189,12 +186,7 @@ pub mod pallet {
 	use sp_runtime::Perbill;
 
 	/// The current storage version.
-	#[cfg(not(any(test, feature = "runtime-benchmarks")))]
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(14);
-
-	/// Hard coded storage version for running tests that depend on the current storage version.
-	#[cfg(any(test, feature = "runtime-benchmarks"))]
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
+	pub(crate) const STORAGE_VERSION: StorageVersion = StorageVersion::new(15);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -216,12 +208,9 @@ pub mod pallet {
 		type Randomness: Randomness<Self::Hash, BlockNumberFor<Self>>;
 
 		/// The fungible in which fees are paid and contract balances are held.
-		type Currency: Inspect<Self::AccountId, Balance = Self::Balance>
+		type Currency: Inspect<Self::AccountId>
 			+ Mutate<Self::AccountId>
 			+ MutateHold<Self::AccountId, Reason = Self::RuntimeHoldReason>;
-
-		/// The units in which we record balances.
-		type Balance: Balance + FixedPointOperand;
 
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -849,7 +838,7 @@ pub mod pallet {
 		},
 
 		/// Code with the specified hash has been stored.
-		CodeStored { code_hash: T::Hash, deposit_held: BalanceOf<T> },
+		CodeStored { code_hash: T::Hash, deposit_held: BalanceOf<T>, uploader: T::AccountId },
 
 		/// A custom event emitted by the contract.
 		ContractEmitted {
@@ -861,7 +850,7 @@ pub mod pallet {
 		},
 
 		/// A code with the specified hash was removed.
-		CodeRemoved { code_hash: T::Hash, deposit_released: BalanceOf<T> },
+		CodeRemoved { code_hash: T::Hash, deposit_released: BalanceOf<T>, remover: T::AccountId },
 
 		/// A contract's code was updated.
 		ContractCodeUpdated {

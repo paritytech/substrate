@@ -103,7 +103,6 @@ std = [
 	"secp256k1/global-context",
 	"sp-core-hashing/std",
 	"sp-debug-derive/std",
-	"sp-externalities",
 	"sp-storage/std",
 	"sp-runtime-interface/std",
 	"ss58-registry/std",
@@ -114,6 +113,7 @@ std = [
 	"libsecp256k1/std",
 	"dyn-clonable",
 	"tracing",
+	"sp-externalities/std"
 ]
 
 # Serde support without relying on std features.
