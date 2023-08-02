@@ -54,6 +54,9 @@ env_logger = "0.9"
 pretty_assertions = "1"
 wat = "1"
 
+# Include this package, so that `unsafe-debug` feature is included for testing.
+pallet-contracts = { path = ".", default-features = false, features = ["unsafe-debug"] }
+
 # Substrate Dependencies
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }

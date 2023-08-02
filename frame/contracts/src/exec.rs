@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(any(test, feature = "unsafe-debug"))]
+#[cfg(feature = "unsafe-debug")]
 use crate::unsafe_debug::ExecutionObserver;
 use crate::{
 	gas::GasMeter,
@@ -905,7 +905,7 @@ where
 			// Every non delegate call or instantiate also optionally transfers the balance.
 			self.initial_transfer()?;
 
-			#[cfg(any(test, feature = "unsafe-debug"))]
+			#[cfg(feature = "unsafe-debug")]
 			let (code_hash, input_clone) = {
 				let code_hash = executable.code_hash().clone();
 				T::Debug::before_call(&code_hash, entry_point, &input_data);
@@ -917,7 +917,7 @@ where
 				.execute(self, &entry_point, input_data)
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
-			#[cfg(any(test, feature = "unsafe-debug"))]
+			#[cfg(feature = "unsafe-debug")]
 			T::Debug::after_call(&code_hash, entry_point, &input_clone, &output);
 
 			// Avoid useless work that would be reverted anyways.
