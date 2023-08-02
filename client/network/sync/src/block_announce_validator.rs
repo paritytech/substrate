@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2023 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -267,7 +267,7 @@ impl<B: BlockT> BlockAnnounceValidator<B> {
 			Entry::Vacant(_) => {
 				error!(
 					target: LOG_TARGET,
-					"💔 Block announcement validation from peer {} finished for that no slot was allocated!",
+					"💔 Block announcement validation from peer {} finished for a slot that was not allocated!",
 					peer_id,
 				);
 			},

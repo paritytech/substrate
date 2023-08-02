@@ -1061,7 +1061,7 @@ where
 		};
 
 		if let PeerSyncState::AncestorSearch { .. } = peer.state {
-			trace!(target: "sync", "Peer {} state is ancestor search.", who);
+			trace!(target: "sync", "Peer {} is in the ancestor search state.", who);
 			return
 		}
 
