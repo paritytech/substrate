@@ -25,6 +25,7 @@
 //! `Compute` and `Storage` parameters the pallet consumes the adequate amount
 //! of weight.
 
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -75,11 +76,20 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event {
 		/// The pallet has been (re)initialized.
-		PalletInitialized { reinit: bool },
+		PalletInitialized {
+			/// Whether the pallet has been re-initialized.
+			reinit: bool,
+		},
 		/// The computation limit has been updated.
-		ComputationLimitSet { compute: FixedU64 },
+		ComputationLimitSet {
+			/// The computation limit.
+			compute: FixedU64,
+		},
 		/// The storage limit has been updated.
-		StorageLimitSet { storage: FixedU64 },
+		StorageLimitSet {
+			/// The storage limit.
+			storage: FixedU64,
+		},
 	}
 
 	#[pallet::error]
@@ -131,10 +141,14 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
+		/// The compute limit.
 		pub compute: FixedU64,
+		/// The storage limit.
 		pub storage: FixedU64,
+		/// The amount of trash data for wasting proof size.
 		pub trash_data_count: u32,
 		#[serde(skip)]
+		/// The required configuration field.
 		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
@@ -175,7 +189,7 @@ pub mod pallet {
 
 		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut meter = WeightMeter::from_limit(remaining_weight);
-			if !meter.check_accrue(T::WeightInfo::empty_on_idle()) {
+			if meter.try_consume(T::WeightInfo::empty_on_idle()).is_err() {
 				return T::WeightInfo::empty_on_idle()
 			}
 
@@ -191,7 +205,7 @@ pub mod pallet {
 			Self::waste_at_most_proof_size(&mut meter);
 			Self::waste_at_most_ref_time(&mut meter);
 
-			meter.consumed
+			meter.consumed()
 		}
 	}
 
@@ -273,7 +287,7 @@ pub mod pallet {
 		pub(crate) fn waste_at_most_proof_size(meter: &mut WeightMeter) {
 			let Ok(n) = Self::calculate_proof_size_iters(&meter) else { return };
 
-			meter.defensive_saturating_accrue(T::WeightInfo::waste_proof_size_some(n));
+			meter.consume(T::WeightInfo::waste_proof_size_some(n));
 
 			(0..n).for_each(|i| {
 				TrashData::<T>::get(i);
@@ -302,7 +316,7 @@ pub mod pallet {
 		/// Tries to come as close to the limit as possible.
 		pub(crate) fn waste_at_most_ref_time(meter: &mut WeightMeter) {
 			let Ok(n) = Self::calculate_ref_time_iters(&meter) else { return };
-			meter.defensive_saturating_accrue(T::WeightInfo::waste_ref_time_iter(n));
+			meter.consume(T::WeightInfo::waste_ref_time_iter(n));
 
 			let clobber = Self::waste_ref_time_iter(vec![0u8; 64], n);
 

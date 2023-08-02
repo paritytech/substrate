@@ -67,7 +67,7 @@ use sp_runtime::{
 	transaction_validity::{
 		TransactionPriority, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
-	FixedPointNumber, FixedPointOperand, FixedU128, Perbill, Perquintill, RuntimeDebug,
+	FixedPointNumber, FixedU128, Perbill, Perquintill, RuntimeDebug,
 };
 use sp_std::prelude::*;
 pub use types::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
@@ -416,6 +416,7 @@ pub mod pallet {
 			});
 		}
 
+		#[cfg(feature = "std")]
 		fn integrity_test() {
 			// given weight == u64, we build multipliers from `diff` of two weight values, which can
 			// at most be maximum block weight. Make sure that this can fit in a multiplier without
@@ -441,33 +442,26 @@ pub mod pallet {
 				return
 			}
 
-			#[cfg(any(feature = "std", test))]
-			sp_io::TestExternalities::new_empty().execute_with(|| {
-				// This is the minimum value of the multiplier. Make sure that if we collapse to
-				// this value, we can recover with a reasonable amount of traffic. For this test we
-				// assert that if we collapse to minimum, the trend will be positive with a weight
-				// value which is 1% more than the target.
-				let min_value = T::FeeMultiplierUpdate::min();
+			// This is the minimum value of the multiplier. Make sure that if we collapse to this
+			// value, we can recover with a reasonable amount of traffic. For this test we assert
+			// that if we collapse to minimum, the trend will be positive with a weight value which
+			// is 1% more than the target.
+			let min_value = T::FeeMultiplierUpdate::min();
+			let target = target + addition;
 
-				let target = target + addition;
-
-				<frame_system::Pallet<T>>::set_block_consumed_resources(target, 0);
-				let next = T::FeeMultiplierUpdate::convert(min_value);
-				assert!(
-					next > min_value,
-					"The minimum bound of the multiplier is too low. When \
-					block saturation is more than target by 1% and multiplier is minimal then \
-					the multiplier doesn't increase."
-				);
-			});
+			<frame_system::Pallet<T>>::set_block_consumed_resources(target, 0);
+			let next = T::FeeMultiplierUpdate::convert(min_value);
+			assert!(
+				next > min_value,
+				"The minimum bound of the multiplier is too low. When \
+				block saturation is more than target by 1% and multiplier is minimal then \
+				the multiplier doesn't increase."
+			);
 		}
 	}
 }
 
-impl<T: Config> Pallet<T>
-where
-	BalanceOf<T>: FixedPointOperand,
-{
+impl<T: Config> Pallet<T> {
 	/// Query the data that we know about the fee of a given `call`.
 	///
 	/// This pallet is not and cannot be aware of the internals of a signed extension, for example
@@ -652,7 +646,6 @@ where
 impl<T> Convert<Weight, BalanceOf<T>> for Pallet<T>
 where
 	T: Config,
-	BalanceOf<T>: FixedPointOperand,
 {
 	/// Compute the fee for the specified weight.
 	///
@@ -681,7 +674,7 @@ pub struct ChargeTransactionPayment<T: Config>(#[codec(compact)] BalanceOf<T>);
 impl<T: Config> ChargeTransactionPayment<T>
 where
 	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
-	BalanceOf<T>: Send + Sync + FixedPointOperand,
+	BalanceOf<T>: Send + Sync,
 {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(fee: BalanceOf<T>) -> Self {
@@ -803,7 +796,7 @@ impl<T: Config> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
 
 impl<T: Config> SignedExtension for ChargeTransactionPayment<T>
 where
-	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand,
+	BalanceOf<T>: Send + Sync + From<u64>,
 	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
 	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
@@ -869,7 +862,6 @@ where
 impl<T: Config, AnyCall: GetDispatchInfo + Encode> EstimateCallFee<AnyCall, BalanceOf<T>>
 	for Pallet<T>
 where
-	BalanceOf<T>: FixedPointOperand,
 	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
 	fn estimate_call_fee(call: &AnyCall, post_info: PostDispatchInfo) -> BalanceOf<T> {

@@ -45,7 +45,7 @@ use finality_grandpa::{
 	voter_set::VoterSet,
 	Message::{Precommit, Prevote, PrimaryPropose},
 };
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::{Decode, DecodeAll, Encode};
 use sc_network::{NetworkBlock, NetworkSyncForkRequest, ReputationChange};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
@@ -352,7 +352,7 @@ impl<B: BlockT, N: Network<B>, S: Syncing<B>> NetworkBridge<B, N, S> {
 		let telemetry = self.telemetry.clone();
 		let incoming =
 			self.gossip_engine.lock().messages_for(topic).filter_map(move |notification| {
-				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
+				let decoded = GossipMessage::<B>::decode_all(&mut &notification.message[..]);
 
 				match decoded {
 					Err(ref e) => {
@@ -651,7 +651,7 @@ fn incoming_global<B: BlockT>(
 		.messages_for(topic)
 		.filter_map(|notification| {
 			// this could be optimized by decoding piecewise.
-			let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
+			let decoded = GossipMessage::<B>::decode_all(&mut &notification.message[..]);
 			if let Err(ref e) = decoded {
 				trace!(
 					target: LOG_TARGET,

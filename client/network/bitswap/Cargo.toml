@@ -19,7 +19,7 @@ prost-build = "0.11"
 async-channel = "1.8.0"
 cid = "0.9.0"
 futures = "0.3.21"
-libp2p-identity = { version = "0.1.2", features = ["peerid"] }
+libp2p-identity = { version = "0.2.0", features = ["peerid"] }
 log = "0.4.17"
 prost = "0.11"
 thiserror = "1.0"

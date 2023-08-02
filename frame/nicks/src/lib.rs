@@ -36,6 +36,7 @@
 //! * `clear_name` - Remove an account's associated name; the deposit is returned.
 //! * `kill_name` - Forcibly remove the associated name; the deposit is lost.
 
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::traits::{Currency, OnUnbalanced, ReservableCurrency};
@@ -86,18 +87,37 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A name was set.
-		NameSet { who: T::AccountId },
+		NameSet {
+			/// The account for which the name was set.
+			who: T::AccountId,
+		},
 		/// A name was forcibly set.
-		NameForced { target: T::AccountId },
+		NameForced {
+			/// The account whose name was forcibly set.
+			target: T::AccountId,
+		},
 		/// A name was changed.
-		NameChanged { who: T::AccountId },
+		NameChanged {
+			/// The account for which the name was changed.
+			who: T::AccountId,
+		},
 		/// A name was cleared, and the given balance returned.
-		NameCleared { who: T::AccountId, deposit: BalanceOf<T> },
+		NameCleared {
+			/// The account for which the name was cleared.
+			who: T::AccountId,
+			/// The deposit returned.
+			deposit: BalanceOf<T>,
+		},
 		/// A name was removed and the given balance slashed.
-		NameKilled { target: T::AccountId, deposit: BalanceOf<T> },
+		NameKilled {
+			/// The account for which the name was removed.
+			target: T::AccountId,
+			/// The deposit returned.
+			deposit: BalanceOf<T>,
+		},
 	}
 
-	/// Error for the nicks pallet.
+	/// Error for the Nicks pallet.
 	#[pallet::error]
 	pub enum Error<T> {
 		/// A name is too short.

@@ -39,7 +39,7 @@ use sp_staking::{EraIndex, SessionIndex};
 use crate as pallet_beefy;
 
 pub use sp_consensus_beefy::{
-	crypto::{AuthorityId as BeefyId, AuthoritySignature as BeefySignature},
+	ecdsa_crypto::{AuthorityId as BeefyId, AuthoritySignature as BeefySignature},
 	ConsensusLog, EquivocationProof, BEEFY_ENGINE_ID,
 };
 
@@ -110,6 +110,7 @@ parameter_types! {
 impl pallet_beefy::Config for Test {
 	type BeefyId = BeefyId;
 	type MaxAuthorities = ConstU32<100>;
+	type MaxNominators = ConstU32<1000>;
 	type MaxSetIdSessionEntries = MaxSetIdSessionEntries;
 	type OnNewValidatorSet = ();
 	type WeightInfo = ();

@@ -52,4 +52,8 @@ tempfile = "3.1.0"
 tokio = "1.27.0"
 
 [features]
-try-runtime = ["sp-debug-derive/force-debug", "frame-try-runtime/try-runtime"]
+try-runtime = [
+	"sp-debug-derive/force-debug",
+	"frame-try-runtime/try-runtime",
+	"sp-runtime/try-runtime"
+]

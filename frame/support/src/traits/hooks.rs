@@ -401,8 +401,8 @@ pub trait Hooks<BlockNumber> {
 	/// `type Bar: Get<u32>` where `Foo::get()` must always be greater than `Bar::get()`, such
 	/// checks can be asserted upon here.
 	///
-	/// Note that this hook is not executed in an externality environment, so if access to state is
-	/// needed, the code should be wrapped in `sp_io::TestExternalities`.
+	/// Note that this hook is executed in an externality environment, provided by
+	/// `sp_io::TestExternalities`. This makes it possible to access the storage.
 	fn integrity_test() {}
 }
 
