@@ -1381,10 +1381,11 @@ fn delegate_call() {
 }
 
 #[test]
-fn transfer_allow_death_cannot_kill_account() {
+fn transfer_expendable_cannot_kill_account() {
 	let (wasm, _code_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
+		let meter_storage_deposit = 132;
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -1407,6 +1408,12 @@ fn transfer_allow_death_cannot_kill_account() {
 
 		let total_balance = <Test as Config>::Currency::total_balance(&addr);
 
+		assert_eq!(
+			test_utils::get_balance_on_hold(&HoldReason::StorageDepositReserve.into(), &addr),
+			meter_storage_deposit
+		);
+
+		// Some ot the total balance is held, so it can't be transferred.
 		assert_err!(
 			<<Test as Config>::Currency as Mutate<AccountId32>>::transfer(
 				&addr,
@@ -1414,7 +1421,7 @@ fn transfer_allow_death_cannot_kill_account() {
 				total_balance,
 				Preservation::Expendable,
 			),
-			TokenError::Frozen,
+			TokenError::FundsUnavailable,
 		);
 
 		assert_eq!(<Test as Config>::Currency::total_balance(&addr), total_balance);
@@ -1602,7 +1609,7 @@ fn self_destruct_works() {
 		.account_id;
 
 		// Check that the BOB contract has been instantiated.
-		// let contract = get_contract(&addr);
+		let _ = get_contract(&addr);
 
 		// Drop all previous events
 		initialize_block(2);
