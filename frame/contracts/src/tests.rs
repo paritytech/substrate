@@ -28,13 +28,14 @@ use crate::{
 	migration::codegen::LATEST_MIGRATION_VERSION,
 	storage::DeletionQueueManager,
 	tests::test_utils::{get_contract, get_contract_checked},
-	unsafe_debug::ExecutionObserver,
 	wasm::{Determinism, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeHash, CodeInfoOf, CollectEvents, Config, ContractInfo, ContractInfoOf,
-	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, ExportedFunction,
-	MigrationInProgress, Origin, Pallet, PristineCode, Schedule,
+	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress, Origin,
+	Pallet, PristineCode, Schedule,
 };
+#[cfg(feature = "unsafe-debug")]
+use crate::{unsafe_debug::ExecutionObserver, ExportedFunction};
 use assert_matches::assert_matches;
 use codec::Encode;
 use frame_support::{
@@ -49,7 +50,9 @@ use frame_support::{
 	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
 use frame_system::{EventRecord, Phase};
-use pallet_contracts_primitives::{CodeUploadReturnValue, ExecReturnValue};
+use pallet_contracts_primitives::CodeUploadReturnValue;
+#[cfg(feature = "unsafe-debug")]
+use pallet_contracts_primitives::ExecReturnValue;
 use pretty_assertions::{assert_eq, assert_ne};
 use sp_core::ByteArray;
 use sp_io::hashing::blake2_256;
@@ -59,7 +62,9 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
 	AccountId32, BuildStorage, Perbill, TokenError,
 };
-use std::{cell::RefCell, ops::Deref};
+#[cfg(feature = "unsafe-debug")]
+use std::cell::RefCell;
+use std::ops::Deref;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -439,6 +444,7 @@ parameter_types! {
 	pub static UnstableInterface: bool = true;
 }
 
+#[cfg(feature = "unsafe-debug")]
 #[derive(Clone, PartialEq, Eq, Debug)]
 struct DebugFrame {
 	code_hash: CodeHash<Test>,
@@ -447,11 +453,14 @@ struct DebugFrame {
 	result: Option<Vec<u8>>,
 }
 
+#[cfg(feature = "unsafe-debug")]
 thread_local! {
-static DEBUG_EXECUTION_TRACE: RefCell<Vec<DebugFrame>> = RefCell::new(Vec::new());
-	}
+	static DEBUG_EXECUTION_TRACE: RefCell<Vec<DebugFrame>> = RefCell::new(Vec::new());
+}
 
+#[cfg(feature = "unsafe-debug")]
 pub struct TestDebugger;
+#[cfg(feature = "unsafe-debug")]
 impl ExecutionObserver<CodeHash<Test>> for TestDebugger {
 	fn before_call(code_hash: &CodeHash<Test>, entry_point: ExportedFunction, input_data: &[u8]) {
 		DEBUG_EXECUTION_TRACE.with(|d| {
@@ -505,6 +514,7 @@ impl Config for Test {
 	type Migrations = crate::migration::codegen::BenchMigrations;
 	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
 	type MaxDelegateDependencies = MaxDelegateDependencies;
+	#[cfg(feature = "unsafe-debug")]
 	type Debug = TestDebugger;
 }
 
@@ -5942,6 +5952,7 @@ fn root_cannot_instantiate() {
 	});
 }
 
+#[cfg(feature = "unsafe-debug")]
 #[test]
 fn unsafe_debugging_works() {
 	let (wasm_caller, code_hash_caller) = compile_module::<Test>("call").unwrap();
