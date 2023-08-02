@@ -86,6 +86,7 @@ std = [
 	"rand/std",
 	"environmental/std",
 	"pallet-balances/std",
+	"pallet-contracts/std", # needed because of self-dependency
 	"pallet-insecure-randomness-collective-flip/std",
 	"pallet-proxy/std",
 	"pallet-timestamp/std",
