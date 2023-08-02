@@ -233,6 +233,20 @@ impl StakingInterface for StakingMock {
 	fn unbond(_stash: &Self::AccountId, _value: Self::Balance) -> sp_runtime::DispatchResult {
 		unreachable!();
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add_era_stakers(
+		current_era: &EraIndex,
+		stash: &Self::AccountId,
+		exposures: Vec<(Self::AccountId, Self::Balance)>,
+	) {
+		unreachable!();
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_current_era(era: EraIndex) {
+		unreachable!();
+	}
 }
 
 type Nominations = Vec<AccountId>;
