@@ -634,8 +634,6 @@ pub(crate) mod tests {
 			sp_tracing::try_init_simple();
 			let j1 = development_config().as_json(true).unwrap();
 			let j2 = development_config_legacy().as_json(true).unwrap();
-			std::fs::write("/tmp/j1.json", j1.clone()).unwrap();
-			std::fs::write("/tmp/j2.json", j2.clone()).unwrap();
 			assert_eq!(j1, j2);
 		}
 
@@ -670,8 +668,6 @@ pub(crate) mod tests {
 			sp_tracing::try_init_simple();
 			let j1 = local_testnet_config().as_json(true).unwrap();
 			let j2 = local_testnet_config_legacy().as_json(true).unwrap();
-			std::fs::write("/tmp/i1.json", j1.clone()).unwrap();
-			std::fs::write("/tmp/i2.json", j2.clone()).unwrap();
 			assert_eq!(j1, j2);
 		}
 
@@ -715,13 +711,11 @@ pub(crate) mod tests {
 			sp_tracing::try_init_simple();
 
 			let chain_spec = staging_testnet_config();
-			std::fs::write("/tmp/k1.json", chain_spec.as_json(false).unwrap()).unwrap();
 			let storage = chain_spec.build_storage().unwrap();
 			let mut keys = storage.top.keys().cloned().map(hex).collect::<Vec<String>>();
 			keys.sort();
 
 			let chain_spec = staging_testnet_config_legacy();
-			std::fs::write("/tmp/k2.json", chain_spec.as_json(false).unwrap()).unwrap();
 			let storage = chain_spec.build_storage().unwrap();
 			let mut keys_expected = storage.top.keys().cloned().map(hex).collect::<Vec<String>>();
 			keys_expected.sort();
