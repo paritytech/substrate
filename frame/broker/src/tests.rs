@@ -748,3 +748,108 @@ fn purchase_requires_valid_status_and_sale_info() {
 		assert_noop!(Broker::do_purchase(1, 100), Error::<Test>::Overpriced);
 	});
 }
+
+#[test]
+fn renewal_requires_valid_status_and_sale_info() {
+	TestExt::new().execute_with(|| {
+		assert_noop!(Broker::do_renew(1, 1), Error::<Test>::Uninitialized);
+
+		let status = StatusRecord {
+			core_count: 2,
+			private_pool_size: 0,
+			system_pool_size: 0,
+			last_committed_timeslice: 0,
+			last_timeslice: 1,
+		};
+		Status::<Test>::put(&status);
+		assert_noop!(Broker::do_renew(1, 1), Error::<Test>::NoSales);
+
+		let mut dummy_sale = SaleInfoRecord {
+			sale_start: 0,
+			leadin_length: 0,
+			price: 200,
+			sellout_price: None,
+			region_begin: 0,
+			region_end: 3,
+			first_core: 3,
+			ideal_cores_sold: 0,
+			cores_offered: 1,
+			cores_sold: 2,
+		};
+		SaleInfo::<Test>::put(&dummy_sale);
+		assert_noop!(Broker::do_renew(1, 1), Error::<Test>::Unavailable);
+
+		dummy_sale.first_core = 1;
+		SaleInfo::<Test>::put(&dummy_sale);
+		assert_noop!(Broker::do_renew(1, 1), Error::<Test>::SoldOut);
+
+		assert_ok!(Broker::do_start_sales(200, 1));
+		assert_noop!(Broker::do_renew(1, 1), Error::<Test>::NotAllowed);
+
+		let record = AllowedRenewalRecord {
+			price: 100,
+			completion: CompletionStatus::Partial(CoreMask::from_chunk(0, 20)),
+		};
+		AllowedRenewals::<Test>::insert(AllowedRenewalId { core: 1, when: 4 }, &record);
+		assert_noop!(Broker::do_renew(1, 1), Error::<Test>::IncompleteAssignment);
+	});
+}
+
+#[test]
+fn cannot_transfer_or_partition_or_interlace_unknown() {
+	TestExt::new().execute_with(|| {
+		let region_id = RegionId { begin: 0, core: 0, mask: CoreMask::complete() };
+		assert_noop!(Broker::do_transfer(region_id, None, 2), Error::<Test>::UnknownRegion);
+		assert_noop!(Broker::do_partition(region_id, None, 2), Error::<Test>::UnknownRegion);
+		assert_noop!(
+			Broker::do_interlace(region_id, None, CoreMask::from_chunk(0, 20)),
+			Error::<Test>::UnknownRegion
+		);
+	});
+}
+
+#[test]
+fn check_ownership_for_transfer_or_partition_or_interlace() {
+	TestExt::new().execute_with(|| {
+		let region_id = RegionId { begin: 0, core: 0, mask: CoreMask::complete() };
+		let record = RegionRecord { end: 4, owner: 1, paid: None };
+		Regions::<Test>::insert(region_id, &record);
+		assert_noop!(Broker::do_transfer(region_id, Some(2), 2), Error::<Test>::NotOwner);
+		assert_noop!(Broker::do_partition(region_id, Some(2), 2), Error::<Test>::NotOwner);
+		assert_noop!(
+			Broker::do_interlace(region_id, Some(2), CoreMask::from_chunk(0, 20)),
+			Error::<Test>::NotOwner
+		);
+	});
+}
+
+#[test]
+fn cannot_partition_invalid_offset() {
+	TestExt::new().execute_with(|| {
+		let region_id = RegionId { begin: 0, core: 0, mask: CoreMask::complete() };
+		let record = RegionRecord { end: 4, owner: 1, paid: None };
+		Regions::<Test>::insert(region_id, &record);
+		assert_noop!(Broker::do_partition(region_id, None, 5), Error::<Test>::PivotTooLate);
+	});
+}
+
+#[test]
+fn cannot_interlace_invalid_pivot() {
+	TestExt::new().execute_with(|| {
+		let region_id = RegionId { begin: 0, core: 0, mask: CoreMask::from_chunk(0, 20) };
+		let record = RegionRecord { end: 4, owner: 1, paid: None };
+		Regions::<Test>::insert(region_id, &record);
+		assert_noop!(
+			Broker::do_interlace(region_id, None, CoreMask::from_chunk(20, 40)),
+			Error::<Test>::ExteriorPivot
+		);
+		assert_noop!(
+			Broker::do_interlace(region_id, None, CoreMask::void()),
+			Error::<Test>::VoidPivot
+		);
+		assert_noop!(
+			Broker::do_interlace(region_id, None, CoreMask::from_chunk(0, 20)),
+			Error::<Test>::CompletePivot
+		);
+	});
+}
