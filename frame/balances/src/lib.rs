@@ -730,6 +730,12 @@ pub mod pallet {
 			let existential_deposit = Self::ed();
 
 			let wipeout = new_free < existential_deposit;
+			debug_assert!(
+				!wipeout || <T::Balance as Zero>::is_zero(&new_free),
+				"Attempt to force balance to be {:?} but this is less than ED {:?}",
+				new_free,
+				existential_deposit
+			);
 			let new_free = if wipeout { Zero::zero() } else { new_free };
 
 			// First we try to modify the account's balance to the forced balance.
