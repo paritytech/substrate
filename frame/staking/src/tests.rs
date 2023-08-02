@@ -788,7 +788,7 @@ fn get_destination_payout_migrates_payee() {
 		Payee::<Test>::insert(stash, RewardDestination::Staked);
 
 		// When
-		let dest = Staking::get_payout_destination(&stash, controller);
+		let dest = Staking::get_payout_destination_migrate(&stash, controller);
 
 		// Then
 		assert_eq!(dest, PayoutDestination::Stake,);

@@ -294,8 +294,8 @@ impl<T: Config> Pallet<T> {
 	fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
 		// NOTE: temporary getter while `Payee` -> `Payees` lazy migration is taking place.
 		// Can replace with `dest = Self:payees(stash);` once migration is done.
-		let dest =
-			Self::bonded(stash).and_then(|c| Some(Self::get_payout_destination(stash, c)))?;
+		let dest = Self::bonded(stash)
+			.and_then(|c| Some(Self::get_payout_destination_migrate(stash, c)))?;
 
 		// Closure to handle the `Stake` payout destination, used in `Stake` and `Split` variants.
 		let payout_destination_stake = |a: BalanceOf<T>| -> Option<PositiveImbalanceOf<T>> {
@@ -1012,7 +1012,7 @@ impl<T: Config> Pallet<T> {
 	/// Temporary getter for `Payees`.
 	///
 	/// Migrates `Payee` to `Payees` if it has not been migrated already.
-	pub fn get_payout_destination(
+	pub fn get_payout_destination_migrate(
 		stash: &T::AccountId,
 		controller: T::AccountId,
 	) -> PayoutDestination<T::AccountId> {
