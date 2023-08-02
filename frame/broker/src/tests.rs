@@ -810,14 +810,14 @@ fn cannot_transfer_or_partition_or_interlace_unknown() {
 
 #[test]
 fn check_ownership_for_transfer_or_partition_or_interlace() {
-	TestExt::new().execute_with(|| {
-		let region_id = RegionId { begin: 0, core: 0, mask: CoreMask::complete() };
-		let record = RegionRecord { end: 4, owner: 1, paid: None };
-		Regions::<Test>::insert(region_id, &record);
-		assert_noop!(Broker::do_transfer(region_id, Some(2), 2), Error::<Test>::NotOwner);
-		assert_noop!(Broker::do_partition(region_id, Some(2), 2), Error::<Test>::NotOwner);
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100, 1));
+		advance_to(2);
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		assert_noop!(Broker::do_transfer(region, Some(2), 2), Error::<Test>::NotOwner);
+		assert_noop!(Broker::do_partition(region, Some(2), 2), Error::<Test>::NotOwner);
 		assert_noop!(
-			Broker::do_interlace(region_id, Some(2), CoreMask::from_chunk(0, 20)),
+			Broker::do_interlace(region, Some(2), CoreMask::from_chunk(0, 20)),
 			Error::<Test>::NotOwner
 		);
 	});
@@ -825,30 +825,31 @@ fn check_ownership_for_transfer_or_partition_or_interlace() {
 
 #[test]
 fn cannot_partition_invalid_offset() {
-	TestExt::new().execute_with(|| {
-		let region_id = RegionId { begin: 0, core: 0, mask: CoreMask::complete() };
-		let record = RegionRecord { end: 4, owner: 1, paid: None };
-		Regions::<Test>::insert(region_id, &record);
-		assert_noop!(Broker::do_partition(region_id, None, 5), Error::<Test>::PivotTooLate);
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100, 1));
+		advance_to(2);
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		assert_noop!(Broker::do_partition(region, None, 5), Error::<Test>::PivotTooLate);
 	});
 }
 
 #[test]
 fn cannot_interlace_invalid_pivot() {
-	TestExt::new().execute_with(|| {
-		let region_id = RegionId { begin: 0, core: 0, mask: CoreMask::from_chunk(0, 20) };
-		let record = RegionRecord { end: 4, owner: 1, paid: None };
-		Regions::<Test>::insert(region_id, &record);
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100, 1));
+		advance_to(2);
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		let (region1, _) = Broker::do_interlace(region, None, CoreMask::from_chunk(0, 20)).unwrap();
 		assert_noop!(
-			Broker::do_interlace(region_id, None, CoreMask::from_chunk(20, 40)),
+			Broker::do_interlace(region1, None, CoreMask::from_chunk(20, 40)),
 			Error::<Test>::ExteriorPivot
 		);
 		assert_noop!(
-			Broker::do_interlace(region_id, None, CoreMask::void()),
+			Broker::do_interlace(region1, None, CoreMask::void()),
 			Error::<Test>::VoidPivot
 		);
 		assert_noop!(
-			Broker::do_interlace(region_id, None, CoreMask::from_chunk(0, 20)),
+			Broker::do_interlace(region1, None, CoreMask::from_chunk(0, 20)),
 			Error::<Test>::CompletePivot
 		);
 	});
