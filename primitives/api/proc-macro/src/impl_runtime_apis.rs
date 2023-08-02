@@ -31,10 +31,12 @@ use quote::quote;
 
 use syn::{
 	fold::{self, Fold},
+	parenthesized,
 	parse::{Error, Parse, ParseStream, Result},
 	parse_macro_input, parse_quote,
 	spanned::Spanned,
-	Attribute, Ident, ImplItem, ItemImpl, Path, Signature, Type, TypePath,
+	Attribute, Ident, ImplItem, ImplItemFn, ItemImpl, LitInt, LitStr, Path, Signature, Type,
+	TypePath,
 };
 
 use std::collections::HashSet;
@@ -67,6 +69,7 @@ fn generate_impl_call(
 	runtime: &Type,
 	input: &Ident,
 	impl_trait: &Path,
+	api_version: &ApiVersion,
 ) -> Result<TokenStream> {
 	let params =
 		extract_parameter_names_types_and_borrows(signature, AllowSelfRefInParameters::No)?;
@@ -111,11 +114,40 @@ fn generate_impl_call(
 		)
 	};
 
+	let fn_calls = if let Some(feature_gated) = &api_version.feature_gated {
+		let pnames = pnames2;
+		let pnames2 = pnames.clone();
+		let pborrow2 = pborrow.clone();
+
+		let feature_name = &feature_gated.0;
+		let impl_trait_fg = extend_with_api_version(impl_trait.clone(), Some(feature_gated.1));
+		let impl_trait = extend_with_api_version(impl_trait.clone(), api_version.custom);
+
+		quote!(
+			#[cfg(feature = #feature_name)]
+			#[allow(deprecated)]
+			let r = <#runtime as #impl_trait_fg>::#fn_name(#( #pborrow #pnames ),*);
+
+			#[cfg(not(feature = #feature_name))]
+			#[allow(deprecated)]
+			let r = <#runtime as #impl_trait>::#fn_name(#( #pborrow2 #pnames2 ),*);
+
+			r
+		)
+	} else {
+		let pnames = pnames2;
+		let impl_trait = extend_with_api_version(impl_trait.clone(), api_version.custom);
+
+		quote!(
+			#[allow(deprecated)]
+			<#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames ),*)
+		)
+	};
+
 	Ok(quote!(
 		#decode_params
 
-		#[allow(deprecated)]
-		<#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames2 ),*)
+		#fn_calls
 	))
 }
 
@@ -130,7 +162,6 @@ fn generate_impl_calls(
 		let trait_api_ver = extract_api_version(&impl_.attrs, impl_.span())?;
 		let impl_trait_path = extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?;
 		let impl_trait = extend_with_runtime_decl_path(impl_trait_path.clone());
-		let impl_trait = extend_with_api_version(impl_trait, trait_api_ver);
 		let impl_trait_ident = &impl_trait_path
 			.segments
 			.last()
@@ -139,14 +170,28 @@ fn generate_impl_calls(
 
 		for item in &impl_.items {
 			if let ImplItem::Fn(method) = item {
-				let impl_call =
-					generate_impl_call(&method.sig, &impl_.self_ty, input, &impl_trait)?;
+				let impl_call = generate_impl_call(
+					&method.sig,
+					&impl_.self_ty,
+					input,
+					&impl_trait,
+					&trait_api_ver,
+				)?;
+				let mut attrs = filter_cfg_attrs(&impl_.attrs);
+
+				let method_api_version = extract_api_version(&method.attrs, method.span())?;
+				if method_api_version.custom.is_some() {
+					return Err(Error::new(method.span(), "`api_version` attribute is not allowed `decl_runtime_api` method implementations"))
+				}
+				if let Some(feature_gated) = method_api_version.feature_gated {
+					add_feature_guard(&mut attrs, &feature_gated.0, true)
+				}
 
 				impl_calls.push((
 					impl_trait_ident.clone(),
 					method.sig.ident.clone(),
 					impl_call,
-					filter_cfg_attrs(&impl_.attrs),
+					attrs,
 				));
 			}
 		}
@@ -448,6 +493,74 @@ fn extend_with_api_version(mut trait_: Path, version: Option<u64>) -> Path {
 	trait_
 }
 
+// Adds a `#[cfg( feature = ...)]` attribute to attributes. Parameters:
+// feature_name - name of the feature
+// t - positive or negative feature guard.
+//		true => `#[cfg(feature = ...)]`
+//		false => `#[cfg(not(feature = ...))]`
+fn add_feature_guard(attrs: &mut Vec<Attribute>, feature_name: &str, t: bool) {
+	let attr = match t {
+		true => parse_quote!(#[cfg(feature = #feature_name)]),
+		false => parse_quote!(#[cfg(not(feature = #feature_name))]),
+	};
+	attrs.push(attr);
+}
+
+// Fold implementation which processes function implementations in impl block for a trait. It is
+// used to process `cfg_attr`s related to staging methods (e.g. `#[cfg_attr(feature =
+// "enable-staging-api", api_version(99))]`). Replaces the `cfg_attr` attribute with a feature guard
+// so that staging methods are added only for staging api implementations.
+struct ApiImplItem {
+	errors: Vec<Error>,
+}
+
+impl ApiImplItem {
+	pub fn new() -> ApiImplItem {
+		ApiImplItem { errors: Vec::new() }
+	}
+
+	pub fn process(&mut self, item: ItemImpl) -> Result<ItemImpl> {
+		let res = self.fold_item_impl(item);
+
+		if let Some(e) = self.errors.pop() {
+			// TODO: what to do with the rest of the errors?
+			return Err(e)
+		}
+
+		Ok(res)
+	}
+}
+
+impl Fold for ApiImplItem {
+	fn fold_impl_item_fn(&mut self, mut i: ImplItemFn) -> ImplItemFn {
+		let v = extract_api_version(&i.attrs, i.span());
+
+		if let Err(e) = v {
+			self.errors.push(e);
+			return fold::fold_impl_item_fn(self, i)
+		}
+
+		let v = v
+			.expect("Explicitly checked for and handled the error case on the previous line. qed.");
+
+		if v.custom.is_some() {
+			self.errors.push(Error::new(
+				i.span(),
+				"`api_version` attribute is not allowed `decl_runtime_api` method implementations",
+			));
+			return fold::fold_impl_item_fn(self, i)
+		}
+
+		if let Some(v) = v.feature_gated {
+			add_feature_guard(&mut i.attrs, &v.0, true);
+		}
+
+		i.attrs = filter_cfg_attrs(&i.attrs);
+
+		fold::fold_impl_item_fn(self, i)
+	}
+}
+
 /// Generates the implementations of the apis for the runtime.
 fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let mut impls_prepared = Vec::new();
@@ -458,12 +571,31 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 		let trait_api_ver = extract_api_version(&impl_.attrs, impl_.span())?;
 
 		let mut impl_ = impl_.clone();
+		impl_.attrs = filter_cfg_attrs(&impl_.attrs);
+		// Process all method implementations add add feature gates where necessary
+		let mut impl_ = ApiImplItem::new().process(impl_)?;
+
 		let trait_ = extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?.clone();
 		let trait_ = extend_with_runtime_decl_path(trait_);
-		let trait_ = extend_with_api_version(trait_, trait_api_ver);
+		// If the trait api contains feature gated version - there are staging methods in it. Handle
+		// them explicitly here by adding staging implementation with `#cfg(feature = ...)` and
+		// stable implementation with `#[cfg(not(feature = ...))]`.
+		if let Some(feature_gated) = trait_api_ver.feature_gated {
+			let mut feature_gated_impl = impl_.clone();
+			add_feature_guard(&mut feature_gated_impl.attrs, &feature_gated.0, true);
+			feature_gated_impl.trait_.as_mut().unwrap().1 =
+				extend_with_api_version(trait_.clone(), Some(feature_gated.1));
 
+			impls_prepared.push(feature_gated_impl);
+
+			// Finally add `#[cfg(not(feature = ...))]` for the stable implementation (which is
+			// generated outside this if).
+			add_feature_guard(&mut impl_.attrs, &feature_gated.0, false);
+		}
+
+		// Generate stable trait implementation.
+		let trait_ = extend_with_api_version(trait_, trait_api_ver.custom);
 		impl_.trait_.as_mut().unwrap().1 = trait_;
-		impl_.attrs = filter_cfg_attrs(&impl_.attrs);
 		impls_prepared.push(impl_);
 	}
 
@@ -671,7 +803,8 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let c = generate_crate_access();
 
 	for impl_ in impls {
-		let api_ver = extract_api_version(&impl_.attrs, impl_.span())?.map(|a| a as u32);
+		let versions = extract_api_version(&impl_.attrs, impl_.span())?;
+		let api_ver = versions.custom.map(|a| a as u32);
 
 		let mut path = extend_with_runtime_decl_path(
 			extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?.clone(),
@@ -695,11 +828,34 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 		}
 
 		let id: Path = parse_quote!( #path ID );
-		let version = quote!( #path VERSION );
-		let attrs = filter_cfg_attrs(&impl_.attrs);
+		let mut attrs = filter_cfg_attrs(&impl_.attrs);
 
-		let api_ver = api_ver.map(|a| quote!( #a )).unwrap_or_else(|| version);
-		populate_runtime_api_versions(&mut result, &mut sections, attrs, id, api_ver, &c)
+		// Handle API versioning
+		// If feature gated version is set - handle it first
+		if let Some(feature_gated) = versions.feature_gated {
+			let feature_gated_version = feature_gated.1 as u32;
+			// the attributes for the feature gated staging api
+			let mut feature_gated_attrs = attrs.clone();
+			add_feature_guard(&mut feature_gated_attrs, &feature_gated.0, true);
+			populate_runtime_api_versions(
+				&mut result,
+				&mut sections,
+				feature_gated_attrs,
+				id.clone(),
+				quote!( #feature_gated_version ),
+				&c,
+			);
+
+			// Add `#[cfg(not(feature ...))]` to the initial attributes. If the staging feature flag
+			// is not set we want to set the stable api version
+			add_feature_guard(&mut attrs, &feature_gated.0, false);
+		}
+
+		// Now add the stable api version to the versions list. If the api has got staging functions
+		// there might be a `#[cfg(not(feature ...))]` attribute attached to the stable version.
+		let base_api_version = quote!( #path VERSION );
+		let api_ver = api_ver.map(|a| quote!( #a )).unwrap_or_else(|| base_api_version);
+		populate_runtime_api_versions(&mut result, &mut sections, attrs, id, api_ver, &c);
 	}
 
 	Ok(quote!(
@@ -766,12 +922,65 @@ fn filter_cfg_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
 	attrs.iter().filter(|a| a.path().is_ident("cfg")).cloned().collect()
 }
 
+// Parse feature flagged api_version.
+// E.g. `#[cfg_attr(feature = "enable-staging-api", api_version(99))]`
+fn extract_cfg_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<(String, u64)>> {
+	let cfg_attrs = attrs.iter().filter(|a| a.path().is_ident("cfg_attr")).collect::<Vec<_>>();
+
+	let mut cfg_api_version_attr = Vec::new();
+	for cfg_attr in cfg_attrs {
+		let mut feature_name = None;
+		let mut api_version = None;
+		cfg_attr.parse_nested_meta(|m| {
+			if m.path.is_ident("feature") {
+				let a = m.value()?;
+				let b: LitStr = a.parse()?;
+				feature_name = Some(b.value());
+			} else if m.path.is_ident(API_VERSION_ATTRIBUTE) {
+				let content;
+				parenthesized!(content in m.input);
+				let ver: LitInt = content.parse()?;
+				api_version = Some(ver.base10_parse::<u64>()?);
+			} else {
+				// we don't want to enforce any restrictions on the `cfg` attributes so just do
+				// nothing here. Otherwise return an error
+				// return Err(Error::new(span, format!("Unsupported cfg attribute")))
+			}
+			Ok(())
+		})?;
+
+		// If there is a cfg attribute containing api_version - save if for processing
+		if let (Some(feature_name), Some(api_version)) = (feature_name, api_version) {
+			cfg_api_version_attr.push((feature_name, api_version));
+		}
+	}
+
+	if cfg_api_version_attr.len() > 1 {
+		return Err(Error::new(span, format!("Found multiple feature gated api versions (cfg attribute with nested {} attribute). This is not supported.", API_VERSION_ATTRIBUTE)))
+	}
+
+	match cfg_api_version_attr.len() {
+		0 => Ok(None),
+		_ => Ok(Some(cfg_api_version_attr.pop())
+			.expect("match expression guarantees that the vec is not empty. qed.")),
+	}
+}
+
+// Represents an API version.
+// `custom` corresponds to `#[api_version(X)]` attribute.
+// `feature_gated` corresponds to `#[cfg_attr(feature = "enable-staging-api", api_version(99))]`
+// attribute. `String` is the feature name, `u64` the staging api version.
+// Both fields may or may not exist for an item so they are both `Option`.
+struct ApiVersion {
+	pub custom: Option<u64>,
+	pub feature_gated: Option<(String, u64)>,
+}
+
 // Extracts the value of `API_VERSION_ATTRIBUTE` and handles errors.
 // Returns:
 // - Err if the version is malformed
-// - Some(u64) if the version is set
-// - None if the version is not set (this is valid).
-fn extract_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<u64>> {
+// - `ApiVersion` on success. IF a version is set or not is determined by the fields of `ApiVersion`
+fn extract_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<ApiVersion> {
 	// First fetch all `API_VERSION_ATTRIBUTE` values (should be only one)
 	let api_ver = attrs
 		.iter()
@@ -790,7 +999,10 @@ fn extract_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<u64>
 	}
 
 	// Parse the runtime version if there exists one.
-	api_ver.first().map(|v| parse_runtime_api_version(v)).transpose()
+	Ok(ApiVersion {
+		custom: api_ver.first().map(|v| parse_runtime_api_version(v)).transpose()?,
+		feature_gated: extract_cfg_api_version(attrs, span)?,
+	})
 }
 
 #[cfg(test)]
