@@ -255,55 +255,55 @@ where
 	}
 }
 
-/// Methods for the `ValidateUnsigned` implementation:
-/// It restricts calls to `report_equivocation_unsigned` to local calls (i.e. extrinsics generated
-/// on this node) or that already in a block. This guarantees that only block authors can include
-/// unsigned equivocation reports.
-impl<T: Config> Pallet<T> {
-	pub fn validate_unsigned(source: TransactionSource, call: &Call<T>) -> TransactionValidity {
-		if let Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
-			// discard equivocation report not coming from the local node
-			match source {
-				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
-				_ => {
-					log::warn!(
-						target: LOG_TARGET,
-						"rejecting unsigned report equivocation transaction because it is not local/in-block."
-					);
-					return InvalidTransaction::Call.into()
-				},
-			}
+// Methods for the `ValidateUnsigned` implementation:
+// It restricts calls to `report_equivocation_unsigned` to local calls (i.e. extrinsics generated
+// on this node) or that already in a block. This guarantees that only block authors can include
+// unsigned equivocation reports.
+// impl<T: Config> Pallet<T> {
+// 	pub fn validate_unsigned(source: TransactionSource, call: &Call<T>) -> TransactionValidity {
+// 		if let Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
+// 			// discard equivocation report not coming from the local node
+// 			match source {
+// 				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
+// 				_ => {
+// 					log::warn!(
+// 						target: LOG_TARGET,
+// 						"rejecting unsigned report equivocation transaction because it is not local/in-block."
+// 					);
+// 					return InvalidTransaction::Call.into()
+// 				},
+// 			}
 
-			let evidence = (*equivocation_proof.clone(), key_owner_proof.clone());
-			T::EquivocationReportSystem::check_evidence(evidence)?;
+// 			let evidence = (*equivocation_proof.clone(), key_owner_proof.clone());
+// 			T::EquivocationReportSystem::check_evidence(evidence)?;
 
-			let longevity =
-				<T::EquivocationReportSystem as OffenceReportSystem<_, _>>::Longevity::get();
+// 			let longevity =
+// 				<T::EquivocationReportSystem as OffenceReportSystem<_, _>>::Longevity::get();
 
-			ValidTransaction::with_tag_prefix("BeefyEquivocation")
-				// We assign the maximum priority for any equivocation report.
-				.priority(TransactionPriority::MAX)
-				// Only one equivocation report for the same offender at the same slot.
-				.and_provides((
-					equivocation_proof.offender_id().clone(),
-					equivocation_proof.set_id(),
-					*equivocation_proof.round_number(),
-				))
-				.longevity(longevity)
-				// We don't propagate this. This can never be included on a remote node.
-				.propagate(false)
-				.build()
-		} else {
-			InvalidTransaction::Call.into()
-		}
-	}
+// 			ValidTransaction::with_tag_prefix("BeefyEquivocation")
+// 				// We assign the maximum priority for any equivocation report.
+// 				.priority(TransactionPriority::MAX)
+// 				// Only one equivocation report for the same offender at the same slot.
+// 				.and_provides((
+// 					equivocation_proof.offender_id().clone(),
+// 					equivocation_proof.set_id(),
+// 					*equivocation_proof.round_number(),
+// 				))
+// 				.longevity(longevity)
+// 				// We don't propagate this. This can never be included on a remote node.
+// 				.propagate(false)
+// 				.build()
+// 		} else {
+// 			InvalidTransaction::Call.into()
+// 		}
+// 	}
 
-	pub fn pre_dispatch(call: &Call<T>) -> Result<(), TransactionValidityError> {
-		if let Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
-			let evidence = (*equivocation_proof.clone(), key_owner_proof.clone());
-			T::EquivocationReportSystem::check_evidence(evidence)
-		} else {
-			Err(InvalidTransaction::Call.into())
-		}
-	}
-}
+// 	pub fn pre_dispatch(call: &Call<T>) -> Result<(), TransactionValidityError> {
+// 		if let Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
+// 			let evidence = (*equivocation_proof.clone(), key_owner_proof.clone());
+// 			T::EquivocationReportSystem::check_evidence(evidence)
+// 		} else {
+// 			Err(InvalidTransaction::Call.into())
+// 		}
+// 	}
+// }

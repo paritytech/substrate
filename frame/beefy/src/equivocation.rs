@@ -241,6 +241,7 @@ where
 /// It restricts calls to `report_equivocation_unsigned` to local calls (i.e. extrinsics generated
 /// on this node) or that already in a block. This guarantees that only block authors can include
 /// unsigned equivocation reports.
+// TODO: move to lib.rs and make it generic over the offence report system
 impl<T: Config> Pallet<T> {
 	pub fn validate_unsigned(source: TransactionSource, call: &Call<T>) -> TransactionValidity {
 		if let Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
