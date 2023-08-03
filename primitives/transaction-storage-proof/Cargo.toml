@@ -28,9 +28,9 @@ std = [
 	"async-trait",
 	"codec/std",
 	"scale-info/std",
-	"sp-core",
 	"sp-inherents/std",
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-trie/std",
+	"sp-core/std"
 ]

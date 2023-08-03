@@ -47,6 +47,9 @@ std = [
 	"log/std",
 	"scale-info/std",
 	"sp-metadata-ir?/std",
+	"sp-api-proc-macro/std",
+	"sp-externalities?/std",
+	"sp-test-primitives/std"
 ]
 # Special feature to disable logging completely.
 #
