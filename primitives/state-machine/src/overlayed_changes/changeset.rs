@@ -118,6 +118,9 @@ pub enum StorageEntry {
 		// False when this append is obtain from no value or a value in a same overlay.
 		// This avoid case where we rollback to incorrect data due to delete then append
 		// in an overlay.
+		// Note that this cannot be deduced from transaction depth n minus one because we can have
+		// a break in transaction sequence in a same transaction.
+		// (remove or set value during a transaction).
 		from_parent: bool,
 	},
 }
