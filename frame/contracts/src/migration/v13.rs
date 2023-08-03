@@ -20,18 +20,28 @@
 
 use crate::{
 	migration::{IsFinished, MigrationStep},
-	storage::DepositAccount,
 	weights::WeightInfo,
-	BalanceOf, CodeHash, Config, Pallet, TrieId, Weight, LOG_TARGET,
+	AccountIdOf, BalanceOf, CodeHash, Config, Pallet, TrieId, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode};
+use core::ops::Deref;
 use frame_support::{codec, pallet_prelude::*, storage_alias, DefaultNoBound};
 use sp_runtime::BoundedBTreeMap;
 use sp_std::prelude::*;
 
-mod old {
-	use crate::storage::DepositAccount;
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(T))]
+pub struct DepositAccount<T: Config>(AccountIdOf<T>);
 
+impl<T: Config> Deref for DepositAccount<T> {
+	type Target = AccountIdOf<T>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+mod old {
 	use super::*;
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
@@ -60,7 +70,7 @@ mod old {
 pub fn store_old_contract_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>) {
 	let info = old::ContractInfo {
 		trie_id: info.trie_id.clone(),
-		deposit_account: info.deposit_account().clone(),
+		deposit_account: DepositAccount([0u8; 32].into()),
 		code_hash: info.code_hash,
 		storage_bytes: Default::default(),
 		storage_items: Default::default(),

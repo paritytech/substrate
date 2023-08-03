@@ -727,7 +727,6 @@ mod tests {
 	fn new_info(info: StorageInfo) -> ContractInfo<Test> {
 		ContractInfo::<Test> {
 			trie_id: Default::default(),
-			deposit_account: DepositAccount([0u8; 32].into()),
 			code_hash: Default::default(),
 			storage_bytes: info.bytes,
 			storage_items: info.items,

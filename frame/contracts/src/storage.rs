@@ -39,7 +39,7 @@ use sp_runtime::{
 	traits::{Hash, Saturating, Zero},
 	BoundedBTreeMap, DispatchResult, RuntimeDebug,
 };
-use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
+use sp_std::{marker::PhantomData, prelude::*};
 
 use self::meter::Diff;
 
@@ -50,10 +50,6 @@ use self::meter::Diff;
 pub struct ContractInfo<T: Config> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
-	/// The account that holds this contracts storage deposit.
-	///
-	/// This is held in a separate account to prevent the contract from spending it.
-	deposit_account: DepositAccount<T>,
 	/// The code associated with a given account.
 	pub code_hash: CodeHash<T>,
 	/// How many bytes of storage are accumulated in this contract's child trie.
@@ -99,11 +95,8 @@ impl<T: Config> ContractInfo<T> {
 				.expect("Runtime uses a reasonable hash size. Hence sizeof(T::Hash) <= 128; qed")
 		};
 
-		let deposit_account = DepositAccount(T::AddressGenerator::deposit_address(account));
-
 		let contract = Self {
 			trie_id,
-			deposit_account,
 			code_hash,
 			storage_bytes: 0,
 			storage_items: 0,
@@ -131,11 +124,6 @@ impl<T: Config> ContractInfo<T> {
 		self.extra_deposit()
 			.saturating_add(self.storage_base_deposit)
 			.saturating_sub(Pallet::<T>::min_balance())
-	}
-
-	/// Returns the account that storage deposits should be deposited into.
-	pub fn deposit_account(&self) -> &DepositAccount<T> {
-		&self.deposit_account
 	}
 
 	/// Returns the storage base deposit of the contract.
@@ -388,18 +376,6 @@ impl WriteOutcome {
 			Self::Overwritten(len) => *len,
 			Self::Taken(value) => value.len() as u32,
 		}
-	}
-}
-
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen)]
-#[scale_info(skip_type_params(T))]
-pub struct DepositAccount<T: Config>(AccountIdOf<T>);
-
-impl<T: Config> Deref for DepositAccount<T> {
-	type Target = AccountIdOf<T>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
 	}
 }
 

@@ -24,12 +24,13 @@
 
 use crate::{
 	migration::{IsFinished, MigrationStep},
-	storage::DepositAccount,
 	weights::WeightInfo,
-	BalanceOf, CodeHash, Config, ContractInfoOf, HoldReason, Pallet, TrieId, Weight, LOG_TARGET,
+	AccountIdOf, BalanceOf, CodeHash, Config, ContractInfoOf, HoldReason, Pallet, TrieId, Weight,
+	LOG_TARGET,
 };
 #[cfg(feature = "try-runtime")]
 use crate::{BalanceOf, ContractInfo};
+use core::ops::Deref;
 #[cfg(feature = "try-runtime")]
 use frame_support::{dispatch::Vec, traits::fungible::InspectHold};
 use frame_support::{
@@ -49,6 +50,20 @@ use sp_runtime::{traits::Zero, Saturating};
 
 mod old {
 	use super::*;
+
+	#[derive(
+		Encode, Decode, Clone, PartialEq, Eq, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen,
+	)]
+	#[scale_info(skip_type_params(T))]
+	pub struct DepositAccount<T: Config>(AccountIdOf<T>);
+
+	impl<T: Config> Deref for DepositAccount<T> {
+		type Target = AccountIdOf<T>;
+
+		fn deref(&self) -> &Self::Target {
+			&self.0
+		}
+	}
 
 	#[derive(
 		Encode, Decode, CloneNoBound, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen,
@@ -84,10 +99,10 @@ pub fn store_old_contract_info<T: Config>(account: T::AccountId, info: crate::Co
 		code_hash: info.code_hash,
 		storage_bytes: Default::default(),
 		storage_items: Default::default(),
-		storage_byte_deposit: Default::default(),
+		storage_byte_deposit: info.storage_byte_deposit,
 		storage_item_deposit: Default::default(),
-		storage_base_deposit: Default::default(),
-		delegate_dependencies: Default::default(),
+		storage_base_deposit: info.storage_base_deposit(),
+		delegate_dependencies: info.delegate_dependencies().clone(),
 	};
 	old::ContractInfoOf::<T>::insert(account, info);
 }

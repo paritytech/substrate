@@ -17,7 +17,7 @@
 
 use crate::{
 	gas::GasMeter,
-	storage::{self, DepositAccount, WriteOutcome},
+	storage::{self, WriteOutcome},
 	BalanceOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo, ContractInfoOf,
 	DebugBufferVec, Determinism, Error, Event, Nonce, Origin, Pallet as Contracts, Schedule,
 	System, WasmBlob, LOG_TARGET,
@@ -532,7 +532,7 @@ enum CachedContract<T: Config> {
 	///
 	/// In this case a reload is neither allowed nor possible. Please note that recursive
 	/// calls cannot remove a contract as this is checked and denied.
-	Terminated(DepositAccount<T>),
+	Terminated,
 }
 
 impl<T: Config> CachedContract<T> {
@@ -632,8 +632,7 @@ impl<T: Config> CachedContract<T> {
 	fn terminate(&mut self, account_id: &T::AccountId) -> ContractInfo<T> {
 		self.load(account_id);
 		let contract = get_cached_or_panic_after_load!(self);
-		let deposit_account = contract.deposit_account().clone();
-		get_cached_or_panic_after_load!(mem::replace(self, Self::Terminated(deposit_account)))
+		get_cached_or_panic_after_load!(mem::replace(self, Self::Terminated))
 	}
 }
 
@@ -921,7 +920,7 @@ where
 			match (entry_point, delegated_code_hash) {
 				(ExportedFunction::Constructor, _) => {
 					// It is not allowed to terminate a contract inside its constructor.
-					if matches!(frame.contract_info, CachedContract::Terminated(_)) {
+					if matches!(frame.contract_info, CachedContract::Terminated) {
 						return Err(Error::<T>::TerminatedInConstructor.into())
 					}
 
