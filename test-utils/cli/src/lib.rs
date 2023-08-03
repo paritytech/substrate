@@ -36,12 +36,13 @@ use std::{
 use tokio::io::{AsyncBufReadExt, AsyncRead};
 
 /// Similar to [`crate::start_node`] spawns a dev node on port `45789`, but works in environments
-/// where you can't access the substarte binary using `cargo_bin("substrate-node")`.
+/// where the substarte binary is not accessible with `cargo_bin("substrate-node")`.
 ///
-/// Helpful when you need a Substrate node running in the background in an external project.
+/// Helpful if you need a Substrate dev node running in the background of a project external to
+/// `substrate`.
 ///
-/// The downside compared to [`crate::start_node`] is that this function is blocking and has no way
-/// of returning a [`Child`]. So you may want to start it inside a new thread.
+/// The downside compared to using [`crate::start_node`] is that this method is blocking rather than
+/// returning a [`Child`]. Therefore, you may want to call this method inside a new thread.
 ///
 /// # Example
 /// ```ignore
