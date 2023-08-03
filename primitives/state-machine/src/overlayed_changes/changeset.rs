@@ -730,23 +730,24 @@ impl OverlayedChangeSet {
 				// We only need to merge if there is an pre-existing value. It may be a value from
 				// the previous transaction or a value committed without any open transaction.
 				if has_predecessor {
-					let mut dropped_tx = overlayed.pop_transaction();
-					let mut do_same_append = false;
+					let mut committed_tx = overlayed.pop_transaction();
+					let mut merge_appends = false;
 					// consecutive appends need to keep past `from_parent` value.
-					if let StorageEntry::Append { from_parent, .. } = &mut dropped_tx.value {
+					if let StorageEntry::Append { from_parent, .. } = &mut committed_tx.value {
 						if *from_parent {
-							if let StorageEntry::Append { from_parent: keep_me, .. } =
+							if let StorageEntry::Append { from_parent: keep_me, data: parent_data, .. } =
 								overlayed.value_mut()
 							{
+								debug_assert!(parent_data.is_empty());
+								merge_appends = true;
 								*from_parent = *keep_me;
-								do_same_append = true
 							}
 						}
 					}
-					if do_same_append {
-						*overlayed.value_mut() = dropped_tx.value;
+					if merge_appends {
+						*overlayed.value_mut() = committed_tx.value;
 					} else {
-						let removed = sp_std::mem::replace(overlayed.value_mut(), dropped_tx.value);
+						let removed = sp_std::mem::replace(overlayed.value_mut(), committed_tx.value);
 						if let StorageEntry::Append {
 							from_parent,
 							data,
@@ -769,7 +770,7 @@ impl OverlayedChangeSet {
 							}
 						}
 					}
-					overlayed.transaction_extrinsics_mut().extend(dropped_tx.extrinsics);
+					overlayed.transaction_extrinsics_mut().extend(committed_tx.extrinsics);
 				}
 			}
 		}
