@@ -870,7 +870,7 @@ impl<'a> StorageAppend<'a> {
 		result
 	}
 
-	/// Append to current buffer.
+	/// Append to current buffer, do not touch the prefixed size.
 	pub fn append_raw(&mut self, mut value: Vec<u8>) {
 		self.0.append(&mut value)
 	}

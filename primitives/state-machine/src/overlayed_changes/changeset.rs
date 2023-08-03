@@ -116,6 +116,7 @@ pub enum StorageEntry {
 		// has been sent forward to next transaction (and thus `data` is empty).
 		moved_size: Option<usize>,
 		// Current number of appended elements.
+		// This is use to rewrite materialized size when needed.
 		nb_append: u32,
 		// When define, contains the number of elements written in data as prefix.
 		// If undefine, `data` do not contain the number of elements.
@@ -335,6 +336,8 @@ impl OverlayedEntry<StorageEntry> {
 				from_parent,
 			} = &mut old_value
 			{
+				// append in same transaction get overwritten, yet if data was moved
+				// from a parent transaction we need to restore it.
 				debug_assert!(moved_size.is_none());
 				let result = core::mem::take(data);
 				from_parent.then(|| (result, *materialized))
@@ -376,19 +379,6 @@ impl OverlayedEntry<StorageEntry> {
 			let parent = self.value_mut();
 			let (data, nb_append, materialized, from_parent) = match parent {
 				StorageEntry::None => (value, 1, None, false),
-				StorageEntry::Some(prev) => {
-					// For compatibility: append if there is a encoded length, overwrite
-					// with value otherwhise.
-					if let Some(nb_append) = StorageAppend::new(prev).extract_nb_appends() {
-						// append on to of a simple storage should be avoided by any sane runtime,
-						// allowing a clone here.
-						let mut data = prev.clone();
-						StorageAppend::new(&mut data).append_raw(value);
-						(data, nb_append + 1, Some(nb_append), false)
-					} else {
-						(value, 1, None, false)
-					}
-				},
 				StorageEntry::Append {
 					data,
 					moved_size,
@@ -400,6 +390,24 @@ impl OverlayedEntry<StorageEntry> {
 					*moved_size = Some(data.len());
 					StorageAppend::new(data).append_raw(value);
 					(core::mem::take(data), *nb_append + 1, *materialized, true)
+				},
+				StorageEntry::Some(prev) => {
+					// For compatibility: append if there is a encoded length, overwrite
+					// with value otherwhise.
+					if let Some(nb_append) = StorageAppend::new(prev).extract_nb_appends() {
+						// append on to of a simple storage should be avoided by any sane runtime,
+						// allowing a clone here.
+						// We clone existing data here, we could also change the existing value
+						// to an append variant to avoid this clone, but since this is should not
+						// happen in well written runtime (mixing set and append operation), the
+						// optimisation is not done here.
+						let mut data = prev.clone();
+						StorageAppend::new(&mut data).append_raw(value);
+						(data, nb_append + 1, Some(nb_append), false)
+					} else {
+						// overwrite, same as empty case.
+						(value, 1, None, false)
+					}
 				},
 			};
 			self.transactions.push(InnerValue {
@@ -413,6 +421,7 @@ impl OverlayedEntry<StorageEntry> {
 				extrinsics: Default::default(),
 			});
 		} else {
+			// not first transaction write
 			let old_value = self.value_mut();
 			let replace = match old_value {
 				StorageEntry::None => Some((value, 1, None, false)),

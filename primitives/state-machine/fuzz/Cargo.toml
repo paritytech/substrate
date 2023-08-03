@@ -9,7 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-sp-runtime = { version = "7.0.0", path = "../../runtime" }
+sp-runtime = { version = "24.0.0", path = "../../runtime" }
 
 [dependencies.sp-state-machine]
 path = ".."
