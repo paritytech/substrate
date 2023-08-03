@@ -20,9 +20,7 @@
 
 use grandpa_primitives::AuthorityId as GrandpaId;
 use kitchensink_runtime::{
-	constants::currency::*, wasm_binary_unwrap, AssetsConfig, BabeConfig, BalancesConfig, Block,
-	ElectionsConfig, ImOnlineConfig, MaxNominations, NominationPoolsConfig, SessionConfig,
-	SessionKeys, SocietyConfig, StakerStatus, StakingConfig, SudoConfig, TechnicalCommitteeConfig,
+	constants::currency::*, wasm_binary_unwrap, Block, MaxNominations, SessionKeys, StakerStatus,
 };
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sc_chain_spec::ChainSpecExtension;
@@ -321,11 +319,11 @@ pub fn testnet_genesis(
 		configure_accounts(initial_authorities, initial_nominators, endowed_accounts, STASH);
 
 	let json = serde_json::json!({
-		"balances": BalancesConfig {
-			balances: endowed_accounts.iter().cloned().map(|x| (x, ENDOWMENT)).collect(),
+		"balances": {
+			"balances": endowed_accounts.iter().cloned().map(|x| (x, ENDOWMENT)).collect::<Vec<_>>(),
 		},
-		"session": SessionConfig {
-			keys: initial_authorities
+		"session": {
+			"keys": initial_authorities
 				.iter()
 				.map(|x| {
 					(
@@ -336,49 +334,42 @@ pub fn testnet_genesis(
 				})
 				.collect::<Vec<_>>(),
 		},
-		"staking": StakingConfig {
-			validator_count: initial_authorities.len() as u32,
-			minimum_validator_count: initial_authorities.len() as u32,
-			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
-			slash_reward_fraction: Perbill::from_percent(10),
-			stakers: stakers.clone(),
-			..Default::default()
+		"staking": {
+			"validatorCount": initial_authorities.len() as u32,
+			"minimumValidatorCount": initial_authorities.len() as u32,
+			"invulnerables": initial_authorities.iter().map(|x| x.0.clone()).collect::<Vec<_>>(),
+			"slashRewardFraction": Perbill::from_percent(10),
+			"stakers": stakers.clone(),
 		},
-		"elections": ElectionsConfig {
-			members: endowed_accounts
+		"elections": {
+			"members": endowed_accounts
 				.iter()
 				.take((num_endowed_accounts + 1) / 2)
 				.cloned()
 				.map(|member| (member, STASH))
-				.collect(),
+				.collect::<Vec<_>>(),
 		},
-		"technicalCommittee": TechnicalCommitteeConfig {
-			members: endowed_accounts
+		"technicalCommittee": {
+			"members": endowed_accounts
 				.iter()
 				.take((num_endowed_accounts + 1) / 2)
 				.cloned()
-				.collect(),
-				..Default::default()
+				.collect::<Vec<_>>(),
 		},
-		"sudo": SudoConfig { key: Some(root_key.clone()) },
-		"babe": BabeConfig {
-			epoch_config: Some(kitchensink_runtime::BABE_GENESIS_EPOCH_CONFIG),
-			..Default::default()
+		"sudo": { "key": Some(root_key.clone()) },
+		"babe": {
+			"epochConfig": Some(kitchensink_runtime::BABE_GENESIS_EPOCH_CONFIG),
 		},
-		"imOnline": ImOnlineConfig { keys: vec![] },
-		"society": SocietyConfig { pot: 0 },
-		"assets": AssetsConfig {
+		"society": { "pot": 0 },
+		"assets": {
 			// This asset is used by the NIS pallet as counterpart currency.
-			assets: vec![(9, get_account_id_from_seed::<sr25519::Public>("Alice"), true, 1)],
-			..Default::default()
+			"assets": vec![(9, get_account_id_from_seed::<sr25519::Public>("Alice"), true, 1)],
 		},
-		"nominationPools": NominationPoolsConfig {
-			min_create_bond: 10 * DOLLARS,
-			min_join_bond: 1 * DOLLARS,
-			..Default::default()
+		"nominationPools": {
+			"minCreateBond": 10 * DOLLARS,
+			"minJoinBond": 1 * DOLLARS,
 		},
 	});
-	log::info!("json -> {}", json);
 	json
 }
 
@@ -494,11 +485,15 @@ pub(crate) mod tests {
 	}
 
 	// This compares the output of RuntimeGenesisConfig-based ChainSpec building against JSON-based
-	// ChainSpec building. Once RuntimeGenesisConfig is removed from client-sode, entire mod can be
+	// ChainSpec building. Once RuntimeGenesisConfig is removed from client-side, entire mod can be
 	// removed.
 	mod json_vs_legacy {
 		use crate::chain_spec::*;
-		use kitchensink_runtime::{CouncilConfig, DemocracyConfig, IndicesConfig};
+		use kitchensink_runtime::{
+			wasm_binary_unwrap, BabeConfig, BalancesConfig, CouncilConfig, DemocracyConfig,
+			ElectionsConfig, ImOnlineConfig, IndicesConfig, NominationPoolsConfig, SessionConfig,
+			SocietyConfig, StakingConfig, SudoConfig, TechnicalCommitteeConfig,
+		};
 		use sp_runtime::BuildStorage;
 		/// Helper function to create RuntimeGenesisConfig for testing
 		pub(super) fn testnet_genesis_legacy(
