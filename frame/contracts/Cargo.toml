@@ -39,6 +39,7 @@ environmental = { version = "1.1.4", default-features = false }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances", optional = true, default-features = false }
 pallet-contracts-primitives = { version = "24.0.0", default-features = false, path = "primitives" }
 pallet-contracts-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
@@ -82,7 +83,7 @@ std = [
 	"log/std",
 	"rand/std",
 	"environmental/std",
-	"pallet-balances/std",
+	"pallet-balances?/std",
 	"pallet-insecure-randomness-collective-flip/std",
 	"pallet-proxy/std",
 	"pallet-timestamp/std",
@@ -95,9 +96,9 @@ runtime-benchmarks = [
 	"rand",
 	"rand_pcg",
 	"wasm-instrument",
+	"pallet-balances/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
-	"pallet-balances/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"pallet-utility/runtime-benchmarks",

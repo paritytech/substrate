@@ -114,7 +114,13 @@ impl NetworkPeers for TestNetwork {
 		unimplemented!();
 	}
 
-	fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {}
+	fn remove_peers_from_reserved_set(
+		&self,
+		_protocol: ProtocolName,
+		_peers: Vec<PeerId>,
+	) -> Result<(), String> {
+		unimplemented!();
+	}
 
 	fn sync_num_connected(&self) -> usize {
 		unimplemented!();
