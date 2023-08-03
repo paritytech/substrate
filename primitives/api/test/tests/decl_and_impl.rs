@@ -250,12 +250,12 @@ fn check_staging_runtime_api_versions<T: RuntimeApiInfo + ?Sized>(_staging_ver: 
 
 #[allow(unused_assignments)]
 fn check_staging_multiver_runtime_api_versions<T: RuntimeApiInfo + ?Sized>(
-	staging_ver: u32,
+	_staging_ver: u32,
 	_stable_ver: u32,
 ) {
 	// Staging APIs should contain staging version if the feature is set...
 	#[cfg(feature = "enable-staging-api")]
-	assert!(RUNTIME_API_VERSIONS.iter().any(|v| v == &(T::ID, staging_ver)));
+	assert!(RUNTIME_API_VERSIONS.iter().any(|v| v == &(T::ID, _staging_ver)));
 	//... otherwise the base version should be set
 	#[cfg(not(feature = "enable-staging-api"))]
 	assert!(RUNTIME_API_VERSIONS.iter().any(|v| v == &(T::ID, _stable_ver)));

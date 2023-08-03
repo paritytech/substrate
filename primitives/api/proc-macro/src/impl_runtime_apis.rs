@@ -510,13 +510,15 @@ fn add_feature_guard(attrs: &mut Vec<Attribute>, feature_name: &str, t: bool) {
 // used to process `cfg_attr`s related to staging methods (e.g. `#[cfg_attr(feature =
 // "enable-staging-api", api_version(99))]`). Replaces the `cfg_attr` attribute with a feature guard
 // so that staging methods are added only for staging api implementations.
-struct ApiImplItem {
+struct ApiImplItem<'a> {
+	trait_api_ver: &'a Option<(String, u64)>,
+	trait_span: Span,
 	errors: Vec<Error>,
 }
 
-impl ApiImplItem {
-	pub fn new() -> ApiImplItem {
-		ApiImplItem { errors: Vec::new() }
+impl<'a> ApiImplItem<'a> {
+	pub fn new(trait_api_ver: &Option<(String, u64)>, trait_span: Span) -> ApiImplItem {
+		ApiImplItem { trait_api_ver, trait_span, errors: Vec::new() }
 	}
 
 	pub fn process(&mut self, item: ItemImpl) -> Result<ItemImpl> {
@@ -531,7 +533,7 @@ impl ApiImplItem {
 	}
 }
 
-impl Fold for ApiImplItem {
+impl<'a> Fold for ApiImplItem<'a> {
 	fn fold_impl_item_fn(&mut self, mut i: ImplItemFn) -> ImplItemFn {
 		let v = extract_api_version(&i.attrs, i.span());
 
@@ -552,6 +554,26 @@ impl Fold for ApiImplItem {
 		}
 
 		if let Some(v) = v.feature_gated {
+			// Check for a mismatch between the trait and the function implementation
+			match self.trait_api_ver {
+				None => {
+					let mut e = Error::new(i.span(), "Found `cfg_attr` for implementation function but the trait is not versioned");
+					e.combine(Error::new(self.trait_span, "Put a `cfg_attr` here"));
+					self.errors.push(e);
+					return fold::fold_impl_item_fn(self, i)
+				},
+				Some(trait_ver) if v != *trait_ver => {
+					let mut e = Error::new(
+						i.span(),
+						"Different `cfg_attr` for the trait and the implementation function",
+					);
+					e.combine(Error::new(self.trait_span, "Trait `cfg_attr` is here"));
+					self.errors.push(e);
+					return fold::fold_impl_item_fn(self, i)
+				},
+				_ => {},
+			}
+
 			add_feature_guard(&mut i.attrs, &v.0, true);
 		}
 
@@ -573,7 +595,8 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 		let mut impl_ = impl_.clone();
 		impl_.attrs = filter_cfg_attrs(&impl_.attrs);
 		// Process all method implementations add add feature gates where necessary
-		let mut impl_ = ApiImplItem::new().process(impl_)?;
+		let mut impl_ =
+			ApiImplItem::new(&trait_api_ver.feature_gated, impl_.span()).process(impl_)?;
 
 		let trait_ = extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?.clone();
 		let trait_ = extend_with_runtime_decl_path(trait_);
