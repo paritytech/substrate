@@ -76,3 +76,34 @@ pub struct PalletTaskAttr {
 	#[inside(_bracket)]
 	attr: TaskAttrType,
 }
+
+#[cfg(test)]
+use syn::parse2;
+
+#[cfg(test)]
+use quote::quote;
+
+#[test]
+fn test_parse_pallet_tasks() {
+	parse2::<PalletTaskAttr>(quote!(#[pallet::tasks(Something::iter())])).unwrap();
+	assert!(parse2::<PalletTaskAttr>(quote!(#[pallet::tasks()])).is_err());
+	assert!(parse2::<PalletTaskAttr>(quote!(#[pallet::task(iter())])).is_err());
+	assert!(parse2::<PalletTaskAttr>(quote!(#[pallet::tasks])).is_err());
+}
+
+#[test]
+fn test_parse_pallet_task_index() {
+	parse2::<PalletTaskAttr>(quote!(#[pallet::task_index(3)])).unwrap();
+	parse2::<PalletTaskAttr>(quote!(#[pallet::task_index(0)])).unwrap();
+	parse2::<PalletTaskAttr>(quote!(#[pallet::task_index(17)])).unwrap();
+	assert!(parse2::<PalletTaskAttr>(quote!(#[pallet::task_index])).is_err());
+	assert!(parse2::<PalletTaskAttr>(quote!(#[pallet::task_index("hey")])).is_err());
+}
+
+#[test]
+fn test_parse_pallet_condition() {
+	parse2::<PalletTaskAttr>(quote!(#[pallet::condition(|x| x.is_some())])).unwrap();
+	parse2::<PalletTaskAttr>(quote!(#[pallet::condition(|_x| some_expr())])).unwrap();
+	assert!(parse2::<PalletTaskAttr>(quote!(#[pallet::condition(x.is_some())])).is_err());
+	assert!(parse2::<PalletTaskAttr>(quote!(#[pallet::condition(|| something())])).is_err());
+}
