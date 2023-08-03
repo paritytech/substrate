@@ -1802,12 +1802,7 @@ fn reap_stash_works() {
 				Error::<Test>::FundedTarget
 			);
 
-			// no easy way to cause an account to go below ED, we tweak their staking ledger
-			// instead.
-			Ledger::<Test>::insert(
-				11,
-				StakingLedger::<Test>::new(11, 5, 5, bounded_vec![], bounded_vec![]),
-			);
+			add_staker_below_ed(11);
 
 			// reap-able
 			assert_ok!(Staking::reap_stash(RuntimeOrigin::signed(20), 11, 0));

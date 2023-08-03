@@ -624,6 +624,13 @@ pub(crate) fn bond_nominator(who: AccountId, val: Balance, target: Vec<AccountId
 	assert_ok!(Staking::nominate(RuntimeOrigin::signed(who), target));
 }
 
+pub(crate) fn add_staker_below_ed(who: AccountId) {
+	let below_ed = ExistentialDeposit::get().saturating_sub(1);
+	let ledger =
+		StakingLedger::<Test>::new(who, below_ed, below_ed, bounded_vec![], bounded_vec![]);
+	ledger.update().unwrap();
+}
+
 /// Progress to the given block, triggering session and era changes as we progress.
 ///
 /// This will finalize the previous block, initialize up to the given block, essentially simulating

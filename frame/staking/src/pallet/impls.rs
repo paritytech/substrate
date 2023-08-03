@@ -673,8 +673,8 @@ impl<T: Config> Pallet<T> {
 		<Bonded<T>>::remove(&stash);
 		<Payee<T>>::remove(&stash);
 
-		Self::do_remove_validator(&stash);
-		Self::do_remove_nominator(&stash);
+		Validators::<T>::remove(stash);
+		Nominators::<T>::remove(stash);
 
 		frame_system::Pallet::<T>::dec_consumers(&stash);
 
@@ -1023,7 +1023,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// TODO: remove
-    #[allow(dead_code)]
+	#[allow(dead_code)]
 	pub(crate) fn print_state() {
 		println!("-----------------");
 		let voters_bags: Vec<_> =
