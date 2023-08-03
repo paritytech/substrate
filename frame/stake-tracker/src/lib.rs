@@ -54,11 +54,7 @@
 pub use pallet::*;
 
 use frame_election_provider_support::SortedListProvider;
-use frame_support::{
-	defensive,
-	traits::{Currency, Defensive},
-};
-use sp_runtime::traits::Saturating;
+use frame_support::traits::{Currency, Defensive};
 use sp_staking::{
 	currency_to_vote::CurrencyToVote, OnStakingUpdate, StakerStatus, StakingInterface,
 };
@@ -196,7 +192,11 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 						.unwrap_or_default()
 						.into_iter()
 					{
-						Self::update_score::<T::TargetList>(&target, stake_imbalance);
+						// target may be chilling due to a recent slash, verify if it is active
+						// before updating the score.
+						if <T::Staking as StakingInterface>::is_validator(&target) {
+							Self::update_score::<T::TargetList>(&target, stake_imbalance);
+						}
 					}
 				},
 				StakerStatus::Validator => {
@@ -297,51 +297,13 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		}
 	}
 
-	// Fired when a staker is slashed.
-	//
-	// Only the score of the targets are updated automatically upon slash. The voter's scores can
-	// be updated externally.
-	//
-	// Note: it is assumed that the stash's staking state is updated *before* the caller calling
-	// into this method.
+	// noop: the updates to target and voter lists when applying a slash are performed
+	// through [`Self::on_nominator_remove`] and [`Self::on_validator_remove`] when the stakers are
+	// chilled.
 	fn on_slash(
-		stash: &T::AccountId,
-		slashed_active: BalanceOf<T>,
-		slashed_unlocking: &BTreeMap<sp_staking::EraIndex, BalanceOf<T>>,
+		_stash: &T::AccountId,
+		_slashed_active: BalanceOf<T>,
+		_slashed_unlocking: &BTreeMap<sp_staking::EraIndex, BalanceOf<T>>,
 	) {
-		let slashed_amount: BalanceOf<T> = slashed_unlocking
-			.values()
-			.fold(Default::default(), |acc: BalanceOf<T>, u| acc.saturating_add(*u))
-			.saturating_add(slashed_active);
-
-		match T::Staking::status(stash).defensive_unwrap_or(StakerStatus::Idle) {
-			StakerStatus::Validator => {
-				// the slashed target's approval voting must be updated upon slashing.
-				Self::update_score::<T::TargetList>(
-					&stash,
-					StakeImbalance::Negative(Self::to_vote(slashed_amount)),
-				);
-			},
-			// the nominators stake is not updated automatically when slashed. However, the
-			// targets list of the nominated validators *must* be kept up to date.
-			StakerStatus::Nominator(nominations) =>
-				for t in nominations.iter() {
-					Self::update_score::<T::TargetList>(
-						t,
-						StakeImbalance::Negative(Self::to_vote(slashed_amount)),
-					)
-				},
-			StakerStatus::Idle => (), // nothing to see here.
-		}
-	}
-
-	fn on_unstake(_who: &T::AccountId) {
-		defensive!("Stake updates related to unstaking should be performed through on_*_update");
-	}
-
-	fn on_validator_update(_who: &T::AccountId) {
-		defensive!(
-			"Validator preferences should not be propagated as part of the stake tracking logic."
-		);
 	}
 }

@@ -353,18 +353,6 @@ pub(crate) fn remove_staker(who: AccountId) {
 	};
 }
 
-pub(crate) fn slash(
-	who: AccountId,
-	slashed_active: Balance,
-	slashed_unlocking: BTreeMap<sp_staking::EraIndex, Balance>,
-) {
-	<StakeTracker as OnStakingUpdate<AccountId, Balance>>::on_slash(
-		&who,
-		slashed_active,
-		&slashed_unlocking,
-	);
-}
-
 #[derive(Default, Copy, Clone)]
 pub struct ExtBuilder {
 	populate_lists: bool,

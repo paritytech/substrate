@@ -20,7 +20,7 @@
 use crate::mock::*;
 
 use frame_election_provider_support::SortedListProvider;
-use sp_staking::{Stake, StakingInterface};
+use sp_staking::Stake;
 
 #[test]
 fn setup_works() {
@@ -141,20 +141,3 @@ fn on_nominator_update_works() {
 	})
 }
 
-#[test]
-fn on_slash_works() {
-	ExtBuilder::default().populate_lists().build_and_execute(|| {
-		assert_eq!(get_scores::<VoterBagsList>(), vec![(10, 100), (11, 100), (1, 100), (2, 100)]);
-		assert_eq!(get_scores::<TargetBagsList>(), vec![(10, 300), (11, 200)]);
-
-		// slash nominator 2.
-		slash(2, 10, Default::default());
-
-		// voters list is not updated automatically upon slash.
-		assert_eq!(get_scores::<VoterBagsList>(), vec![(10, 100), (11, 100), (1, 100), (2, 100)]);
-
-		// targets list nominated by the slashed nominator are affected.
-		assert_eq!(<StakingMock as StakingInterface>::nominations(&2).unwrap(), vec![10, 11]);
-		assert_eq!(get_scores::<TargetBagsList>(), vec![(10, 290), (11, 190)]);
-	})
-}
