@@ -6028,7 +6028,6 @@ fn unsafe_debugging_works() {
 		));
 
 		let stack_top = current_stack()[4..].to_vec();
-
 		assert_eq!(
 			stack_top,
 			vec![
