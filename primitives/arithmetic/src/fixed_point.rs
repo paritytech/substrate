@@ -52,17 +52,16 @@ pub trait FixedPointOperand:
 {
 }
 
-impl<
-		T: Copy
-			+ Clone
-			+ Bounded
-			+ Zero
-			+ Saturating
-			+ PartialOrd<Self>
-			+ UniqueSaturatedInto<u128>
-			+ TryFrom<u128>
-			+ CheckedNeg,
-	> FixedPointOperand for T
+impl<T> FixedPointOperand for T where
+	T: Copy
+		+ Clone
+		+ Bounded
+		+ Zero
+		+ Saturating
+		+ PartialOrd<Self>
+		+ UniqueSaturatedInto<u128>
+		+ TryFrom<u128>
+		+ CheckedNeg
 {
 }
 

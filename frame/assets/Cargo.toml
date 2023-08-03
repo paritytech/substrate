@@ -41,10 +41,19 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"frame-benchmarking?/std",
+	"pallet-balances/std",
+	"sp-io/std"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks"
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-balances/try-runtime",
+	"sp-runtime/try-runtime"
+]

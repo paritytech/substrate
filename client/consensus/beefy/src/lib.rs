@@ -46,7 +46,8 @@ use sp_blockchain::{
 };
 use sp_consensus::{Error as ConsensusError, SyncOracle};
 use sp_consensus_beefy::{
-	crypto::AuthorityId, BeefyApi, MmrRootHash, PayloadProvider, ValidatorSet, BEEFY_ENGINE_ID,
+	ecdsa_crypto::AuthorityId, BeefyApi, MmrRootHash, PayloadProvider, ValidatorSet,
+	BEEFY_ENGINE_ID,
 };
 use sp_keystore::KeystorePtr;
 use sp_mmr_primitives::MmrApi;
@@ -142,7 +143,7 @@ where
 		+ Send
 		+ Sync,
 	RuntimeApi: ProvideRuntimeApi<B> + Send + Sync,
-	RuntimeApi::Api: BeefyApi<B>,
+	RuntimeApi::Api: BeefyApi<B, AuthorityId>,
 {
 	// Voter -> RPC links
 	let (to_rpc_justif_sender, from_voter_justif_stream) =
@@ -224,7 +225,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 	C: Client<B, BE> + BlockBackend<B>,
 	P: PayloadProvider<B>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
+	R::Api: BeefyApi<B, AuthorityId> + MmrApi<B, MmrRootHash, NumberFor<B>>,
 	N: GossipNetwork<B> + NetworkRequest + Send + Sync + 'static,
 	S: GossipSyncing<B> + SyncOracle + 'static,
 {
@@ -339,7 +340,7 @@ where
 	B: Block,
 	BE: Backend<B>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+	R::Api: BeefyApi<B, AuthorityId>,
 {
 	// Initialize voter state from AUX DB if compatible.
 	crate::aux_schema::load_persistent(backend)?
@@ -374,7 +375,7 @@ where
 	B: Block,
 	BE: Backend<B>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+	R::Api: BeefyApi<B, AuthorityId>,
 {
 	let beefy_genesis = runtime
 		.runtime_api()
@@ -478,7 +479,7 @@ async fn wait_for_runtime_pallet<B, R>(
 where
 	B: Block,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+	R::Api: BeefyApi<B, AuthorityId>,
 {
 	info!(target: LOG_TARGET, "🥩 BEEFY gadget waiting for BEEFY pallet to become available...");
 	loop {
@@ -518,7 +519,7 @@ fn expect_validator_set<B, R>(
 where
 	B: Block,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+	R::Api: BeefyApi<B, AuthorityId>,
 {
 	runtime
 		.runtime_api()
