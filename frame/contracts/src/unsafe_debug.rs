@@ -1,6 +1,7 @@
 #![cfg(feature = "unsafe-debug")]
 
-use crate::{exec::ExportedFunction, CodeHash};
+pub use crate::exec::ExportedFunction;
+use crate::{CodeHash, Vec};
 use pallet_contracts_primitives::ExecReturnValue;
 
 /// Umbrella trait for all interfaces that serves for debugging, but are not suitable for any

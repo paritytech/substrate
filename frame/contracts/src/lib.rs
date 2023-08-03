@@ -138,7 +138,7 @@ pub use weights::WeightInfo;
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
-	exec::{ExportedFunction, Frame},
+	exec::Frame,
 	migration::{MigrateSequence, Migration, NoopMigration},
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
