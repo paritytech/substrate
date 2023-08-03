@@ -34,7 +34,14 @@ sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = true,
 
 [features]
 default = ["std"]
-runtime-benchmarks = ["array-bytes", "frame-benchmarking/runtime-benchmarks"]
+runtime-benchmarks = [
+	"array-bytes",
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks"
+]
 std = [
 	"log/std",
 	"frame-benchmarking?/std",
@@ -49,5 +56,11 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-transaction-storage-proof/std",
+	"sp-core/std"
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-balances/try-runtime",
+	"sp-runtime/try-runtime"
+]

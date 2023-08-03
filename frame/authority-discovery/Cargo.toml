@@ -43,5 +43,12 @@ std = [
 	"sp-authority-discovery/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-core/std",
+	"sp-io/std"
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-session/try-runtime",
+	"sp-runtime/try-runtime"
+]
