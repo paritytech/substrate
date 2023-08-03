@@ -107,14 +107,7 @@ pub enum StorageEntry {
 	/// rollback.
 	Append {
 		// current buffer of appended data.
-		data: StorageValue,
-		// Total size in bytes of appended data.
-		//
-		// This does not include the size of the compact 32 encoded number of appends.
-		//
-		// This value is only define in the state of a transaction, iff `data`
-		// has been sent forward to next transaction (and thus `data` is empty).
-		moved_size: Option<usize>,
+		data: AppendData,
 		// Current number of appended elements.
 		// This is use to rewrite materialized size when needed.
 		nb_append: u32,
@@ -129,6 +122,25 @@ pub enum StorageEntry {
 	},
 }
 
+/// Data with append is passed around transaction items,
+/// latest consecutive append always contains the data and
+/// previous one the size of data at the transaction end.
+#[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
+pub enum AppendData {
+	/// The value is in next transaction, we keep
+	/// trace of the total size of data size in this layer.
+	///
+	/// The size does not include the size of the compact 32 encoded number of appends.
+	/// This can be deduces from `materialized` of `StorageEntry`, but is not really
+	/// needed: we can restore to the size of the current data and only rebuild it
+	/// see `restore_append_to_parent`.
+	MovedSize(usize),
+	/// Current value representation, possibly with a materialized size,
+	/// see `materialized` of `StorageEntry`.
+	Data(StorageValue),
+}
+
 impl Default for StorageEntry {
 	fn default() -> Self {
 		StorageEntry::None
@@ -139,13 +151,19 @@ impl StorageEntry {
 	pub(super) fn to_option(mut self) -> Option<StorageValue> {
 		self.render_append();
 		match self {
-			StorageEntry::Append { data, .. } | StorageEntry::Some(data) => Some(data),
+			StorageEntry::Append { data: AppendData::Data(data), .. } |
+			StorageEntry::Some(data) => Some(data),
 			StorageEntry::None => None,
+			StorageEntry::Append { data: AppendData::MovedSize(_), .. } =>
+				unreachable!("overwritten if in latest transaction"),
 		}
 	}
 
 	fn render_append(&mut self) {
-		if let StorageEntry::Append { data, materialized, nb_append, .. } = self {
+		if let StorageEntry::Append {
+			data: AppendData::Data(data), materialized, nb_append, ..
+		} = self
+		{
 			let nb_append = *nb_append;
 			if &Some(nb_append) == materialized {
 				return
@@ -280,15 +298,13 @@ fn restore_append_to_parent(
 	match parent {
 		StorageEntry::Append {
 			data: parent_data,
-			moved_size: parent_moved_size,
 			nb_append: _,
 			materialized: parent_materialized,
 			from_parent: _,
 		} => {
-			debug_assert!(parent_data.is_empty());
-			let mut target_size = parent_moved_size
-				.take()
-				.expect("append in new layer store size in previous; qed");
+			let AppendData::MovedSize(mut target_size) = parent_data else {
+				unreachable!("restore only when parent is moved");
+			};
 
 			// use materialized size from next layer to avoid changing it at this point.
 			let (delta, decrease) =
@@ -302,7 +318,7 @@ fn restore_append_to_parent(
 
 			// actually truncate the data.
 			current_data.truncate(target_size);
-			*parent_data = current_data;
+			*parent_data = AppendData::Data(current_data);
 		},
 		_ => {
 			// No value or a simple value, no need to restore
@@ -328,22 +344,22 @@ impl OverlayedEntry<StorageEntry> {
 			self.transactions.push(InnerValue { value, extrinsics: Default::default() });
 		} else {
 			let mut old_value = self.value_mut();
-			let set_prev = if let StorageEntry::Append {
-				data,
-				moved_size,
-				nb_append: _,
-				materialized,
-				from_parent,
-			} = &mut old_value
-			{
-				// append in same transaction get overwritten, yet if data was moved
-				// from a parent transaction we need to restore it.
-				debug_assert!(moved_size.is_none());
-				let result = core::mem::take(data);
-				from_parent.then(|| (result, *materialized))
-			} else {
-				None
-			};
+			let set_prev =
+				if let StorageEntry::Append { data, nb_append: _, materialized, from_parent } =
+					&mut old_value
+				{
+					// append in same transaction get overwritten, yet if data was moved
+					// from a parent transaction we need to restore it.
+					let AppendData::Data(data) = data else {
+						unreachable!(
+							"set in last transaction and append in last transaction is data"
+						);
+					};
+					let result = core::mem::take(data);
+					from_parent.then(|| (result, *materialized))
+				} else {
+					None
+				};
 			*old_value = value;
 			if let Some((data, current_materialized)) = set_prev {
 				let transactions = self.transactions.len();
@@ -367,8 +383,7 @@ impl OverlayedEntry<StorageEntry> {
 		if self.transactions.is_empty() {
 			self.transactions.push(InnerValue {
 				value: StorageEntry::Append {
-					data: value,
-					moved_size: None,
+					data: AppendData::Data(value),
 					nb_append: 1,
 					materialized: None,
 					from_parent: false,
@@ -379,17 +394,16 @@ impl OverlayedEntry<StorageEntry> {
 			let parent = self.value_mut();
 			let (data, nb_append, materialized, from_parent) = match parent {
 				StorageEntry::None => (value, 1, None, false),
-				StorageEntry::Append {
-					data,
-					moved_size,
-					nb_append,
-					materialized,
-					from_parent: _,
-				} => {
-					assert!(moved_size.is_none());
-					*moved_size = Some(data.len());
-					StorageAppend::new(data).append_raw(value);
-					(core::mem::take(data), *nb_append + 1, *materialized, true)
+				StorageEntry::Append { data, nb_append, materialized, from_parent: _ } => {
+					let AppendData::Data(data_buf) = data else {
+						unreachable!(
+							"append in last transaction and append in last transaction is data"
+						);
+					};
+					let mut data_buf = core::mem::take(data_buf);
+					*data = AppendData::MovedSize(data_buf.len());
+					StorageAppend::new(&mut data_buf).append_raw(value);
+					(data_buf, *nb_append + 1, *materialized, true)
 				},
 				StorageEntry::Some(prev) => {
 					// For compatibility: append if there is a encoded length, overwrite
@@ -412,8 +426,7 @@ impl OverlayedEntry<StorageEntry> {
 			};
 			self.transactions.push(InnerValue {
 				value: StorageEntry::Append {
-					data,
-					moved_size: None,
+					data: AppendData::Data(data),
 					nb_append,
 					materialized,
 					from_parent,
@@ -440,15 +453,19 @@ impl OverlayedEntry<StorageEntry> {
 					}
 				},
 				StorageEntry::Append { data, nb_append, .. } => {
-					StorageAppend::new(data).append_raw(value);
+					let AppendData::Data(data_buf) = data else {
+						unreachable!(
+							"append in last transaction and append in last transaction is data"
+						);
+					};
+					StorageAppend::new(data_buf).append_raw(value);
 					*nb_append += 1;
 					None
 				},
 			};
 			if let Some((data, nb_append, materialized, from_parent)) = replace {
 				*old_value = StorageEntry::Append {
-					data,
-					moved_size: None,
+					data: AppendData::Data(data),
 					nb_append,
 					materialized,
 					from_parent,
@@ -467,8 +484,11 @@ impl OverlayedEntry<StorageEntry> {
 		value.render_append();
 		let value = self.value_ref();
 		match value {
-			StorageEntry::Some(data) | StorageEntry::Append { data, .. } => Some(data),
+			StorageEntry::Some(data) |
+			StorageEntry::Append { data: AppendData::Data(data), .. } => Some(data),
 			StorageEntry::None => None,
+			StorageEntry::Append { data: AppendData::MovedSize(_), .. } =>
+				unreachable!("render before"),
 		}
 	}
 }
@@ -698,16 +718,16 @@ impl OverlayedChangeSet {
 			if rollback {
 				match overlayed.pop_transaction().value {
 					StorageEntry::Append {
-						data,
-						moved_size: size_current,
+						data: AppendData::Data(data),
 						nb_append: _,
 						materialized: materialized_current,
 						from_parent,
 					} if from_parent => {
-						debug_assert!(size_current.is_none());
 						debug_assert!(!overlayed.transactions.is_empty());
 						restore_append_to_parent(overlayed.value_mut(), data, materialized_current);
 					},
+					StorageEntry::Append { data: AppendData::MovedSize(_), .. } =>
+						unreachable!("last tx data is not moved"),
 					_ => (),
 				}
 
@@ -735,10 +755,12 @@ impl OverlayedChangeSet {
 					// consecutive appends need to keep past `from_parent` value.
 					if let StorageEntry::Append { from_parent, .. } = &mut committed_tx.value {
 						if *from_parent {
-							if let StorageEntry::Append { from_parent: keep_me, data: parent_data, .. } =
-								overlayed.value_mut()
-							{
-								debug_assert!(parent_data.is_empty());
+							let parent = overlayed.value_mut();
+							debug_assert!(!matches!(
+								parent,
+								StorageEntry::Append { data: AppendData::Data(_), .. }
+							));
+							if let StorageEntry::Append { from_parent: keep_me, .. } = parent {
 								merge_appends = true;
 								*from_parent = *keep_me;
 							}
@@ -747,10 +769,15 @@ impl OverlayedChangeSet {
 					if merge_appends {
 						*overlayed.value_mut() = committed_tx.value;
 					} else {
-						let removed = sp_std::mem::replace(overlayed.value_mut(), committed_tx.value);
+						let removed =
+							sp_std::mem::replace(overlayed.value_mut(), committed_tx.value);
+						debug_assert!(!matches!(
+							removed,
+							StorageEntry::Append { data: AppendData::MovedSize(_), .. }
+						));
 						if let StorageEntry::Append {
 							from_parent,
-							data,
+							data: AppendData::Data(data),
 							materialized: current_materialized,
 							..
 						} = removed
