@@ -18,6 +18,8 @@
 mod pallet_dummy;
 
 use self::test_utils::{ensure_stored, expected_deposit, hash};
+#[cfg(feature = "unsafe-debug")]
+use crate::unsafe_debug::{ExecutionObserver, ExportedFunction};
 use crate::{
 	self as pallet_contracts,
 	chain_extension::{
@@ -34,8 +36,6 @@ use crate::{
 	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress, Origin,
 	Pallet, PristineCode, Schedule,
 };
-#[cfg(feature = "unsafe-debug")]
-use crate::{unsafe_debug::ExecutionObserver, ExportedFunction};
 use assert_matches::assert_matches;
 use codec::Encode;
 use frame_support::{
