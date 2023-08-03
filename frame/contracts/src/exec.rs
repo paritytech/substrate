@@ -918,7 +918,7 @@ where
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
 			#[cfg(feature = "unsafe-debug")]
-			T::Debug::after_call(&code_hash, entry_point, &input_clone, &output);
+			T::Debug::after_call(&code_hash, entry_point, input_clone, &output);
 
 			// Avoid useless work that would be reverted anyways.
 			if output.did_revert() {

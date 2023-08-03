@@ -97,7 +97,6 @@ mod wasm;
 
 pub mod chain_extension;
 pub mod migration;
-#[cfg(feature = "unsafe-debug")]
 pub mod unsafe_debug;
 pub mod weights;
 

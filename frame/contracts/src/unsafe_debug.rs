@@ -1,3 +1,5 @@
+#![cfg(feature = "unsafe-debug")]
+
 use crate::{exec::ExportedFunction, CodeHash};
 use pallet_contracts_primitives::ExecReturnValue;
 
@@ -35,7 +37,7 @@ pub trait ExecutionObserver<CodeHash> {
 	fn after_call(
 		_code_hash: &CodeHash,
 		_entry_point: ExportedFunction,
-		_input_data: &[u8],
+		_input_data: Vec<u8>,
 		_output: &ExecReturnValue,
 	) {
 	}

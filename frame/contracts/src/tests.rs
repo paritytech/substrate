@@ -476,14 +476,14 @@ impl ExecutionObserver<CodeHash<Test>> for TestDebugger {
 	fn after_call(
 		code_hash: &CodeHash<Test>,
 		entry_point: ExportedFunction,
-		input_data: &[u8],
+		input_data: Vec<u8>,
 		output: &ExecReturnValue,
 	) {
 		DEBUG_EXECUTION_TRACE.with(|d| {
 			d.borrow_mut().push(DebugFrame {
 				code_hash: code_hash.clone(),
 				call: entry_point,
-				input: input_data.to_vec(),
+				input: input_data,
 				result: Some(output.data.clone()),
 			})
 		});
