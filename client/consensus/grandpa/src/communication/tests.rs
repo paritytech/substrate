@@ -226,11 +226,7 @@ impl NotificationService for TestNotificationService {
 	}
 
 	/// Send synchronous `notification` to `peer`.
-	fn send_sync_notification(
-		&self,
-		_peer: &PeerId,
-		_notification: Vec<u8>,
-	) -> Result<(), sc_network::error::Error> {
+	fn send_sync_notification(&self, _peer: &PeerId, _notification: Vec<u8>) {
 		// TODO: this needs to be implemented
 		unimplemented!();
 	}

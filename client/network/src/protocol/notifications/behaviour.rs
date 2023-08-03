@@ -21,7 +21,7 @@ use crate::{
 	peerset::DropReason,
 	protocol::notifications::{
 		handler::{self, NotificationsSink, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut},
-		service::{NotificationCommand, ProtocolHandle},
+		service::{metrics, NotificationCommand, ProtocolHandle},
 	},
 	service::traits::ValidationResult,
 	types::ProtocolName,
@@ -414,12 +414,13 @@ impl Notifications {
 			.unzip();
 		assert!(!notif_protocols.is_empty());
 
+		let metrics = registry.as_ref().and_then(|registry| metrics::register(&registry).ok());
 		let (protocol_handles, command_streams): (Vec<_>, Vec<_>) = protocol_handle_pairs
 			.into_iter()
 			.enumerate()
 			.map(|(set_id, protocol_handle_pair)| {
 				let (mut protocol_handle, command_stream) = protocol_handle_pair.split();
-				protocol_handle.set_metrics(registry.clone());
+				protocol_handle.set_metrics(metrics.clone());
 
 				(protocol_handle, (set_id, command_stream))
 			})

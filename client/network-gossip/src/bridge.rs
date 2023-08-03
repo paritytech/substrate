@@ -513,11 +513,7 @@ mod tests {
 		}
 
 		/// Send synchronous `notification` to `peer`.
-		fn send_sync_notification(
-			&self,
-			_peer: &PeerId,
-			_notification: Vec<u8>,
-		) -> Result<(), sc_network::error::Error> {
+		fn send_sync_notification(&self, _peer: &PeerId, _notification: Vec<u8>) {
 			unimplemented!();
 		}
 

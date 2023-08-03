@@ -31,7 +31,6 @@ use futures::{
 };
 use libp2p::PeerId;
 use parking_lot::Mutex;
-use prometheus_endpoint::Registry;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -40,7 +39,7 @@ use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
-mod metrics;
+pub(crate) mod metrics;
 #[cfg(test)]
 mod tests;
 
@@ -387,8 +386,8 @@ impl ProtocolHandle {
 	}
 
 	/// Set metrics.
-	pub fn set_metrics(&mut self, metrics: Option<Registry>) {
-		self.metrics = metrics.map_or(None, |registry| metrics::register(&registry).ok());
+	pub fn set_metrics(&mut self, metrics: Option<metrics::Metrics>) {
+		self.metrics = metrics;
 	}
 
 	/// Report to the protocol that a substream has been opened and it must be validated by the
