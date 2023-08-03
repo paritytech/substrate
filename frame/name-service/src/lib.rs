@@ -642,7 +642,7 @@ pub mod pallet {
 		pub fn set_address(
 			origin: OriginFor<T>,
 			name_hash: NameHash,
-			address: T::AccountId, // TODO: should be agnostic address from any chain.
+			address: T::AccountId,
 			suffix: BoundedSuffixOf<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
