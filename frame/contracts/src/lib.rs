@@ -348,6 +348,11 @@ pub mod pallet {
 		/// ```
 		type Migrations: MigrateSequence;
 
+		/// Type that provides debug handling for the contract execution process.
+		///
+		/// # Warning
+		///
+		/// Do **not** use it in a production environment or for benchmarking purposes.
 		#[cfg(feature = "unsafe-debug")]
 		type Debug: unsafe_debug::UnsafeDebug<Self>;
 	}
