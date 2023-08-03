@@ -37,13 +37,20 @@ use sp_std::prelude::*;
 mod old {
 	use super::*;
 
+	pub type BalanceOf<T, OldCurrency> = <OldCurrency as frame_support::traits::Currency<
+		<T as frame_system::Config>::AccountId,
+	>>::Balance;
+
 	#[derive(Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
 	#[codec(mel_bound())]
-	#[scale_info(skip_type_params(T))]
-	pub struct OwnerInfo<T: Config> {
+	#[scale_info(skip_type_params(T, OldCurrency))]
+	pub struct OwnerInfo<T: Config, OldCurrency>
+	where
+		OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
+	{
 		pub owner: AccountIdOf<T>,
 		#[codec(compact)]
-		pub deposit: BalanceOf<T>,
+		pub deposit: BalanceOf<T, OldCurrency>,
 		#[codec(compact)]
 		pub refcount: u64,
 	}
@@ -63,7 +70,8 @@ mod old {
 	}
 
 	#[storage_alias]
-	pub type OwnerInfoOf<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, OwnerInfo<T>>;
+	pub type OwnerInfoOf<T: Config, OldCurrency> =
+		StorageMap<Pallet<T>, Identity, CodeHash<T>, OwnerInfo<T, OldCurrency>>;
 
 	#[storage_alias]
 	pub type CodeStorage<T: Config> =
@@ -72,11 +80,14 @@ mod old {
 
 #[derive(Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
 #[codec(mel_bound())]
-#[scale_info(skip_type_params(T))]
-pub struct CodeInfo<T: Config> {
+#[scale_info(skip_type_params(T, OldCurrency))]
+pub struct CodeInfo<T: Config, OldCurrency>
+where
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
+{
 	owner: AccountIdOf<T>,
 	#[codec(compact)]
-	deposit: BalanceOf<T>,
+	deposit: old::BalanceOf<T, OldCurrency>,
 	#[codec(compact)]
 	refcount: u64,
 	determinism: Determinism,
@@ -84,13 +95,17 @@ pub struct CodeInfo<T: Config> {
 }
 
 #[storage_alias]
-pub type CodeInfoOf<T: Config> = StorageMap<Pallet<T>, Twox64Concat, CodeHash<T>, CodeInfo<T>>;
+pub type CodeInfoOf<T: Config, OldCurrency> =
+	StorageMap<Pallet<T>, Twox64Concat, CodeHash<T>, CodeInfo<T, OldCurrency>>;
 
 #[storage_alias]
 pub type PristineCode<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, Vec<u8>>;
 
 #[cfg(feature = "runtime-benchmarks")]
-pub fn store_old_dummy_code<T: Config>(len: usize, account: T::AccountId) {
+pub fn store_old_dummy_code<T: Config, OldCurrency>(len: usize, account: T::AccountId)
+where
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId> + 'static,
+{
 	use sp_runtime::traits::Hash;
 
 	let code = vec![42u8; len];
@@ -107,15 +122,24 @@ pub fn store_old_dummy_code<T: Config>(len: usize, account: T::AccountId) {
 	old::CodeStorage::<T>::insert(hash, module);
 
 	let info = old::OwnerInfo { owner: account, deposit: u32::MAX.into(), refcount: u64::MAX };
-	old::OwnerInfoOf::<T>::insert(hash, info);
+	old::OwnerInfoOf::<T, OldCurrency>::insert(hash, info);
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
-pub struct Migration<T: Config> {
+pub struct Migration<T: Config, OldCurrency>
+where
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
+	OldCurrency::Balance: From<BalanceOf<T>>,
+{
 	last_code_hash: Option<CodeHash<T>>,
+	_phantom: PhantomData<OldCurrency>,
 }
 
-impl<T: Config> MigrationStep for Migration<T> {
+impl<T: Config, OldCurrency> MigrationStep for Migration<T, OldCurrency>
+where
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId> + 'static,
+	OldCurrency::Balance: From<BalanceOf<T>>,
+{
 	const VERSION: u16 = 12;
 
 	fn max_step_weight() -> Weight {
@@ -124,9 +148,11 @@ impl<T: Config> MigrationStep for Migration<T> {
 
 	fn step(&mut self) -> (IsFinished, Weight) {
 		let mut iter = if let Some(last_key) = self.last_code_hash.take() {
-			old::OwnerInfoOf::<T>::iter_from(old::OwnerInfoOf::<T>::hashed_key_for(last_key))
+			old::OwnerInfoOf::<T, OldCurrency>::iter_from(
+				old::OwnerInfoOf::<T, OldCurrency>::hashed_key_for(last_key),
+			)
 		} else {
-			old::OwnerInfoOf::<T>::iter()
+			old::OwnerInfoOf::<T, OldCurrency>::iter()
 		};
 		if let Some((hash, old_info)) = iter.next() {
 			log::debug!(target: LOG_TARGET, "Migrating OwnerInfo for code_hash {:?}", hash);
@@ -158,7 +184,8 @@ impl<T: Config> MigrationStep for Migration<T> {
 			let bytes_before = module
 				.encoded_size()
 				.saturating_add(code_len)
-				.saturating_add(old::OwnerInfo::<T>::max_encoded_len()) as u32;
+				.saturating_add(old::OwnerInfo::<T, OldCurrency>::max_encoded_len())
+				as u32;
 			let items_before = 3u32;
 			let deposit_expected_before = price_per_byte
 				.saturating_mul(bytes_before.into())
@@ -166,24 +193,25 @@ impl<T: Config> MigrationStep for Migration<T> {
 			let ratio = FixedU128::checked_from_rational(old_info.deposit, deposit_expected_before)
 				.unwrap_or_default()
 				.min(FixedU128::from_u32(1));
-			let bytes_after = code_len.saturating_add(CodeInfo::<T>::max_encoded_len()) as u32;
+			let bytes_after =
+				code_len.saturating_add(CodeInfo::<T, OldCurrency>::max_encoded_len()) as u32;
 			let items_after = 2u32;
 			let deposit_expected_after = price_per_byte
 				.saturating_mul(bytes_after.into())
 				.saturating_add(price_per_item.saturating_mul(items_after.into()));
 			let deposit = ratio.saturating_mul_int(deposit_expected_after);
 
-			let info = CodeInfo::<T> {
+			let info = CodeInfo::<T, OldCurrency> {
 				determinism: module.determinism,
 				owner: old_info.owner,
-				deposit,
+				deposit: deposit.into(),
 				refcount: old_info.refcount,
 				code_len: code_len as u32,
 			};
 
 			let amount = old_info.deposit.saturating_sub(info.deposit);
 			if !amount.is_zero() {
-				T::Currency::unreserve(&info.owner, amount);
+				OldCurrency::unreserve(&info.owner, amount);
 				log::debug!(
 					target: LOG_TARGET,
 					"Deposit refunded: {:?} Balance, to: {:?}",
@@ -198,7 +226,7 @@ impl<T: Config> MigrationStep for Migration<T> {
 					&old_info.deposit
 				);
 			}
-			CodeInfoOf::<T>::insert(hash, info);
+			CodeInfoOf::<T, OldCurrency>::insert(hash, info);
 
 			self.last_code_hash = Some(hash);
 
@@ -213,12 +241,12 @@ impl<T: Config> MigrationStep for Migration<T> {
 	fn pre_upgrade_step() -> Result<Vec<u8>, TryRuntimeError> {
 		let len = 100;
 		log::debug!(target: LOG_TARGET, "Taking sample of {} OwnerInfo(s)", len);
-		let sample: Vec<_> = old::OwnerInfoOf::<T>::iter()
+		let sample: Vec<_> = old::OwnerInfoOf::<T, OldCurrency>::iter()
 			.take(len)
 			.map(|(k, v)| {
 				let module = old::CodeStorage::<T>::get(k)
 					.expect("No PrefabWasmModule found for code_hash: {:?}");
-				let info: CodeInfo<T> = CodeInfo {
+				let info: CodeInfo<T, OldCurrency> = CodeInfo {
 					determinism: module.determinism,
 					deposit: v.deposit,
 					refcount: v.refcount,
@@ -231,22 +259,24 @@ impl<T: Config> MigrationStep for Migration<T> {
 
 		let storage: u32 =
 			old::CodeStorage::<T>::iter().map(|(_k, v)| v.encoded_size() as u32).sum();
-		let mut deposit: BalanceOf<T> = Default::default();
-		old::OwnerInfoOf::<T>::iter().for_each(|(_k, v)| deposit += v.deposit);
+		let mut deposit: old::BalanceOf<T, OldCurrency> = Default::default();
+		old::OwnerInfoOf::<T, OldCurrency>::iter().for_each(|(_k, v)| deposit += v.deposit);
 
 		Ok((sample, deposit, storage).encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		let state = <(Vec<(CodeHash<T>, CodeInfo<T>)>, BalanceOf<T>, u32) as Decode>::decode(
-			&mut &state[..],
-		)
+		let state = <(
+			Vec<(CodeHash<T>, CodeInfo<T, OldCurrency>)>,
+			old::BalanceOf<T, OldCurrency>,
+			u32,
+		) as Decode>::decode(&mut &state[..])
 		.unwrap();
 
 		log::debug!(target: LOG_TARGET, "Validating state of {} Codeinfo(s)", state.0.len());
 		for (hash, old) in state.0 {
-			let info = CodeInfoOf::<T>::get(&hash)
+			let info = CodeInfoOf::<T, OldCurrency>::get(&hash)
 				.expect(format!("CodeInfo for code_hash {:?} not found!", hash).as_str());
 			ensure!(info.determinism == old.determinism, "invalid determinism");
 			ensure!(info.owner == old.owner, "invalid owner");
@@ -262,7 +292,7 @@ impl<T: Config> MigrationStep for Migration<T> {
 		} else {
 			log::debug!(target: LOG_TARGET, "CodeStorage is empty.");
 		}
-		if let Some((k, _)) = old::OwnerInfoOf::<T>::iter().next() {
+		if let Some((k, _)) = old::OwnerInfoOf::<T, OldCurrency>::iter().next() {
 			log::warn!(
 				target: LOG_TARGET,
 				"OwnerInfoOf is still NOT empty, found code_hash: {:?}",
@@ -272,10 +302,10 @@ impl<T: Config> MigrationStep for Migration<T> {
 			log::debug!(target: LOG_TARGET, "OwnerInfoOf is empty.");
 		}
 
-		let mut deposit: BalanceOf<T> = Default::default();
+		let mut deposit: old::BalanceOf<T, OldCurrency> = Default::default();
 		let mut items = 0u32;
 		let mut storage_info = 0u32;
-		CodeInfoOf::<T>::iter().for_each(|(_k, v)| {
+		CodeInfoOf::<T, OldCurrency>::iter().for_each(|(_k, v)| {
 			deposit += v.deposit;
 			items += 1;
 			storage_info += v.encoded_size() as u32;

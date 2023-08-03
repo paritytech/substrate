@@ -243,10 +243,10 @@
 //! More precise usage details are still being worked on and will likely change in the future.
 
 mod behaviour;
-mod peer_store;
-mod peerset;
 mod protocol;
-mod protocol_controller;
+
+#[cfg(test)]
+mod mock;
 
 pub mod config;
 pub mod discovery;
@@ -254,6 +254,8 @@ pub mod error;
 pub mod event;
 pub mod network_state;
 pub mod peer_info;
+pub mod peer_store;
+pub mod protocol_controller;
 pub mod request_responses;
 pub mod service;
 pub mod transport;

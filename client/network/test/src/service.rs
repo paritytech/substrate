@@ -23,6 +23,7 @@ use sc_consensus::{ImportQueue, Link};
 use sc_network::{
 	config::{self, FullNetworkConfiguration, MultiaddrWithPeerId, ProtocolId, TransportConfig},
 	event::Event,
+	peer_store::PeerStore,
 	service::traits::{NotificationEvent, ValidationResult},
 	NetworkEventStream, NetworkPeers, NetworkService, NetworkStateInfo, NetworkWorker,
 	NotificationService,
@@ -224,6 +225,12 @@ impl TestNetworkBuilder {
 			full_net_config.add_request_response_protocol(config);
 		}
 
+		let peer_store = PeerStore::new(
+			network_config.boot_nodes.iter().map(|bootnode| bootnode.peer_id).collect(),
+		);
+		let peer_store_handle = peer_store.handle();
+		tokio::spawn(peer_store.run().boxed());
+
 		let genesis_hash =
 			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
 		let worker = NetworkWorker::<
@@ -237,6 +244,7 @@ impl TestNetworkBuilder {
 			}),
 			genesis_hash,
 			network_config: full_net_config,
+			peer_store: peer_store_handle,
 			protocol_id,
 			fork_id,
 			metrics_registry: None,
@@ -410,7 +418,6 @@ async fn notifications_state_consistent() {
 						.send_sync_notification(&node1.local_peer_id(), b"hello world".to_vec());
 				}
 			},
-			_ => {},
 		};
 	}
 }
@@ -493,7 +500,7 @@ async fn notifications_back_pressure() {
 
 	const TOTAL_NOTIFS: usize = 10_000;
 
-	let (node1, handle1, node2, handle2) = build_nodes_one_proto();
+	let (_node1, handle1, node2, handle2) = build_nodes_one_proto();
 	let (mut handle1, mut handle2) = (handle1.unwrap(), handle2.unwrap());
 	let node2_id = node2.local_peer_id();
 

@@ -486,7 +486,7 @@ pub trait ByteArray: AsRef<[u8]> + AsMut<[u8]> + for<'a> TryFrom<&'a [u8], Error
 }
 
 /// Trait suitable for typical cryptographic key public type.
-pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {}
+pub trait Public: CryptoType + ByteArray + Derive + PartialEq + Eq + Clone + Send {}
 
 /// An opaque 32-byte cryptographic identifier.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -834,7 +834,7 @@ impl sp_std::str::FromStr for SecretUri {
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
 #[cfg(feature = "full_crypto")]
-pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
+pub trait Pair: CryptoType + Sized {
 	/// The type which is used to encode a public key.
 	type Public: Public + Hash;
 
@@ -1144,6 +1144,8 @@ pub mod key_types {
 	pub const ACCOUNT: KeyTypeId = KeyTypeId(*b"acco");
 	/// Key type for Aura module, built-in. Identified as `aura`.
 	pub const AURA: KeyTypeId = KeyTypeId(*b"aura");
+	/// Key type for BEEFY module.
+	pub const BEEFY: KeyTypeId = KeyTypeId(*b"beef");
 	/// Key type for ImOnline module, built-in. Identified as `imon`.
 	pub const IM_ONLINE: KeyTypeId = KeyTypeId(*b"imon");
 	/// Key type for AuthorityDiscovery module, built-in. Identified as `audi`.

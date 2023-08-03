@@ -18,8 +18,6 @@
 
 //! `sc-network` type definitions
 
-use libp2p::core::upgrade;
-
 use std::{
 	borrow::Borrow,
 	fmt,
@@ -92,9 +90,9 @@ impl fmt::Display for ProtocolName {
 	}
 }
 
-impl upgrade::ProtocolName for ProtocolName {
-	fn protocol_name(&self) -> &[u8] {
-		(self as &str).as_bytes()
+impl AsRef<str> for ProtocolName {
+	fn as_ref(&self) -> &str {
+		self as &str
 	}
 }
 

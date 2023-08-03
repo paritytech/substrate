@@ -168,8 +168,8 @@ impl LoadedModule {
 					let _ = import.ty().func().ok_or("expected a function")?;
 
 					if !<T as Config>::ChainExtension::enabled() &&
-						import.name().as_bytes() == b"seal_call_chain_extension" ||
-						import.name().as_bytes() == b"call_chain_extension"
+						(import.name().as_bytes() == b"seal_call_chain_extension" ||
+							import.name().as_bytes() == b"call_chain_extension")
 					{
 						return Err("Module uses chain extensions but chain extensions are disabled")
 					}
