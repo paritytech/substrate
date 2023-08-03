@@ -140,4 +140,3 @@ fn on_nominator_update_works() {
 		assert_eq!(get_scores::<TargetBagsList>(), vec![(10, 200), (11, 200), (20, 150)]);
 	})
 }
-
