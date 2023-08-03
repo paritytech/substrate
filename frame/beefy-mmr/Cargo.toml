@@ -51,5 +51,13 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-api/std",
+	"sp-staking/std"
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-beefy/try-runtime",
+	"pallet-mmr/try-runtime",
+	"pallet-session/try-runtime",
+	"sp-runtime/try-runtime"
+]

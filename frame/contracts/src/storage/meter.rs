@@ -26,8 +26,9 @@ use frame_support::{
 	dispatch::{fmt::Debug, DispatchError},
 	ensure,
 	traits::{
-		tokens::{Fortitude::Polite, Preservation::Protect, WithdrawConsequence},
-		Currency, ExistenceRequirement, Get,
+		fungible::Mutate,
+		tokens::{Fortitude::Polite, Preservation, WithdrawConsequence},
+		Get,
 	},
 	DefaultNoBound, RuntimeDebugNoBound,
 };
@@ -37,7 +38,7 @@ use sp_runtime::{
 };
 use sp_std::{marker::PhantomData, vec::Vec};
 
-/// Deposit that uses the native currency's balance type.
+/// Deposit that uses the native fungible's balance type.
 pub type DepositOf<T> = Deposit<BalanceOf<T>>;
 
 /// A production root storage meter that actually charges from its origin.
@@ -89,7 +90,7 @@ pub trait Ext<T: Config> {
 
 /// This [`Ext`] is used for actual on-chain execution when balance needs to be charged.
 ///
-/// It uses [`frame_support::traits::ReservableCurrency`] in order to do accomplish the reserves.
+/// It uses [`frame_support::traits::fungible::Mutate`] in order to do accomplish the reserves.
 pub enum ReservingExt {}
 
 /// Used to implement a type state pattern for the meter.
@@ -453,7 +454,7 @@ where
 		System::<T>::inc_consumers(contract_info.deposit_account())?;
 
 		// We also need to make sure that the contract's account itself exists.
-		T::Currency::transfer(origin, contract, ed, ExistenceRequirement::KeepAlive)?;
+		T::Currency::transfer(origin, contract, ed, Preservation::Preserve)?;
 		System::<T>::inc_consumers(contract)?;
 
 		Ok(deposit)
@@ -517,7 +518,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 		// We are sending the `min_leftover` and the `min_balance` from the origin
 		// account as part of a contract call. Hence origin needs to have those left over
 		// as free balance after accounting for all deposits.
-		let max = T::Currency::reducible_balance(origin, Protect, Polite)
+		let max = T::Currency::reducible_balance(origin, Preservation::Preserve, Polite)
 			.saturating_sub(min_leftover)
 			.saturating_sub(Pallet::<T>::min_balance());
 		let default = max.min(T::DefaultDepositLimit::get());
@@ -537,12 +538,11 @@ impl<T: Config> Ext<T> for ReservingExt {
 		terminated: bool,
 	) -> Result<(), DispatchError> {
 		match amount {
-			Deposit::Charge(amount) => T::Currency::transfer(
-				origin,
-				deposit_account,
-				*amount,
-				ExistenceRequirement::KeepAlive,
-			),
+			Deposit::Charge(amount) | Deposit::Refund(amount) if amount.is_zero() => return Ok(()),
+			Deposit::Charge(amount) => {
+				T::Currency::transfer(origin, deposit_account, *amount, Preservation::Preserve)?;
+				Ok(())
+			},
 			Deposit::Refund(amount) => {
 				if terminated {
 					System::<T>::dec_consumers(&deposit_account);
@@ -551,9 +551,11 @@ impl<T: Config> Ext<T> for ReservingExt {
 					deposit_account,
 					origin,
 					*amount,
-					// We can safely use `AllowDeath` because our own consumer prevents an removal.
-					ExistenceRequirement::AllowDeath,
-				)
+					// We can safely make it `Expendable` because our own consumer prevents a
+					// removal.
+					Preservation::Expendable,
+				)?;
+				Ok(())
 			},
 		}
 	}
