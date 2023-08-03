@@ -379,7 +379,7 @@ impl OverlayedChanges {
 		});
 		self.offchain
 			.overlay_mut()
-			.rollback_transaction_simple()
+			.rollback_transaction_offchain()
 			.expect("Top and offchain changesets are started in lockstep; qed");
 		Ok(())
 	}
@@ -397,7 +397,7 @@ impl OverlayedChanges {
 		}
 		self.offchain
 			.overlay_mut()
-			.commit_transaction_simple()
+			.commit_transaction_offchain()
 			.expect("Top and offchain changesets are started in lockstep; qed");
 		Ok(())
 	}
@@ -433,7 +433,7 @@ impl OverlayedChanges {
 		}
 		self.offchain
 			.overlay_mut()
-			.exit_runtime_simple()
+			.exit_runtime_offchain()
 			.expect("Top and offchain changesets are started in lockstep; qed");
 		Ok(())
 	}

@@ -257,7 +257,7 @@ impl<V> OverlayedEntry<V> {
 	///
 	/// This makes sure that the old version is not overwritten and can be properly
 	/// rolled back when required.
-	fn set_simple(&mut self, value: V, first_write_in_tx: bool, at_extrinsic: Option<u32>) {
+	fn set_offchain(&mut self, value: V, first_write_in_tx: bool, at_extrinsic: Option<u32>) {
 		if first_write_in_tx || self.transactions.is_empty() {
 			self.transactions.push(InnerValue { value, extrinsics: Default::default() });
 		} else {
@@ -513,9 +513,9 @@ impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 	/// Set a new value for the specified key.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub fn set_simple(&mut self, key: K, value: V, at_extrinsic: Option<u32>) {
+	pub fn set_offchain(&mut self, key: K, value: V, at_extrinsic: Option<u32>) {
 		let overlayed = self.changes.entry(key.clone()).or_default();
-		overlayed.set_simple(value, insert_dirty(&mut self.dirty_keys, key), at_extrinsic);
+		overlayed.set_offchain(value, insert_dirty(&mut self.dirty_keys, key), at_extrinsic);
 	}
 
 	/// Get a list of all changes as seen by current transaction.
@@ -562,7 +562,7 @@ impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 	///
 	/// This commits all dangling transaction left open by the runtime.
 	/// Calling this while already outside the runtime will return an error.
-	pub fn exit_runtime_simple(&mut self) -> Result<(), NotInRuntime> {
+	pub fn exit_runtime_offchain(&mut self) -> Result<(), NotInRuntime> {
 		if let ExecutionMode::Client = self.execution_mode {
 			return Err(NotInRuntime)
 		}
@@ -574,7 +574,7 @@ impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 			);
 		}
 		while self.has_open_runtime_transactions() {
-			self.rollback_transaction_simple()
+			self.rollback_transaction_offchain()
 				.expect("The loop condition checks that the transaction depth is > 0; qed");
 		}
 		Ok(())
@@ -595,19 +595,19 @@ impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 	///
 	/// Any changes made during that transaction are discarded. Returns an error if
 	/// there is no open transaction that can be rolled back.
-	pub fn rollback_transaction_simple(&mut self) -> Result<(), NoOpenTransaction> {
-		self.close_transaction_simple(true)
+	pub fn rollback_transaction_offchain(&mut self) -> Result<(), NoOpenTransaction> {
+		self.close_transaction_offchain(true)
 	}
 
 	/// Commit the last transaction started by `start_transaction`.
 	///
 	/// Any changes made during that transaction are committed. Returns an error if
 	/// there is no open transaction that can be committed.
-	pub fn commit_transaction_simple(&mut self) -> Result<(), NoOpenTransaction> {
-		self.close_transaction_simple(false)
+	pub fn commit_transaction_offchain(&mut self) -> Result<(), NoOpenTransaction> {
+		self.close_transaction_offchain(false)
 	}
 
-	fn close_transaction_simple(&mut self, rollback: bool) -> Result<(), NoOpenTransaction> {
+	fn close_transaction_offchain(&mut self, rollback: bool) -> Result<(), NoOpenTransaction> {
 		// runtime is not allowed to close transactions started by the client
 		if let ExecutionMode::Runtime = self.execution_mode {
 			if !self.has_open_runtime_transactions() {

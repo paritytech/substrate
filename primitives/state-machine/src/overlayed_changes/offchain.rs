@@ -53,7 +53,7 @@ impl OffchainOverlayedChanges {
 
 	/// Remove a key and its associated value from the offchain database.
 	pub fn remove(&mut self, prefix: &[u8], key: &[u8]) {
-		let _ = self.0.set_simple(
+		let _ = self.0.set_offchain(
 			(prefix.to_vec(), key.to_vec()),
 			OffchainOverlayedChange::Remove,
 			None,
@@ -62,7 +62,7 @@ impl OffchainOverlayedChanges {
 
 	/// Set the value associated with a key under a prefix to the value provided.
 	pub fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		let _ = self.0.set_simple(
+		let _ = self.0.set_offchain(
 			(prefix.to_vec(), key.to_vec()),
 			OffchainOverlayedChange::SetValue(value.to_vec()),
 			None,
