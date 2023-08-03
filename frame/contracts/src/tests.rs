@@ -5997,6 +5997,8 @@ fn unsafe_debugging_works() {
 		}
 	}
 
+	use frame_support::traits::Currency;
+
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
