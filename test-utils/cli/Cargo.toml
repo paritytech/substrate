@@ -20,4 +20,6 @@ nix = "0.26.2"
 regex = "1.7.3"
 tokio = { version = "1.22.0", features = ["full"] }
 node-primitives = { path = "../../bin/node/primitives" }
+node-template = { path = "../../bin/node-template/node" }
+sc-cli = { path = "../../client/cli" }
 futures = "0.3.28"

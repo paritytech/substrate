@@ -35,6 +35,43 @@ use std::{
 };
 use tokio::io::{AsyncBufReadExt, AsyncRead};
 
+/// Similar to [`crate::start_node`] spawns a dev node on port `45789`, but works in environments
+/// where you can't access the substarte binary using `cargo_bin("substrate-node")`.
+///
+/// Helpful when you need a Substrate node running in the background in an external project.
+///
+/// The downside compared to [`crate::start_node`] is that this function is blocking and has no way
+/// of returning a [`Child`]. So you may want to start it inside a new thread.
+///
+/// # Example
+/// ```ignore
+/// // Spawn a dev node in the background.
+/// let _ = std::thread::spawn(move || {
+/// 	common::start_node_without_binary();
+/// });
+/// ```
+pub fn start_node_without_binary() {
+	use sc_cli::SubstrateCli;
+
+	let cli = node_template::cli::Cli::from_iter(vec![
+		"node-template",
+		"--dev",
+		"--tmp",
+		"--rpc-port=45789",
+	]);
+	let runner = cli.create_runner(&cli.run).unwrap();
+	match runner.run_node_until_exit(|config| async move {
+		node_template::service::new_full(config).map_err(sc_cli::Error::Service)
+	}) {
+		Ok(_) => {
+			println!("Node process exited successfully.");
+		},
+		Err(e) => {
+			println!("Node process exited with error: {:?}", e);
+		},
+	};
+}
+
 /// Starts a new Substrate node in development mode with a temporary chain.
 ///
 /// This function creates a new Substrate node using the `substrate` binary.
