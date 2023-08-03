@@ -268,7 +268,10 @@ impl<V> OverlayedEntry<V> {
 		}
 	}
 }
-fn restore_append_with_parent(
+
+/// When a transaction layer is dropped, pass the current data buffer to the
+/// parent layer (will be new current).
+fn restore_append_to_parent(
 	parent: &mut StorageEntry,
 	mut current_data: Vec<u8>,
 	current_materialized: Option<u32>,
@@ -276,24 +279,29 @@ fn restore_append_with_parent(
 	match parent {
 		StorageEntry::Append {
 			data: parent_data,
-			moved_size,
+			moved_size: parent_moved_size,
 			nb_append: _,
-			materialized,
+			materialized: parent_materialized,
 			from_parent: _,
 		} => {
 			debug_assert!(parent_data.is_empty());
-			let mut moved_size =
-				moved_size.take().expect("append in new layer store size in previous; qed");
+			let mut target_size = parent_moved_size
+				.take()
+				.expect("append in new layer store size in previous; qed");
+
+			// use materialized size from next layer to avoid changing it at this point.
 			let (delta, decrease) =
-				StorageAppend::diff_materialized(*materialized, current_materialized);
+				StorageAppend::diff_materialized(*parent_materialized, current_materialized);
 			if decrease {
-				moved_size -= delta;
+				target_size -= delta;
 			} else {
-				moved_size += delta;
+				target_size += delta;
 			}
-			current_data.truncate(moved_size);
+			*parent_materialized = current_materialized;
+
+			// actually truncate the data.
+			current_data.truncate(target_size);
 			*parent_data = current_data;
-			*materialized = current_materialized;
 		},
 		_ => {
 			// No value or a simple value, no need to restore
@@ -338,7 +346,7 @@ impl OverlayedEntry<StorageEntry> {
 				let transactions = self.transactions.len();
 
 				let parent = self.transactions.get_mut(transactions - 2).expect("from parent true");
-				restore_append_with_parent(&mut parent.value, data, current_materialized);
+				restore_append_to_parent(&mut parent.value, data, current_materialized);
 			}
 		}
 
@@ -689,11 +697,7 @@ impl OverlayedChangeSet {
 					} if from_parent => {
 						debug_assert!(size_current.is_none());
 						debug_assert!(!overlayed.transactions.is_empty());
-						restore_append_with_parent(
-							overlayed.value_mut(),
-							data,
-							materialized_current,
-						);
+						restore_append_to_parent(overlayed.value_mut(), data, materialized_current);
 					},
 					_ => (),
 				}
@@ -748,7 +752,7 @@ impl OverlayedChangeSet {
 									.transactions
 									.get_mut(transactions - 2)
 									.expect("from parent true");
-								restore_append_with_parent(
+								restore_append_to_parent(
 									&mut parent.value,
 									data,
 									current_materialized,
