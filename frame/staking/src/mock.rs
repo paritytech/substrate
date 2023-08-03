@@ -295,15 +295,19 @@ parameter_types! {
 
 pub struct EventListenerMock;
 impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
+	// covered by StakeTracker
+
+	/*
 	fn on_nominator_add(who: &AccountId) {
 		<VoterBagsList as SortedListProvider<AccountId>>::on_insert(*who, Staking::weight_of(who))
 			.unwrap();
 	}
 
 	fn on_nominator_remove(who: &AccountId, _nominations: Vec<AccountId>) {
-		// TODO(gpestana): add target list; update target list; update/add tests
+		 TODO(gpestana): add target list; update target list; update/add tests
 		<VoterBagsList as SortedListProvider<AccountId>>::on_remove(who).unwrap()
 	}
+	*/
 
 	fn on_slash(
 		_pool_account: &AccountId,
@@ -340,6 +344,7 @@ impl crate::pallet::pallet::Config for Test {
 	type TargetList = TargetBagsList;
 	type MaxUnlockingChunks = MaxUnlockingChunks;
 	type HistoryDepth = HistoryDepth;
+	//type EventListeners = (StakeTracker, EventListenerMock);
 	type EventListeners = StakeTracker;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();

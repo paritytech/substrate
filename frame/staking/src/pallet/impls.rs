@@ -1021,6 +1021,23 @@ impl<T: Config> Pallet<T> {
 	pub fn api_nominations_quota(_balance: BalanceOf<T>) -> u32 {
 		T::MaxNominations::get()
 	}
+
+	// TODO: remove
+    #[allow(dead_code)]
+	pub(crate) fn print_state() {
+		println!("-----------------");
+		let voters_bags: Vec<_> =
+			<T::VoterList as SortedListProvider<T::AccountId>>::iter().map(|v| v).collect();
+		println!("Voters bags: {:?}", voters_bags);
+		let targets_bags: Vec<_> =
+			<T::TargetList as SortedListProvider<T::AccountId>>::iter().map(|t| t).collect();
+		println!("Targets bags: {:?}", targets_bags);
+		let noms: Vec<_> = Nominators::iter().map(|x: (_, Nominations<T>)| x).collect();
+		println!("Nominators: {:?}", noms);
+		let vals: Vec<_> = Validators::<T>::iter().map(|(v, _)| v).collect();
+		println!("Validators: {:?}", vals);
+		println!("");
+	}
 }
 
 impl<T: Config> ElectionDataProvider for Pallet<T> {
@@ -1384,6 +1401,7 @@ where
 					add_db_reads_writes(rw, rw);
 				}
 				unapplied.reporters = details.reporters.clone();
+
 				if slash_defer_duration == 0 {
 					// Apply right away.
 					slashing::apply_slash::<T>(unapplied, slash_era);

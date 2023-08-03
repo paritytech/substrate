@@ -281,6 +281,9 @@ pub(crate) fn compute_slash<T: Config>(
 			// chill the validator - it misbehaved in the current span and should
 			// not continue in the next election. also end the slashing span.
 			spans.end_span(params.now);
+
+			// TODO: why is chill_stash so deep into the whole calling path? consider refactoring to
+			// bubble up the changes to the ledger and make the code more undersrandable.
 			<Pallet<T>>::chill_stash(params.stash);
 		}
 	}

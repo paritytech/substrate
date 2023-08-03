@@ -349,7 +349,6 @@ impl<T: Config> StakingLedger<T> {
 		if slash_amount.is_zero() {
 			return Zero::zero()
 		}
-
 		use sp_runtime::PerThing as _;
 		let mut remaining_slash = slash_amount;
 		let pre_slash_total = self.total;
