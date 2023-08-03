@@ -30,7 +30,9 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
-	migration::{codegen::LATEST_MIGRATION_VERSION, v09, v10, v11, v12, v13, v14, MigrationStep},
+	migration::{
+		codegen::LATEST_MIGRATION_VERSION, v09, v10, v11, v12, v13, v14, v15, MigrationStep,
+	},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -292,6 +294,19 @@ benchmarks! {
 		T::Currency::set_balance(&account, caller_funding::<T>());
 		v14::store_dummy_code::<T, pallet_balances::Pallet<T>>(account);
 		let mut m = v14::Migration::<T, pallet_balances::Pallet<T>>::default();
+	}: {
+		m.step();
+	}
+
+	// This benchmarks the v15 migration step (remove deposit account).
+	#[pov_mode = Measured]
+	v15_migration_step {
+		let contract = <Contract<T>>::with_caller(
+			whitelisted_caller(), WasmModule::dummy(), vec![],
+		)?;
+
+		v15::store_old_contract_info::<T>(contract.account_id.clone(), contract.info()?);
+		let mut m = v15::Migration::<T>::default();
 	}: {
 		m.step();
 	}

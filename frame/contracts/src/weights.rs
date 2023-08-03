@@ -57,6 +57,7 @@ pub trait WeightInfo {
 	fn v12_migration_step(c: u32, ) -> Weight;
 	fn v13_migration_step() -> Weight;
 	fn v14_migration_step() -> Weight;
+	fn v15_migration_step() -> Weight;
 	fn migration_noop() -> Weight;
 	fn migrate() -> Weight;
 	fn on_runtime_upgrade_noop() -> Weight;
@@ -252,6 +253,17 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Minimum execution time: 27_995_000 picoseconds.
 		Weight::from_parts(28_661_000, 6200)
 			.saturating_add(T::DbWeight::get().reads(3_u64))
+	}
+	/// Storage: `Contracts::ContractInfoOf` (r:3 w:1)
+	/// Proof: `Contracts::ContractInfoOf` (`max_values`: None, `max_size`: Some(1819), added: 4294, mode: `Measured`)
+	fn v15_migration_step() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `639`
+		//  Estimated: `9054`
+		// Minimum execution time: 35_342_000 picoseconds.
+		Weight::from_parts(36_839_000, 9054)
+			.saturating_add(T::DbWeight::get().reads(3_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Contracts::MigrationInProgress` (r:1 w:1)
 	/// Proof: `Contracts::MigrationInProgress` (`max_values`: Some(1), `max_size`: Some(1026), added: 1521, mode: `Measured`)
@@ -2122,6 +2134,17 @@ impl WeightInfo for () {
 		// Minimum execution time: 27_995_000 picoseconds.
 		Weight::from_parts(28_661_000, 6200)
 			.saturating_add(RocksDbWeight::get().reads(3_u64))
+	}
+	/// Storage: `Contracts::ContractInfoOf` (r:3 w:1)
+	/// Proof: `Contracts::ContractInfoOf` (`max_values`: None, `max_size`: Some(1819), added: 4294, mode: `Measured`)
+	fn v15_migration_step() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `639`
+		//  Estimated: `9054`
+		// Minimum execution time: 35_342_000 picoseconds.
+		Weight::from_parts(36_839_000, 9054)
+			.saturating_add(RocksDbWeight::get().reads(3_u64))
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Contracts::MigrationInProgress` (r:1 w:1)
 	/// Proof: `Contracts::MigrationInProgress` (`max_values`: Some(1), `max_size`: Some(1026), added: 1521, mode: `Measured`)

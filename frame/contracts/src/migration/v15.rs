@@ -15,16 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Move contracts' _reserved_ balance to be _held_ instead. Since
-//! [`Currency`](frame_support::traits::Currency) has been deprecated [here](https://github.com/paritytech/substrate/pull/12951),
-//! we need the storage deposit to be handled by the [`frame_support::traits::fungible`] traits
-//! instead. For this we need to transfer the balance in the deposit account to the contract's
-//! account and hold it in there.
+//! Move contracts' _reserved_ balance from the `deposit_account` to be _held_ in the contract's
+//! account instead. Since [`Currency`](frame_support::traits::Currency) has been [deprecated]
+//! (https://github.com/paritytech/substrate/pull/12951), we need the deposits to be handled by the
+//! [`frame_support::traits::fungible`] traits instead. For this transfer the balance in the
+//! deposit account to the contract's account and hold it in there.
+//! Then the deposit account is not needed anymore and we can get rid of it.
 
 use crate::{
 	migration::{IsFinished, MigrationStep},
+	storage::DepositAccount,
 	weights::WeightInfo,
-	Config, ContractInfoOf, HoldReason, Weight, LOG_TARGET,
+	BalanceOf, CodeHash, Config, ContractInfoOf, HoldReason, Pallet, TrieId, Weight, LOG_TARGET,
 };
 #[cfg(feature = "try-runtime")]
 use crate::{BalanceOf, ContractInfo};
@@ -32,17 +34,63 @@ use crate::{BalanceOf, ContractInfo};
 use frame_support::{dispatch::Vec, traits::fungible::InspectHold};
 use frame_support::{
 	pallet_prelude::*,
+	storage_alias,
 	traits::{
 		fungible::{Mutate, MutateHold},
 		tokens::{fungible::Inspect, Fortitude, Preservation},
 	},
-	DefaultNoBound,
+	BoundedBTreeMap, DefaultNoBound,
 };
 use frame_system::Pallet as System;
 use sp_core::hexdisplay::HexDisplay;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 use sp_runtime::{traits::Zero, Saturating};
+
+mod old {
+	use super::*;
+
+	#[derive(
+		Encode, Decode, CloneNoBound, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen,
+	)]
+	#[scale_info(skip_type_params(T))]
+	pub struct ContractInfo<T: Config> {
+		pub trie_id: TrieId,
+		pub deposit_account: DepositAccount<T>,
+		pub code_hash: CodeHash<T>,
+		pub storage_bytes: u32,
+		pub storage_items: u32,
+		pub storage_byte_deposit: BalanceOf<T>,
+		pub storage_item_deposit: BalanceOf<T>,
+		pub storage_base_deposit: BalanceOf<T>,
+		pub delegate_dependencies:
+			BoundedBTreeMap<CodeHash<T>, BalanceOf<T>, T::MaxDelegateDependencies>,
+	}
+
+	#[storage_alias]
+	pub type ContractInfoOf<T: Config> = StorageMap<
+		Pallet<T>,
+		Twox64Concat,
+		<T as frame_system::Config>::AccountId,
+		ContractInfo<T>,
+	>;
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+pub fn store_old_contract_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>) {
+	let info = old::ContractInfo {
+		trie_id: info.trie_id.clone(),
+		deposit_account: info.deposit_account().clone(),
+		code_hash: info.code_hash,
+		storage_bytes: Default::default(),
+		storage_items: Default::default(),
+		storage_byte_deposit: Default::default(),
+		storage_item_deposit: Default::default(),
+		storage_base_deposit: Default::default(),
+		delegate_dependencies: Default::default(),
+	};
+	old::ContractInfoOf::<T>::insert(account, info);
+}
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
 pub struct Migration<T: Config> {
@@ -53,7 +101,7 @@ impl<T: Config> MigrationStep for Migration<T> {
 	const VERSION: u16 = 15;
 
 	fn max_step_weight() -> Weight {
-		T::WeightInfo::v13_migration_step() // TODO
+		T::WeightInfo::v15_migration_step()
 	}
 
 	fn step(&mut self) -> (IsFinished, Weight) {
@@ -158,10 +206,10 @@ impl<T: Config> MigrationStep for Migration<T> {
 			// Store last key for next migration step
 			self.last_account = Some(account);
 
-			(IsFinished::No, T::WeightInfo::v13_migration_step()) // TODO
+			(IsFinished::No, T::WeightInfo::v15_migration_step())
 		} else {
 			log::info!(target: LOG_TARGET, "Done Migrating Storage Deposits.");
-			(IsFinished::Yes, T::WeightInfo::v13_migration_step()) // TODO
+			(IsFinished::Yes, T::WeightInfo::v15_migration_step())
 		}
 	}
 
