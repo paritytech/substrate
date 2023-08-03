@@ -6036,7 +6036,7 @@ fn unsafe_debugging_works() {
 				call_frame(code_hash_caller, main_args.clone(), false),
 				call_frame(code_hash_callee, inner_args.clone(), false),
 				call_frame(code_hash_callee, inner_args, true),
-				call_frame(code_hash_caller, main_args, true),
+				call_frame(code_hash_caller, main_args, false),
 			]
 		);
 	});
