@@ -63,19 +63,47 @@ pub mod ecdsa_n_bls377 {
 #[cfg(feature = "full_crypto")]
 //type Seed = [u8; SECRET_KEY_SERIALIZED_SIZE];
 
+pub trait PublicKeyBound: TraitPublic + sp_std::hash::Hash + ByteArray {}
 /// A public key.
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, PartialEq, Eq, PartialOrd, Ord)]
 #[scale_info(skip_type_params(T))]
-pub struct Public<LeftPublic: TraitPublic, RightPublic: TraitPublic> {
+pub struct PublicWithInner<LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RIGHT_SIZE: usize> {
+    inner: [u8; LEFT_PLUS_RIGHT_SIZE],
+ 	_phantom: PhantomData<fn() -> (LeftPublic, RightPublic)>,
+}
+
+pub struct Public<LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound> {
     left_public : LeftPublic,
     right_public: RightPublic,
 }
 
-#[cfg(feature = "full_crypto")]
-impl<T1: TraitPublic, T2: TraitPublicc> sp_std::hash::Hash for Public<T1,T2> {
- 	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
- 		self.left_public.hash(state);
-        self.right_public.hash(state);
- 	}
-}
+// #[cfg(feature = "full_crypto")]
+// impl<T1: PublicKeyBound, T2: PublicKeyBound> sp_std::hash::Hash for Public<T1,T2> {
+//  	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
+//  		self.left_public.hash(state);
+//         self.right_public.hash(state);
+//  	}
+// }
 
+// impl<T1: TraitPublic, T2: TraitPublic> ByteArray for Public<T1,T2> {
+//  	const LEN: usize = T1::LEN + T2::LEN;
+// }
+
+// impl<T1: PublicKeyBound, T2: PublicKeyBound> TryFrom<&[u8]> for Public<T1,T2> {
+//  	type Error = ();
+
+//  	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+// // 		if data.len() != PUBLIC_KEY_SERIALIZED_SIZE {
+// // 			return Err(())
+// // 		}
+// // 		let mut r = [0u8; PUBLIC_KEY_SERIALIZED_SIZE];
+// // 		r.copy_from_slice(data);
+// // 		Ok(Self::unchecked_from(r))
+//  	}
+// }
+
+// impl<T1,T2> AsMut<[u8]> for Public<T1,T2> {
+//  	fn as_mut(&mut self) -> &mut [u8] {
+//  		&mut self.inner[..]
+//  	}
+// }
