@@ -20,7 +20,7 @@ use crate::keystore::BeefyKeystore;
 use codec::{DecodeAll, Encode};
 use sp_consensus::Error as ConsensusError;
 use sp_consensus_beefy::{
-	crypto::{AuthorityId, Signature},
+	ecdsa_crypto::{AuthorityId, Signature},
 	ValidatorSet, ValidatorSetId, VersionedFinalityProof,
 };
 use sp_runtime::traits::{Block as BlockT, NumberFor};

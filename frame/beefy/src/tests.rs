@@ -20,7 +20,7 @@ use std::vec;
 use codec::Encode;
 use sp_consensus_beefy::{
 	check_equivocation_proof, generate_equivocation_proof, known_payloads::MMR_ROOT_ID,
-	Keyring as BeefyKeyring, Payload, ValidatorSet,
+	Keyring as BeefyKeyring, Payload, ValidatorSet, KEY_TYPE as BEEFY_KEY_TYPE,
 };
 
 use sp_runtime::DigestItem;
@@ -297,8 +297,7 @@ fn report_equivocation_current_set_works() {
 		);
 
 		// create the key ownership proof
-		let key_owner_proof =
-			Historical::prove((sp_consensus_beefy::KEY_TYPE, &equivocation_key)).unwrap();
+		let key_owner_proof = Historical::prove((BEEFY_KEY_TYPE, &equivocation_key)).unwrap();
 
 		// report the equivocation and the tx should be dispatched successfully
 		assert_ok!(Beefy::report_equivocation_unsigned(
@@ -354,8 +353,7 @@ fn report_equivocation_old_set_works() {
 		let equivocation_key = &authorities[equivocation_authority_index];
 
 		// create the key ownership proof in the "old" set
-		let key_owner_proof =
-			Historical::prove((sp_consensus_beefy::KEY_TYPE, &equivocation_key)).unwrap();
+		let key_owner_proof = Historical::prove((BEEFY_KEY_TYPE, &equivocation_key)).unwrap();
 
 		start_era(2);
 
@@ -436,8 +434,7 @@ fn report_equivocation_invalid_set_id() {
 		let equivocation_key = &authorities[equivocation_authority_index];
 		let equivocation_keyring = BeefyKeyring::from_public(equivocation_key).unwrap();
 
-		let key_owner_proof =
-			Historical::prove((sp_consensus_beefy::KEY_TYPE, &equivocation_key)).unwrap();
+		let key_owner_proof = Historical::prove((BEEFY_KEY_TYPE, &equivocation_key)).unwrap();
 
 		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
 		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
@@ -475,8 +472,7 @@ fn report_equivocation_invalid_session() {
 		let equivocation_keyring = BeefyKeyring::from_public(equivocation_key).unwrap();
 
 		// generate a key ownership proof at current era set id
-		let key_owner_proof =
-			Historical::prove((sp_consensus_beefy::KEY_TYPE, &equivocation_key)).unwrap();
+		let key_owner_proof = Historical::prove((BEEFY_KEY_TYPE, &equivocation_key)).unwrap();
 
 		start_era(2);
 
@@ -520,7 +516,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 
 		// generate a key ownership proof for the authority at index 1
 		let invalid_key_owner_proof =
-			Historical::prove((sp_consensus_beefy::KEY_TYPE, &invalid_owner_key)).unwrap();
+			Historical::prove((BEEFY_KEY_TYPE, &invalid_owner_key)).unwrap();
 
 		let equivocation_authority_index = 0;
 		let equivocation_key = &authorities[equivocation_authority_index];
@@ -568,8 +564,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 		let equivocation_keyring = BeefyKeyring::from_public(equivocation_key).unwrap();
 
 		// generate a key ownership proof at set id in era 1
-		let key_owner_proof =
-			Historical::prove((sp_consensus_beefy::KEY_TYPE, &equivocation_key)).unwrap();
+		let key_owner_proof = Historical::prove((BEEFY_KEY_TYPE, &equivocation_key)).unwrap();
 
 		let assert_invalid_equivocation_proof = |equivocation_proof| {
 			assert_err!(
@@ -649,8 +644,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 			(block_num, payload2, set_id, &equivocation_keyring),
 		);
 
-		let key_owner_proof =
-			Historical::prove((sp_consensus_beefy::KEY_TYPE, &equivocation_key)).unwrap();
+		let key_owner_proof = Historical::prove((BEEFY_KEY_TYPE, &equivocation_key)).unwrap();
 
 		let call = Call::report_equivocation_unsigned {
 			equivocation_proof: Box::new(equivocation_proof.clone()),
@@ -755,8 +749,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		);
 
 		// create the key ownership proof.
-		let key_owner_proof =
-			Historical::prove((sp_consensus_beefy::KEY_TYPE, &equivocation_key)).unwrap();
+		let key_owner_proof = Historical::prove((BEEFY_KEY_TYPE, &equivocation_key)).unwrap();
 
 		// check the dispatch info for the call.
 		let info = Call::<Test>::report_equivocation_unsigned {
