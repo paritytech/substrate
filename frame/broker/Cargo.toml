@@ -38,6 +38,7 @@ std = [
 	"sp-runtime/std",
 	"sp-arithmetic/std",
 	"sp-core/std",
+	"sp-io/std",
 	"sp-std/std",
 ]
 
