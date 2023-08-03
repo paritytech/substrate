@@ -854,3 +854,29 @@ fn cannot_interlace_invalid_pivot() {
 		);
 	});
 }
+
+#[test]
+fn assign_should_drop_invalid_region() {
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100, 1));
+		advance_to(2);
+		let mut region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		advance_to(10);
+		assert_ok!(Broker::do_assign(region, Some(1), 1001, Provisional));
+		region.begin = 7;
+		System::assert_last_event(Event::RegionDropped { region_id: region, duration: 0 }.into());
+	});
+}
+
+#[test]
+fn pool_should_drop_invalid_region() {
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100, 1));
+		advance_to(2);
+		let mut region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		advance_to(10);
+		assert_ok!(Broker::do_pool(region, Some(1), 1001, Provisional));
+		region.begin = 7;
+		System::assert_last_event(Event::RegionDropped { region_id: region, duration: 0 }.into());
+	});
+}
