@@ -352,20 +352,6 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 	fn enable_transfer(_collection: &Self::CollectionId, _item: &Self::ItemId) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
-
-	/// Disable the `collection` transfer.
-	///
-	/// By default, this is not a supported operation.
-	fn disable_collection_transfer(_collection: &Self::CollectionId) -> DispatchResult {
-		Err(TokenError::Unsupported.into())
-	}
-
-	/// Re-enable the `collection` transfer.
-	///
-	/// By default, this is not a supported operation.
-	fn enable_collection_transfer(_collection: &Self::CollectionId) -> DispatchResult {
-		Err(TokenError::Unsupported.into())
-	}
 }
 
 /// Trait for buying non-fungible items.
@@ -384,7 +370,7 @@ pub trait Buy<AccountId, ItemPrice>: Inspect<AccountId> {
 		item: &Self::ItemId,
 		sender: &AccountId,
 		price: Option<ItemPrice>,
-		whitelisted_buyer: Option<AccountId>
+		whitelisted_buyer: Option<AccountId>,
 	) -> DispatchResult;
 
 	/// Returns the item price of `item` of `collection`, or `None` if the item is not for sale

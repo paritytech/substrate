@@ -127,13 +127,14 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 			ItemConfigOf::<T, I>::get(collection, item),
 		) {
 			(Some(cc), Some(ic))
-				if cc.is_setting_enabled(CollectionSetting::TransferableItems) &&
-					ic.is_setting_enabled(ItemSetting::Transferable) =>
-				true,
+				if cc.is_setting_enabled(CollectionSetting::TransferableItems)
+					&& ic.is_setting_enabled(ItemSetting::Transferable) =>
+			{
+				true
+			},
 			_ => false,
 		}
 	}
-
 }
 
 impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, CollectionConfigFor<T, I>>
@@ -211,7 +212,7 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemConfig
 		Self::do_burn(*collection, *item, |d| {
 			if let Some(check_owner) = maybe_check_owner {
 				if &d.owner != check_owner {
-					return Err(Error::<T, I>::NoPermission.into())
+					return Err(Error::<T, I>::NoPermission.into());
 				}
 			}
 			Ok(())
@@ -345,29 +346,14 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 			&PalletAttributes::<Self::CollectionId>::TransferDisabled.encode(),
 		)
 	}
-
-	fn disable_collection_transfer(collection: &Self::CollectionId) -> DispatchResult {
-		<Self as Mutate<T::AccountId, ItemConfig>>::set_collection_attribute(
-			collection,
-			&PalletAttributes::<Self::CollectionId>::TransferDisabled.encode(),
-			&[],
-		)
-	}
-
-	fn enable_collection_transfer(collection: &Self::CollectionId) -> DispatchResult {
-		<Self as Mutate<T::AccountId, ItemConfig>>::clear_collection_attribute(
-			collection,
-			&PalletAttributes::<Self::CollectionId>::TransferDisabled.encode(),
-		)
-	}
 }
 
-impl<T: Config<I>, I: 'static> Buy<T::AccountId, ItemPrice<T,I>> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> Buy<T::AccountId, ItemPrice<T, I>> for Pallet<T, I> {
 	fn buy_item(
 		collection: &Self::CollectionId,
 		item: &Self::ItemId,
 		buyer: &T::AccountId,
-		bid_price: &ItemPrice<T,I>,
+		bid_price: &ItemPrice<T, I>,
 	) -> DispatchResult {
 		Self::do_buy_item(*collection, *item, buyer.clone(), *bid_price)
 	}
@@ -376,20 +362,16 @@ impl<T: Config<I>, I: 'static> Buy<T::AccountId, ItemPrice<T,I>> for Pallet<T, I
 		collection: &Self::CollectionId,
 		item: &Self::ItemId,
 		sender: &T::AccountId,
-		price: Option<ItemPrice<T,I>>,
-		whitelisted_buyer: Option<T::AccountId>
+		price: Option<ItemPrice<T, I>>,
+		whitelisted_buyer: Option<T::AccountId>,
 	) -> DispatchResult {
 		Self::do_set_price(*collection, *item, sender.clone(), price, whitelisted_buyer)
 	}
 
-	fn item_price(
-		collection: &Self::CollectionId,
-		item: &Self::ItemId,
-	) -> Option<ItemPrice<T, I>> {
+	fn item_price(collection: &Self::CollectionId, item: &Self::ItemId) -> Option<ItemPrice<T, I>> {
 		ItemPriceOf::<T, I>::get(collection, item).map(|a| a.0)
 	}
 }
-
 
 impl<T: Config<I>, I: 'static> InspectEnumerable<T::AccountId> for Pallet<T, I> {
 	type CollectionsIterator = KeyPrefixIterator<<T as Config<I>>::CollectionId>;

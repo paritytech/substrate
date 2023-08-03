@@ -6,10 +6,9 @@ A pallet for dealing with NFT royalties
 
 The NFTs Royalty pallet provides royalties for non-fungible tokens. Features include:
 
-* Setting a royalty for an NFT collection
-* Setting a royalty for a specific NFT item (overriding the NFT collection royalty)
-* Ability to specify multiple royalty recipients for a collection or item
-* Updating royalty recipients for a collection or item
+* Setting a royalty for a specific NFT item
+* Ability to specify multiple royalty recipients
+* Updating royalty recipients for an item
 * Buying NFTs and thus paying royalties to recipient(s)
 * Deleting royalties only if the collection or item no longer exists
 
@@ -18,16 +17,12 @@ This pallet can be loosely coupled with the [NFTs pallet](https://paritytech.git
 ### Terminology
 * Recipients:  List of accounts that the royalty will go to and its correspondent percentage of the royalties.
 * Recipient Admin:  Account admin of the royalty, the one that can transfer or remove the royalty.
-* Collection Royalty Deposit: The amount of funds that must be reserved for storing a collection's royalty.
 * Item Royalty Deposit: The amount of funds that must be reserved for storing an item's royalty.
 ### Permissionless dispatchables
 
-* `set_collection_royalty`: Set the royalty for an existing NFT collection by placing a deposit.
 * `set_item_royalty`: Set the royalty for an existing NFT item by placing a deposit.
-* `transfer_collection_royalty_recipient`: Set the `royalty_admin` of a collection to another account.
 * `transfer_item_royalty_recipient`: Set the `royalty_admin` of a collection to another account.
 * `buy`: Buy an NFT item if it's up for sale and pays the royalty associated to it.
-* `remove_collection_royalty`: Remove the royalty associated to an NFT collection only if the NFT collection no longer exists.
 * `remove_item_royalty`: Remove the royalty associated to an NFT item only if the item no longer exists.
 
 ## Related Modules

@@ -18,16 +18,13 @@
 //! Tests for the NFTs Royalty pallet.
 
 use super::Event as NftsRoyaltyEvent;
-use crate::{
-	mock::*, CollectionRoyalty, Error, ItemRoyalty, RoyaltyDetails, *
-};
-use frame_support::{ assert_noop, assert_ok, traits::{ tokens::nonfungibles_v2::Destroy, Currency }};
+use crate::{mock::*, Error, ItemRoyalty, RoyaltyDetails, *};
+use frame_support::{assert_noop, assert_ok, traits::Currency};
 
 use pallet_nfts::{
 	Account, CollectionAccount, CollectionConfig, CollectionSetting, CollectionSettings,
-	ItemConfig, ItemSettings, MintSettings, Error as NftErrors
+	Error as NftErrors, ItemConfig, ItemSettings, MintSettings,
 };
-
 pub use sp_runtime::{DispatchError, ModuleError, Permill};
 
 type AccountIdOf<Test> = <Test as frame_system::Config>::AccountId;
@@ -75,173 +72,6 @@ fn set_up_balances(initial_balance: u64) {
 }
 
 #[test]
-fn set_collection_royalty_should_work() {
-	new_test_ext().execute_with(|| {
-		create_collection();
-		set_up_balances(100);
-		assert_ok!(NftsRoyalty::set_collection_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			Permill::from_percent(5),
-			vec![RoyaltyDetails {
-				royalty_recipient: account(1),
-				royalty_recipient_percentage: Permill::from_percent(100),
-			}]
-		));
-		// Read royalty pallet's storage.
-		let nft_with_royalty = CollectionRoyalty::<Test>::get(0).unwrap();
-		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
-		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
-		assert_eq!(nft_with_royalty.deposit, 1);
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
-
-		// Check that the deposit was taken
-		assert_eq!(Balances::free_balance(&account(1)), 99);
-
-		// Check the event was emitted
-		assert_eq!(
-			last_event(),
-			NftsRoyaltyEvent::CollectionRoyaltySet {
-				nft_collection: 0,
-				royalty_percentage: Permill::from_percent(5),
-				royalty_recipients: nft_with_royalty.recipients
-			}
-		);
-	});
-}
-
-#[test]
-fn set_collection_royalty_fail_item_not_exist() {
-	new_test_ext().execute_with(|| {
-		assert_noop!(
-			NftsRoyalty::set_collection_royalty(
-				RuntimeOrigin::signed(account(1)),
-				0,
-				Permill::from_percent(5),
-				vec![RoyaltyDetails {
-					royalty_recipient: account(1),
-					royalty_recipient_percentage: Permill::from_percent(100),
-				}]
-			),
-			Error::<Test>::CollectionDoesNotExist
-		);
-	});
-}
-
-#[test]
-fn set_collection_royalty_fail_no_permission() {
-	new_test_ext().execute_with(|| {
-		create_collection();
-		assert_noop!(
-			NftsRoyalty::set_collection_royalty(
-				RuntimeOrigin::signed(account(2)),
-				0,
-				Permill::from_percent(5),
-				vec![RoyaltyDetails {
-					royalty_recipient: account(1),
-					royalty_recipient_percentage: Permill::from_percent(100),
-				}]
-			),
-			Error::<Test>::NoPermission
-		);
-	});
-}
-
-#[test]
-fn set_collection_royalty_fail_ovewrite() {
-	new_test_ext().execute_with(|| {
-		create_collection();
-		let initial_balance = 100;
-		set_up_balances(initial_balance);
-		assert_ok!(NftsRoyalty::set_collection_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			Permill::from_percent(5),
-			vec![RoyaltyDetails {
-				royalty_recipient: account(1),
-				royalty_recipient_percentage: Permill::from_percent(100),
-			}]
-		));
-		assert_noop!(
-			NftsRoyalty::set_collection_royalty(
-				RuntimeOrigin::signed(account(1)),
-				0,
-				Permill::from_percent(15),
-				vec![RoyaltyDetails {
-					royalty_recipient: account(1),
-					royalty_recipient_percentage: Permill::from_percent(100),
-				}]
-			),
-			Error::<Test>::RoyaltyAlreadyExists
-		);
-	});
-}
-#[test]
-fn set_collection_royalty_fail_limit_recipients() {
-	new_test_ext().execute_with(|| {
-		create_collection();
-		set_up_balances(100);
-		assert_noop!(
-			NftsRoyalty::set_collection_royalty(
-				RuntimeOrigin::signed(account(1)),
-				0,
-				Permill::from_percent(5),
-				vec![
-					RoyaltyDetails {
-						royalty_recipient: account(1),
-						royalty_recipient_percentage: Permill::from_percent(25),
-					},
-					RoyaltyDetails {
-						royalty_recipient: account(2),
-						royalty_recipient_percentage: Permill::from_percent(25),
-					},
-					RoyaltyDetails {
-						royalty_recipient: account(3),
-						royalty_recipient_percentage: Permill::from_percent(25),
-					},
-					RoyaltyDetails {
-						royalty_recipient: account(4),
-						royalty_recipient_percentage: Permill::from_percent(25),
-					}
-				]
-			),
-			Error::<Test>::MaxRecipientsLimit
-		);
-	});
-}
-
-#[test]
-fn set_collection_royalty_fail_invalid_percentages() {
-	new_test_ext().execute_with(|| {
-		create_collection();
-		set_up_balances(100);
-		assert_noop!(
-			NftsRoyalty::set_collection_royalty(
-				RuntimeOrigin::signed(account(1)),
-				0,
-				Permill::from_percent(5),
-				vec![
-					RoyaltyDetails {
-						royalty_recipient: account(1),
-						royalty_recipient_percentage: Permill::from_percent(25),
-					},
-					RoyaltyDetails {
-						royalty_recipient: account(2),
-						royalty_recipient_percentage: Permill::from_percent(25),
-					},
-					RoyaltyDetails {
-						royalty_recipient: account(3),
-						royalty_recipient_percentage: Permill::from_percent(25),
-					},
-				]
-			),
-			Error::<Test>::InvalidRoyaltyPercentage
-		);
-	});
-}
-
-#[test]
 fn set_item_royalty_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
@@ -269,7 +99,10 @@ fn set_item_royalty_should_work() {
 		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
+		assert_eq!(
+			nft_with_royalty.recipients[0].royalty_recipient_percentage,
+			Permill::from_percent(100)
+		);
 
 		// Check that the deposit was taken
 		assert_eq!(Balances::free_balance(&account(1)), 99);
@@ -453,94 +286,6 @@ fn set_item_royalty_fail_invalid_percentages() {
 }
 
 #[test]
-fn transfer_collection_royalty_should_work() {
-	new_test_ext().execute_with(|| {
-		create_collection();
-		let initial_balance = 100;
-		set_up_balances(initial_balance);
-		assert_ok!(NftsRoyalty::set_collection_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			Permill::from_percent(5),
-			vec![RoyaltyDetails {
-				royalty_recipient: account(1),
-				royalty_recipient_percentage: Permill::from_percent(100),
-			}]
-		));
-		// Read royalty pallet's storage.
-		let nft_with_royalty = CollectionRoyalty::<Test>::get(0).unwrap();
-		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
-		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
-		assert_eq!(nft_with_royalty.deposit, 1);
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
-
-		assert_ok!(NftsRoyalty::transfer_collection_royalty_recipient(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			account(2)
-		));
-		// Read royalty pallet's storage.
-		let nft_with_royalty = CollectionRoyalty::<Test>::get(0).unwrap();
-		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
-		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
-		assert_eq!(nft_with_royalty.deposit, 1);
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(2));
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
-		// Check if the event has been emitted.
-		assert_eq!(
-			last_event(),
-			NftsRoyaltyEvent::CollectionRoyaltyRecipientChanged {
-				nft_collection: 0,
-				old_royalty_recipient: account(1),
-				new_royalty_recipient: account(2),
-			}
-		);
-	});
-}
-
-#[test]
-fn transfer_collection_royalty_should_fail_if_not_a_royalty_recipient() {
-	new_test_ext().execute_with(|| {
-		create_collection();
-		let initial_balance = 100;
-		set_up_balances(initial_balance);
-		assert_ok!(NftsRoyalty::set_collection_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			Permill::from_percent(5),
-			vec![RoyaltyDetails {
-				royalty_recipient: account(1),
-				royalty_recipient_percentage: Permill::from_percent(100),
-			}]
-		));
-		// Read royalty pallet's storage.
-		let nft_with_royalty = CollectionRoyalty::<Test>::get(0).unwrap();
-		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
-		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
-		assert_eq!(nft_with_royalty.deposit, 1);
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
-
-		assert_noop!(
-			NftsRoyalty::transfer_collection_royalty_recipient(
-				RuntimeOrigin::signed(account(2)),
-				0,
-				account(2)
-			),
-			Error::<Test>::NoPermission
-		);
-		// Read royalty pallet's storage to check that the royalty has not changed.
-		let nft_with_royalty = CollectionRoyalty::<Test>::get(0).unwrap();
-		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
-		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
-		assert_eq!(nft_with_royalty.deposit, 1);
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
-	});
-}
-
-#[test]
 fn transfer_item_royalty_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
@@ -563,7 +308,10 @@ fn transfer_item_royalty_should_work() {
 		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
+		assert_eq!(
+			nft_with_royalty.recipients[0].royalty_recipient_percentage,
+			Permill::from_percent(100)
+		);
 
 		assert_ok!(NftsRoyalty::transfer_item_royalty_recipient(
 			RuntimeOrigin::signed(account(1)),
@@ -577,7 +325,10 @@ fn transfer_item_royalty_should_work() {
 		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(2));
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
+		assert_eq!(
+			nft_with_royalty.recipients[0].royalty_recipient_percentage,
+			Permill::from_percent(100)
+		);
 		// Check if the event has been emitted.
 		assert_eq!(
 			last_event(),
@@ -614,7 +365,10 @@ fn transfer_item_royalty_should_fail_if_not_a_royalty_recipient() {
 		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
+		assert_eq!(
+			nft_with_royalty.recipients[0].royalty_recipient_percentage,
+			Permill::from_percent(100)
+		);
 
 		assert_noop!(
 			NftsRoyalty::transfer_item_royalty_recipient(
@@ -631,7 +385,10 @@ fn transfer_item_royalty_should_fail_if_not_a_royalty_recipient() {
 		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
+		assert_eq!(
+			nft_with_royalty.recipients[0].royalty_recipient_percentage,
+			Permill::from_percent(100)
+		);
 	});
 }
 
@@ -677,97 +434,7 @@ fn buy_should_work() {
 }
 
 #[test]
-fn buy_should_work_on_item_royalty_with_collection_royalty() {
-	new_test_ext().execute_with(|| {
-		create_collection();
-		let initial_balance = 100;
-		set_up_balances(initial_balance);
-		assert_ok!(NftsRoyalty::set_collection_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			Permill::from_percent(20),
-			vec![RoyaltyDetails {
-				royalty_recipient: account(1),
-				royalty_recipient_percentage: Permill::from_percent(100),
-			}]
-		));
-
-		let mint_id = mint_item();
-		assert_ok!(NftsRoyalty::set_item_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			mint_id,
-			Permill::from_percent(10),
-			vec![RoyaltyDetails {
-				royalty_recipient: account(1),
-				royalty_recipient_percentage: Permill::from_percent(100),
-			}]
-		));
-		assert_ok!(Nfts::set_price(RuntimeOrigin::signed(account(1)), 0, 42, Some(50), None,));
-
-		assert_ok!(NftsRoyalty::buy(RuntimeOrigin::signed(account(2)), 0, 42, 60));
-		// Get the items directly from the NFTs pallet, to see if the owner has changed
-		let mut items: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
-		items.sort();
-		assert_eq!(items, vec![(account(2), 0, 42)]);
-		// Check the balance of royalty owner -> initial balance + price item + royalty.
-		assert_eq!(Balances::total_balance(&account(1)), initial_balance + 50 + 5);
-		// Check the balance of buyer -> initial balance - price item - royalty.
-		assert_eq!(Balances::total_balance(&account(2)), initial_balance - 50 - 5);
-		assert_eq!(
-			last_event(),
-			NftsRoyaltyEvent::RoyaltyPaid {
-				nft_collection: 0,
-				nft: 42,
-				royalty_amount_paid: 5,
-				royalty_recipient: account(1)
-			}
-		);
-	});
-}
-
-#[test]
-fn buy_should_work_on_collection_royalty_without_item() {
-	new_test_ext().execute_with(|| {
-		create_collection();
-		let initial_balance = 100;
-		set_up_balances(initial_balance);
-
-		mint_item();
-		assert_ok!(NftsRoyalty::set_collection_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			Permill::from_percent(10),
-			vec![RoyaltyDetails {
-				royalty_recipient: account(1),
-				royalty_recipient_percentage: Permill::from_percent(100),
-			}]
-		));
-		assert_ok!(Nfts::set_price(RuntimeOrigin::signed(account(1)), 0, 42, Some(50), None,));
-
-		assert_ok!(NftsRoyalty::buy(RuntimeOrigin::signed(account(2)), 0, 42, 60));
-		// Get the items directly from the NFTs pallet, to see if the owner has changed
-		let mut items: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
-		items.sort();
-		assert_eq!(items, vec![(account(2), 0, 42)]);
-		// Check the balance of royalty owner -> initial balance + price item + royalty.
-		assert_eq!(Balances::total_balance(&account(1)), initial_balance + 50 + 5);
-		// Check the balance of buyer -> initial balance - price item - royalty.
-		assert_eq!(Balances::total_balance(&account(2)), initial_balance - 50 - 5);
-		assert_eq!(
-			last_event(),
-			NftsRoyaltyEvent::RoyaltyPaid {
-				nft_collection: 0,
-				nft: 42,
-				royalty_amount_paid: 5,
-				royalty_recipient: account(1)
-			}
-		);
-	});
-}
-
-#[test]
-fn buy_should_work_with_multiple_recipients_at_collection_level() {
+fn buy_should_work_with_multiple_recipients() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		let initial_balance = 100;
@@ -794,6 +461,7 @@ fn buy_should_work_with_multiple_recipients_at_collection_level() {
 				}
 			],
 		));
+
 		assert_ok!(Nfts::set_price(RuntimeOrigin::signed(account(1)), 0, 42, Some(50), None,));
 
 		assert_ok!(NftsRoyalty::buy(RuntimeOrigin::signed(account(4)), 0, 42, 60));
@@ -818,107 +486,6 @@ fn buy_should_work_with_multiple_recipients_at_collection_level() {
 		);
 	});
 }
-
-#[test]
-fn buy_should_work_with_multiple_recipients_at_item_level() {
-	new_test_ext().execute_with(|| {
-		create_collection();
-		let initial_balance = 100;
-		set_up_balances(initial_balance);
-
-		let mint_id = mint_item();
-		assert_ok!(NftsRoyalty::set_item_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			mint_id,
-			Permill::from_percent(10),
-			vec![
-				RoyaltyDetails {
-					royalty_recipient: account(1),
-					royalty_recipient_percentage: Permill::from_percent(20),
-				},
-				RoyaltyDetails {
-					royalty_recipient: account(2),
-					royalty_recipient_percentage: Permill::from_percent(60),
-				},
-				RoyaltyDetails {
-					royalty_recipient: account(3),
-					royalty_recipient_percentage: Permill::from_percent(20),
-				}
-			],
-		));
-		assert_ok!(NftsRoyalty::set_collection_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			Permill::from_percent(10),
-			vec![
-				RoyaltyDetails {
-					royalty_recipient: account(1),
-					royalty_recipient_percentage: Permill::from_percent(20),
-				},
-				RoyaltyDetails {
-					royalty_recipient: account(2),
-					royalty_recipient_percentage: Permill::from_percent(60),
-				},
-				RoyaltyDetails {
-					royalty_recipient: account(3),
-					royalty_recipient_percentage: Permill::from_percent(20),
-				}
-			],
-		));
-		
-		assert_ok!(Nfts::set_price(RuntimeOrigin::signed(account(1)), 0, 42, Some(50), None,));
-
-		assert_ok!(NftsRoyalty::buy(RuntimeOrigin::signed(account(4)), 0, 42, 60));
-		// Get the items directly from the NFTs pallet, to see if the owner has changed
-		let mut items: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
-		items.sort();
-		assert_eq!(items, vec![(account(4), 0, 42)]);
-		// Check the balance of royalties recipients -> initial balance + price item + royalty.
-		assert_eq!(Balances::total_balance(&account(1)), initial_balance + 50 + 1);
-		assert_eq!(Balances::total_balance(&account(2)), initial_balance + 3);
-		assert_eq!(Balances::total_balance(&account(3)), initial_balance + 1);
-		// Check the balance of buyer -> initial balance - price item - royalty.
-		assert_eq!(Balances::total_balance(&account(4)), initial_balance - 50 - 5);
-		assert_eq!(
-			last_event(),
-			NftsRoyaltyEvent::RoyaltyPaid {
-				nft_collection: 0,
-				nft: 42,
-				royalty_amount_paid: 1,
-				royalty_recipient: account(3)
-			}
-		);
-	});
-}
-
-// #[test]
-// fn buy_on_external_pallet_should_fail_if_collection_locked() {
-// 	new_test_ext().execute_with(|| {
-// 		create_collection();
-// 		let initial_balance = 100;
-// 		set_up_balances(initial_balance);
-// 		assert_ok!(NftsRoyalty::set_collection_royalty(
-// 			RuntimeOrigin::signed(account(1)),
-// 			0,
-// 			Permill::from_percent(20),
-// 			vec![RoyaltyDetails {
-// 				royalty_recipient: account(1),
-// 				royalty_recipient_percentage: Permill::from_percent(100),
-// 			}]
-// 		));
-
-// 		mint_item();
-
-// 		assert_ok!(Nfts::set_price(RuntimeOrigin::signed(account(1)), 0, 42, Some(50), None,));
-
-// 		assert_noop!(
-// 			Nfts::buy_item(RuntimeOrigin::signed(account(2)), 0, 42, 60),
-// 			NftErrors::<Test>::ItemLocked
-// 		);
-
-// 	});
-// }
 
 #[test]
 fn buy_on_external_pallet_should_fail_if_nft_locked() {
@@ -926,15 +493,6 @@ fn buy_on_external_pallet_should_fail_if_nft_locked() {
 		create_collection();
 		let initial_balance = 100;
 		set_up_balances(initial_balance);
-		assert_ok!(NftsRoyalty::set_collection_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			Permill::from_percent(20),
-			vec![RoyaltyDetails {
-				royalty_recipient: account(1),
-				royalty_recipient_percentage: Permill::from_percent(100),
-			}]
-		));
 
 		let mint_id = mint_item();
 		assert_ok!(NftsRoyalty::set_item_royalty(
@@ -953,7 +511,6 @@ fn buy_on_external_pallet_should_fail_if_nft_locked() {
 			Nfts::buy_item(RuntimeOrigin::signed(account(2)), 0, 42, 60),
 			NftErrors::<Test>::ItemLocked
 		);
-
 	});
 }
 
@@ -994,93 +551,15 @@ fn error_if_buy_item_not_on_sale() {
 			0,
 			mint_id,
 			Permill::from_percent(5),
-			vec![
-				RoyaltyDetails {
-					royalty_recipient: account(1),
-					royalty_recipient_percentage: Permill::from_percent(100),
-				},
-			],
+			vec![RoyaltyDetails {
+				royalty_recipient: account(1),
+				royalty_recipient_percentage: Permill::from_percent(100),
+			},],
 		));
 
 		assert_noop!(
 			NftsRoyalty::buy(RuntimeOrigin::signed(account(2)), 0, 42, 50),
 			Error::<Test>::NotForSale
-		);
-	});
-}
-
-#[test]
-fn remove_collection_royalty_should_work() {
-	new_test_ext().execute_with(|| {
-		create_collection();
-		let initial_balance = 100;
-		set_up_balances(initial_balance);
-
-		assert_ok!(NftsRoyalty::set_collection_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			Permill::from_percent(5),
-			vec![
-				RoyaltyDetails {
-					royalty_recipient: account(1),
-					royalty_recipient_percentage: Permill::from_percent(100),
-				},
-			],
-		));
-
-		assert_eq!(Balances::free_balance(&account(1)), initial_balance - 1);
-		
-		let w = Nfts::get_destroy_witness(&0).unwrap();
-		assert_ok!(Nfts::destroy(RuntimeOrigin::signed(account(1)), 0, w));
-
-		assert_eq!(Nfts::collections().any(|x| x == 0), false);
-
-		assert_ok!(NftsRoyalty::remove_collection_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-		));
-
-		// Check that `CollectionRoyalty` does not contain collection 0.
-		assert_eq!(CollectionRoyalty::<Test>::contains_key(0), false);
-
-		// Check the balance of royalty owner -> initial balance + deposit.
-		assert_eq!(Balances::free_balance(&account(1)), initial_balance);
-		
-		// Check the event was emitted
-		assert_eq!(
-			last_event(),
-			NftsRoyaltyEvent::CollectionRoyaltyRemoved {
-				nft_collection: 0,
-			}
-		);
-	});
-}
-
-#[test]
-fn remove_collection_royalty_fail_if_collection_still_exists() {
-	new_test_ext().execute_with(|| {
-		create_collection();
-		let initial_balance = 100;
-		set_up_balances(initial_balance);
-
-		assert_ok!(NftsRoyalty::set_collection_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			Permill::from_percent(5),
-			vec![
-				RoyaltyDetails {
-					royalty_recipient: account(1),
-					royalty_recipient_percentage: Permill::from_percent(100),
-				},
-			],
-		));
-
-		assert_noop!(
-			NftsRoyalty::remove_collection_royalty(
-				RuntimeOrigin::signed(account(1)),
-				0,
-			),
-			Error::<Test>::CollectionStillExists
 		);
 	});
 }
@@ -1098,12 +577,10 @@ fn remove_item_royalty_should_work() {
 			0,
 			mint_id,
 			Permill::from_percent(5),
-			vec![
-				RoyaltyDetails {
-					royalty_recipient: account(1),
-					royalty_recipient_percentage: Permill::from_percent(100),
-				},
-			],
+			vec![RoyaltyDetails {
+				royalty_recipient: account(1),
+				royalty_recipient_percentage: Permill::from_percent(100),
+			},],
 		));
 
 		let nft_with_royalty = ItemRoyalty::<Test>::get((0, mint_id)).unwrap();
@@ -1115,23 +592,18 @@ fn remove_item_royalty_should_work() {
 
 		assert_eq!(Nfts::items(&0).any(|id| id == mint_id), false);
 
-		assert_ok!(NftsRoyalty::remove_item_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			mint_id,
-		));
+		assert_ok!(
+			NftsRoyalty::remove_item_royalty(RuntimeOrigin::signed(account(1)), 0, mint_id,)
+		);
 
 		assert_eq!(ItemRoyalty::<Test>::contains_key((0, mint_id)), false);
 
 		assert_eq!(Balances::free_balance(&account(1)), initial_balance);
-		
+
 		// Check the event was emitted
 		assert_eq!(
 			last_event(),
-			NftsRoyaltyEvent::ItemRoyaltyRemoved {
-				nft_collection: 0,
-				nft: 42,
-			}
+			NftsRoyaltyEvent::ItemRoyaltyRemoved { nft_collection: 0, nft: 42 }
 		);
 	});
 }
@@ -1149,22 +621,16 @@ fn remove_item_royalty_should_fail_if_item_still_exists() {
 			0,
 			mint_id,
 			Permill::from_percent(5),
-			vec![
-				RoyaltyDetails {
-					royalty_recipient: account(1),
-					royalty_recipient_percentage: Permill::from_percent(100),
-				},
-			],
+			vec![RoyaltyDetails {
+				royalty_recipient: account(1),
+				royalty_recipient_percentage: Permill::from_percent(100),
+			},],
 		));
 
 		assert_eq!(Balances::free_balance(&account(1)), initial_balance - 1);
 
 		assert_noop!(
-			NftsRoyalty::remove_item_royalty(
-				RuntimeOrigin::signed(account(1)),
-				0,
-				mint_id,
-			),
+			NftsRoyalty::remove_item_royalty(RuntimeOrigin::signed(account(1)), 0, mint_id,),
 			Error::<Test>::NftStillExists
 		);
 	});
