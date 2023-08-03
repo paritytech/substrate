@@ -518,7 +518,7 @@ impl<T: Config> PoolMember<T> {
 		// point is equal to balance (normally), and rewards are usually a proportion of the points
 		// in the pool, the likelihood of rc reaching near u128::MAX is near impossible.
 
-		(current_reward_counter.defensive_saturating_sub(self.last_recorded_reward_counter))
+		(current_reward_counter.saturating_sub(self.last_recorded_reward_counter))
 			.checked_mul_int(self.active_points())
 			.ok_or(Error::<T>::OverflowRisk)
 	}
@@ -1334,6 +1334,16 @@ impl<T: Config> RewardPool<T> {
 		let new_pending_commission = commission * current_payout_balance;
 		let new_pending_rewards = current_payout_balance.saturating_sub(new_pending_commission);
 
+		// ed increase fix
+		// let ed_increase: BalanceOf<T> = 300_000_000u32.into();
+		let ed_increase: BalanceOf<T> = 0u32.into();
+		let decrease_reward_counter =
+			T::RewardCounter::checked_from_rational(ed_increase, bonded_points).unwrap();
+		let last_recorded_reward_counter = self
+			.last_recorded_reward_counter
+			.checked_sub(&decrease_reward_counter)
+			.unwrap_or_default();
+
 		// * accuracy notes regarding the multiplication in `checked_from_rational`:
 		// `current_payout_balance` is a subset of the total_issuance at the very worse.
 		// `bonded_points` are similarly, in a non-slashed pool, have the same granularity as
@@ -1370,7 +1380,7 @@ impl<T: Config> RewardPool<T> {
 		// which is basically 10^-8 DOTs. See `smallest_claimable_reward` for an example of this.
 		let current_reward_counter =
 			T::RewardCounter::checked_from_rational(new_pending_rewards, bonded_points)
-				.and_then(|ref r| self.last_recorded_reward_counter.checked_add(r))
+				.and_then(|ref r| last_recorded_reward_counter.checked_add(r))
 				.ok_or(Error::<T>::OverflowRisk)?;
 
 		Ok((current_reward_counter, new_pending_commission))
@@ -3132,14 +3142,17 @@ impl<T: Config> Pallet<T> {
 		RewardPools::<T>::iter_keys().try_for_each(|id| -> Result<(), TryRuntimeError> {
 			// the sum of the pending rewards must be less than the leftover balance. Since the
 			// reward math rounds down, we might accumulate some dust here.
-			let pending_rewards_lt_leftover_bal = RewardPool::<T>::current_balance(id) >=
-				pools_members_pending_rewards.get(&id).copied().unwrap_or_default();
+			let pending_rewards = pools_members_pending_rewards.get(&id).copied().unwrap_or_default();
+			let balance = RewardPool::<T>::current_balance(id);
+			let pending_rewards_lt_leftover_bal = balance >=
+				pending_rewards;
 			if !pending_rewards_lt_leftover_bal {
 				log::warn!(
-					"pool {:?}, sum pending rewards = {:?}, remaining balance = {:?}",
+					"pool {:?}, sum pending rewards = {:?}, remaining balance = {:?}, deficit = {:?}",
 					id,
 					pools_members_pending_rewards.get(&id),
-					RewardPool::<T>::current_balance(id)
+					RewardPool::<T>::current_balance(id),
+					pools_members_pending_rewards.get(&id).unwrap().saturating_sub(RewardPool::<T>::current_balance(id)),
 				);
 			}
 			ensure!(

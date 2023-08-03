@@ -298,10 +298,10 @@ mod bonded_pool {
 }
 
 mod reward_pool {
+	use sp_runtime::assert_eq_error_rate;
+	use super::*;
 	#[test]
 	fn current_balance_only_counts_balance_over_existential_deposit() {
-		use super::*;
-
 		ExtBuilder::default().build_and_execute(|| {
 			let reward_account = Pools::create_reward_account(2);
 
@@ -323,6 +323,78 @@ mod reward_pool {
 			// Then
 			assert_eq!(RewardPool::<Runtime>::current_balance(2), 1);
 		});
+	}
+
+	#[test]
+	fn reward_balance_deficit() {
+		ExtBuilder::default()
+			.add_members(vec![(30, 10), (40, 10), (50, 10)])
+			.max_members_per_pool(Some(5))
+			.max_members(Some(5))
+			.build_and_execute(|| {
+				ExistentialDeposit::set(10);
+
+				// the reward pool has earned 60 in rewards
+				deposit_rewards(60*10u128.pow(12));
+
+				let _drain_events = pool_events_since_last_call();
+
+				// claim payout works as expected
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(30)));
+
+				// since one member has claimed their payout, the reward pool is 40.
+				assert_eq_error_rate!(RewardPool::<Runtime>::current_balance(1), 30*10u128.pow(12), 10);
+
+				// pool points changes as new member joins. This commits the old reward balance to
+				// the pool.
+				Balances::make_free_balance_be(&100, 20);
+				assert_ok!(Pools::join(RuntimeOrigin::signed(100), 10, 1));
+
+				// Reward balance is still 40 that is committed to reward pool.
+				assert_eq_error_rate!(RewardPool::<Runtime>::current_balance(1), 30*10u128.pow(12), 10);
+
+
+				// increase ED from 5 to 10
+				ExistentialDeposit::set(10u128.pow(12));
+
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(40)));
+				assert_eq_error_rate!(RewardPool::<Runtime>::current_balance(1), 14*10u128.pow(12), 20);
+
+				// pending rewards now exceeds the reward balance.
+				assert_err!(
+					Pools::do_try_state(u8::MAX),
+					"The sum of the pending rewards must be less than the leftover balance."
+				);
+
+				// The reward pool has decreased which should lower reward for the member yet
+				// members are able to claim the same reward as before.
+				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(40)));
+
+				// topping up would not help since any reward is distributed to all members and does
+				// not fix the discrepancy in reward counter.
+				deposit_rewards(10u128.pow(12) - 10);
+
+				// pending rewards now exceeds the reward balance.
+				assert_err!(
+					Pools::do_try_state(u8::MAX),
+					"The sum of the pending rewards must be less than the leftover balance."
+				);
+
+				// Fixing the reward counter by decreasing it to the factor of increase in ED.
+				let pool = BondedPool::<Runtime>::get(1).expect("pool exists");
+				let decrease_factor =
+					RewardCounter::checked_from_rational(5, pool.points).unwrap();
+				RewardPools::<Runtime>::mutate(1, |reward_pool| {
+					reward_pool.as_mut().expect("pool exists").last_recorded_reward_counter = reward_pool.clone()
+						.unwrap()
+						.last_recorded_reward_counter
+						.checked_sub(&decrease_factor)
+						.unwrap_or_default();
+				});
+				Pools::do_try_state(u8::MAX).unwrap();
+
+			});
 	}
 }
 
