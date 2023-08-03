@@ -208,6 +208,7 @@ benchmarks! {
 		T: Config + pallet_balances::Config,
 		BalanceOf<T>: From<<pallet_balances::Pallet<T> as Currency<T::AccountId>>::Balance>,
 		<pallet_balances::Pallet<T> as Currency<T::AccountId>>::Balance: From<BalanceOf<T>>,
+		<T as frame_system::Config>::AccountId: From<[u8; 32]>,
 	}
 
 	// The base weight consumed on processing contracts deletion queue.

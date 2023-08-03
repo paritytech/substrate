@@ -55,7 +55,7 @@ mod old {
 		Encode, Decode, Clone, PartialEq, Eq, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen,
 	)]
 	#[scale_info(skip_type_params(T))]
-	pub struct DepositAccount<T: Config>(AccountIdOf<T>);
+	pub struct DepositAccount<T: Config>(pub AccountIdOf<T>);
 
 	impl<T: Config> Deref for DepositAccount<T> {
 		type Target = AccountIdOf<T>;
@@ -92,10 +92,13 @@ mod old {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-pub fn store_old_contract_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>) {
+pub fn store_old_contract_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>)
+where
+	<T as frame_system::Config>::AccountId: From<[u8; 32]>,
+{
 	let info = old::ContractInfo {
 		trie_id: info.trie_id.clone(),
-		deposit_account: info.deposit_account().clone(),
+		deposit_account: old::DepositAccount([0u8; 32].into()),
 		code_hash: info.code_hash,
 		storage_bytes: Default::default(),
 		storage_items: Default::default(),
@@ -121,13 +124,15 @@ impl<T: Config> MigrationStep for Migration<T> {
 
 	fn step(&mut self) -> (IsFinished, Weight) {
 		let mut iter = if let Some(last_account) = self.last_account.take() {
-			ContractInfoOf::<T>::iter_from(ContractInfoOf::<T>::hashed_key_for(last_account))
+			old::ContractInfoOf::<T>::iter_from(old::ContractInfoOf::<T>::hashed_key_for(
+				last_account,
+			))
 		} else {
-			ContractInfoOf::<T>::iter()
+			old::ContractInfoOf::<T>::iter()
 		};
 
 		if let Some((account, contract)) = iter.next() {
-			let deposit_account = &contract.deposit_account();
+			let deposit_account = &contract.deposit_account;
 			if System::<T>::consumers(deposit_account) > Zero::zero() {
 				System::<T>::dec_consumers(deposit_account);
 			}
@@ -254,13 +259,13 @@ impl<T: Config> MigrationStep for Migration<T> {
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		let sample =
-			<Vec<(T::AccountId, ContractInfo<T>, BalanceOf<T>, BalanceOf<T>)> as Decode>::decode(
+			<Vec<(T::AccountId, old::ContractInfo<T>, BalanceOf<T>, BalanceOf<T>)> as Decode>::decode(
 				&mut &state[..],
 			)
 			.expect("pre_upgrade_step provides a valid state; qed");
 
 		log::debug!(target: LOG_TARGET, "Validating sample of {} contracts", sample.len());
-		for (account, contract, old_total_balance, deposit_balance) in sample {
+		for (account, old_contract, old_total_balance, deposit_balance) in sample {
 			log::debug!(target: LOG_TARGET, "===");
 			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
 
@@ -277,7 +282,7 @@ impl<T: Config> MigrationStep for Migration<T> {
 				"deposit mismatch"
 			);
 			ensure!(
-				!System::<T>::account_exists(&contract.deposit_account()),
+				!System::<T>::account_exists(&old_contract.deposit_account),
 				"deposit account still exists"
 			);
 		}

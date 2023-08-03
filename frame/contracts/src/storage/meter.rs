@@ -634,7 +634,6 @@ mod tests {
 	use super::*;
 	use crate::{
 		exec::AccountIdOf,
-		storage::DepositAccount,
 		tests::{Test, ALICE, BOB, CHARLIE},
 	};
 	use frame_support::parameter_types;

@@ -67,7 +67,10 @@ mod old {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-pub fn store_old_contract_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>) {
+pub fn store_old_contract_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>)
+where
+	<T as frame_system::Config>::AccountId: From<[u8; 32]>,
+{
 	let info = old::ContractInfo {
 		trie_id: info.trie_id.clone(),
 		deposit_account: DepositAccount([0u8; 32].into()),
