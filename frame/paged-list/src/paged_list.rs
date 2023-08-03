@@ -113,6 +113,12 @@ pub struct StoragePagedListMeta<Prefix, Value, HeapSize> {
 	_phantom: PhantomData<(Prefix, Value, HeapSize)>,
 }
 
+/// Similar to [`StorageInstance`] but allows for runtime-generated prefix.
+pub trait StoragePrefix {
+	fn pallet_prefix() -> &[u8];
+	fn instance_prefix() -> &[u8];
+}
+
 impl<Prefix, Value, HeapSize> frame_support::storage::StorageAppender<Value>
 	for StoragePagedListMeta<Prefix, Value, HeapSize>
 where

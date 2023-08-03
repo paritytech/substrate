@@ -69,18 +69,12 @@ frame_support::parameter_types! {
 	pub const MaxPages: Option<u32> = Some(20);
 }
 
-impl crate::Config for Test {
-	type Value = u32;
-	type HeapSize = HeapSize;
-}
+impl crate::Config for Test {}
 
-impl crate::Config<crate::Instance2> for Test {
-	type Value = u32;
-	type HeapSize = HeapSize;
-}
+impl crate::Config<crate::Instance2> for Test {}
 
-pub type MetaOf<T, I> =
-	StoragePagedListMeta<ListPrefix<T, I>, <T as Config>::Value, <T as Config>::HeapSize>;
+pub type MetaOf<T, Value, HeapSize, I> =
+	StoragePagedListMeta<ListPrefix<T, I>, Value, HeapSize>;
 
 /// Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
