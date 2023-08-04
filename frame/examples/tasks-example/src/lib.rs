@@ -141,6 +141,31 @@ pub mod pallet {
 		}
 	}
 
+	impl<T: Config + TypeInfo> frame_support::unsigned::ValidateUnsigned for Pallet<T> {
+		type Call = Call<T>;
+
+		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			// TODO: verify `source` ?
+			use frame_support::traits::Task;
+			match call {
+				Call::do_task { task } => {
+					if task.is_valid() {
+						Ok(ValidTransaction {
+							priority: 0, // TODO: make configurable on Task?
+							requires: vec![],
+							provides: vec![task.encode()],
+							longevity: TransactionLongevity::max_value(),
+							propagate: true,
+						})
+					} else {
+						InvalidTransaction::Custom(1u8).into() // TODO: custom error enum for this?
+					}
+				},
+				_ => InvalidTransaction::Call.into(),
+			}
+		}
+	}
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
