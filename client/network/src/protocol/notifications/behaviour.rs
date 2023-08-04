@@ -998,27 +998,34 @@ impl Notifications {
 		}
 	}
 
-	/// Function that is called when the peerset wants us to reject an incoming peer.
+	/// Function that is called when the protocol wants us to reject an incoming peer.
 	fn protocol_report_reject(&mut self, index: IncomingIndex) {
+		if let Some((set_id, peer_id)) = self.peerset_report_reject(index) {
+			self.protocol_controller_handles[usize::from(set_id)].dropped(peer_id)
+		}
+	}
+
+	/// Function that is called when the peerset wants us to reject an incoming peer.
+	fn peerset_report_reject(&mut self, index: IncomingIndex) -> Option<(SetId, PeerId)> {
 		let incoming = if let Some(pos) = self.incoming.iter().position(|i| i.incoming_id == index)
 		{
 			self.incoming.remove(pos)
 		} else {
 			error!(target: "sub-libp2p", "PSM => Reject({:?}): Invalid index", index);
-			return
+			return None
 		};
 
 		if !incoming.alive {
 			trace!(target: "sub-libp2p", "PSM => Reject({:?}, {}, {:?}): Obsolete incoming, \
 				ignoring", index, incoming.peer_id, incoming.set_id);
-			return
+			return None
 		}
 
 		let state = match self.peers.get_mut(&(incoming.peer_id, incoming.set_id)) {
 			Some(s) => s,
 			None => {
 				debug_assert!(false);
-				return
+				return None
 			},
 		};
 
@@ -1031,7 +1038,7 @@ impl Notifications {
 						"PSM => Reject({:?}, {}, {:?}): Ignoring obsolete incoming index, we are already awaiting {:?}.",
 						index, incoming.peer_id, incoming.set_id, incoming_index
 					);
-					return
+					return None
 				} else if index > incoming_index {
 					error!(
 						target: "sub-libp2p",
@@ -1039,7 +1046,7 @@ impl Notifications {
 						index, incoming.peer_id, incoming.set_id, incoming_index
 					);
 					debug_assert!(false);
-					return
+					return None
 				}
 
 				trace!(target: "sub-libp2p", "PSM => Reject({:?}, {}, {:?}): Rejecting connections.",
@@ -1063,10 +1070,15 @@ impl Notifications {
 				}
 
 				*state = PeerState::Disabled { connections, backoff_until };
+				Some((incoming.set_id, incoming.peer_id))
 			},
-			peer => error!(target: "sub-libp2p",
-				"State mismatch in libp2p: Expected alive incoming. Got {:?}.",
-				peer),
+			peer => {
+				error!(
+					target: "sub-libp2p",
+					"State mismatch in libp2p: Expected alive incoming. Got {peer:?}.",
+				);
+				None
+			},
 		}
 	}
 }
@@ -2128,7 +2140,7 @@ impl NetworkBehaviour for Notifications {
 					self.peerset_report_preaccept(index);
 				},
 				Poll::Ready(Some(Message::Reject(index))) => {
-					self.protocol_report_reject(index);
+					let _ = self.peerset_report_reject(index);
 				},
 				Poll::Ready(Some(Message::Connect { peer_id, set_id, .. })) => {
 					self.peerset_report_connect(peer_id, set_id);
@@ -2175,7 +2187,6 @@ impl NetworkBehaviour for Notifications {
 					self.protocol_report_accept(index);
 				},
 				Ok(ValidationResult::Reject) => {
-					// TODO(aaro): remove connection from peerset
 					self.protocol_report_reject(index);
 				},
 				Err(_) => {
