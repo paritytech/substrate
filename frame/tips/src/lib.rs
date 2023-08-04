@@ -615,7 +615,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// * There should be a corresponding `OpenTip.reason` for each key in `Reasons`.
 	#[cfg(any(feature = "try-runtime", test))]
-	pub fn do_try_state() -> Result<(), &'static str> {
+	pub fn do_try_state() -> Result<(), sp_runtime::TryRuntimeError> {
 		let reasons = Reasons::<T, I>::iter_keys().collect::<Vec<_>>();
 		let tips = Tips::<T, I>::iter_keys().collect::<Vec<_>>();
 

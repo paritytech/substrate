@@ -1210,7 +1210,7 @@ fn vested_transfer_less_than_existential_deposit_fails() {
 }
 
 #[test]
-fn plain_lack_stain() {
+fn play_out_all_schedules() {
 	let vesting_config = vec![
 		// 5 * existential deposit locked.
 		(1, 0, 10, 5 * ED),

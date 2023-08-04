@@ -73,6 +73,7 @@ use sp_runtime::{
 		AtLeast32BitUnsigned, Bounded, Convert, MaybeSerializeDeserialize, One, Saturating,
 		StaticLookup, Zero,
 	},
+	SaturatedConversion,
 	RuntimeDebug,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
@@ -659,12 +660,15 @@ impl<T: Config> Pallet<T> {
 	/// * the locked amount(`still_vesting`) of a vesting schedule must be equal to the
 	/// product of the duration(`schedules_left` - `starting_block`) and the per block amount when the locked
 	/// amount is divisible by the per block amount.
+	/// * However, If the locked amount is not divisible by the per block amount, the remainder (`locked` % `per_block`) 
+	/// should be less than the per block amount and at the final vesting block (`schedules_left` - 1), 
+	/// the vesting balance should be equal to the remainder.
 	///
 	/// During schedule timeframe:
 	/// * the amount `still_vesting` must be equal to the product of the remaining blocks to vest(`schedules_left` - `current_block`) 
 	/// and per block amount when the locked amount is divisible by the per block amount.
-	/// * However, if the locked amount is not divisible by the per block amount, 
-	/// at the final vesting block the remainder must equal the amount `still_vesting`.
+	/// * However, If the locked amount is not divisible by the per block amount, then at the final vesting block of the 
+	/// current schedule (`schedules_left` - 1), the vesting balance should be equal to the remainder.
 	#[cfg(any(feature = "try-runtime", test))]
 	pub fn do_try_state() -> Result<(), sp_runtime::TryRuntimeError> {
 		Vesting::<T>::iter().for_each(|(_, d)| {
@@ -673,7 +677,7 @@ impl<T: Config> Pallet<T> {
 			for info in infos.iter() {
 				let schedules_left: BalanceOf<T> =
 					info.ending_block_as_balance::<T::BlockNumberToBalance>();
-				let starting_block = T::BlockNumberToBalance::convert(info.starting_block());
+				let starting_block = T::BlockNumberToBalance::convert(info.starting_block()); 
 
 				let still_vesting = info
 					.locked_at::<T::BlockNumberToBalance>(<frame_system::Pallet<T>>::block_number());
@@ -683,10 +687,18 @@ impl<T: Config> Pallet<T> {
 				if current_block < starting_block {
 					let count = schedules_left.saturating_sub(starting_block);
 					if (info.locked() % info.per_block()).is_zero() {
-						assert!(still_vesting == (count * info.per_block()), "uninitiated schedule, the vesting balance is unequal with the total raw per block releases.");
+						assert!(still_vesting == (count * info.per_block()), "Before schedule starts, the vesting balance should be equal to the total per block releases.");
 					} else {
 						let re = info.locked() % info.per_block();
-						assert!(info.per_block() > re, "uinitiated schedule, the raw per block is greater than remainder");
+						assert!(info.per_block() > re, "Before schedule starts, the per block should be greater than the remainder");
+
+						let final_vest_block = schedules_left.saturating_sub(One::one()).saturated_into::<u64>();
+						let final_vest_amount = info.locked_at::<T::BlockNumberToBalance>(final_vest_block.saturated_into());
+						assert!(final_vest_amount == re, "Before schedule starts, the final vest amount should be equal to the remainder"); 
+
+						let no_schedules_left = schedules_left.saturated_into::<u64>();
+						let no_locks = info.locked_at::<T::BlockNumberToBalance>(no_schedules_left.saturated_into());
+						assert!(no_locks == Zero::zero(), "After all schedules, all amounts should be unlocked"); 
 					}
 				} else {
 					if (info.locked() % info.per_block()).is_zero() {
@@ -694,14 +706,14 @@ impl<T: Config> Pallet<T> {
 							still_vesting
 								== (schedules_left.saturating_sub(current_block)
 									* info.per_block()),
-							"Schedule started, the vesting balance is unequal with the total per block releases"
+							"during schedules, the vesting balance should be equal to the total per block releases"
 						);
 					} else {
 						let re = info.locked() % info.per_block();
-						assert!(info.per_block() > re, "Schedule started, per block is less than remainder");
+						assert!(info.per_block() > re, "per block should be greater than the remainder");
 
 						if current_block == schedules_left.saturating_sub(One::one()) {
-							assert!(still_vesting == re, "Schedule started, at the final vesting block the vesting balance is unequal to the remainder");
+							assert!(still_vesting == re, "At the final vesting block, the vesting balance should be equal to the remainder");
 						}
 
 						if current_block == schedules_left {
