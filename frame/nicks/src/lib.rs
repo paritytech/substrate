@@ -17,24 +17,29 @@
 
 //! # Nicks Pallet
 //!
-//! - [`Config`]
-//! - [`Call`]
+//! - [`Config`] - Pallet configuration
+//! - [`Call`]  - Callable functions _(dispatchable extrinsics)_ available in this pallet
+//! - [`Event`] - Events emitted by this pallet
+//! - [`Error`] - Possible errors which may be returned by the dispatchable extrinsics
 //!
 //! ## Overview
 //!
-//! Nicks is an example pallet for keeping track of account names on-chain. It makes no effort to
-//! create a name hierarchy, be a DNS replacement or provide reverse lookups. Furthermore, the
-//! weights attached to this pallet's dispatchable functions are for demonstration purposes only and
-//! have not been designed to be economically secure. Do not use this pallet as-is in production.
-//!
-//! ## Interface
+//! The `pallet_nicks` is an _example_ pallet for keeping track of account names on-chain.
+//! It makes no effort to create a name hierarchy, be a DNS replacement or provide reverse lookups.
+//! 
+//! <div class="example-wrap" style="display:inline-block"><pre class="compile_fail"
+//! style="white-space:normal;font:inherit;">
+//! <strong>WARNING</strong>:
+//! The weights attached to this pallet's dispatchable functions are for demonstration purposes only and
+//! have not been designed to be economically secure. <strong style="color:red">Do not use this pallet as-is in production.</strong>
+//! </pre></div>
 //!
 //! ### Dispatchable Functions
 //!
-//! * `set_name` - Set the associated name of an account; a small deposit is reserved if not already
+//! * [`set_name`](Pallet::set_name) - Set the associated name of an account; a small deposit is reserved if not already
 //!   taken.
-//! * `clear_name` - Remove an account's associated name; the deposit is returned.
-//! * `kill_name` - Forcibly remove the associated name; the deposit is lost.
+//! * [`clear_name`](Pallet::clear_name) - Remove an account's associated name; the deposit is returned.
+//! * [`kill_name`](Pallet::kill_name) - Forcibly remove the associated name; the deposit is lost.
 
 #![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -58,27 +63,34 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// The overarching event type.
+		/// As this pallet can emit [events](Event) it depends on the runtime's definition of an event
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// The currency trait.
+		/// [`ReservableCurrency`](frame_support::traits::ReservableCurrency),
+		/// used to reserve the [`ReservationFee`](Self::ReservationFee) from the caller's balance
 		type Currency: ReservableCurrency<Self::AccountId>;
 
-		/// Reservation fee.
+		/// Amount reserved from caller's balance when a name is set via [`set_name`](Pallet::set_name).
+		/// Fee can be unreserved via [`clear_name`](Pallet::clear_name)
+		/// 
+		/// **NB:** It is possible to lose this fee to [slashing](Pallet::kill_name)
 		#[pallet::constant]
 		type ReservationFee: Get<BalanceOf<Self>>;
 
-		/// What to do with slashed funds.
+		/// What to do with reserved balance if slashed via [`kill_name`](Pallet::kill_name)
 		type Slashed: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
-		/// The origin which may forcibly set or remove a name. Root can always do this.
+		/// The origin which may forcibly [set](Pallet::set_name) or [remove](Pallet::kill_name) a name.
+		/// **Root can always do this.**
 		type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
-		/// The minimum length a name may be.
+		/// The minimum length in bytes that a name can be
 		#[pallet::constant]
 		type MinLength: Get<u32>;
 
-		/// The maximum length a name may be.
+		/// The maximum length in bytes that a name can be
+		/// 
+		/// **NB:** Any storage item whose size is determined by user action should have a bound on it
 		#[pallet::constant]
 		type MaxLength: Get<u32>;
 	}
@@ -86,49 +98,51 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A name was set.
+		/// A name was [set](Pallet::set_name)
 		NameSet {
-			/// The account for which the name was set.
+			/// The account for which a name was set and who paid the `ReservationFee`
 			who: T::AccountId,
 		},
-		/// A name was forcibly set.
+		/// A name was [forcibly set](Pallet::force_name)
 		NameForced {
-			/// The account whose name was forcibly set.
+			/// The account whose name was forcibly set and which potentially paid the `ReservationFee`
 			target: T::AccountId,
 		},
-		/// A name was changed.
+		/// An existing name was [changed](Pallet::set_name)
 		NameChanged {
-			/// The account for which the name was changed.
+			/// The account associated with the name which was changed
 			who: T::AccountId,
 		},
-		/// A name was cleared, and the given balance returned.
+		/// A name was [cleared](Pallet::clear_name), and the `ReservationFee` was returned
 		NameCleared {
-			/// The account for which the name was cleared.
+			/// The account associated with the name which was cleared
 			who: T::AccountId,
-			/// The deposit returned.
+			/// The amount of reserved currency which was returned
 			deposit: BalanceOf<T>,
 		},
-		/// A name was removed and the given balance slashed.
+		/// A name was [removed](Pallet::kill_name) and the `ReservationFee` slashed
 		NameKilled {
-			/// The account for which the name was removed.
+			/// The account associated with the name which was removed
 			target: T::AccountId,
-			/// The deposit returned.
+			/// The amount of reserved currency which was slashed
 			deposit: BalanceOf<T>,
 		},
 	}
 
-	/// Error for the Nicks pallet.
+	/// Possible errors which can be returned by the nicks pallet [dispatchable functions](Call)
 	#[pallet::error]
 	pub enum Error<T> {
-		/// A name is too short.
+		/// The supplied name is shorter than the `MinLength` specified in the pallet [`Config`]
 		TooShort,
-		/// A name is too long.
+		/// The supplied name is longer than the `MaxLength` specified in the pallet [`Config`]
 		TooLong,
-		/// An account isn't named.
+		/// Attempting to remove a name for an account which does not have a name set
 		Unnamed,
 	}
 
-	/// The lookup table for names.
+	/// Names are stored as a bytes array alongside the amount of balance reserved as a fee.
+	/// It is safe to use the [Twox64Concat](frame_support::Twox64Concat) hasher
+	/// as the key preimage (`AccountId`) is a secure hash
 	#[pallet::storage]
 	pub(super) type NameOf<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, (BoundedVec<u8, T::MaxLength>, BalanceOf<T>)>;
@@ -141,15 +155,21 @@ pub mod pallet {
 		/// Set an account's name. The name should be a UTF-8-encoded string by convention, though
 		/// we don't check it.
 		///
-		/// The name may not be more than `T::MaxLength` bytes, nor less than `T::MinLength` bytes.
+		/// The name may not be more than [`MaxLength`](Config::MaxLength) bytes,
+		/// or less than [`MinLength`](Config::MinLength) bytes.
 		///
-		/// If the account doesn't already have a name, then a fee of `ReservationFee` is reserved
-		/// in the account.
+		/// If the account doesn't already have a name, then a fee of [`ReservationFee`](Config::ReservationFee)
+		/// is reserved in the account.
 		///
 		/// The dispatch origin for this call must be _Signed_.
-		///
+		/// 
+		/// # Errors
+		/// 
+		/// If the size of the supplied name is not within the bounds defined in [`Config`]
+		/// the function returns an [`Error::TooShort`] or [`Error::TooLong`]
+		/// 
 		/// ## Complexity
-		/// - O(1).
+		/// - O(1)
 		#[pallet::call_index(0)]
 		#[pallet::weight({50_000_000})]
 		pub fn set_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResult {
@@ -159,6 +179,7 @@ pub mod pallet {
 				name.try_into().map_err(|_| Error::<T>::TooLong)?;
 			ensure!(bounded_name.len() >= T::MinLength::get() as usize, Error::<T>::TooShort);
 
+			// if a name already exists in storage we do not reserve any additional fee
 			let deposit = if let Some((_, deposit)) = <NameOf<T>>::get(&sender) {
 				Self::deposit_event(Event::<T>::NameChanged { who: sender.clone() });
 				deposit
@@ -173,12 +194,17 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Clear an account's name and return the deposit. Fails if the account was not named.
+		/// Clear an account's name and return the [deposit](Config::ReservationFee).
+		/// Fails if the account was not named.
 		///
 		/// The dispatch origin for this call must be _Signed_.
-		///
+		/// 
+		/// # Errors
+		/// 
+		/// If no name exists in storage for the account this function returns an [`Error::Unnamed`]
+		/// 
 		/// ## Complexity
-		/// - O(1).
+		/// - O(1)
 		#[pallet::call_index(1)]
 		#[pallet::weight({70_000_000})]
 		pub fn clear_name(origin: OriginFor<T>) -> DispatchResult {
@@ -195,13 +221,17 @@ pub mod pallet {
 
 		/// Remove an account's name and take charge of the deposit.
 		///
-		/// Fails if `target` has not been named. The deposit is dealt with through `T::Slashed`
+		/// Fails if `target` has not been named. The deposit is dealt with via the [`Slashed`](Config::Slashed)
 		/// imbalance handler.
 		///
-		/// The dispatch origin for this call must match `T::ForceOrigin`.
-		///
+		/// The dispatch origin for this call must match [`ForceOrigin`](Config::ForceOrigin).
+		/// 
+		/// # Errors
+		/// 
+		/// If no name exists in storage for the account this function returns an [`Error::Unnamed`]
+		/// 
 		/// ## Complexity
-		/// - O(1).
+		/// - O(1)
 		#[pallet::call_index(2)]
 		#[pallet::weight({70_000_000})]
 		pub fn kill_name(origin: OriginFor<T>, target: AccountIdLookupOf<T>) -> DispatchResult {
@@ -218,14 +248,23 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set a third-party account's name with no deposit.
+		/// Forcibly set a third-party account's name. 
+		/// 
+		/// No [deposit](Config::ReservationFee) is taken for the name,
+		/// however if a name already exists for the account any existing deposit is retained
 		///
-		/// No length checking is done on the name.
+		/// The name size can not exceed the [`MaxLength`](Config::MaxLength), but no
+		/// other length checks are performed.
 		///
-		/// The dispatch origin for this call must match `T::ForceOrigin`.
-		///
+		/// The dispatch origin for this call must match [`ForceOrigin`](Config::ForceOrigin).
+		/// 
+		/// # Errors
+		/// 
+		/// If the size of the supplied name exceeds the [`MaxLength`](Config::MaxLength) value
+		/// from the [`Config`] this function returns an [`Error::TooLong`]
+		/// 
 		/// ## Complexity
-		/// - O(1).
+		/// - O(1)
 		#[pallet::call_index(3)]
 		#[pallet::weight({70_000_000})]
 		pub fn force_name(
