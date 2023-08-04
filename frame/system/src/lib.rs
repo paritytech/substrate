@@ -233,15 +233,15 @@ pub mod pallet {
 			type BlockWeights = ();
 			type BlockLength = ();
 			type DbWeight = ();
-			#[pallet::verbatim]
+			#[verbatim]
 			type RuntimeEvent = ();
-			#[pallet::verbatim]
+			#[verbatim]
 			type RuntimeOrigin = ();
-			#[pallet::verbatim]
+			#[verbatim]
 			type RuntimeCall = ();
-			#[pallet::verbatim]
+			#[verbatim]
 			type Block = ();
-			#[pallet::verbatim]
+			#[verbatim]
 			type PalletInfo = ();
 			type BaseCallFilter = frame_support::traits::Everything;
 			type BlockHashCount = ConstU64<10>;

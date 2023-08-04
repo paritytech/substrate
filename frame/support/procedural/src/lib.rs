@@ -1086,13 +1086,13 @@ pub fn register_default_impl(attrs: TokenStream, tokens: TokenStream) -> TokenSt
 	}
 }
 
-/// The optional attribute `#[pallet::verbatim]` can be attached to any item in an impl
+/// The optional attribute `#[verbatim]` can be attached to any item in an impl
 /// statement that has `#[register_default_impl]` attached.
 ///
 /// Attaching this attribute to an item ensures that the combined impl generated via
 /// [`#[derive_impl(..)]`](`macro@derive_impl`)  will use the same name for the default.
 ///
-/// As an example, if you have an impl item `#[pallet::verbatim] type RuntimeEvent = ();` in
+/// As an example, if you have an impl item `#[verbatim] type RuntimeEvent = ();` in
 /// your impl statement, the combined impl will have `type RuntimeEvent = RuntimeEvent;` instead.
 #[proc_macro_attribute]
 pub fn verbatim(_: TokenStream, tokens: TokenStream) -> TokenStream {

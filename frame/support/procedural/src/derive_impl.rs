@@ -43,9 +43,6 @@ pub struct PalletAttr {
 	#[bracket]
 	_bracket: token::Bracket,
 	#[inside(_bracket)]
-	_pallet: keyword::pallet,
-	#[prefix(Token![::] in _bracket)]
-	#[inside(_bracket)]
 	typ: PalletAttrType,
 }
 
@@ -54,11 +51,7 @@ where
 	Attr: syn::parse::Parse,
 {
 	let attrs = &mut item.attrs;
-
-	if let Some(index) = attrs.iter().position(|attr| {
-		attr.path().segments.first().map_or(false, |segment| segment.ident == "pallet")
-	}) {
-		let pallet_attr = attrs.remove(index);
+	if let Some(pallet_attr) = attrs.get(0) {
 		Ok(Some(syn::parse2(pallet_attr.into_token_stream())?))
 	} else {
 		Ok(None)
