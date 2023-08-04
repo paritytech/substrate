@@ -266,7 +266,7 @@ pub trait Ext: sealing::Sealed {
 	/// Get a reference to the schedule used by the current call.
 	fn schedule(&self) -> &Schedule<Self::T>;
 
-	/// Gean immutable reference to the nested gas meter.
+	/// Get an immutable reference to the nested gas meter.
 	fn gas_meter(&self) -> &GasMeter<Self::T>;
 
 	/// Get a mutable reference to the nested gas meter.
