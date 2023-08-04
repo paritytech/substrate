@@ -240,9 +240,11 @@ pub mod pallet {
 		/// Move the caller's Id directly in front of `lighter`.
 		///
 		/// The dispatch origin for this call must be _Signed_ and can only be called by the Id of
-		/// the account going in front of `lighter`.
+		/// the account going in front of `lighter`. Fee is payed by the origin under all
+		/// circumstances.
 		///
-		/// Only works if
+		/// Only works if:
+		///
 		/// - both nodes are within the same bag,
 		/// - and `origin` has a greater `Score` than `lighter`.
 		#[pallet::call_index(1)]
@@ -253,6 +255,24 @@ pub mod pallet {
 		) -> DispatchResult {
 			let heavier = ensure_signed(origin)?;
 			let lighter = T::Lookup::lookup(lighter)?;
+			List::<T, I>::put_in_front_of(&lighter, &heavier)
+				.map_err::<Error<T, I>, _>(Into::into)
+				.map_err::<DispatchError, _>(Into::into)
+		}
+
+		/// Same as [`put_in_front_of`], but it can be called by anyone.
+		///
+		/// Fee is payed by the origin under all circumstances.
+		#[pallet::call_index(2)]
+		#[pallet::weight(T::WeightInfo::put_in_front_of())]
+		pub fn put_in_front_of_other(
+			origin: OriginFor<T>,
+			heavier: AccountIdLookupOf<T>,
+			lighter: AccountIdLookupOf<T>,
+		) -> DispatchResult {
+			let _ = ensure_signed(origin)?;
+			let lighter = T::Lookup::lookup(lighter)?;
+			let heavier = T::Lookup::lookup(heavier)?;
 			List::<T, I>::put_in_front_of(&lighter, &heavier)
 				.map_err::<Error<T, I>, _>(Into::into)
 				.map_err::<DispatchError, _>(Into::into)
