@@ -1009,7 +1009,7 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 ///
 /// Attaching this attribute to a trait item ensures that the generated trait `DefaultConfig`
 /// will not have any bounds for this trait item.
-/// 
+///
 /// As an example, if you have a trait item `type AccountId: SomeTrait;` in your `Config` trait,
 /// the generated `DefaultConfig` will only have `type AccountId;` with no trait bound.
 #[proc_macro_attribute]
@@ -1091,7 +1091,7 @@ pub fn register_default_impl(attrs: TokenStream, tokens: TokenStream) -> TokenSt
 ///
 /// Attaching this attribute to an item ensures that the combined impl generated via
 /// [`#[derive_impl(..)]`](`macro@derive_impl`)  will use the same name for the default.
-/// 
+///
 /// As an example, if you have an impl item `#[pallet::verbatim] type RuntimeEvent = ();` in
 /// your impl statement, the combined impl will have `type RuntimeEvent = RuntimeEvent;` instead.
 #[proc_macro_attribute]
