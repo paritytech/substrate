@@ -24,7 +24,6 @@ use crate::{
 	AccountIdOf, BalanceOf, CodeHash, Config, Pallet, TrieId, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode};
-use core::ops::Deref;
 use frame_support::{codec, pallet_prelude::*, storage_alias, DefaultNoBound};
 use sp_runtime::BoundedBTreeMap;
 use sp_std::prelude::*;
@@ -32,14 +31,6 @@ use sp_std::prelude::*;
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
 pub struct DepositAccount<T: Config>(AccountIdOf<T>);
-
-impl<T: Config> Deref for DepositAccount<T> {
-	type Target = AccountIdOf<T>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
 
 mod old {
 	use super::*;

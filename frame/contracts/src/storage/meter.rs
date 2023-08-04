@@ -97,16 +97,6 @@ pub trait Ext<T: Config> {
 /// It uses [`frame_support::traits::fungible::Mutate`] in order to do accomplish the reserves.
 pub enum ReservingExt {}
 
-// /// Indicates the reason that originated the charge.
-// pub enum ChargeReason {
-// 	/// The charge was originated by a contract instantiation.
-// 	Instantiate,
-// 	/// The charge was originated by a contract termination.
-// 	Terminate,
-// 	/// The charge was not originated by a contract instantiation or termination.
-// 	Regular,
-// }
-
 /// Used to implement a type state pattern for the meter.
 ///
 /// It is sealed and cannot be implemented outside of this module.

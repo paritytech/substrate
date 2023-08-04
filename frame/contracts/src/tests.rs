@@ -5101,7 +5101,7 @@ fn deposit_limit_honors_min_leftover() {
 			Contracts::call(
 				RuntimeOrigin::signed(BOB),
 				addr.clone(),
-				499,
+				400,
 				GAS_LIMIT,
 				Some(codec::Compact(500)),
 				100u32.to_le_bytes().to_vec()
@@ -5431,6 +5431,7 @@ fn add_remove_delegate_dependency_works() {
 
 		// There should be a dependency and a deposit.
 		let contract = test_utils::get_contract(&addr_caller);
+		let info_deposit = test_utils::contract_info_storage_deposit(&addr_caller);
 
 		let dependency_deposit = &CodeHashLockupDepositPercent::get().mul_ceil(deposit);
 		assert_eq!(contract.delegate_dependencies().get(&code_hash), Some(dependency_deposit));
@@ -5439,7 +5440,7 @@ fn add_remove_delegate_dependency_works() {
 				&HoldReason::StorageDepositReserve.into(),
 				&addr_caller
 			),
-			dependency_deposit + contract.storage_base_deposit() - ED
+			dependency_deposit + info_deposit
 		);
 
 		// Removing the code should fail, since we have added a dependency.
@@ -5478,7 +5479,7 @@ fn add_remove_delegate_dependency_works() {
 				&HoldReason::StorageDepositReserve.into(),
 				&addr_caller
 			),
-			contract.storage_base_deposit() - ED
+			info_deposit
 		);
 
 		// Removing an unexisting dependency should fail.
