@@ -1256,6 +1256,8 @@ impl pallet_contracts::Config for Runtime {
 	type Migrations = ();
 	#[cfg(feature = "runtime-benchmarks")]
 	type Migrations = pallet_contracts::migration::codegen::BenchMigrations;
+	#[cfg(feature = "unsafe-debug")]
+	type Debug = ();
 	type MaxDelegateDependencies = ConstU32<32>;
 	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
 }
