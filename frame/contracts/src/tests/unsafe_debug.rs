@@ -1,14 +1,10 @@
 #![cfg(feature = "unsafe-debug")]
 
-use crate::{
-	tests::{compile_module, ExtBuilder, ALICE, GAS_LIMIT},
-	unsafe_debug::{ExecutionObserver, ExportedFunction},
-	CodeHash, CollectEvents, DebugInfo,
-};
-use codec::Encode;
-use frame_support::assert_ok;
-use pallet_contracts_primitives::{Code, ExecReturnValue};
-use sp_core::crypto::AccountId32;
+use super::*;
+use crate::unsafe_debug::{ExecutionObserver, ExportedFunction};
+use frame_support::traits::Currency;
+use pallet_contracts_primitives::ExecReturnValue;
+use pretty_assertions::assert_eq;
 use std::cell::RefCell;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -97,8 +93,6 @@ fn unsafe_debugging_works() {
 			result: if after { Some(vec![]) } else { None },
 		}
 	}
-
-	use frame_support::traits::Currency;
 
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
