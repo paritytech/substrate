@@ -148,7 +148,7 @@ pub mod tests {
 		// type BlockHashCount = ConstU64<10>;
 		// type OnSetCode = ();
 
-		// These are marked as `#[pallet::verbatim]`. Hence, they are being injected as
+		// These are marked as `#[verbatim]`. Hence, they are being injected as
 		// defaults with same names.
 
 		// type Block = Block;
