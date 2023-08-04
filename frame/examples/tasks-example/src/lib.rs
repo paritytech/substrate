@@ -141,6 +141,10 @@ pub mod pallet {
 		}
 	}
 
+	// We can actually auto-impl this in the macros if an existing
+	// `ValidateUnsigned` impl is not present. If one is present, we just wouldn't emit an
+	// impl for this. An existing impl will be easy to find using a simple visitor pattern in
+	// the macros.
 	impl<T: Config + TypeInfo> frame_support::unsigned::ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 
