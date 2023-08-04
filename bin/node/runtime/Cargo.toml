@@ -134,6 +134,7 @@ substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-bu
 [features]
 default = ["std"]
 with-tracing = ["frame-executive/with-tracing"]
+unsafe-debug = ["pallet-contracts/unsafe-debug"]
 std = [
 	"pallet-whitelist/std",
 	"pallet-offences-benchmarking?/std",
