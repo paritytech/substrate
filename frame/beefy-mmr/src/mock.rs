@@ -36,7 +36,7 @@ use sp_runtime::{
 use crate as pallet_beefy_mmr;
 
 pub use sp_consensus_beefy::{
-	crypto::AuthorityId as BeefyId, mmr::BeefyDataProvider, ConsensusLog, BEEFY_ENGINE_ID,
+	ecdsa_crypto::AuthorityId as BeefyId, mmr::BeefyDataProvider, ConsensusLog, BEEFY_ENGINE_ID,
 };
 
 impl_opaque_keys! {

@@ -51,7 +51,7 @@ use sp_runtime::traits::{Hash, Keccak256, NumberFor};
 use sp_std::prelude::*;
 
 /// Key type for BEEFY module.
-pub const KEY_TYPE: sp_application_crypto::KeyTypeId = sp_application_crypto::KeyTypeId(*b"beef");
+pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::BEEFY;
 
 /// Trait representing BEEFY authority id, including custom signature verification.
 ///
@@ -63,23 +63,21 @@ pub trait BeefyAuthorityId<MsgHash: Hash>: RuntimeAppPublic {
 	fn verify(&self, signature: &<Self as RuntimeAppPublic>::Signature, msg: &[u8]) -> bool;
 }
 
-/// BEEFY cryptographic types
+/// BEEFY cryptographic types for ECDSA crypto
 ///
-/// This module basically introduces three crypto types:
-/// - `crypto::Pair`
-/// - `crypto::Public`
-/// - `crypto::Signature`
+/// This module basically introduces four crypto types:
+/// - `ecdsa_crypto::Pair`
+/// - `ecdsa_crypto::Public`
+/// - `ecdsa_crypto::Signature`
+/// - `ecdsa_crypto::AuthorityId`
 ///
 /// Your code should use the above types as concrete types for all crypto related
 /// functionality.
-///
-/// The current underlying crypto scheme used is ECDSA. This can be changed,
-/// without affecting code restricted against the above listed crypto types.
-pub mod crypto {
-	use super::{BeefyAuthorityId, Hash, RuntimeAppPublic};
+pub mod ecdsa_crypto {
+	use super::{BeefyAuthorityId, Hash, RuntimeAppPublic, KEY_TYPE as BEEFY_KEY_TYPE};
 	use sp_application_crypto::{app_crypto, ecdsa};
 	use sp_core::crypto::Wraps;
-	app_crypto!(ecdsa, crate::KEY_TYPE);
+	app_crypto!(ecdsa, BEEFY_KEY_TYPE);
 
 	/// Identity of a BEEFY authority using ECDSA as its crypto.
 	pub type AuthorityId = Public;
@@ -104,6 +102,44 @@ pub mod crypto {
 	}
 }
 
+/// BEEFY cryptographic types for BLS crypto
+///
+/// This module basically introduces four crypto types:
+/// - `bls_crypto::Pair`
+/// - `bls_crypto::Public`
+/// - `bls_crypto::Signature`
+/// - `bls_crypto::AuthorityId`
+///
+/// Your code should use the above types as concrete types for all crypto related
+/// functionality.
+
+#[cfg(feature = "bls-experimental")]
+pub mod bls_crypto {
+	use super::{BeefyAuthorityId, Hash, RuntimeAppPublic, KEY_TYPE as BEEFY_KEY_TYPE};
+	use sp_application_crypto::{app_crypto, bls377};
+	use sp_core::{bls377::Pair as BlsPair, crypto::Wraps, Pair as _};
+	app_crypto!(bls377, BEEFY_KEY_TYPE);
+
+	/// Identity of a BEEFY authority using BLS as its crypto.
+	pub type AuthorityId = Public;
+
+	/// Signature for a BEEFY authority using BLS as its crypto.
+	pub type AuthoritySignature = Signature;
+
+	impl<MsgHash: Hash> BeefyAuthorityId<MsgHash> for AuthorityId
+	where
+		<MsgHash as Hash>::Output: Into<[u8; 32]>,
+	{
+		fn verify(&self, signature: &<Self as RuntimeAppPublic>::Signature, msg: &[u8]) -> bool {
+			// `w3f-bls` library uses IETF hashing standard and as such does not exposes
+			// a choice of hash to field function.
+			// We are directly calling into the library to avoid introducing new host call.
+			// and because BeefyAuthorityId::verify is being called in the runtime so we don't have
+
+			BlsPair::verify(signature.as_inner_ref(), msg, self.as_inner_ref())
+		}
+	}
+}
 /// The `ConsensusEngineId` of BEEFY.
 pub const BEEFY_ENGINE_ID: sp_runtime::ConsensusEngineId = *b"BEEF";
 
@@ -304,14 +340,15 @@ impl OpaqueKeyOwnershipProof {
 
 sp_api::decl_runtime_apis! {
 	/// API necessary for BEEFY voters.
-	#[api_version(2)]
-	pub trait BeefyApi
+	#[api_version(3)]
+	pub trait BeefyApi<AuthorityId> where
+		AuthorityId : Codec + RuntimeAppPublic,
 	{
 		/// Return the block number where BEEFY consensus is enabled/started
 		fn beefy_genesis() -> Option<NumberFor<Block>>;
 
 		/// Return the current active BEEFY validator set
-		fn validator_set() -> Option<ValidatorSet<crypto::AuthorityId>>;
+		fn validator_set() -> Option<ValidatorSet<AuthorityId>>;
 
 		/// Submits an unsigned extrinsic to report an equivocation. The caller
 		/// must provide the equivocation proof and a key ownership proof
@@ -323,7 +360,7 @@ sp_api::decl_runtime_apis! {
 		/// hardcoded to return `None`). Only useful in an offchain context.
 		fn submit_report_equivocation_unsigned_extrinsic(
 			equivocation_proof:
-				EquivocationProof<NumberFor<Block>, crypto::AuthorityId, crypto::Signature>,
+				EquivocationProof<NumberFor<Block>, AuthorityId, <AuthorityId as RuntimeAppPublic>::Signature>,
 			key_owner_proof: OpaqueKeyOwnershipProof,
 		) -> Option<()>;
 
@@ -340,9 +377,10 @@ sp_api::decl_runtime_apis! {
 		/// older states to be available.
 		fn generate_key_ownership_proof(
 			set_id: ValidatorSetId,
-			authority_id: crypto::AuthorityId,
+			authority_id: AuthorityId,
 		) -> Option<OpaqueKeyOwnershipProof>;
 	}
+
 }
 
 #[cfg(test)]
@@ -366,14 +404,14 @@ mod tests {
 	}
 
 	#[test]
-	fn beefy_verify_works() {
+	fn ecdsa_beefy_verify_works() {
 		let msg = &b"test-message"[..];
-		let (pair, _) = crypto::Pair::generate();
+		let (pair, _) = ecdsa_crypto::Pair::generate();
 
-		let keccak_256_signature: crypto::Signature =
+		let keccak_256_signature: ecdsa_crypto::Signature =
 			pair.as_inner_ref().sign_prehashed(&keccak_256(msg)).into();
 
-		let blake2_256_signature: crypto::Signature =
+		let blake2_256_signature: ecdsa_crypto::Signature =
 			pair.as_inner_ref().sign_prehashed(&blake2_256(msg)).into();
 
 		// Verification works if same hashing function is used when signing and verifying.
@@ -392,7 +430,7 @@ mod tests {
 		));
 
 		// Other public key doesn't work
-		let (other_pair, _) = crypto::Pair::generate();
+		let (other_pair, _) = ecdsa_crypto::Pair::generate();
 		assert!(!BeefyAuthorityId::<Keccak256>::verify(
 			&other_pair.public(),
 			&keccak_256_signature,
@@ -403,5 +441,21 @@ mod tests {
 			&blake2_256_signature,
 			msg,
 		));
+	}
+
+	#[test]
+	#[cfg(feature = "bls-experimental")]
+	fn bls_beefy_verify_works() {
+		let msg = &b"test-message"[..];
+		let (pair, _) = bls_crypto::Pair::generate();
+
+		let signature: bls_crypto::Signature = pair.as_inner_ref().sign(&msg).into();
+
+		// Verification works if same hashing function is used when signing and verifying.
+		assert!(BeefyAuthorityId::<Keccak256>::verify(&pair.public(), &signature, msg));
+
+		// Other public key doesn't work
+		let (other_pair, _) = bls_crypto::Pair::generate();
+		assert!(!BeefyAuthorityId::<Keccak256>::verify(&other_pair.public(), &signature, msg,));
 	}
 }
