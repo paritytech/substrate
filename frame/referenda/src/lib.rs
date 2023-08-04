@@ -66,6 +66,7 @@
 
 use codec::{Codec, Encode};
 use frame_support::{
+	dispatch::DispatchResult,
 	ensure,
 	traits::{
 		schedule::{
@@ -414,6 +415,15 @@ pub mod pallet {
 		BadStatus,
 		/// The preimage does not exist.
 		PreimageNotExist,
+	}
+
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), sp_runtime::TryRuntimeError> {
+			Self::do_try_state()?;
+			Ok(())
+		}
 	}
 
 	#[pallet::call]
@@ -1032,7 +1042,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - If it's ready to be decided, start deciding;
 	/// - If it's not ready to be decided and non-deciding timeout has passed, fail;
 	/// - If it's ongoing and passing, ensure confirming; if at end of confirmation period, pass.
-	/// - If it's ongoing and not passing, stop confirning; if it has reached end time, fail.
+	/// - If it's ongoing and not passing, stop confirming; if it has reached end time, fail.
 	///
 	/// Weight will be a bit different depending on what it does, but it's designed so as not to
 	/// differ dramatically, especially if `MaxQueue` is kept small. In particular _there are no
@@ -1283,5 +1293,88 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(hash) = MetadataOf::<T, I>::take(index) {
 			Self::deposit_event(Event::<T, I>::MetadataCleared { index, hash });
 		}
+	}
+
+	/// Ensure the correctness of the state of this pallet.
+	///
+	/// The following assertions must always apply.
+	///
+	/// General assertions:
+	///
+	/// * [`ReferendumCount`] must always be equal to the number of referenda in
+	///   [`ReferendumInfoFor`].
+	/// * Referendum indices in [`MetadataOf`] must also be stored in [`ReferendumInfoFor`].
+	#[cfg(any(feature = "try-runtime", test))]
+	fn do_try_state() -> Result<(), sp_runtime::TryRuntimeError> {
+		ensure!(
+			ReferendumCount::<T, I>::get() as usize ==
+				ReferendumInfoFor::<T, I>::iter_keys().count(),
+			"Number of referenda in `ReferendumInfoFor` is different than `ReferendumCount`"
+		);
+
+		MetadataOf::<T, I>::iter_keys().try_for_each(|referendum_index| -> DispatchResult {
+			ensure!(
+				ReferendumInfoFor::<T, I>::contains_key(referendum_index),
+				"Referendum indices in `MetadataOf` must also be stored in `ReferendumInfoOf`"
+			);
+			Ok(())
+		})?;
+
+		Self::try_state_referenda_info()?;
+		Self::try_state_tracks()?;
+
+		Ok(())
+	}
+
+	/// Looking at referenda info:
+	///
+	/// - Data regarding ongoing phase:
+	///
+	/// * There must exist track info for the track of the referendum.
+	/// * The deciding stage has to begin before confirmation period.
+	/// * If alarm is set the nudge call has to be at most [`UndecidingTimeout`] blocks away
+	///  from the submission block.
+	#[cfg(any(feature = "try-runtime", test))]
+	fn try_state_referenda_info() -> Result<(), sp_runtime::TryRuntimeError> {
+		ReferendumInfoFor::<T, I>::iter().try_for_each(|(_, referendum)| {
+			match referendum {
+				ReferendumInfo::Ongoing(status) => {
+					ensure!(
+						Self::track(status.track).is_some(),
+						"No track info for the track of the referendum."
+					);
+
+					if let Some(deciding) = status.deciding {
+						ensure!(
+							deciding.since <
+								deciding.confirming.unwrap_or(BlockNumberFor::<T>::max_value()),
+							"Deciding status cannot begin before confirming stage."
+						)
+					}
+				},
+				_ => {},
+			}
+			Ok(())
+		})
+	}
+
+	/// Looking at tracks:
+	///
+	/// * The referendum indices stored in [`TrackQueue`] must exist as keys in the
+	///  [`ReferendumInfoFor`] storage map.
+	#[cfg(any(feature = "try-runtime", test))]
+	fn try_state_tracks() -> Result<(), sp_runtime::TryRuntimeError> {
+		T::Tracks::tracks().iter().try_for_each(|track| {
+			TrackQueue::<T, I>::get(track.0).iter().try_for_each(
+				|(referendum_index, _)| -> Result<(), sp_runtime::TryRuntimeError> {
+					ensure!(
+					ReferendumInfoFor::<T, I>::contains_key(referendum_index),
+					"`ReferendumIndex` inside the `TrackQueue` should be a key in `ReferendumInfoFor`"
+				);
+					Ok(())
+				},
+			)?;
+			Ok(())
+		})
 	}
 }
