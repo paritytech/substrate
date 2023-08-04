@@ -759,7 +759,11 @@ where
 		match info.class {
 			DispatchClass::Normal => {
 				// For normal class we simply take the `tip_per_weight`.
-				scaled_tip
+				let fee_n_multiplier = T::OperationalFeeMultiplier::get()
+							.saturated_into::<BalanceOf<T>>().saturating_mul(final_fee); 
+				// Taking into account extrinsic fee 
+				// final_tip = multiplier * final_fee + scaled_tip
+				scaled_tip.saturating_add(fee_n_multiplier)
 			},
 			DispatchClass::Mandatory => {
 				// Mandatory extrinsics should be prohibited (e.g. by the [`CheckWeight`]
