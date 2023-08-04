@@ -5431,7 +5431,6 @@ fn add_remove_delegate_dependency_works() {
 
 		// There should be a dependency and a deposit.
 		let contract = test_utils::get_contract(&addr_caller);
-		let info_deposit = test_utils::contract_info_storage_deposit(&addr_caller);
 
 		let dependency_deposit = &CodeHashLockupDepositPercent::get().mul_ceil(deposit);
 		assert_eq!(contract.delegate_dependencies().get(&code_hash), Some(dependency_deposit));
@@ -5440,7 +5439,7 @@ fn add_remove_delegate_dependency_works() {
 				&HoldReason::StorageDepositReserve.into(),
 				&addr_caller
 			),
-			dependency_deposit + info_deposit
+			dependency_deposit + contract.storage_base_deposit() - ED
 		);
 
 		// Removing the code should fail, since we have added a dependency.
@@ -5479,7 +5478,7 @@ fn add_remove_delegate_dependency_works() {
 				&HoldReason::StorageDepositReserve.into(),
 				&addr_caller
 			),
-			info_deposit
+			contract.storage_base_deposit() - ED
 		);
 
 		// Removing an unexisting dependency should fail.
