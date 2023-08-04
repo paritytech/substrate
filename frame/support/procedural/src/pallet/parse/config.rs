@@ -62,7 +62,8 @@ pub struct ConfigDef {
 	/// no trait items
 	///
 	/// A bool for each sub-trait item indicates whether the item has `#[pallet::no_bounds]`
-	/// attached to it. If true, the item will not any bounds in the generated default sub-trait.
+	/// attached to it. If true, the item will not have any bounds in the generated default
+	/// sub-trait.
 	pub default_sub_trait: Vec<(syn::TraitItem, bool)>,
 }
 

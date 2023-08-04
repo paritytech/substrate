@@ -27,7 +27,6 @@ use syn::{
 };
 
 mod keyword {
-	syn::custom_keyword!(pallet);
 	syn::custom_keyword!(verbatim);
 }
 
