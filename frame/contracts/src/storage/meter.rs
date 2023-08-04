@@ -461,19 +461,6 @@ where
 
 		E::charge(origin, contract, &deposit.saturating_sub(&Deposit::Charge(ed)), false)?;
 
-		// TODO: should the `ed` be transferred back to the origin in case the charge fails?
-		// .map_err(|e| {
-		// 	let _ = T::Currency::transfer(
-		// 		contract,
-		// 		origin,
-		// 		transferred_ed,
-		// 		Preservation::Expendable,
-		// 	)
-		// 	.map_err(|e| e);
-		// 	System::<T>::dec_consumers(contract);
-		// 	e
-		// });
-
 		Ok(deposit)
 	}
 
@@ -568,12 +555,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 					Precision::Exact,
 					Preservation::Preserve,
 					Fortitude::Polite,
-				)
-				.map_err(|e| {
-					// TODO: handle partial mutation rollback
-					let _ = System::<T>::dec_providers(contract);
-					e
-				})?;
+				)?;
 
 				Pallet::<T>::deposit_event(
 					vec![T::Hashing::hash_of(&origin), T::Hashing::hash_of(&contract)],
@@ -594,7 +576,6 @@ impl<T: Config> Ext<T> for ReservingExt {
 					Restriction::Free,
 					Fortitude::Polite,
 				)?;
-				// TODO: handle partial mutation rollback
 
 				Pallet::<T>::deposit_event(
 					vec![T::Hashing::hash_of(&contract), T::Hashing::hash_of(&origin)],
