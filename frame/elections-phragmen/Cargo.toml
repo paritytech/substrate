@@ -52,6 +52,9 @@ std = [
 	"sp-staking/std",
 	"sp-tracing/std"
 ]
+# Disable hooks that would be automatically called by the runtime.
+# Useful for migrating from Gov V1 to V2.
+disable-hooks = []
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",

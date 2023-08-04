@@ -66,3 +66,6 @@ try-runtime = [
 	"pallet-scheduler/try-runtime",
 	"sp-runtime/try-runtime"
 ]
+# Disable hooks that would be automatically called by the runtime.
+# Useful for migrating from Gov V1 to V2.
+disable-hooks = []

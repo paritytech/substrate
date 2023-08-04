@@ -157,17 +157,15 @@ use frame_support::{
 	ensure,
 	error::BadOrigin,
 	traits::{
-		defensive_prelude::*,
-		schedule::{v3::Named as ScheduleNamed, DispatchTime},
-		Bounded, Currency, EnsureOrigin, Get, Hash as PreimageHash, LockIdentifier,
-		LockableCurrency, OnUnbalanced, QueryPreimage, ReservableCurrency, StorePreimage,
-		WithdrawReasons,
+		schedule::v3::Named as ScheduleNamed, Bounded, Currency, EnsureOrigin, Get,
+		Hash as PreimageHash, LockIdentifier, LockableCurrency, OnUnbalanced, QueryPreimage,
+		ReservableCurrency, StorePreimage, WithdrawReasons,
 	},
 	weights::Weight,
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 use sp_runtime::{
-	traits::{Bounded as ArithBounded, One, Saturating, StaticLookup, Zero},
+	traits::{Bounded as ArithBounded, Saturating, StaticLookup, Zero},
 	ArithmeticError, DispatchError, DispatchResult,
 };
 use sp_std::prelude::*;
@@ -566,6 +564,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Weight: see `begin_block`
+		#[cfg(not(feature = "disable-hooks"))]
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			Self::begin_block(n)
 		}
@@ -1536,6 +1535,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Table the next waiting proposal for a vote.
+	#[cfg(not(feature = "disable-hooks"))]
 	fn launch_next(now: BlockNumberFor<T>) -> DispatchResult {
 		if LastTabledWasExternal::<T>::take() {
 			Self::launch_public(now).or_else(|_| Self::launch_external(now))
@@ -1546,6 +1546,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Table the waiting external proposal for a vote, if there is one.
+	#[cfg(not(feature = "disable-hooks"))]
 	fn launch_external(now: BlockNumberFor<T>) -> DispatchResult {
 		if let Some((proposal, threshold)) = <NextExternal<T>>::take() {
 			LastTabledWasExternal::<T>::put(true);
@@ -1564,7 +1565,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Table the waiting public proposal with the highest backing for a vote.
+	#[cfg(not(feature = "disable-hooks"))]
 	fn launch_public(now: BlockNumberFor<T>) -> DispatchResult {
+		use frame_support::traits::defensive_prelude::*;
+
 		let mut public_props = Self::public_props();
 		if let Some((winner_index, _)) = public_props.iter().enumerate().max_by_key(
 			// defensive only: All current public proposals have an amount locked
@@ -1596,11 +1600,15 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	#[cfg(not(feature = "disable-hooks"))]
 	fn bake_referendum(
 		now: BlockNumberFor<T>,
 		index: ReferendumIndex,
 		status: ReferendumStatus<BlockNumberFor<T>, BoundedCallOf<T>, BalanceOf<T>>,
 	) -> bool {
+		use frame_support::traits::schedule::DispatchTime;
+		use sp_runtime::traits::One;
+
 		let total_issuance = T::Currency::total_issuance();
 		let approved = status.threshold.approved(status.tally, total_issuance);
 
@@ -1634,6 +1642,7 @@ impl<T: Config> Pallet<T> {
 	/// ## Complexity:
 	/// If a referendum is launched or maturing, this will take full block weight if queue is not
 	/// empty. Otherwise, `O(R)` where `R` is the number of unbaked referenda.
+	#[cfg(not(feature = "disable-hooks"))]
 	fn begin_block(now: BlockNumberFor<T>) -> Weight {
 		let max_block_weight = T::BlockWeights::get().max_block;
 		let mut weight = Weight::zero();

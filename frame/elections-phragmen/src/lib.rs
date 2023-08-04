@@ -286,6 +286,7 @@ pub mod pallet {
 		/// What to do at the end of each block.
 		///
 		/// Checks if an election needs to happen or not.
+		#[cfg(not(feature = "disable-hooks"))]
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let term_duration = T::TermDuration::get();
 			if !term_duration.is_zero() && (n % term_duration).is_zero() {
@@ -295,6 +296,7 @@ pub mod pallet {
 			}
 		}
 
+		#[cfg(not(feature = "disable-hooks"))]
 		fn integrity_test() {
 			let block_weight = T::BlockWeights::get().max_block;
 			// mind the order.
