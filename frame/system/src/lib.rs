@@ -676,32 +676,32 @@ pub mod pallet {
 		}
 	}
 
-	// #[pallet::validate_unsigned]
-	// impl<T: Config> ValidateUnsigned for Pallet<T> {
-	// 	type Call = Call<T>;
+	// 	#[pallet::validate_unsigned]
+	// 	impl<T: Config> ValidateUnsigned for Pallet<T> {
+	// 		type Call = Call<T>;
 
-	// 	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-	// 		if let Call::do_task(task) = call {
-	// 			if task.is_valid() {
-	// 				// Specify the task priority here. The priority is used to order transactions
-	// 				// which are included in the same block. For simplicity, all tasks here are
-	// 				// given the same priority. You may want to refine this to assign different
-	// 				// priorities to different tasks.
-	// 				Ok(ValidTransaction {
-	// 					priority: 0,
-	// 					requires: vec![],
-	// 					provides: vec![],
-	// 					longevity: TransactionLongevity::max_value(),
-	// 					propagate: true,
-	// 				})
+	// 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+	// 			if let Call::do_task(task) = call {
+	// 				if task.is_valid() {
+	// 					// Specify the task priority here. The priority is used to order transactions
+	// 					// which are included in the same block. For simplicity, all tasks here are
+	// 					// given the same priority. You may want to refine this to assign different
+	// 					// priorities to different tasks.
+	// 					Ok(ValidTransaction {
+	// 						priority: 0,
+	// 						requires: vec![],
+	// 						provides: vec![],
+	// 						longevity: TransactionLongevity::max_value(),
+	// 						propagate: true,
+	// 					})
+	// 				} else {
+	// 					Err(InvalidTransaction::Stale.into())
+	// 				}
 	// 			} else {
-	// 				Err(InvalidTransaction::Stale.into())
+	// 				Err(InvalidTransaction::Call.into())
 	// 			}
-	// 		} else {
-	// 			Err(InvalidTransaction::Call.into())
 	// 		}
 	// 	}
-	// }
 }
 
 pub type Key = Vec<u8>;

@@ -49,7 +49,19 @@ pub mod pallet {
 		}
 	}
 
-	// this can be auto-generated from the macros
+	// we can automatically inject `InvalidTask` into an existing Error enum by finding it via
+	// visitor pattern, otherwise we can just emit an error enum containing just our
+	// `InvalidTask` variant. Alternatively we could just expect that `InvalidTask` is included
+	// in the error enum, by convention, or we could use something like
+	// `InvalidTransaction::Custom(1u8)` but this seems bad to me.
+	#[pallet::error]
+	pub enum Error<T> {
+		InvalidTask,
+		ValueOverflow,
+		ValueUnderflow,
+	}
+
+	// this will be auto-generated from `#[pallet::tasks]`
 	impl<T: Config> frame_support::traits::Task for Task<T>
 	where
 		T: TypeInfo,
@@ -74,22 +86,31 @@ pub mod pallet {
 		fn run(&self) -> Result<(), DispatchError> {
 			match self {
 				Task::Increment => {
-					// Increment the value and emit an event
-					let new_val =
-						Value::<T>::get().unwrap().checked_add(1).ok_or("Value overflow")?;
-					Value::<T>::put(new_val);
-					Pallet::<T>::deposit_event(Event::Incremented { new_val });
+					// Get the value and check if it can be incremented
+					let value = Value::<T>::get().unwrap_or_default();
+					if value >= 255 {
+						Err(Error::<T>::ValueOverflow.into())
+					} else {
+						let new_val = value.checked_add(1).ok_or(Error::<T>::ValueOverflow)?;
+						Value::<T>::put(new_val);
+						Pallet::<T>::deposit_event(Event::Incremented { new_val });
+						Ok(())
+					}
 				},
 				Task::Decrement => {
-					// Decrement the value and emit an event
-					let new_val =
-						Value::<T>::get().unwrap().checked_sub(1).ok_or("Value underflow")?;
-					Value::<T>::put(new_val);
-					Pallet::<T>::deposit_event(Event::Decremented { new_val });
+					// Get the value and check if it can be decremented
+					let value = Value::<T>::get().unwrap_or_default();
+					if value == 0 {
+						Err(Error::<T>::ValueUnderflow.into())
+					} else {
+						let new_val = value.checked_sub(1).ok_or(Error::<T>::ValueUnderflow)?;
+						Value::<T>::put(new_val);
+						Pallet::<T>::deposit_event(Event::Decremented { new_val });
+						Ok(())
+					}
 				},
 				Task::__Ignore(_, _) => unreachable!(),
 			}
-			Ok(())
 		}
 	}
 
@@ -137,10 +158,9 @@ pub mod pallet {
 			use frame_support::traits::Task;
 			ensure_root(origin)?;
 			if task.is_valid() {
-				task.run()?;
-				Ok(())
+				task.run()
 			} else {
-				Err(DispatchError::Other("Invalid task"))
+				Err(Error::<T>::InvalidTask.into())
 			}
 		}
 	}
