@@ -19,6 +19,7 @@ use super::*;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+use frame_support::traits::fungibles::Credit;
 use sp_std::{cmp::Ordering, marker::PhantomData};
 
 pub(super) type PoolIdOf<T> = (<T as Config>::MultiAssetId, <T as Config>::MultiAssetId);
@@ -97,6 +98,12 @@ pub trait Swap<AccountId, Balance, MultiAssetId> {
 		send_to: AccountId,
 		keep_alive: bool,
 	) -> Result<Balance, DispatchError>;
+
+	fn swap_exact_tokens_for_tokens_credit(
+		path: Vec<MultiAssetId>,
+		amount_in: Credit<AccountId, Balance>,
+		amount_out_min: Option<Balance>,
+	) -> Result<Credit<AccountId, Balance>, DispatchError>;
 
 	/// Take the `path[0]` asset and swap some amount for `amount_out` of the `path[1]`. If an
 	/// `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
