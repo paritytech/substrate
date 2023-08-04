@@ -25,6 +25,7 @@ pub mod keywords {
 	use syn::custom_keyword;
 
 	custom_keyword!(tasks);
+	custom_keyword!(task_list);
 	custom_keyword!(condition);
 	custom_keyword!(task_index);
 	custom_keyword!(pallet);
@@ -32,9 +33,9 @@ pub mod keywords {
 
 #[derive(Parse)]
 pub enum TaskAttrType {
-	#[peek(keywords::tasks, name = "#[pallet::tasks(..)]")]
-	Tasks {
-		_tasks: keywords::tasks,
+	#[peek(keywords::task_list, name = "#[pallet::task_list(..)]")]
+	TaskList {
+		_tasks: keywords::task_list,
 		#[paren]
 		_paren: Paren,
 		#[inside(_paren)]
@@ -62,6 +63,7 @@ pub enum TaskAttrType {
 		#[inside(_paren)]
 		expr: Expr,
 	},
+	// TODO: Tasks
 }
 
 #[derive(Parse)]
@@ -84,11 +86,11 @@ use syn::parse2;
 use quote::quote;
 
 #[test]
-fn test_parse_pallet_tasks() {
-	parse2::<PalletTaskAttr>(quote!(#[pallet::tasks(Something::iter())])).unwrap();
-	assert!(parse2::<PalletTaskAttr>(quote!(#[pallet::tasks()])).is_err());
-	assert!(parse2::<PalletTaskAttr>(quote!(#[pallet::task(iter())])).is_err());
-	assert!(parse2::<PalletTaskAttr>(quote!(#[pallet::tasks])).is_err());
+fn test_parse_pallet_task_list_() {
+	parse2::<PalletTaskAttr>(quote!(#[pallet::task_list(Something::iter())])).unwrap();
+	assert!(parse2::<PalletTaskAttr>(quote!(#[pallet::task_list()])).is_err());
+	assert!(parse2::<PalletTaskAttr>(quote!(#[pallet::tasks_list(iter())])).is_err());
+	assert!(parse2::<PalletTaskAttr>(quote!(#[pallet::task_list])).is_err());
 }
 
 #[test]
