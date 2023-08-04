@@ -74,8 +74,7 @@ use sp_runtime::{
 		AtLeast32BitUnsigned, Bounded, Convert, MaybeSerializeDeserialize, One, Saturating,
 		StaticLookup, Zero,
 	},
-	SaturatedConversion,
-	RuntimeDebug,
+	RuntimeDebug, SaturatedConversion,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
@@ -246,7 +245,6 @@ pub mod pallet {
 				let locked = balance.saturating_sub(liquid);
 				let length_as_balance = T::BlockNumberToBalance::convert(length);
 				let per_block = locked / length_as_balance.max(sp_runtime::traits::One::one());
-				println!("{:?}", per_block);
 				let vesting_info = VestingInfo::new(locked, per_block, begin);
 				if !vesting_info.is_valid() {
 					panic!("Invalid VestingInfo params at genesis")
@@ -418,7 +416,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			if schedule1_index == schedule2_index {
-				return Ok(());
+				return Ok(())
 			};
 			let schedule1_index = schedule1_index as usize;
 			let schedule2_index = schedule2_index as usize;
@@ -496,7 +494,7 @@ impl<T: Config> Pallet<T> {
 		// Validate user inputs.
 		ensure!(schedule.locked() >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
 		if !schedule.is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into());
+			return Err(Error::<T>::InvalidScheduleParams.into())
 		};
 		let target = T::Lookup::lookup(target)?;
 		let source = T::Lookup::lookup(source)?;
@@ -644,8 +642,8 @@ impl<T: Config> Pallet<T> {
 		};
 
 		debug_assert!(
-			locked_now > Zero::zero() && schedules.len() > 0
-				|| locked_now == Zero::zero() && schedules.len() == 0
+			locked_now > Zero::zero() && schedules.len() > 0 ||
+				locked_now == Zero::zero() && schedules.len() == 0
 		);
 
 		Ok((schedules, locked_now))
@@ -659,17 +657,21 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Before schedules begin:
 	/// * the locked amount(`still_vesting`) of a vesting schedule must be equal to the
-	/// product of the duration(`schedules_left` - `starting_block`) and the per block amount when the locked
-	/// amount is divisible by the per block amount.
-	/// * However, If the locked amount is not divisible by the per block amount, the remainder (`locked` % `per_block`) 
-	/// should be less than the per block amount and at the final vesting block (`schedules_left` - 1), 
-	/// the vesting balance should be equal to the remainder.
+	/// product of the duration(`schedules_left` - `starting_block`) and the per block amount when
+	/// the locked amount is divisible by the per block amount.
+	/// * However, If the locked amount is not divisible by the per block amount, the remainder
+	///   (`locked` % `per_block`)
+	/// should be less than the per block amount and at the final vesting block (`schedules_left` -
+	/// 1), the vesting balance should be equal to the remainder.
 	///
 	/// During schedule timeframe:
-	/// * the amount `still_vesting` must be equal to the product of the remaining blocks to vest(`schedules_left` - `current_block`) 
+	/// * the amount `still_vesting` must be equal to the product of the remaining blocks to
+	///   vest(`schedules_left` - `current_block`)
 	/// and per block amount when the locked amount is divisible by the per block amount.
-	/// * However, If the locked amount is not divisible by the per block amount, then at the final vesting block of the 
-	/// current schedule (`schedules_left` - 1), the vesting balance should be equal to the remainder.
+	/// * However, If the locked amount is not divisible by the per block amount, then at the final
+	///   vesting block of the
+	/// current schedule (`schedules_left` - 1), the vesting balance should be equal to the
+	/// remainder.
 	#[cfg(any(feature = "try-runtime", test))]
 	pub fn do_try_state() -> Result<(), sp_runtime::TryRuntimeError> {
 		Vesting::<T>::iter().for_each(|(_, d)| {
@@ -767,13 +769,13 @@ where
 		starting_block: BlockNumberFor<T>,
 	) -> DispatchResult {
 		if locked.is_zero() {
-			return Ok(());
+			return Ok(())
 		}
 
 		let vesting_schedule = VestingInfo::new(locked, per_block, starting_block);
 		// Check for `per_block` or `locked` of 0.
 		if !vesting_schedule.is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into());
+			return Err(Error::<T>::InvalidScheduleParams.into())
 		};
 
 		let mut schedules = Self::vesting(who).unwrap_or_default();
@@ -801,7 +803,7 @@ where
 	) -> DispatchResult {
 		// Check for `per_block` or `locked` of 0.
 		if !VestingInfo::new(locked, per_block, starting_block).is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into());
+			return Err(Error::<T>::InvalidScheduleParams.into())
 		}
 
 		ensure!(

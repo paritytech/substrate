@@ -254,8 +254,8 @@ pub mod pallet {
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
 			ensure!(!Tips::<T, I>::contains_key(&hash), Error::<T, I>::AlreadyKnown);
 
-			let deposit = T::TipReportDepositBase::get()
-				+ T::DataDepositPerByte::get() * (reason.len() as u32).into();
+			let deposit = T::TipReportDepositBase::get() +
+				T::DataDepositPerByte::get() * (reason.len() as u32).into();
 			T::Currency::reserve(&finder, deposit)?;
 
 			Reasons::<T, I>::insert(&reason_hash, &reason);
@@ -457,7 +457,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
 			Self::do_try_state()
 		}
 	}
@@ -509,9 +509,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Some(m) => {
 					member = members_iter.next();
 					if m < a {
-						continue;
+						continue
 					} else {
-						break true;
+						break true
 					}
 				},
 			}

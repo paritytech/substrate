@@ -700,7 +700,8 @@ fn merge_ongoing_schedules() {
 		let sched2 = VestingInfo::new(sched2_locked, sched2_per_block, cur_block);
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched2]);
 
-		// And just to double check, we assert the new merged schedule will be cleaned up as expected.
+		// And just to double check, we assert the new merged schedule will be cleaned up as
+		// expected.
 		System::set_block_number(30);
 		assert_ok!(Vesting::do_try_state());
 		vest_and_assert_no_vesting::<Test>(2);
@@ -1187,16 +1188,16 @@ fn vested_transfer_less_than_existential_deposit_fails() {
 	ExtBuilder::default().existential_deposit(4 * ED).build().execute_with(|| {
 		// MinVestedTransfer is less the ED.
 		assert!(
-			<Test as Config>::Currency::minimum_balance()
-				> <Test as Config>::MinVestedTransfer::get()
+			<Test as Config>::Currency::minimum_balance() >
+				<Test as Config>::MinVestedTransfer::get()
 		);
 
 		let sched =
 			VestingInfo::new(<Test as Config>::MinVestedTransfer::get() as u64, 1u64, 10u64);
 		// The new account balance with the schedule's locked amount would be less than ED.
 		assert!(
-			Balances::free_balance(&99) + sched.locked()
-				< <Test as Config>::Currency::minimum_balance()
+			Balances::free_balance(&99) + sched.locked() <
+				<Test as Config>::Currency::minimum_balance()
 		);
 
 		// vested_transfer fails.
