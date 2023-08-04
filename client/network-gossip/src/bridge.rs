@@ -208,7 +208,15 @@ impl<B: BlockT> Future for GossipEngine<B> {
 								);
 								let _ = result_tx.send(ValidationResult::Accept);
 							},
-							NotificationEvent::NotificationStreamOpened { peer, role, .. } => {
+							NotificationEvent::NotificationStreamOpened {
+								peer, handshake, ..
+							} => {
+								log::debug!(target: "gossip", "handshake {handshake:?}");
+								let Some(role) = this.network.peer_role(peer, handshake) else {
+									log::debug!(target: "gossip", "role for {peer} couldn't be determined");
+									continue
+								};
+
 								this.state_machine.new_peer(&mut *this.network, peer, role);
 							},
 							NotificationEvent::NotificationStreamClosed { peer } => {
@@ -326,6 +334,7 @@ impl<B: BlockT> futures::future::FusedFuture for GossipEngine<B> {
 mod tests {
 	use super::*;
 	use crate::{ValidationResult, ValidatorContext};
+	use codec::{DecodeAll, Encode};
 	use futures::{
 		channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
 		executor::{block_on, block_on_stream},
@@ -338,7 +347,7 @@ mod tests {
 		service::traits::{MessageSink, NotificationEvent},
 		Event, NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 		NotificationSenderError, NotificationSenderT as NotificationSender, NotificationService,
-		NotificationsSink,
+		NotificationsSink, Roles,
 	};
 	use sc_network_common::{role::ObservedRole, sync::SyncEventStream};
 	use sp_runtime::{
@@ -418,6 +427,12 @@ mod tests {
 
 		fn sync_num_connected(&self) -> usize {
 			unimplemented!();
+		}
+
+		fn peer_role(&self, _peer_id: PeerId, handshake: Vec<u8>) -> Option<ObservedRole> {
+			Roles::decode_all(&mut &handshake[..])
+				.ok()
+				.and_then(|role| Some(ObservedRole::from(role)))
 		}
 	}
 
@@ -548,7 +563,7 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn message_sink(&self, peer: &PeerId) -> Option<Box<dyn MessageSink>> {
+		fn message_sink(&self, _peer: &PeerId) -> Option<Box<dyn MessageSink>> {
 			unimplemented!();
 		}
 	}
@@ -620,9 +635,8 @@ mod tests {
 		// Register the remote peer.
 		tx.send(NotificationEvent::NotificationStreamOpened {
 			peer: remote_peer,
-			role: ObservedRole::Authority,
 			negotiated_fallback: None,
-			handshake: vec![1, 3, 3, 7],
+			handshake: Roles::FULL.encode(),
 		})
 		.await
 		.unwrap();
@@ -783,9 +797,8 @@ mod tests {
 			// Register the remote peer.
 			tx.start_send(NotificationEvent::NotificationStreamOpened {
 				peer: remote_peer,
-				role: ObservedRole::Authority,
 				negotiated_fallback: None,
-				handshake: vec![1, 3, 3, 7],
+				handshake: Roles::FULL.encode(),
 			})
 			.unwrap();
 

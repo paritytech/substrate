@@ -54,7 +54,7 @@ impl PeerStoreProvider for MockPeerStore {
 		None
 	}
 
-	fn set_peer_role(&mut self, peer_id: &PeerId, role: ObservedRole) {
+	fn set_peer_role(&mut self, _peer_id: &PeerId, _role: ObservedRole) {
 		unimplemented!();
 	}
 

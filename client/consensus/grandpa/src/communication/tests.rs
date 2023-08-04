@@ -24,7 +24,7 @@ use super::{
 };
 use crate::{communication::grandpa_protocol_name, environment::SharedVoterSetState};
 use futures::prelude::*;
-use parity_scale_codec::Encode;
+use parity_scale_codec::{DecodeAll, Encode};
 use sc_network::{
 	config::{MultiaddrWithPeerId, Role},
 	event::Event as NetworkEvent,
@@ -32,10 +32,10 @@ use sc_network::{
 	types::ProtocolName,
 	Multiaddr, NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 	NetworkSyncForkRequest, NotificationSenderError, NotificationSenderT as NotificationSender,
-	NotificationsSink, PeerId, ReputationChange,
+	PeerId, ReputationChange,
 };
 use sc_network_common::{
-	role::ObservedRole,
+	role::{ObservedRole, Roles},
 	sync::{SyncEvent as SyncStreamEvent, SyncEventStream},
 };
 use sc_network_gossip::Validator;
@@ -125,6 +125,12 @@ impl NetworkPeers for TestNetwork {
 
 	fn sync_num_connected(&self) -> usize {
 		unimplemented!();
+	}
+
+	fn peer_role(&self, _peer_id: PeerId, handshake: Vec<u8>) -> Option<ObservedRole> {
+		Roles::decode_all(&mut &handshake[..])
+			.ok()
+			.and_then(|role| Some(ObservedRole::from(role)))
 	}
 }
 
@@ -264,7 +270,7 @@ impl NotificationService for TestNotificationService {
 		unimplemented!();
 	}
 
-	fn message_sink(&self, peer: &PeerId) -> Option<Box<dyn MessageSink>> {
+	fn message_sink(&self, _peer: &PeerId) -> Option<Box<dyn MessageSink>> {
 		unimplemented!();
 	}
 }
@@ -466,9 +472,8 @@ fn good_commit_leads_to_relay() {
 				let _ = tester.notification_tx.unbounded_send(
 					NotificationEvent::NotificationStreamOpened {
 						peer: sender_id,
-						role: ObservedRole::Full,
 						negotiated_fallback: None,
-						handshake: vec![1, 3, 3, 7],
+						handshake: Roles::FULL.encode(),
 					},
 				);
 				let _ = tester.notification_tx.unbounded_send(
@@ -483,9 +488,8 @@ fn good_commit_leads_to_relay() {
 				let _ = tester.notification_tx.unbounded_send(
 					NotificationEvent::NotificationStreamOpened {
 						peer: receiver_id,
-						role: ObservedRole::Full,
 						negotiated_fallback: None,
-						handshake: vec![1, 3, 3, 7],
+						handshake: Roles::FULL.encode(),
 					},
 				);
 
@@ -617,9 +621,8 @@ fn bad_commit_leads_to_report() {
 				let _ = tester.notification_tx.unbounded_send(
 					NotificationEvent::NotificationStreamOpened {
 						peer: sender_id,
-						role: ObservedRole::Full,
 						negotiated_fallback: None,
-						handshake: vec![1, 3, 3, 7],
+						handshake: Roles::FULL.encode(),
 					},
 				);
 				let _ = tester.notification_tx.unbounded_send(

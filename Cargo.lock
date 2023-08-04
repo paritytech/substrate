@@ -9270,6 +9270,7 @@ dependencies = [
  "libp2p-identity",
  "log",
  "multiaddr",
+ "parity-scale-codec",
  "quickcheck",
  "sc-network",
  "sc-network-common",

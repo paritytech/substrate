@@ -41,6 +41,18 @@ impl ObservedRole {
 	}
 }
 
+impl From<Roles> for ObservedRole {
+	fn from(roles: Roles) -> Self {
+		if roles.is_authority() {
+			ObservedRole::Authority
+		} else if roles.is_full() {
+			ObservedRole::Full
+		} else {
+			ObservedRole::Light
+		}
+	}
+}
+
 /// Role of the local node.
 #[derive(Debug, Clone)]
 pub enum Role {

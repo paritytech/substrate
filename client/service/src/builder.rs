@@ -889,7 +889,8 @@ where
 		block_request_protocol_name,
 		state_request_protocol_name,
 		warp_request_protocol_name,
-		rx,
+		rx, // TODO(aaro): remove
+		peer_store_handle.clone(),
 	)?;
 	let sync_service_import_queue = sync_service.clone();
 	let sync_service = Arc::new(sync_service);

@@ -324,7 +324,12 @@ where
 			NotificationEvent::ValidateInboundSubstream { result_tx, .. } => {
 				let _ = result_tx.send(ValidationResult::Accept);
 			},
-			NotificationEvent::NotificationStreamOpened { peer, role, .. } => {
+			NotificationEvent::NotificationStreamOpened { peer, handshake, .. } => {
+				let Some(role) = self.network.peer_role(peer, handshake) else {
+					log::debug!(target: "sub-libp2p", "role for {peer} couldn't be determined");
+					return;
+				};
+
 				let _was_in = self.peers.insert(
 					peer,
 					Peer {

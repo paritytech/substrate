@@ -100,14 +100,14 @@ impl<B: BlockT> Protocol<B> {
 	/// Create a new instance.
 	pub fn new(
 		roles: Roles,
-		network_config: &config::NetworkConfiguration,
+		_network_config: &config::NetworkConfiguration,
 		registry: &Option<Registry>,
 		notification_protocols: Vec<config::NonDefaultSetConfig>,
 		block_announces_protocol: config::NonDefaultSetConfig,
 		peer_store_handle: PeerStoreHandle,
 		protocol_controller_handles: Vec<protocol_controller::ProtocolHandle>,
 		from_protocol_controllers: TracingUnboundedReceiver<protocol_controller::Message>,
-		tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
+		_tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
 	) -> error::Result<Self> {
 		let (behaviour, notification_protocols) = {
 			let installed_protocols = iter::once(block_announces_protocol.protocol_name().clone())

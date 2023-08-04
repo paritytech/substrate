@@ -330,7 +330,9 @@ mod tests {
 	use libp2p::{Multiaddr, PeerId};
 	use sc_block_builder::BlockBuilderProvider as _;
 	use sc_client_api::Backend as _;
-	use sc_network::{config::MultiaddrWithPeerId, types::ProtocolName, ReputationChange};
+	use sc_network::{
+		config::MultiaddrWithPeerId, types::ProtocolName, ObservedRole, ReputationChange,
+	};
 	use sc_transaction_pool::BasicPool;
 	use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 	use sp_consensus::BlockOrigin;
@@ -421,6 +423,10 @@ mod tests {
 
 		fn sync_num_connected(&self) -> usize {
 			unimplemented!();
+		}
+
+		fn peer_role(&self, _peer_id: PeerId, _handshake: Vec<u8>) -> Option<ObservedRole> {
+			None
 		}
 	}
 

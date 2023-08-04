@@ -54,6 +54,7 @@ use crate::{
 	ReputationChange,
 };
 
+use codec::DecodeAll;
 use either::Either;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
@@ -72,7 +73,10 @@ use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 
-use sc_network_common::ExHashT;
+use sc_network_common::{
+	role::{ObservedRole, Roles},
+	ExHashT,
+};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
 
@@ -130,6 +134,8 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	protocol_handles: Vec<protocol_controller::ProtocolHandle>,
 	/// Shortcut to sync protocol handle (`protocol_handles[0]`).
 	sync_protocol_handle: protocol_controller::ProtocolHandle,
+	/// Handle to `PeerStore`.
+	peer_store_handle: PeerStoreHandle,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -516,6 +522,7 @@ where
 			notification_protocol_ids,
 			protocol_handles,
 			sync_protocol_handle,
+			peer_store_handle: params.peer_store.clone(),
 			_marker: PhantomData,
 			_block: Default::default(),
 		});
@@ -978,6 +985,16 @@ where
 
 	fn sync_num_connected(&self) -> usize {
 		self.num_connected.load(Ordering::Relaxed)
+	}
+
+	fn peer_role(&self, peer_id: PeerId, handshake: Vec<u8>) -> Option<ObservedRole> {
+		match Roles::decode_all(&mut &handshake[..]) {
+			Ok(role) => Some(role.into()),
+			Err(_) => {
+				log::debug!(target: "sub-libp2p", "handshake doesn't contain peer role: {handshake:?}");
+				self.peer_store_handle.peer_role(&peer_id)
+			},
+		}
 	}
 }
 

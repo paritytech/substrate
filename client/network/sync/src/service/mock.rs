@@ -27,6 +27,7 @@ use sc_network::{
 	NetworkNotification, NetworkPeers, NetworkRequest, NetworkSyncForkRequest,
 	NotificationSenderError, NotificationSenderT, ReputationChange,
 };
+use sc_network_common::role::ObservedRole;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 use std::collections::HashSet;
@@ -105,6 +106,7 @@ mockall::mock! {
 			peers: Vec<PeerId>
 		) -> Result<(), String>;
 		fn sync_num_connected(&self) -> usize;
+		fn peer_role(&self, peer_id: PeerId, handshake: Vec<u8>) -> Option<ObservedRole>;
 	}
 
 	#[async_trait::async_trait]

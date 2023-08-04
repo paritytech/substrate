@@ -34,7 +34,6 @@ use parking_lot::Mutex;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 
-use sc_network_common::role::ObservedRole;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
@@ -101,9 +100,6 @@ enum InnerNotificationEvent {
 
 		/// Received handshake.
 		handshake: Vec<u8>,
-
-		/// Role of the peer.
-		role: ObservedRole,
 
 		/// Negotiated fallback.
 		negotiated_fallback: Option<ProtocolName>,
@@ -259,7 +255,6 @@ impl NotificationService for NotificationHandle {
 				InnerNotificationEvent::NotificationStreamOpened {
 					peer,
 					handshake,
-					role,
 					negotiated_fallback,
 					sink,
 				} => {
@@ -270,7 +265,6 @@ impl NotificationService for NotificationHandle {
 					return Some(NotificationEvent::NotificationStreamOpened {
 						peer,
 						handshake,
-						role,
 						negotiated_fallback,
 					})
 				},
@@ -281,15 +275,12 @@ impl NotificationService for NotificationHandle {
 				InnerNotificationEvent::NotificationReceived { peer, notification } =>
 					return Some(NotificationEvent::NotificationReceived { peer, notification }),
 				InnerNotificationEvent::NotificationSinkReplaced { peer, sink } => {
-					println!("replace sink");
-
 					match self.peers.get_mut(&peer) {
 						None => log::error!(
 							"{}: notification sink replaced for {peer} but peer does not exist",
 							self.protocol
 						),
 						Some(context) => {
-							println!("done");
 							context.sink = sink.clone();
 							*context.shared_sink.lock() = sink.clone();
 						},
@@ -381,6 +372,7 @@ pub struct ProtocolHandle {
 }
 
 impl ProtocolHandle {
+	/// Create new [`ProtocolHandle`].
 	fn new(protocol: ProtocolName, subscribers: Subscribers) -> Self {
 		Self { protocol, subscribers, num_peers: 0usize, metrics: None }
 	}
@@ -462,7 +454,6 @@ impl ProtocolHandle {
 		&mut self,
 		peer: PeerId,
 		handshake: Vec<u8>,
-		role: ObservedRole,
 		negotiated_fallback: Option<ProtocolName>,
 		sink: NotificationsSink,
 	) -> Result<(), ()> {
@@ -476,7 +467,6 @@ impl ProtocolHandle {
 				.unbounded_send(InnerNotificationEvent::NotificationStreamOpened {
 					peer,
 					handshake: handshake.clone(),
-					role: role.clone(),
 					negotiated_fallback: negotiated_fallback.clone(),
 					sink: sink.clone(),
 				})
@@ -554,6 +544,7 @@ impl ProtocolHandle {
 	}
 
 	/// Get the number of connected peers.
+	// TODO(aaro): remove if possible
 	pub fn num_peers(&self) -> usize {
 		self.num_peers
 	}

@@ -48,8 +48,6 @@ use smallvec::SmallVec;
 use tokio::sync::oneshot::error::RecvError;
 use tokio_stream::StreamMap;
 
-use sc_network_common::role::ObservedRole;
-
 use std::{
 	cmp,
 	collections::{hash_map::Entry, VecDeque},
@@ -1945,8 +1943,6 @@ impl NetworkBehaviour for Notifications {
 									.report_substream_opened(
 										peer_id,
 										received_handshake,
-										ObservedRole::Full, /* TODO(aaro): this needs to be
-										                     * queried from `Peerstore` */
 										negotiated_fallback,
 										notifications_sink.clone(),
 									);

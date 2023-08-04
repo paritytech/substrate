@@ -226,6 +226,14 @@ pub trait NetworkPeers {
 
 	/// Returns the number of peers in the sync peer set we're connected to.
 	fn sync_num_connected(&self) -> usize;
+
+	/// Attempt to get peer role.
+	///
+	/// Right now the peer role is decoded into the received handshake for all protocols
+	/// (`/block-announces/1` has other information as well). If the handshake cannot be
+	/// decoded into a role, the role queried from `PeerStore` and if the role is not stored
+	/// there either, `None` is returned and the peer should be discarded.
+	fn peer_role(&self, peer_id: PeerId, handshake: Vec<u8>) -> Option<ObservedRole>;
 }
 
 // Manual implementation to avoid extra boxing here
@@ -300,6 +308,10 @@ where
 
 	fn sync_num_connected(&self) -> usize {
 		T::sync_num_connected(self)
+	}
+
+	fn peer_role(&self, peer_id: PeerId, handshake: Vec<u8>) -> Option<ObservedRole> {
+		T::peer_role(self, peer_id, handshake)
 	}
 }
 
@@ -650,9 +662,6 @@ pub enum NotificationEvent {
 
 		/// Received handshake.
 		handshake: Vec<u8>,
-
-		/// Role of the peer.
-		role: ObservedRole,
 
 		/// Negotiated fallback.
 		negotiated_fallback: Option<ProtocolName>,

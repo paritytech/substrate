@@ -37,6 +37,7 @@ use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::ImportQueueService;
 use sc_network::{
 	config::{FullNetworkConfiguration, NonDefaultSetConfig, ProtocolId},
+	peer_store::{PeerStoreHandle, PeerStoreProvider},
 	service::traits::{NotificationEvent, ValidationResult},
 	types::ProtocolName,
 	utils::LruHashSet,
@@ -266,6 +267,9 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	/// Stored as an `Option<Instant>` so once the initial wait has passed, `SyncingEngine`
 	/// can reset the peer timers and continue with the normal eviction process.
 	syncing_started: Option<Instant>,
+
+	/// Handle to `PeerStore`.
+	peer_store_handle: PeerStoreHandle,
 }
 
 impl<B: BlockT, Client> SyncingEngine<B, Client>
@@ -294,6 +298,7 @@ where
 		state_request_protocol_name: ProtocolName,
 		warp_sync_protocol_name: Option<ProtocolName>,
 		_rx: sc_utils::mpsc::TracingUnboundedReceiver<sc_network::SyncEvent<B>>,
+		peer_store_handle: PeerStoreHandle,
 	) -> Result<(Self, SyncingService<B>, NonDefaultSetConfig), ClientError> {
 		let mode = net_config.network_config.sync_mode;
 		let max_parallel_downloads = net_config.network_config.max_parallel_downloads;
@@ -413,6 +418,7 @@ where
 				notification_service,
 				tick_timeout: Delay::new(TICK_TIMEOUT),
 				syncing_started: None,
+				peer_store_handle,
 				metrics: if let Some(r) = metrics_registry {
 					match Metrics::register(r, is_major_syncing.clone()) {
 						Ok(metrics) => Some(metrics),
@@ -1026,6 +1032,7 @@ where
 		log::debug!(target: LOG_TARGET, "connected {}", who);
 
 		self.peers.insert(who, peer);
+		self.peer_store_handle.set_peer_role(&who, status.roles.into());
 
 		if no_slot_peer {
 			self.default_peers_set_no_slot_connected_peers.insert(who);

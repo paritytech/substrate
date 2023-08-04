@@ -651,6 +651,10 @@ mod tests {
 		fn sync_num_connected(&self) -> usize {
 			unimplemented!();
 		}
+
+		fn peer_role(&self, _peer_id: PeerId, _handshake: Vec<u8>) -> Option<ObservedRole> {
+			None
+		}
 	}
 
 	impl NetworkEventStream for NoOpNetwork {
