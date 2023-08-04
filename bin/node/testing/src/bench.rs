@@ -398,7 +398,7 @@ impl BenchDb {
 
 		let client_config = sc_service::ClientConfig::default();
 		let genesis_block_builder = sc_service::GenesisBlockBuilder::new(
-			&keyring.generate_genesis(),
+			keyring.as_storage_builder(),
 			!client_config.no_genesis,
 			backend.clone(),
 			executor.clone(),
@@ -585,12 +585,20 @@ impl BenchKeyring {
 		}
 	}
 
-	/// Generate genesis with accounts from this keyring endowed with some balance.
-	pub fn generate_genesis(&self) -> kitchensink_runtime::RuntimeGenesisConfig {
-		crate::genesis::config_endowed(
-			Some(kitchensink_runtime::wasm_binary_unwrap()),
-			self.collect_account_ids(),
-		)
+	/// Generate genesis with accounts from this keyring endowed with some balance and
+	/// kitchensink_runtime code blob.
+	pub fn as_storage_builder(&self) -> &dyn sp_runtime::BuildStorage {
+		self
+	}
+}
+
+impl sp_runtime::BuildStorage for BenchKeyring {
+	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage) -> Result<(), String> {
+		storage.top.insert(
+			sp_core::storage::well_known_keys::CODE.to_vec(),
+			kitchensink_runtime::wasm_binary_unwrap().into(),
+		);
+		crate::genesis::config_endowed(self.collect_account_ids()).assimilate_storage(storage)
 	}
 }
 

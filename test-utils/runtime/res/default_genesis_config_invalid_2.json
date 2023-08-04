@@ -1,8 +1,20 @@
 {
-  "system": {
-    "code": "0x52"
-  },
-  "babe": {
+  "system": {},
+  "babex": {
+    "authorities": [
+      [
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        1
+      ],
+      [
+        "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        1
+      ],
+      [
+        "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+        1
+      ]
+    ],
     "epochConfig": {
       "c": [
         3,

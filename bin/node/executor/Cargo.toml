@@ -13,18 +13,19 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+log = { version = "0.4.17", default-features = false }
 codec = { package = "parity-scale-codec", version = "3.6.1" }
-scale-info = { version = "2.5.0", features = ["derive"] }
+scale-info = { version = "2.5.0", features = ["derive", "serde"] }
 frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 kitchensink-runtime = { version = "3.0.0-dev", path = "../runtime" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
-sp-core = { version = "21.0.0", path = "../../../primitives/core" }
+sp-core = { version = "21.0.0", path = "../../../primitives/core", features=["serde"] }
 sp-keystore = { version = "0.27.0", path = "../../../primitives/keystore" }
 sp-state-machine = { version = "0.28.0", path = "../../../primitives/state-machine" }
+sp-statement-store = { version = "4.0.0-dev", path = "../../../primitives/statement-store", features=["serde"] }
 sp-tracing = { version = "10.0.0", path = "../../../primitives/tracing" }
 sp-trie = { version = "22.0.0", path = "../../../primitives/trie" }
-sp-statement-store = { version = "4.0.0-dev", path = "../../../primitives/statement-store" }
 
 [dev-dependencies]
 criterion = "0.4.0"

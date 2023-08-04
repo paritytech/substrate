@@ -157,16 +157,23 @@
 //!
 //! // The genesis declaration of the chain.
 //! //
-//! // `runtime`, `raw`, `stateRootHash` denote the type of the genesis declaration.
+//! // `runtime`, `runtimeGenesisConfig`, `runtimeGenesisConfigPatch`, `raw`, `stateRootHash` denote
+//! // the type of the genesis declaration.
 //! //
 //! // These declarations are in the following formats:
 //! // - `runtime` is a `json` object that can be parsed by a compatible `GenesisConfig`. This
 //! //  `GenesisConfig` is declared by a runtime and opaque to the node.
+//! // - `runtimeGenesisConfig` is a json object that can be parsed by compatible runtime. It is a
+//! //    json object the represents full `GenesisConfig` of the runtime. Similar to `runtime`.
+//! // - `runtimeGenesisConfigPatch` is a json object that can be parsed by compatible runtime. It
+//! // contains a patch to default runtime's `GenesisConfig`. It is opaque to the node.
 //! // - `raw` is a `json` object with two fields `top` and `children_default`. Each of these
 //! //   fields is a map of `key => value`. These key/value pairs represent the genesis storage.
 //! // - `stateRootHash` is a single hex encoded hash that represents the genesis hash. The hash
 //! //   type depends on the hash used by the chain.
 //! //
+//! // Runtime must support `GenesisBuilder` API in order to use `runtimeGenesisConfigPatch` or
+//! // `runtimeGenesisConfig`.
 //! "genesis": { "runtime": {} },
 //!
 //! /// Optional map of `block_number` to `wasm_code`.
@@ -189,15 +196,17 @@
 
 mod chain_spec;
 mod extension;
-mod genesis;
+mod genesis_block;
+mod genesis_config_builder;
 
 pub use self::{
-	chain_spec::{ChainSpec as GenericChainSpec, NoExtension},
+	chain_spec::{ChainSpec as GenericChainSpec, ChainSpecBuilder, NoExtension},
 	extension::{get_extension, get_extension_mut, Extension, Fork, Forks, GetExtension, Group},
-	genesis::{
+	genesis_block::{
 		construct_genesis_block, resolve_state_version_from_wasm, BuildGenesisBlock,
 		GenesisBlockBuilder,
 	},
+	genesis_config_builder::GenesisConfigBuilderRuntimeCaller,
 };
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 

@@ -1,0 +1,30 @@
+{
+  "name": "TestName",
+  "id": "test_id",
+  "chainType": "Local",
+  "bootNodes": [],
+  "telemetryEndpoints": null,
+  "protocolId": null,
+  "properties": null,
+  "codeSubstitutes": {},
+  "genesis": {
+    "runtimeGenesisConfigPatch": {
+      "babe": {
+        "epochConfig": {
+          "allowed_slots": "PrimaryAndSecondaryPlainSlots",
+          "c": [
+            7,
+            10
+          ]
+        }
+      },
+      "substrateTest": {
+        "authorities": [
+          "5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL",
+          "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+        ]
+      }
+    }
+  },
+  "code": "0x0"
+}

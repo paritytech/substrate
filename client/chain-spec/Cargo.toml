@@ -13,15 +13,28 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
+json-patch = { version = "1.0.0", default-features = false }
 memmap2 = "0.5.0"
 serde = { version = "1.0.163", features = ["derive"] }
 serde_json = "1.0.85"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-chain-spec-derive = { version = "4.0.0-dev", path = "./derive" }
 sc-executor = { version = "0.10.0-dev", path = "../executor" }
+sc-executor-common = { version = "0.10.0-dev", path = "../../client/executor/common" }
+sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "21.0.0", path = "../../primitives/core" }
+sp-genesis-builder = { version = "0.1.0-dev", path = "../../primitives/genesis-builder" }
 sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }
 sp-state-machine = { version = "0.28.0", path = "../../primitives/state-machine" }
+log = { version = "0.4.17", default-features = false }
+array-bytes = { version = "6.1" } #debug
+
+[dev-dependencies]
+substrate-test-runtime = { path = "../../test-utils/runtime" }
+sp-keyring = { version = "24.0.0", path = "../../primitives/keyring" }
+sp-application-crypto = { version = "23.0.0", default-features = false, path = "../../primitives/application-crypto", features = ["serde"]  }
+sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe", features = ["serde"] }

@@ -1,7 +1,5 @@
 {
-  "system": {
-    "code": "0x52"
-  },
+  "system": {},
   "babe": {
     "authorities": [
       [

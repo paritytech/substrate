@@ -14,8 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
-scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-
+scale-info = { version = "2.5.0", default-features = false, features = ["derive", "serde"] }
 pallet-aura = { version = "4.0.0-dev", default-features = false, path = "../../../frame/aura" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../../frame/balances" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/support" }
@@ -28,16 +27,18 @@ pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, 
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
 sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/block-builder"}
-sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/aura" }
-sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/consensus/grandpa" }
-sp-core = { version = "21.0.0", default-features = false, path = "../../../primitives/core" }
+sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/aura", features = ["serde"] }
+sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/consensus/grandpa", features = ["serde"] }
+sp-core = { version = "21.0.0", default-features = false, path = "../../../primitives/core", features=["serde"] }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/inherents"}
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/offchain" }
-sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime", features = ["serde"] }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
 sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
-sp-version = { version = "22.0.0", default-features = false, path = "../../../primitives/version" }
+sp-version = { version = "22.0.0", default-features = false, path = "../../../primitives/version", features=["serde"] }
+serde_json = { version = "1.0.85", default-features = false, features = ["alloc"] }
+sp-genesis-builder = { version = "0.1.0-dev", default-features = false, path = "../../../primitives/genesis-builder" }
 
 # Used for the node template's RPCs
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
@@ -87,6 +88,8 @@ std = [
 	"sp-transaction-pool/std",
 	"sp-version/std",
 	"substrate-wasm-builder",
+	"serde_json/std",
+	"sp-genesis-builder/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
@@ -115,3 +118,6 @@ try-runtime = [
 	"sp-runtime/try-runtime"
 ]
 experimental = ["pallet-aura/experimental"]
+
+#Enabling this flag will disable GenesisBuilder API implementation in runtime.
+disable-genesis-builder = []

@@ -857,3 +857,20 @@ fn should_import_block_with_test_client() {
 
 	futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 }
+
+#[test]
+fn default_config_as_json_works() {
+	sp_tracing::try_init_simple();
+	let mut t = new_test_ext(compact_code_unwrap());
+	let r = executor_call(&mut t, "GenesisBuilder_create_default_config", &vec![], false)
+		.0
+		.unwrap();
+	let r = Vec::<u8>::decode(&mut &r[..]).unwrap();
+	let json = String::from_utf8(r.into()).expect("returned value is json. qed.");
+	let mut expected = include_str!("res/default_genesis_config.json").to_string();
+
+	//remove "\n":
+	expected.pop();
+
+	assert_eq!(expected, json);
+}

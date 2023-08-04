@@ -20,7 +20,7 @@ codec = { package = "parity-scale-codec", version = "3.6.1", default-features = 
 	"derive",
 	"max-encoded-len",
 ] }
-scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.5.0", default-features = false, features = ["derive", "serde"] }
 static_assertions = "1.1.0"
 log = { version = "0.4.17", default-features = false }
 
@@ -28,23 +28,24 @@ log = { version = "0.4.17", default-features = false }
 primitive-types = { version = "0.12.0", default-features = false, features = ["codec", "scale-info", "num-traits"] }
 
 # primitives
-sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/authority-discovery" }
-sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/babe" }
-sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/consensus/grandpa" }
+sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/authority-discovery", features=["serde"] }
+sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/babe", features=["serde"] }
+sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/consensus/grandpa", features=["serde"]  }
 sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "4.0.0-dev" }
+sp-genesis-builder = { version = "0.1.0-dev", default-features = false, path = "../../../primitives/genesis-builder" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/inherents" }
 node-primitives = { version = "2.0.0", default-features = false, path = "../primitives" }
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/offchain" }
-sp-core = { version = "21.0.0", default-features = false, path = "../../../primitives/core" }
-sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
-sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
-sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
-sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
-sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
-sp-statement-store = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/statement-store" }
-sp-version = { version = "22.0.0", default-features = false, path = "../../../primitives/version" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../../primitives/core", features=["serde"] }
 sp-io = { version = "23.0.0", default-features = false, path = "../../../primitives/io" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime", features=["serde"] }
+sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking", features=["serde"] }
+sp-statement-store = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/statement-store", features=["serde"]  }
+sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
+sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
+sp-version = { version = "22.0.0", default-features = false, path = "../../../primitives/version", features=["serde"] }
 
 # frame dependencies
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }
@@ -127,6 +128,7 @@ pallet-transaction-storage = { version = "4.0.0-dev", default-features = false, 
 pallet-uniques = { version = "4.0.0-dev", default-features = false, path = "../../../frame/uniques" }
 pallet-vesting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/vesting" }
 pallet-whitelist = { version = "4.0.0-dev", default-features = false, path = "../../../frame/whitelist" }
+serde_json = { version = "1.0.85", default-features = false, features = ["alloc", "arbitrary_precision"] }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder", optional = true }
@@ -235,6 +237,7 @@ std = [
 	"pallet-child-bounties/std",
 	"pallet-alliance/std",
 	"substrate-wasm-builder",
+	"sp-genesis-builder/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

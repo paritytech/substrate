@@ -251,18 +251,16 @@ mod tests {
 				trie_cache_maximum_size: None,
 				state_pruning: None,
 				blocks_pruning: sc_client_db::BlocksPruning::KeepAll,
-				chain_spec: Box::new(GenericChainSpec::from_genesis(
-					"test",
-					"test_id",
-					ChainType::Development,
-					|| unimplemented!("Not required in tests"),
-					Vec::new(),
-					None,
-					None,
-					None,
-					None,
-					NoExtension::None,
-				)),
+				chain_spec: Box::new(
+					GenericChainSpec::<()>::builder()
+						.with_name("test")
+						.with_id("test_id")
+						.with_extensions(NoExtension::None)
+						.with_chain_type(ChainType::Development)
+						.with_code(Default::default())
+						.with_genesis_config_patch(Default::default())
+						.build(),
+				),
 				wasm_method: Default::default(),
 				wasm_runtime_overrides: None,
 				rpc_addr: None,

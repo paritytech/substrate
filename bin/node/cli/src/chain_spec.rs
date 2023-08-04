@@ -20,10 +20,7 @@
 
 use grandpa_primitives::AuthorityId as GrandpaId;
 use kitchensink_runtime::{
-	constants::currency::*, wasm_binary_unwrap, BabeConfig, BalancesConfig, Block, CouncilConfig,
-	DemocracyConfig, ElectionsConfig, ImOnlineConfig, IndicesConfig, MaxNominations,
-	NominationPoolsConfig, SessionConfig, SessionKeys, SocietyConfig, StakerStatus, StakingConfig,
-	SudoConfig, SystemConfig, TechnicalCommitteeConfig,
+	constants::currency::*, wasm_binary_unwrap, Block, MaxNominations, SessionKeys, StakerStatus,
 };
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sc_chain_spec::ChainSpecExtension;
@@ -44,6 +41,8 @@ pub use node_primitives::{AccountId, Balance, Signature};
 type AccountPublic = <Signature as Verify>::Signer;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
+const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
+const STASH: Balance = ENDOWMENT / 1000;
 
 /// Node `ChainSpec` extensions.
 ///
@@ -76,7 +75,11 @@ fn session_keys(
 	SessionKeys { grandpa, babe, im_online, authority_discovery }
 }
 
-fn staging_testnet_config_genesis() -> RuntimeGenesisConfig {
+fn configure_accounts_for_staging_testnet() -> (
+	Vec<(AccountId, AccountId, GrandpaId, BabeId, ImOnlineId, AuthorityDiscoveryId)>,
+	AccountId,
+	Vec<AccountId>,
+) {
 	#[rustfmt::skip]
 	// stash, controller, session-key
 	// generated with secret:
@@ -175,28 +178,29 @@ fn staging_testnet_config_genesis() -> RuntimeGenesisConfig {
 	);
 
 	let endowed_accounts: Vec<AccountId> = vec![root_key.clone()];
+	(initial_authorities, root_key, endowed_accounts)
+}
 
+fn staging_testnet_config_genesis() -> serde_json::Value {
+	let (initial_authorities, root_key, endowed_accounts) =
+		configure_accounts_for_staging_testnet();
 	testnet_genesis(initial_authorities, vec![], root_key, Some(endowed_accounts))
 }
 
 /// Staging testnet config.
 pub fn staging_testnet_config() -> ChainSpec {
-	let boot_nodes = vec![];
-	ChainSpec::from_genesis(
-		"Staging Testnet",
-		"staging_testnet",
-		ChainType::Live,
-		staging_testnet_config_genesis,
-		boot_nodes,
-		Some(
+	ChainSpec::builder()
+		.with_name("Staging Testnet")
+		.with_id("staging_testnet")
+		.with_chain_type(ChainType::Live)
+		.with_genesis_config_patch(staging_testnet_config_genesis())
+		.with_telemetry_endpoints(
 			TelemetryEndpoints::new(vec![(STAGING_TELEMETRY_URL.to_string(), 0)])
 				.expect("Staging telemetry url is valid; qed"),
-		),
-		None,
-		None,
-		None,
-		Default::default(),
-	)
+		)
+		.with_extensions(Default::default())
+		.with_code(wasm_binary_unwrap())
+		.build()
 }
 
 /// Helper function to generate a crypto pair from seed
@@ -228,8 +232,7 @@ pub fn authority_keys_from_seed(
 	)
 }
 
-/// Helper function to create RuntimeGenesisConfig for testing
-pub fn testnet_genesis(
+fn configure_accounts(
 	initial_authorities: Vec<(
 		AccountId,
 		AccountId,
@@ -239,9 +242,14 @@ pub fn testnet_genesis(
 		AuthorityDiscoveryId,
 	)>,
 	initial_nominators: Vec<AccountId>,
-	root_key: AccountId,
 	endowed_accounts: Option<Vec<AccountId>>,
-) -> RuntimeGenesisConfig {
+	stash: Balance,
+) -> (
+	Vec<(AccountId, AccountId, GrandpaId, BabeId, ImOnlineId, AuthorityDiscoveryId)>,
+	Vec<AccountId>,
+	usize,
+	Vec<(AccountId, AccountId, Balance, StakerStatus<AccountId>)>,
+) {
 	let mut endowed_accounts: Vec<AccountId> = endowed_accounts.unwrap_or_else(|| {
 		vec![
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -273,7 +281,7 @@ pub fn testnet_genesis(
 	let mut rng = rand::thread_rng();
 	let stakers = initial_authorities
 		.iter()
-		.map(|x| (x.0.clone(), x.0.clone(), STASH, StakerStatus::Validator))
+		.map(|x| (x.0.clone(), x.0.clone(), stash, StakerStatus::Validator))
 		.chain(initial_nominators.iter().map(|x| {
 			use rand::{seq::SliceRandom, Rng};
 			let limit = (MaxNominations::get() as usize).min(initial_authorities.len());
@@ -284,23 +292,38 @@ pub fn testnet_genesis(
 				.into_iter()
 				.map(|choice| choice.0.clone())
 				.collect::<Vec<_>>();
-			(x.clone(), x.clone(), STASH, StakerStatus::Nominator(nominations))
+			(x.clone(), x.clone(), stash, StakerStatus::Nominator(nominations))
 		}))
 		.collect::<Vec<_>>();
 
 	let num_endowed_accounts = endowed_accounts.len();
 
-	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
-	const STASH: Balance = ENDOWMENT / 1000;
+	(initial_authorities, endowed_accounts, num_endowed_accounts, stakers)
+}
 
-	RuntimeGenesisConfig {
-		system: SystemConfig { code: wasm_binary_unwrap().to_vec(), ..Default::default() },
-		balances: BalancesConfig {
-			balances: endowed_accounts.iter().cloned().map(|x| (x, ENDOWMENT)).collect(),
+/// Helper function to create RuntimeGenesisConfig json patch for testing
+pub fn testnet_genesis(
+	initial_authorities: Vec<(
+		AccountId,
+		AccountId,
+		GrandpaId,
+		BabeId,
+		ImOnlineId,
+		AuthorityDiscoveryId,
+	)>,
+	initial_nominators: Vec<AccountId>,
+	root_key: AccountId,
+	endowed_accounts: Option<Vec<AccountId>>,
+) -> serde_json::Value {
+	let (initial_authorities, endowed_accounts, num_endowed_accounts, stakers) =
+		configure_accounts(initial_authorities, initial_nominators, endowed_accounts, STASH);
+
+	let json = serde_json::json!({
+		"balances": {
+			"balances": endowed_accounts.iter().cloned().map(|x| (x, ENDOWMENT)).collect::<Vec<_>>(),
 		},
-		indices: IndicesConfig { indices: vec![] },
-		session: SessionConfig {
-			keys: initial_authorities
+		"session": {
+			"keys": initial_authorities
 				.iter()
 				.map(|x| {
 					(
@@ -311,64 +334,46 @@ pub fn testnet_genesis(
 				})
 				.collect::<Vec<_>>(),
 		},
-		staking: StakingConfig {
-			validator_count: initial_authorities.len() as u32,
-			minimum_validator_count: initial_authorities.len() as u32,
-			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
-			slash_reward_fraction: Perbill::from_percent(10),
-			stakers,
-			..Default::default()
+		"staking": {
+			"validatorCount": initial_authorities.len() as u32,
+			"minimumValidatorCount": initial_authorities.len() as u32,
+			"invulnerables": initial_authorities.iter().map(|x| x.0.clone()).collect::<Vec<_>>(),
+			"slashRewardFraction": Perbill::from_percent(10),
+			"stakers": stakers.clone(),
 		},
-		democracy: DemocracyConfig::default(),
-		elections: ElectionsConfig {
-			members: endowed_accounts
+		"elections": {
+			"members": endowed_accounts
 				.iter()
 				.take((num_endowed_accounts + 1) / 2)
 				.cloned()
 				.map(|member| (member, STASH))
-				.collect(),
+				.collect::<Vec<_>>(),
 		},
-		council: CouncilConfig::default(),
-		technical_committee: TechnicalCommitteeConfig {
-			members: endowed_accounts
+		"technicalCommittee": {
+			"members": endowed_accounts
 				.iter()
 				.take((num_endowed_accounts + 1) / 2)
 				.cloned()
-				.collect(),
-			phantom: Default::default(),
+				.collect::<Vec<_>>(),
 		},
-		sudo: SudoConfig { key: Some(root_key) },
-		babe: BabeConfig {
-			epoch_config: Some(kitchensink_runtime::BABE_GENESIS_EPOCH_CONFIG),
-			..Default::default()
+		"sudo": { "key": Some(root_key.clone()) },
+		"babe": {
+			"epochConfig": Some(kitchensink_runtime::BABE_GENESIS_EPOCH_CONFIG),
 		},
-		im_online: ImOnlineConfig { keys: vec![] },
-		authority_discovery: Default::default(),
-		grandpa: Default::default(),
-		technical_membership: Default::default(),
-		treasury: Default::default(),
-		society: SocietyConfig { pot: 0 },
-		vesting: Default::default(),
-		assets: pallet_assets::GenesisConfig {
+		"society": { "pot": 0 },
+		"assets": {
 			// This asset is used by the NIS pallet as counterpart currency.
-			assets: vec![(9, get_account_id_from_seed::<sr25519::Public>("Alice"), true, 1)],
-			..Default::default()
+			"assets": vec![(9, get_account_id_from_seed::<sr25519::Public>("Alice"), true, 1)],
 		},
-		pool_assets: Default::default(),
-		transaction_storage: Default::default(),
-		transaction_payment: Default::default(),
-		alliance: Default::default(),
-		alliance_motion: Default::default(),
-		nomination_pools: NominationPoolsConfig {
-			min_create_bond: 10 * DOLLARS,
-			min_join_bond: 1 * DOLLARS,
-			..Default::default()
+		"nominationPools": {
+			"minCreateBond": 10 * DOLLARS,
+			"minJoinBond": 1 * DOLLARS,
 		},
-		glutton: Default::default(),
-	}
+	});
+	json
 }
 
-fn development_config_genesis() -> RuntimeGenesisConfig {
+fn development_config_genesis_json() -> serde_json::Value {
 	testnet_genesis(
 		vec![authority_keys_from_seed("Alice")],
 		vec![],
@@ -379,21 +384,17 @@ fn development_config_genesis() -> RuntimeGenesisConfig {
 
 /// Development config (single validator Alice)
 pub fn development_config() -> ChainSpec {
-	ChainSpec::from_genesis(
-		"Development",
-		"dev",
-		ChainType::Development,
-		development_config_genesis,
-		vec![],
-		None,
-		None,
-		None,
-		None,
-		Default::default(),
-	)
+	ChainSpec::builder()
+		.with_name("Development")
+		.with_id("dev")
+		.with_chain_type(ChainType::Development)
+		.with_genesis_config_patch(development_config_genesis_json())
+		.with_extensions(Default::default())
+		.with_code(wasm_binary_unwrap())
+		.build()
 }
 
-fn local_testnet_genesis() -> RuntimeGenesisConfig {
+fn local_testnet_genesis() -> serde_json::Value {
 	testnet_genesis(
 		vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
 		vec![],
@@ -404,18 +405,14 @@ fn local_testnet_genesis() -> RuntimeGenesisConfig {
 
 /// Local testnet config (multivalidator Alice + Bob)
 pub fn local_testnet_config() -> ChainSpec {
-	ChainSpec::from_genesis(
-		"Local Testnet",
-		"local_testnet",
-		ChainType::Local,
-		local_testnet_genesis,
-		vec![],
-		None,
-		None,
-		None,
-		None,
-		Default::default(),
-	)
+	ChainSpec::builder()
+		.with_name("Local Testnet")
+		.with_id("local_testnet")
+		.with_chain_type(ChainType::Local)
+		.with_genesis_config_patch(local_testnet_genesis())
+		.with_extensions(Default::default())
+		.with_code(wasm_binary_unwrap())
+		.build()
 }
 
 #[cfg(test)]
@@ -425,45 +422,33 @@ pub(crate) mod tests {
 	use sc_service_test;
 	use sp_runtime::BuildStorage;
 
-	fn local_testnet_genesis_instant_single() -> RuntimeGenesisConfig {
-		testnet_genesis(
-			vec![authority_keys_from_seed("Alice")],
-			vec![],
-			get_account_id_from_seed::<sr25519::Public>("Alice"),
-			None,
-		)
-	}
-
 	/// Local testnet config (single validator - Alice)
 	pub fn integration_test_config_with_single_authority() -> ChainSpec {
-		ChainSpec::from_genesis(
-			"Integration Test",
-			"test",
-			ChainType::Development,
-			local_testnet_genesis_instant_single,
-			vec![],
-			None,
-			None,
-			None,
-			None,
-			Default::default(),
-		)
+		ChainSpec::builder()
+			.with_name("Integration Test")
+			.with_id("test")
+			.with_chain_type(ChainType::Development)
+			.with_genesis_config_patch(testnet_genesis(
+				vec![authority_keys_from_seed("Alice")],
+				vec![],
+				get_account_id_from_seed::<sr25519::Public>("Alice"),
+				None,
+			))
+			.with_extensions(Default::default())
+			.with_code(wasm_binary_unwrap())
+			.build()
 	}
 
 	/// Local testnet config (multivalidator Alice + Bob)
 	pub fn integration_test_config_with_two_authorities() -> ChainSpec {
-		ChainSpec::from_genesis(
-			"Integration Test",
-			"test",
-			ChainType::Development,
-			local_testnet_genesis,
-			vec![],
-			None,
-			None,
-			None,
-			None,
-			Default::default(),
-		)
+		ChainSpec::builder()
+			.with_name("Integration Test")
+			.with_id("test")
+			.with_chain_type(ChainType::Development)
+			.with_genesis_config_patch(local_testnet_genesis())
+			.with_extensions(Default::default())
+			.with_code(wasm_binary_unwrap())
+			.build()
 	}
 
 	#[test]
@@ -497,5 +482,300 @@ pub(crate) mod tests {
 	#[test]
 	fn test_staging_test_net_chain_spec() {
 		staging_testnet_config().build_storage().unwrap();
+	}
+
+	// This compares the output of RuntimeGenesisConfig-based ChainSpec building against JSON-based
+	// ChainSpec building. Once RuntimeGenesisConfig is removed from client-side, entire mod can be
+	// removed.
+	mod json_vs_legacy {
+		use crate::chain_spec::*;
+		use kitchensink_runtime::{
+			wasm_binary_unwrap, BabeConfig, BalancesConfig, CouncilConfig, DemocracyConfig,
+			ElectionsConfig, ImOnlineConfig, IndicesConfig, NominationPoolsConfig, SessionConfig,
+			SocietyConfig, StakingConfig, SudoConfig, TechnicalCommitteeConfig,
+		};
+		use sp_runtime::BuildStorage;
+		/// Helper function to create RuntimeGenesisConfig for testing
+		pub(super) fn testnet_genesis_legacy(
+			initial_authorities: Vec<(
+				AccountId,
+				AccountId,
+				GrandpaId,
+				BabeId,
+				ImOnlineId,
+				AuthorityDiscoveryId,
+			)>,
+			initial_nominators: Vec<AccountId>,
+			root_key: AccountId,
+			endowed_accounts: Option<Vec<AccountId>>,
+		) -> RuntimeGenesisConfig {
+			let (initial_authorities, endowed_accounts, num_endowed_accounts, stakers) =
+				configure_accounts(
+					initial_authorities,
+					initial_nominators,
+					endowed_accounts,
+					STASH,
+				);
+
+			RuntimeGenesisConfig {
+				system: Default::default(),
+				balances: BalancesConfig {
+					balances: endowed_accounts.iter().cloned().map(|x| (x, ENDOWMENT)).collect(),
+				},
+				indices: IndicesConfig { indices: vec![] },
+				session: SessionConfig {
+					keys: initial_authorities
+						.iter()
+						.map(|x| {
+							(
+								x.0.clone(),
+								x.0.clone(),
+								session_keys(x.2.clone(), x.3.clone(), x.4.clone(), x.5.clone()),
+							)
+						})
+						.collect::<Vec<_>>(),
+				},
+				staking: StakingConfig {
+					validator_count: initial_authorities.len() as u32,
+					minimum_validator_count: initial_authorities.len() as u32,
+					invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
+					slash_reward_fraction: Perbill::from_percent(10),
+					stakers,
+					..Default::default()
+				},
+				democracy: DemocracyConfig::default(),
+				elections: ElectionsConfig {
+					members: endowed_accounts
+						.iter()
+						.take((num_endowed_accounts + 1) / 2)
+						.cloned()
+						.map(|member| (member, STASH))
+						.collect(),
+				},
+				council: CouncilConfig::default(),
+				technical_committee: TechnicalCommitteeConfig {
+					members: endowed_accounts
+						.iter()
+						.take((num_endowed_accounts + 1) / 2)
+						.cloned()
+						.collect(),
+					phantom: Default::default(),
+				},
+				sudo: SudoConfig { key: Some(root_key) },
+				babe: BabeConfig {
+					epoch_config: Some(kitchensink_runtime::BABE_GENESIS_EPOCH_CONFIG),
+					..Default::default()
+				},
+				im_online: ImOnlineConfig { keys: vec![] },
+				authority_discovery: Default::default(),
+				grandpa: Default::default(),
+				technical_membership: Default::default(),
+				treasury: Default::default(),
+				society: SocietyConfig { pot: 0 },
+				vesting: Default::default(),
+				assets: pallet_assets::GenesisConfig {
+					// This asset is used by the NIS pallet as counterpart currency.
+					assets: vec![(
+						9,
+						get_account_id_from_seed::<sr25519::Public>("Alice"),
+						true,
+						1,
+					)],
+					..Default::default()
+				},
+				pool_assets: Default::default(),
+				transaction_storage: Default::default(),
+				transaction_payment: Default::default(),
+				alliance: Default::default(),
+				alliance_motion: Default::default(),
+				nomination_pools: NominationPoolsConfig {
+					min_create_bond: 10 * DOLLARS,
+					min_join_bond: 1 * DOLLARS,
+					..Default::default()
+				},
+				glutton: Default::default(),
+			}
+		}
+
+		fn development_config_genesis_legacy() -> RuntimeGenesisConfig {
+			testnet_genesis_legacy(
+				vec![authority_keys_from_seed("Alice")],
+				vec![],
+				get_account_id_from_seed::<sr25519::Public>("Alice"),
+				None,
+			)
+		}
+
+		/// Development config (single validator Alice). Legacy building method, for testing.
+		fn development_config_legacy() -> ChainSpec {
+			#[allow(deprecated)]
+			ChainSpec::from_genesis(
+				"Development",
+				"dev",
+				ChainType::Development,
+				development_config_genesis_legacy,
+				vec![],
+				None,
+				None,
+				None,
+				None,
+				Default::default(),
+				wasm_binary_unwrap(),
+			)
+		}
+
+		#[test]
+		fn development_config_building_test() {
+			sp_tracing::try_init_simple();
+			let j1 = development_config().as_json(true).unwrap();
+			let j2 = development_config_legacy().as_json(true).unwrap();
+			assert_eq!(j1, j2);
+		}
+
+		pub(super) fn local_testnet_genesis_legacy() -> RuntimeGenesisConfig {
+			testnet_genesis_legacy(
+				vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
+				vec![],
+				get_account_id_from_seed::<sr25519::Public>("Alice"),
+				None,
+			)
+		}
+		/// Local testnet config (multivalidator Alice + Bob). Legacy building method, for testing.
+		fn local_testnet_config_legacy() -> ChainSpec {
+			#[allow(deprecated)]
+			ChainSpec::from_genesis(
+				"Local Testnet",
+				"local_testnet",
+				ChainType::Local,
+				local_testnet_genesis_legacy,
+				vec![],
+				None,
+				None,
+				None,
+				None,
+				Default::default(),
+				wasm_binary_unwrap(),
+			)
+		}
+
+		#[test]
+		fn local_testnet_config_building_test() {
+			sp_tracing::try_init_simple();
+			let j1 = local_testnet_config().as_json(true).unwrap();
+			let j2 = local_testnet_config_legacy().as_json(true).unwrap();
+			assert_eq!(j1, j2);
+		}
+
+		fn staging_testnet_config_genesis_legacy() -> RuntimeGenesisConfig {
+			let (initial_authorities, root_key, endowed_accounts) =
+				configure_accounts_for_staging_testnet();
+			testnet_genesis_legacy(initial_authorities, vec![], root_key, Some(endowed_accounts))
+		}
+
+		/// Staging testnet config. Legacy building method, for testing.
+		fn staging_testnet_config_legacy() -> ChainSpec {
+			let boot_nodes = vec![];
+			#[allow(deprecated)]
+			ChainSpec::from_genesis(
+				"Staging Testnet",
+				"staging_testnet",
+				ChainType::Live,
+				staging_testnet_config_genesis_legacy,
+				boot_nodes,
+				Some(
+					TelemetryEndpoints::new(vec![(STAGING_TELEMETRY_URL.to_string(), 0)])
+						.expect("Staging telemetry url is valid; qed"),
+				),
+				None,
+				None,
+				None,
+				Default::default(),
+				wasm_binary_unwrap(),
+			)
+		}
+
+		fn hex<T>(x: T) -> String
+		where
+			T: array_bytes::Hex,
+		{
+			x.hex(Default::default())
+		}
+
+		#[test]
+		fn staging_testnet_config_building_test() {
+			sp_tracing::try_init_simple();
+
+			let chain_spec = staging_testnet_config();
+			let storage = chain_spec.build_storage().unwrap();
+			let mut keys = storage.top.keys().cloned().map(hex).collect::<Vec<String>>();
+			keys.sort();
+
+			let chain_spec = staging_testnet_config_legacy();
+			let storage = chain_spec.build_storage().unwrap();
+			let mut keys_expected = storage.top.keys().cloned().map(hex).collect::<Vec<String>>();
+			keys_expected.sort();
+			assert_eq!(keys, keys_expected);
+		}
+
+		fn local_testnet_genesis_instant_single_legacy() -> RuntimeGenesisConfig {
+			testnet_genesis_legacy(
+				vec![authority_keys_from_seed("Alice")],
+				vec![],
+				get_account_id_from_seed::<sr25519::Public>("Alice"),
+				None,
+			)
+		}
+
+		/// Local testnet config (single validator - Alice)
+		pub(super) fn integration_test_config_with_single_authority_legacy() -> ChainSpec {
+			#[allow(deprecated)]
+			ChainSpec::from_genesis(
+				"Integration Test",
+				"test",
+				ChainType::Development,
+				local_testnet_genesis_instant_single_legacy,
+				vec![],
+				None,
+				None,
+				None,
+				None,
+				Default::default(),
+				wasm_binary_unwrap(),
+			)
+		}
+
+		#[test]
+		fn integration_test_config_with_single_authority_legacy_compare_test() {
+			sp_tracing::try_init_simple();
+			let j1 = integration_test_config_with_single_authority_legacy().as_json(true).unwrap();
+			let j2 = super::integration_test_config_with_single_authority().as_json(true).unwrap();
+			assert_eq!(j1, j2);
+		}
+
+		/// Local testnet config (multivalidator Alice + Bob)
+		pub fn integration_test_config_with_two_authorities_legacy() -> ChainSpec {
+			#[allow(deprecated)]
+			ChainSpec::from_genesis(
+				"Integration Test",
+				"test",
+				ChainType::Development,
+				local_testnet_genesis_legacy,
+				vec![],
+				None,
+				None,
+				None,
+				None,
+				Default::default(),
+				wasm_binary_unwrap(),
+			)
+		}
+
+		#[test]
+		fn integration_test_config_with_with_two_authorities_compare_test() {
+			sp_tracing::try_init_simple();
+			let j1 = integration_test_config_with_two_authorities_legacy().as_json(true).unwrap();
+			let j2 = super::integration_test_config_with_two_authorities().as_json(true).unwrap();
+			assert_eq!(j1, j2);
+		}
 	}
 }

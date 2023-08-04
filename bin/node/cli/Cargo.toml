@@ -122,7 +122,6 @@ futures = "0.3.21"
 tempfile = "3.1.0"
 assert_cmd = "2.0.2"
 nix = { version = "0.26.1", features = ["signal"] }
-serde_json = "1.0"
 regex = "1.6.0"
 platforms = "3.0"
 soketto = "0.7.1"

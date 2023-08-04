@@ -189,7 +189,7 @@ fn bench_execute_block(c: &mut Criterion) {
 
 	for strategy in execution_methods {
 		group.bench_function(format!("{:?}", strategy), |b| {
-			let genesis_config = node_testing::genesis::config(Some(compact_code_unwrap()));
+			let genesis_config = node_testing::genesis::config();
 			let use_native = match strategy {
 				ExecutionMethod::Native => true,
 				ExecutionMethod::Wasm(..) => false,
