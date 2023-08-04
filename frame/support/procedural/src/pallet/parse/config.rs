@@ -60,6 +60,9 @@ pub struct ConfigDef {
 	/// Contains default sub-trait items (instantiated by `#[pallet::config(with_default)]`).
 	/// Vec will be empty if `#[pallet::config(with_default)]` is not specified or if there are
 	/// no trait items
+	///
+	/// A bool for each sub-trait item indicates whether the item has `#[pallet::no_bounds]`
+	/// attached to it. If true, the item will not any bounds in the generated default sub-trait.
 	pub default_sub_trait: Vec<(syn::TraitItem, bool)>,
 }
 

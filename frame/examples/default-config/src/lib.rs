@@ -122,10 +122,6 @@ pub mod tests {
 
 	#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 	impl frame_system::Config for Test {
-		// these items are defined by frame-system as `no_default`, so we must specify them here.
-		// Note that these are types that actually rely on the outer runtime, and can't sensibly
-		// have an _independent_ default.
-
 		// all of this is coming from `frame_system::config_preludes::TestDefaultConfig`.
 
 		// type Nonce = u32;
@@ -148,6 +144,18 @@ pub mod tests {
 		// type BlockWeights = ();
 		// type BlockLength = ();
 		// type DbWeight = ();
+		// type BaseCallFilter = frame_support::traits::Everything;
+		// type BlockHashCount = ConstU64<10>;
+		// type OnSetCode = ();
+
+		// These are marked as `#[pallet::verbatim]`. Hence, they are being injected as
+		// defaults with same names.
+
+		// type Block = Block;
+		// type RuntimeOrigin = RuntimeOrigin;
+		// type RuntimeCall = RuntimeCall;
+		// type RuntimeEvent = RuntimeEvent;
+		// type PalletInfo = PalletInfo;
 
 		// you could still overwrite any of them if desired.
 		type SS58Prefix = frame_support::traits::ConstU16<456>;
