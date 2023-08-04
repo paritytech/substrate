@@ -32,8 +32,9 @@ use frame_support::{
 	ensure,
 	storage::{with_transaction, TransactionOutcome},
 	traits::{
-		tokens::{Fortitude::Polite, Preservation::Expendable},
-		Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time,
+		fungible::{Inspect, Mutate},
+		tokens::{Fortitude::Polite, Preservation},
+		Contains, OriginTrait, Randomness, Time,
 	},
 	weights::Weight,
 	Blake2_128Concat, BoundedVec, StorageHasher,
@@ -1112,13 +1113,15 @@ where
 
 	/// Transfer some funds from `from` to `to`.
 	fn transfer(
-		existence_requirement: ExistenceRequirement,
+		preservation: Preservation,
 		from: &T::AccountId,
 		to: &T::AccountId,
 		value: BalanceOf<T>,
 	) -> DispatchResult {
-		T::Currency::transfer(from, to, value, existence_requirement)
-			.map_err(|_| Error::<T>::TransferFailed)?;
+		if !value.is_zero() && from != to {
+			T::Currency::transfer(from, to, value, preservation)
+				.map_err(|_| Error::<T>::TransferFailed)?;
+		}
 		Ok(())
 	}
 
@@ -1142,7 +1145,7 @@ where
 			Origin::Root if value.is_zero() => return Ok(()),
 			Origin::Root => return DispatchError::RootNotAllowed.into(),
 		};
-		Self::transfer(ExistenceRequirement::KeepAlive, &caller, &frame.account_id, value)
+		Self::transfer(Preservation::Preserve, &caller, &frame.account_id, value)
 	}
 
 	/// Reference to the current (top) frame.
@@ -1290,7 +1293,6 @@ where
 	}
 
 	fn terminate(&mut self, beneficiary: &AccountIdOf<Self::T>) -> Result<(), DispatchError> {
-		use frame_support::traits::fungible::Inspect;
 		if self.is_recursive() {
 			return Err(Error::<T>::TerminatedWhileReentrant.into())
 		}
@@ -1298,11 +1300,11 @@ where
 		let info = frame.terminate();
 		frame.nested_storage.terminate(&info);
 		System::<T>::dec_consumers(&frame.account_id);
-		T::Currency::transfer(
+		Self::transfer(
+			Preservation::Expendable,
 			&frame.account_id,
 			beneficiary,
-			T::Currency::reducible_balance(&frame.account_id, Expendable, Polite),
-			ExistenceRequirement::AllowDeath,
+			T::Currency::reducible_balance(&frame.account_id, Preservation::Expendable, Polite),
 		)?;
 		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);
@@ -1326,7 +1328,7 @@ where
 	}
 
 	fn transfer(&mut self, to: &T::AccountId, value: BalanceOf<T>) -> DispatchResult {
-		Self::transfer(ExistenceRequirement::KeepAlive, &self.top_frame().account_id, to, value)
+		Self::transfer(Preservation::Preserve, &self.top_frame().account_id, to, value)
 	}
 
 	fn get_storage(&mut self, key: &Key<T>) -> Option<Vec<u8>> {
@@ -1389,7 +1391,7 @@ where
 	}
 
 	fn balance(&self) -> BalanceOf<T> {
-		T::Currency::free_balance(&self.top_frame().account_id)
+		T::Currency::balance(&self.top_frame().account_id)
 	}
 
 	fn value_transferred(&self) -> BalanceOf<T> {
@@ -1820,7 +1822,7 @@ mod tests {
 			set_balance(&origin, 100);
 			set_balance(&dest, 0);
 
-			MockStack::transfer(ExistenceRequirement::KeepAlive, &origin, &dest, 55).unwrap();
+			MockStack::transfer(Preservation::Preserve, &origin, &dest, 55).unwrap();
 
 			assert_eq!(get_balance(&origin), 45);
 			assert_eq!(get_balance(&dest), 55);
@@ -1958,7 +1960,7 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			set_balance(&origin, 0);
 
-			let result = MockStack::transfer(ExistenceRequirement::KeepAlive, &origin, &dest, 100);
+			let result = MockStack::transfer(Preservation::Preserve, &origin, &dest, 100);
 
 			assert_eq!(result, Err(Error::<Test>::TransferFailed.into()));
 			assert_eq!(get_balance(&origin), 0);
