@@ -339,9 +339,7 @@ where
 		let mut events = Vec::new();
 
 		// Nothing to be done if no finalized hashes are provided.
-		let Some(first_hash) = finalized_block_hashes.get(0) else {
-			return Ok(Default::default())
-		};
+		let Some(first_hash) = finalized_block_hashes.get(0) else { return Ok(Default::default()) };
 
 		// Find the parent header.
 		let Some(first_header) = self.client.header(*first_hash)? else {

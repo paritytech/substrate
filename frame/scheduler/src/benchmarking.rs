@@ -23,7 +23,7 @@ use frame_support::{
 	ensure,
 	traits::{schedule::Priority, BoundedInline},
 };
-use frame_system::RawOrigin;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use sp_std::{prelude::*, vec};
 
 use crate::Pallet as Scheduler;
@@ -42,7 +42,10 @@ type SystemOrigin<T> = <T as frame_system::Config>::RuntimeOrigin;
 /// - `None`: aborted (hash without preimage)
 /// - `Some(true)`: hash resolves into call if possible, plain call otherwise
 /// - `Some(false)`: plain call
-fn fill_schedule<T: Config>(when: T::BlockNumber, n: u32) -> Result<(), &'static str> {
+fn fill_schedule<T: Config>(
+	when: frame_system::pallet_prelude::BlockNumberFor<T>,
+	n: u32,
+) -> Result<(), &'static str> {
 	let t = DispatchTime::At(when);
 	let origin: <T as Config>::PalletsOrigin = frame_system::RawOrigin::Root.into();
 	for i in 0..n {
@@ -125,7 +128,7 @@ fn make_origin<T: Config>(signed: bool) -> <T as Config>::PalletsOrigin {
 benchmarks! {
 	// `service_agendas` when no work is done.
 	service_agendas_base {
-		let now = T::BlockNumber::from(BLOCK_NUMBER);
+		let now = BlockNumberFor::<T>::from(BLOCK_NUMBER);
 		IncompleteSince::<T>::put(now - One::one());
 	}: {
 		Scheduler::<T>::service_agendas(&mut WeightMeter::max_limit(), now, 0);
@@ -224,7 +227,7 @@ benchmarks! {
 	schedule {
 		let s in 0 .. (T::MaxScheduledPerBlock::get() - 1);
 		let when = BLOCK_NUMBER.into();
-		let periodic = Some((T::BlockNumber::one(), 100));
+		let periodic = Some((BlockNumberFor::<T>::one(), 100));
 		let priority = 0;
 		// Essentially a no-op call.
 		let call = Box::new(SystemCall::set_storage { items: vec![] }.into());
@@ -267,7 +270,7 @@ benchmarks! {
 		let s in 0 .. (T::MaxScheduledPerBlock::get() - 1);
 		let id = u32_to_name(s);
 		let when = BLOCK_NUMBER.into();
-		let periodic = Some((T::BlockNumber::one(), 100));
+		let periodic = Some((BlockNumberFor::<T>::one(), 100));
 		let priority = 0;
 		// Essentially a no-op call.
 		let call = Box::new(SystemCall::set_storage { items: vec![] }.into());

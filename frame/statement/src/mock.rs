@@ -27,12 +27,10 @@ use frame_support::{
 };
 use sp_core::{Pair, H256};
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	AccountId32,
+	AccountId32, BuildStorage,
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 pub const MIN_ALLOWED_STATEMENTS: u32 = 4;
@@ -41,10 +39,7 @@ pub const MIN_ALLOWED_BYTES: u32 = 1024;
 pub const MAX_ALLOWED_BYTES: u32 = 4096;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		Balances: pallet_balances,
@@ -59,13 +54,12 @@ impl frame_system::Config for Test {
 	type DbWeight = RocksDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId32;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -111,7 +105,7 @@ impl Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let balances = pallet_balances::GenesisConfig::<Test> {
 		balances: vec![
 			(sp_core::sr25519::Pair::from_string("//Alice", None).unwrap().public().into(), 6000),

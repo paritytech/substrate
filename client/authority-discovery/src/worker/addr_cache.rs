@@ -162,8 +162,8 @@ impl AddrCache {
 
 fn peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
 	addr.iter().last().and_then(|protocol| {
-		if let Protocol::P2p(multihash) = protocol {
-			PeerId::from_multihash(multihash).ok()
+		if let Protocol::P2p(peer_id) = protocol {
+			Some(peer_id)
 		} else {
 			None
 		}
@@ -178,7 +178,8 @@ fn addresses_to_peer_ids(addresses: &HashSet<Multiaddr>) -> HashSet<PeerId> {
 mod tests {
 	use super::*;
 
-	use libp2p::multihash::{self, Multihash};
+	use libp2p::multihash::Multihash;
+	use multihash_codetable::Code;
 	use quickcheck::{Arbitrary, Gen, QuickCheck, TestResult};
 
 	use sp_authority_discovery::{AuthorityId, AuthorityPair};
@@ -200,14 +201,13 @@ mod tests {
 	impl Arbitrary for TestMultiaddr {
 		fn arbitrary(g: &mut Gen) -> Self {
 			let seed = (0..32).map(|_| u8::arbitrary(g)).collect::<Vec<_>>();
-			let peer_id = PeerId::from_multihash(
-				Multihash::wrap(multihash::Code::Sha2_256.into(), &seed).unwrap(),
-			)
-			.unwrap();
+			let peer_id =
+				PeerId::from_multihash(Multihash::wrap(Code::Sha2_256.into(), &seed).unwrap())
+					.unwrap();
 			let multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333"
 				.parse::<Multiaddr>()
 				.unwrap()
-				.with(Protocol::P2p(peer_id.into()));
+				.with(Protocol::P2p(peer_id));
 
 			TestMultiaddr(multiaddr)
 		}
@@ -219,18 +219,17 @@ mod tests {
 	impl Arbitrary for TestMultiaddrsSamePeerCombo {
 		fn arbitrary(g: &mut Gen) -> Self {
 			let seed = (0..32).map(|_| u8::arbitrary(g)).collect::<Vec<_>>();
-			let peer_id = PeerId::from_multihash(
-				Multihash::wrap(multihash::Code::Sha2_256.into(), &seed).unwrap(),
-			)
-			.unwrap();
+			let peer_id =
+				PeerId::from_multihash(Multihash::wrap(Code::Sha2_256.into(), &seed).unwrap())
+					.unwrap();
 			let multiaddr1 = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333"
 				.parse::<Multiaddr>()
 				.unwrap()
-				.with(Protocol::P2p(peer_id.into()));
+				.with(Protocol::P2p(peer_id));
 			let multiaddr2 = "/ip6/2002:db8:0:0:0:0:0:2/tcp/30133"
 				.parse::<Multiaddr>()
 				.unwrap()
-				.with(Protocol::P2p(peer_id.into()));
+				.with(Protocol::P2p(peer_id));
 			TestMultiaddrsSamePeerCombo(multiaddr1, multiaddr2)
 		}
 	}
@@ -367,7 +366,7 @@ mod tests {
 		let mut addr_cache = AddrCache::new();
 
 		let peer_id = PeerId::random();
-		let addr = Multiaddr::empty().with(Protocol::P2p(peer_id.into()));
+		let addr = Multiaddr::empty().with(Protocol::P2p(peer_id));
 
 		let authority_id0 = AuthorityPair::generate().0.public();
 		let authority_id1 = AuthorityPair::generate().0.public();

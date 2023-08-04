@@ -134,7 +134,7 @@ impl<T> ScaleContainerStreamIter<T> {
 	///
 	/// - `key`: Storage key of the container in the state.
 	///
-	/// Same as [`Self::try_new`], but logs a potential error and sets the length to `0`.
+	/// Same as [`Self::new_try`], but logs a potential error and sets the length to `0`.
 	pub fn new(key: Vec<u8>) -> Self {
 		let mut input = StorageInput::new(key);
 		let length = if input.exists() {
