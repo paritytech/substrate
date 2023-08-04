@@ -138,6 +138,7 @@ pub enum Metadata {
 	CountedMap { value: syn::Type, key: syn::Type },
 	DoubleMap { value: syn::Type, key1: syn::Type, key2: syn::Type },
 	NMap { keys: Vec<syn::Type>, keygen: syn::Type, value: syn::Type },
+	CountedNMap { keys: Vec<syn::Type>, keygen: syn::Type, value: syn::Type },
 }
 
 pub enum QueryKind {
@@ -230,6 +231,13 @@ pub enum StorageGenerics {
 		on_empty: Option<syn::Type>,
 		max_values: Option<syn::Type>,
 	},
+	CountedNMap {
+		keygen: syn::Type,
+		value: syn::Type,
+		query_kind: Option<syn::Type>,
+		on_empty: Option<syn::Type>,
+		max_values: Option<syn::Type>,
+	},
 }
 
 impl StorageGenerics {
@@ -242,6 +250,8 @@ impl StorageGenerics {
 			Self::Value { value, .. } => Metadata::Value { value },
 			Self::NMap { keygen, value, .. } =>
 				Metadata::NMap { keys: collect_keys(&keygen)?, keygen, value },
+			Self::CountedNMap { keygen, value, .. } =>
+				Metadata::CountedNMap { keys: collect_keys(&keygen)?, keygen, value },
 		};
 
 		Ok(res)
@@ -254,7 +264,8 @@ impl StorageGenerics {
 			Self::Map { query_kind, .. } |
 			Self::CountedMap { query_kind, .. } |
 			Self::Value { query_kind, .. } |
-			Self::NMap { query_kind, .. } => query_kind.clone(),
+			Self::NMap { query_kind, .. } |
+			Self::CountedNMap { query_kind, .. } => query_kind.clone(),
 		}
 	}
 }
@@ -265,6 +276,7 @@ enum StorageKind {
 	CountedMap,
 	DoubleMap,
 	NMap,
+	CountedNMap,
 }
 
 /// Check the generics in the `map` contains the generics in `gen` may contains generics in
@@ -493,6 +505,29 @@ fn process_named_generics(
 				max_values: parsed.remove("MaxValues").map(|binding| binding.ty),
 			}
 		},
+		StorageKind::CountedNMap => {
+			check_generics(
+				&parsed,
+				&["Key", "Value"],
+				&["QueryKind", "OnEmpty", "MaxValues"],
+				"CountedStorageNMap",
+				args_span,
+			)?;
+
+			StorageGenerics::CountedNMap {
+				keygen: parsed
+					.remove("Key")
+					.map(|binding| binding.ty)
+					.expect("checked above as mandatory generic"),
+				value: parsed
+					.remove("Value")
+					.map(|binding| binding.ty)
+					.expect("checked above as mandatory generic"),
+				query_kind: parsed.remove("QueryKind").map(|binding| binding.ty),
+				on_empty: parsed.remove("OnEmpty").map(|binding| binding.ty),
+				max_values: parsed.remove("MaxValues").map(|binding| binding.ty),
+			}
+		},
 	};
 
 	let metadata = generics.metadata()?;
@@ -578,6 +613,16 @@ fn process_unnamed_generics(
 				false,
 			)
 		},
+		StorageKind::CountedNMap => {
+			let keygen = retrieve_arg(1)?;
+			let keys = collect_keys(&keygen)?;
+			(
+				None,
+				Metadata::CountedNMap { keys, keygen, value: retrieve_arg(2)? },
+				retrieve_arg(3).ok(),
+				false,
+			)
+		},
 	};
 
 	Ok(res)
@@ -594,10 +639,11 @@ fn process_generics(
 		"CountedStorageMap" => StorageKind::CountedMap,
 		"StorageDoubleMap" => StorageKind::DoubleMap,
 		"StorageNMap" => StorageKind::NMap,
+		"CountedStorageNMap" => StorageKind::CountedNMap,
 		found => {
 			let msg = format!(
 				"Invalid pallet::storage, expected ident: `StorageValue` or \
-				`StorageMap` or `CountedStorageMap` or `StorageDoubleMap` or `StorageNMap` \
+				`StorageMap` or `CountedStorageMap` or `StorageDoubleMap` or `StorageNMap` or `CountedStorageNMap` \
 				in order to expand metadata, found `{}`.",
 				found,
 			);
