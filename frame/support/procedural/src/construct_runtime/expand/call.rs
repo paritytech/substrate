@@ -123,7 +123,7 @@ pub fn expand_outer_dispatch(
 				}
 			}
 		}
-		
+
 		impl #scrate::dispatch::GetCallMetadata for RuntimeCall {
 			fn get_call_metadata(&self) -> #scrate::dispatch::CallMetadata {
 				use #scrate::dispatch::GetCallName;
