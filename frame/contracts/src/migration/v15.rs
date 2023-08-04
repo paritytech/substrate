@@ -109,7 +109,7 @@ where
 
 #[derive(Encode, Decode, CloneNoBound, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
-pub struct ContractInfo<T: Config> {
+struct ContractInfo<T: Config> {
 	pub trie_id: TrieId,
 	pub code_hash: CodeHash<T>,
 	pub storage_bytes: u32,
@@ -122,7 +122,7 @@ pub struct ContractInfo<T: Config> {
 }
 
 #[storage_alias]
-pub(crate) type ContractInfoOf<T: Config> =
+type ContractInfoOf<T: Config> =
 	StorageMap<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, ContractInfo<T>>;
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
@@ -293,22 +293,52 @@ impl<T: Config> MigrationStep for Migration<T> {
 			log::debug!(target: LOG_TARGET, "===");
 			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
 
+			let on_hold =
+				T::Currency::balance_on_hold(&HoldReason::StorageDepositReserve.into(), &account);
+			let account_balance = T::Currency::total_balance(&account);
+
+			log::debug!(
+				target: LOG_TARGET,
+				"Validating balances match. Old deposit account's balance: {:?}. Contract's on hold: {:?}. Old contract's total balance: {:?}, Contract's total balance: {:?}.",
+				old_deposit_balance,
+				on_hold,
+				old_account_balance,
+				account_balance
+			);
 			ensure!(
-				old_account_balance.saturating_add(old_deposit_balance) ==
-					T::Currency::total_balance(&account),
+				old_account_balance.saturating_add(old_deposit_balance) == account_balance,
 				"total balance mismatch"
 			);
-			ensure!(
-				old_deposit_balance ==
-					T::Currency::balance_on_hold(
-						&HoldReason::StorageDepositReserve.into(),
-						&account
-					),
-				"deposit mismatch"
-			);
+			ensure!(old_deposit_balance == on_hold, "deposit mismatch");
 			ensure!(
 				!System::<T>::account_exists(&old_contract.deposit_account),
 				"deposit account still exists"
+			);
+
+			let migration_contract_info = ContractInfoOf::<T>::try_get(&account).unwrap();
+			let crate_contract_info = crate::ContractInfoOf::<T>::try_get(&account).unwrap();
+			ensure!(
+				migration_contract_info.trie_id == crate_contract_info.trie_id,
+				"trie_id mismatch"
+			);
+			ensure!(
+				migration_contract_info.code_hash == crate_contract_info.code_hash,
+				"code_hash mismatch"
+			);
+			ensure!(
+				migration_contract_info.storage_byte_deposit ==
+					crate_contract_info.storage_byte_deposit,
+				"storage_byte_deposit mismatch"
+			);
+			ensure!(
+				migration_contract_info.storage_base_deposit ==
+					crate_contract_info.storage_base_deposit(),
+				"storage_base_deposit mismatch"
+			);
+			ensure!(
+				&migration_contract_info.delegate_dependencies ==
+					crate_contract_info.delegate_dependencies(),
+				"delegate_dependencies mismatch"
 			);
 		}
 
