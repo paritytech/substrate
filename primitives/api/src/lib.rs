@@ -352,20 +352,23 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// feature flag. You can do it this way:
 /// ```ignore
 /// pub struct Runtime {}
-/// decl_runtime_apis! {
-/// pub trait ApiWithStagingMethod {
-///     fn stable_one(data: u64);
-///     #[api_version(99)]
-///     fn staging_one();
+/// sp_api::decl_runtime_apis! {
+///     pub trait ApiWithStagingMethod {
+///         fn stable_one(data: u64);
+///
+///         #[api_version(99)]
+///         fn staging_one();
+///     }
 /// }
 ///
-/// impl_runtime_apis! {
-/// #[cfg_attr(feature = "enable-staging-api", api_version(99))]
-/// impl self::ApiWithStagingMethod<Block> for Runtime {
-///     fn stable_one(_: u64) {}
-///
+/// sp_api::impl_runtime_apis! {
 ///     #[cfg_attr(feature = "enable-staging-api", api_version(99))]
-///     fn staging_one() {}
+///     impl self::ApiWithStagingMethod<Block> for Runtime {
+///         fn stable_one(_: u64) {}
+///
+///         #[cfg_attr(feature = "enable-staging-api", api_version(99))]
+///         fn staging_one() {}
+///     }
 /// }
 /// ```
 ///
@@ -386,7 +389,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// #[cfg_attr(feature = "enable-staging-api", api_version(99))]
 /// #[api_version(2)]
 /// impl self::ApiWithStagingAndVersionedMethods<Block> for Runtime {
-/// ...
+///  // impl skipped
 /// }
 /// ```
 pub use sp_api_proc_macro::impl_runtime_apis;
