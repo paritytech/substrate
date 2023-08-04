@@ -25,8 +25,7 @@
 use crate::{
 	migration::{IsFinished, MigrationStep},
 	weights::WeightInfo,
-	AccountIdOf, BalanceOf, CodeHash, Config, ContractInfoOf, HoldReason, Pallet, TrieId, Weight,
-	LOG_TARGET,
+	AccountIdOf, BalanceOf, CodeHash, Config, HoldReason, Pallet, TrieId, Weight, LOG_TARGET,
 };
 #[cfg(feature = "try-runtime")]
 use crate::{BalanceOf, ContractInfo};
@@ -110,6 +109,24 @@ where
 	old::ContractInfoOf::<T>::insert(account, info);
 }
 
+#[derive(Encode, Decode, CloneNoBound, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(T))]
+pub struct ContractInfo<T: Config> {
+	pub trie_id: TrieId,
+	pub code_hash: CodeHash<T>,
+	pub storage_bytes: u32,
+	pub storage_items: u32,
+	pub storage_byte_deposit: BalanceOf<T>,
+	pub storage_item_deposit: BalanceOf<T>,
+	pub storage_base_deposit: BalanceOf<T>,
+	pub delegate_dependencies:
+		BoundedBTreeMap<CodeHash<T>, BalanceOf<T>, T::MaxDelegateDependencies>,
+}
+
+#[storage_alias]
+pub(crate) type ContractInfoOf<T: Config> =
+	StorageMap<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, ContractInfo<T>>;
+
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
 pub struct Migration<T: Config> {
 	last_account: Option<T::AccountId>,
@@ -131,8 +148,8 @@ impl<T: Config> MigrationStep for Migration<T> {
 			old::ContractInfoOf::<T>::iter()
 		};
 
-		if let Some((account, contract)) = iter.next() {
-			let deposit_account = &contract.deposit_account;
+		if let Some((account, old_contract)) = iter.next() {
+			let deposit_account = &old_contract.deposit_account;
 			if System::<T>::consumers(deposit_account) > Zero::zero() {
 				System::<T>::dec_consumers(deposit_account);
 			}
@@ -222,6 +239,17 @@ impl<T: Config> MigrationStep for Migration<T> {
 			}
 
 			log::debug!(target: LOG_TARGET, "===");
+			let info = ContractInfo {
+				trie_id: old_contract.trie_id,
+				code_hash: old_contract.code_hash,
+				storage_bytes: old_contract.storage_bytes,
+				storage_items: old_contract.storage_items,
+				storage_byte_deposit: old_contract.storage_byte_deposit,
+				storage_item_deposit: old_contract.storage_item_deposit,
+				storage_base_deposit: old_contract.storage_base_deposit,
+				delegate_dependencies: old_contract.delegate_dependencies,
+			};
+			ContractInfoOf::<T>::insert(account.clone(), info);
 
 			// Store last key for next migration step
 			self.last_account = Some(account);
@@ -242,13 +270,11 @@ impl<T: Config> MigrationStep for Migration<T> {
 		let state: Vec<(T::AccountId, ContractInfo<T>, BalanceOf<T>, BalanceOf<T>)> = sample
 			.iter()
 			.map(|(account, contract)| {
-				let deposit_balance = T::Currency::total_balance(&contract.deposit_account());
-				let account_balance = T::Currency::total_balance(&account);
 				(
 					account.clone(),
 					contract.clone(),
-					account_balance.saturating_add(deposit_balance),
-					deposit_balance,
+					T::Currency::total_balance(&account),
+					T::Currency::total_balance(&contract.deposit_account()),
 				)
 			})
 			.collect();
@@ -265,16 +291,17 @@ impl<T: Config> MigrationStep for Migration<T> {
 			.expect("pre_upgrade_step provides a valid state; qed");
 
 		log::debug!(target: LOG_TARGET, "Validating sample of {} contracts", sample.len());
-		for (account, old_contract, old_total_balance, deposit_balance) in sample {
+		for (account, old_contract, old_account_balance, old_deposit_balance) in sample {
 			log::debug!(target: LOG_TARGET, "===");
 			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
 
 			ensure!(
-				old_total_balance == T::Currency::total_balance(&account),
+				old_total_balance.saturating_add(old_account_balance) ==
+					T::Currency::total_balance(&account),
 				"total balance mismatch"
 			);
 			ensure!(
-				deposit_balance ==
+				old_deposit_balance ==
 					T::Currency::balance_on_hold(
 						&HoldReason::StorageDepositReserve.into(),
 						&account

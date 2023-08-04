@@ -1566,7 +1566,9 @@ mod tests {
 		exec::ExportedFunction::*,
 		gas::GasMeter,
 		tests::{
-			test_utils::{get_balance, hash, place_contract, set_balance},
+			test_utils::{
+				contract_info_storage_deposit, get_balance, hash, place_contract, set_balance,
+			},
 			ExtBuilder, RuntimeCall, RuntimeEvent as MetaEvent, Test, TestFilter, ALICE, BOB,
 			CHARLIE, GAS_LIMIT,
 		},
@@ -2520,7 +2522,6 @@ mod tests {
 					),
 					Ok((address, ref output)) if output.data == vec![80, 65, 83, 83] => address
 				);
-				let meter_storage_deposit = 132;
 
 				// Check that the newly created account has the expected code hash and
 				// there are instantiation event.
@@ -2534,7 +2535,7 @@ mod tests {
 						Event::StorageDepositTransferredAndHeld {
 							from: ALICE,
 							to: instantiated_contract_address.clone(),
-							amount: meter_storage_deposit
+							amount: contract_info_storage_deposit(&instantiated_contract_address)
 						},
 						Event::Instantiated {
 							deployer: ALICE,
@@ -2633,7 +2634,6 @@ mod tests {
 					min_balance * 10,
 				)
 				.unwrap();
-				let meter_storage_deposit = 132;
 
 				assert_matches!(
 					MockStack::run_call(
@@ -2665,7 +2665,7 @@ mod tests {
 						Event::StorageDepositTransferredAndHeld {
 							from: ALICE,
 							to: instantiated_contract_address.clone(),
-							amount: meter_storage_deposit
+							amount: contract_info_storage_deposit(&instantiated_contract_address)
 						},
 						Event::Instantiated {
 							deployer: BOB,
