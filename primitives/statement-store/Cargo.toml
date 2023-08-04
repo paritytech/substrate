@@ -53,6 +53,7 @@ std = [
 	"hkdf",
 	"sha2",
 	"rand",
+	"sp-externalities/std"
 ]
 serde = [
         "scale-info/serde",

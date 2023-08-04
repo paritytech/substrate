@@ -25,10 +25,10 @@
 //!
 //! ## Overview
 //!
-//! This module extends accounts based on the [`Currency`] trait to have smart-contract
-//! functionality. It can be used with other modules that implement accounts based on [`Currency`].
-//! These "smart-contract accounts" have the ability to instantiate smart-contracts and make calls
-//! to other contract and non-contract accounts.
+//! This module extends accounts based on the [`frame_support::traits::fungible`] traits to have
+//! smart-contract functionality. It can be used with other modules that implement accounts based on
+//! the [`frame_support::traits::fungible`] traits. These "smart-contract accounts" have the ability
+//! to instantiate smart-contracts and make calls to other contract and non-contract accounts.
 //!
 //! The smart-contract code is stored once, and later retrievable via its hash.
 //! This means that multiple smart-contracts can be instantiated from the same hash, without
@@ -117,8 +117,8 @@ use frame_support::{
 	ensure,
 	error::BadOrigin,
 	traits::{
-		tokens::fungible::Inspect, ConstU32, Contains, Currency, Get, Randomness,
-		ReservableCurrency, Time,
+		fungible::{Inspect, Mutate, MutateHold},
+		ConstU32, Contains, Get, Randomness, Time,
 	},
 	weights::Weight,
 	BoundedVec, RuntimeDebugNoBound,
@@ -133,7 +133,6 @@ use scale_info::TypeInfo;
 use smallvec::Array;
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, Zero};
 use sp_std::{fmt::Debug, prelude::*};
-pub use weights::WeightInfo;
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
@@ -143,6 +142,7 @@ pub use crate::{
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 	wasm::Determinism,
 };
+pub use weights::WeightInfo;
 
 #[cfg(doc)]
 pub use crate::wasm::api_doc;
@@ -150,7 +150,7 @@ pub use crate::wasm::api_doc;
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = BoundedVec<u8, ConstU32<128>>;
 type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+	<<T as Config>::Currency as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
@@ -186,7 +186,7 @@ pub mod pallet {
 	use sp_runtime::Perbill;
 
 	/// The current storage version.
-	pub(crate) const STORAGE_VERSION: StorageVersion = StorageVersion::new(13);
+	pub(crate) const STORAGE_VERSION: StorageVersion = StorageVersion::new(14);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -207,9 +207,10 @@ pub mod pallet {
 		/// to supply a dummy implementation for this type (because it is never used).
 		type Randomness: Randomness<Self::Hash, BlockNumberFor<Self>>;
 
-		/// The currency in which fees are paid and contract balances are held.
-		type Currency: ReservableCurrency<Self::AccountId> // TODO: Move to fungible traits
-			+ Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
+		/// The fungible in which fees are paid and contract balances are held.
+		type Currency: Inspect<Self::AccountId>
+			+ Mutate<Self::AccountId>
+			+ MutateHold<Self::AccountId, Reason = Self::RuntimeHoldReason>;
 
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -329,20 +330,25 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxDebugBufferLen: Get<u32>;
 
+		/// Overarching hold reason.
+		type RuntimeHoldReason: From<HoldReason>;
+
 		/// The sequence of migration steps that will be applied during a migration.
 		///
 		/// # Examples
 		/// ```
 		/// use pallet_contracts::migration::{v10, v11};
 		/// # struct Runtime {};
-		/// type Migrations = (v10::Migration<Runtime>, v11::Migration<Runtime>);
+		/// # struct Currency {};
+		/// type Migrations = (v10::Migration<Runtime, Currency>, v11::Migration<Runtime>);
 		/// ```
 		///
 		/// If you have a single migration step, you can use a tuple with a single element:
 		/// ```
 		/// use pallet_contracts::migration::v10;
 		/// # struct Runtime {};
-		/// type Migrations = (v10::Migration<Runtime>,);
+		/// # struct Currency {};
+		/// type Migrations = (v10::Migration<Runtime, Currency>,);
 		/// ```
 		type Migrations: MigrateSequence;
 	}
@@ -832,7 +838,7 @@ pub mod pallet {
 		},
 
 		/// Code with the specified hash has been stored.
-		CodeStored { code_hash: T::Hash },
+		CodeStored { code_hash: T::Hash, deposit_held: BalanceOf<T>, uploader: T::AccountId },
 
 		/// A custom event emitted by the contract.
 		ContractEmitted {
@@ -844,7 +850,7 @@ pub mod pallet {
 		},
 
 		/// A code with the specified hash was removed.
-		CodeRemoved { code_hash: T::Hash },
+		CodeRemoved { code_hash: T::Hash, deposit_released: BalanceOf<T>, remover: T::AccountId },
 
 		/// A contract's code was updated.
 		ContractCodeUpdated {
@@ -977,6 +983,13 @@ pub mod pallet {
 		DelegateDependencyAlreadyExists,
 		/// Can not add a delegate dependency to the code hash of the contract itself.
 		CannotAddSelfAsDelegateDependency,
+	}
+
+	/// A reason for the pallet contracts placing a hold on funds.
+	#[pallet::composite_enum]
+	pub enum HoldReason {
+		/// The Pallet has reserved it for storing code on-chain.
+		CodeUploadDepositReserve,
 	}
 
 	/// A mapping from a contract's code hash to its code.

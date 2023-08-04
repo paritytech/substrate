@@ -52,13 +52,93 @@ use std::{
 };
 use wasm_timer::Delay;
 
-use crate::{
-	peer_store::PeerStoreProvider,
-	peerset::{IncomingIndex, Message, SetConfig, SetId},
-};
+use crate::peer_store::PeerStoreProvider;
 
 /// Log target for this file.
 pub const LOG_TARGET: &str = "peerset";
+
+/// `Notifications` protocol index. For historical reasons it's called `SetId`, because it
+/// used to refer to a set of peers in a peerset for this protocol.
+///
+/// Can be constructed using the `From<usize>` trait implementation based on the index of the
+/// protocol in `Notifications`.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SetId(usize);
+
+impl SetId {
+	/// Const conversion function for initialization of hardcoded peerset indices.
+	pub const fn from(id: usize) -> Self {
+		Self(id)
+	}
+}
+
+impl From<usize> for SetId {
+	fn from(id: usize) -> Self {
+		Self(id)
+	}
+}
+
+impl From<SetId> for usize {
+	fn from(id: SetId) -> Self {
+		id.0
+	}
+}
+
+/// Configuration for a set of nodes for a specific protocol.
+#[derive(Debug)]
+pub struct ProtoSetConfig {
+	/// Maximum number of incoming links to peers.
+	pub in_peers: u32,
+
+	/// Maximum number of outgoing links to peers.
+	pub out_peers: u32,
+
+	/// Lists of nodes we should always be connected to.
+	///
+	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
+	/// >			otherwise it will not be able to connect to them.
+	pub reserved_nodes: HashSet<PeerId>,
+
+	/// If true, we only accept nodes in [`ProtoSetConfig::reserved_nodes`].
+	pub reserved_only: bool,
+}
+
+/// Message that is sent by [`ProtocolController`] to `Notifications`.
+#[derive(Debug, PartialEq)]
+pub enum Message {
+	/// Request to open a connection to the given peer. From the point of view of the
+	/// `ProtocolController`, we are immediately connected.
+	Connect {
+		/// Set id to connect on.
+		set_id: SetId,
+		/// Peer to connect to.
+		peer_id: PeerId,
+	},
+
+	/// Drop the connection to the given peer, or cancel the connection attempt after a `Connect`.
+	Drop {
+		/// Set id to disconnect on.
+		set_id: SetId,
+		/// Peer to disconnect from.
+		peer_id: PeerId,
+	},
+
+	/// Equivalent to `Connect` for the peer corresponding to this incoming index.
+	Accept(IncomingIndex),
+
+	/// Equivalent to `Drop` for the peer corresponding to this incoming index.
+	Reject(IncomingIndex),
+}
+
+/// Opaque identifier for an incoming connection. Allocated by the network.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IncomingIndex(pub u64);
+
+impl From<u64> for IncomingIndex {
+	fn from(val: u64) -> Self {
+		Self(val)
+	}
+}
 
 /// External API actions.
 #[derive(Debug)]
@@ -179,8 +259,7 @@ impl Default for PeerState {
 	}
 }
 
-/// Side of [`ProtocolHandle`] responsible for all the logic. Currently all instances are
-/// owned by [`crate::Peerset`], but they should eventually be moved to corresponding protocols.
+/// Worker side of [`ProtocolHandle`] responsible for all the logic.
 #[derive(Debug)]
 pub struct ProtocolController {
 	/// Set id to use when sending connect/drop requests to `Notifications`.
@@ -217,7 +296,7 @@ impl ProtocolController {
 	/// Construct new [`ProtocolController`].
 	pub fn new(
 		set_id: SetId,
-		config: SetConfig,
+		config: ProtoSetConfig,
 		to_notifications: TracingUnboundedSender<Message>,
 		peer_store: Box<dyn PeerStoreProvider>,
 	) -> (ProtocolHandle, ProtocolController) {
@@ -758,12 +837,8 @@ impl ProtocolController {
 
 #[cfg(test)]
 mod tests {
-	use super::{Direction, PeerState, ProtocolController, ProtocolHandle};
-	use crate::{
-		peer_store::PeerStoreProvider,
-		peerset::{IncomingIndex, Message, SetConfig, SetId},
-		ReputationChange,
-	};
+	use super::*;
+	use crate::{peer_store::PeerStoreProvider, ReputationChange};
 	use libp2p::PeerId;
 	use sc_utils::mpsc::{tracing_unbounded, TryRecvError};
 	use std::collections::HashSet;
@@ -788,10 +863,9 @@ mod tests {
 		let reserved2 = PeerId::random();
 
 		// Add first reserved node via config.
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			out_peers: 0,
-			bootnodes: Vec::new(),
 			reserved_nodes: std::iter::once(reserved1).collect(),
 			reserved_only: true,
 		};
@@ -851,10 +925,9 @@ mod tests {
 		let reserved2 = PeerId::random();
 
 		// Add first reserved node via config.
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			out_peers: 0,
-			bootnodes: Vec::new(),
 			reserved_nodes: std::iter::once(reserved1).collect(),
 			reserved_only: true,
 		};
@@ -903,10 +976,9 @@ mod tests {
 		let reserved2 = PeerId::random();
 
 		// Add first reserved node via config.
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			out_peers: 0,
-			bootnodes: Vec::new(),
 			reserved_nodes: std::iter::once(reserved1).collect(),
 			reserved_only: true,
 		};
@@ -962,11 +1034,10 @@ mod tests {
 		let peer2 = PeerId::random();
 		let candidates = vec![peer1, peer2];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			// Less slots than candidates.
 			out_peers: 2,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1014,13 +1085,8 @@ mod tests {
 		let outgoing_candidates = vec![regular1, regular2];
 		let reserved_nodes = [reserved1, reserved2].iter().cloned().collect();
 
-		let config = SetConfig {
-			in_peers: 10,
-			out_peers: 10,
-			bootnodes: Vec::new(),
-			reserved_nodes,
-			reserved_only: false,
-		};
+		let config =
+			ProtoSetConfig { in_peers: 10, out_peers: 10, reserved_nodes, reserved_only: false };
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
 		let mut peer_store = MockPeerStoreHandle::new();
@@ -1055,11 +1121,10 @@ mod tests {
 		let candidates1 = vec![peer1, peer2];
 		let candidates2 = vec![peer3];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			// Less slots than candidates.
 			out_peers: 2,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1126,11 +1191,10 @@ mod tests {
 
 	#[test]
 	fn in_reserved_only_mode_no_peers_are_requested_from_peer_store_and_connected() {
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			// Make sure we have slots available.
 			out_peers: 2,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: true,
 		};
@@ -1153,11 +1217,10 @@ mod tests {
 
 	#[test]
 	fn in_reserved_only_mode_no_regular_peers_are_accepted() {
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			// Make sure we have slots available.
 			in_peers: 2,
 			out_peers: 0,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: true,
 		};
@@ -1191,11 +1254,10 @@ mod tests {
 		let peer2 = PeerId::random();
 		let candidates = vec![peer1, peer2];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			// Make sure we have slots available.
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: true,
 		};
@@ -1239,10 +1301,9 @@ mod tests {
 		let regular2 = PeerId::random();
 		let outgoing_candidates = vec![regular1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
 			reserved_only: false,
 		};
@@ -1300,10 +1361,9 @@ mod tests {
 		let reserved1 = PeerId::random();
 		let reserved2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
 			reserved_only: false,
 		};
@@ -1333,10 +1393,9 @@ mod tests {
 		let reserved1 = PeerId::random();
 		let reserved2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
 			reserved_only: true,
 		};
@@ -1380,10 +1439,9 @@ mod tests {
 		let peer1 = PeerId::random();
 		let peer2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [peer1, peer2].iter().cloned().collect(),
 			reserved_only: false,
 		};
@@ -1427,10 +1485,9 @@ mod tests {
 		let peer2 = PeerId::random();
 		let outgoing_candidates = vec![peer1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1470,10 +1527,9 @@ mod tests {
 		let peer2 = PeerId::random();
 		let outgoing_candidates = vec![peer1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1530,10 +1586,9 @@ mod tests {
 		let reserved1 = PeerId::random();
 		let reserved2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
 			reserved_only: false,
 		};
@@ -1587,10 +1642,9 @@ mod tests {
 		let peer2 = PeerId::random();
 		let outgoing_candidates = vec![peer1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1640,10 +1694,9 @@ mod tests {
 		let reserved1 = PeerId::random();
 		let reserved2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
 			reserved_only: false,
 		};
@@ -1701,10 +1754,9 @@ mod tests {
 		let regular2 = PeerId::random();
 		let outgoing_candidates = vec![regular1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1754,10 +1806,9 @@ mod tests {
 		let regular2 = PeerId::random();
 		let outgoing_candidates = vec![regular1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1808,10 +1859,9 @@ mod tests {
 		let regular2 = PeerId::random();
 		let outgoing_candidates = vec![regular1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 1,
 			out_peers: 1,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1862,10 +1912,9 @@ mod tests {
 		let peer1 = PeerId::random();
 		let peer2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 1,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1893,10 +1942,9 @@ mod tests {
 	fn banned_regular_incoming_node_is_rejected() {
 		let peer1 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1919,10 +1967,9 @@ mod tests {
 	fn banned_reserved_incoming_node_is_rejected() {
 		let reserved1 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: std::iter::once(reserved1).collect(),
 			reserved_only: false,
 		};
@@ -1946,10 +1993,9 @@ mod tests {
 	fn we_dont_connect_to_banned_reserved_node() {
 		let reserved1 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: std::iter::once(reserved1).collect(),
 			reserved_only: false,
 		};

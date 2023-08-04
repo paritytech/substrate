@@ -161,11 +161,31 @@ cli = [
 ]
 runtime-benchmarks = [
 	"kitchensink-runtime/runtime-benchmarks",
-	"frame-benchmarking-cli/runtime-benchmarks"
+	"frame-benchmarking-cli/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"pallet-asset-tx-payment/runtime-benchmarks",
+	"pallet-assets/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
+	"pallet-im-online/runtime-benchmarks",
+	"pallet-timestamp/runtime-benchmarks",
+	"sc-client-db/runtime-benchmarks",
+	"sc-service/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks"
 ]
 # Enable features that allow the runtime to be tried and debugged. Name might be subject to change
 # in the near future.
-try-runtime = ["kitchensink-runtime/try-runtime", "try-runtime-cli/try-runtime"]
+try-runtime = [
+	"kitchensink-runtime/try-runtime",
+	"try-runtime-cli/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-asset-conversion-tx-payment/try-runtime",
+	"pallet-asset-tx-payment/try-runtime",
+	"pallet-assets/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-im-online/try-runtime",
+	"pallet-timestamp/try-runtime",
+	"sp-runtime/try-runtime"
+]
 
 [[bench]]
 name = "transaction_pool"
