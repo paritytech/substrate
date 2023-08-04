@@ -103,7 +103,7 @@ impl pallet_aura::Config for Test {
 	type MaxAuthorities = ConstU32<10>;
 	type AllowMultipleBlocksPerSlot = AllowMultipleBlocksPerSlot;
 
-	#[cfg(feature = "explicit-slot-duration")]
+	#[cfg(feature = "experimental")]
 	type SlotDuration = ConstU64<SLOT_DURATION>;
 }
 
