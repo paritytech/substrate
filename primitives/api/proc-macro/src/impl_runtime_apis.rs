@@ -511,8 +511,11 @@ fn add_feature_guard(attrs: &mut Vec<Attribute>, feature_name: &str, t: bool) {
 // "enable-staging-api", api_version(99))]`). Replaces the `cfg_attr` attribute with a feature guard
 // so that staging methods are added only for staging api implementations.
 struct ApiImplItem<'a> {
+	// Version of the trait where the `ImplItemFn` is located. Used for error reporting.
 	trait_api_ver: &'a Option<(String, u64)>,
+	// Span of the trait where the `ImplItemFn` is located. Used for error reporting.
 	trait_span: Span,
+	// All errors which occurred during folding
 	errors: Vec<Error>,
 }
 
@@ -537,13 +540,14 @@ impl<'a> Fold for ApiImplItem<'a> {
 	fn fold_impl_item_fn(&mut self, mut i: ImplItemFn) -> ImplItemFn {
 		let v = extract_api_version(&i.attrs, i.span());
 
-		if let Err(e) = v {
-			self.errors.push(e);
-			return fold::fold_impl_item_fn(self, i)
-		}
-
-		let v = v
-			.expect("Explicitly checked for and handled the error case on the previous line. qed.");
+		let v = match v {
+			Ok(ver) => ver,
+			Err(e) => {
+				// `api_version` attribute seems to be malformed
+				self.errors.push(e);
+				return fold::fold_impl_item_fn(self, i)
+			},
+		};
 
 		if v.custom.is_some() {
 			self.errors.push(Error::new(
@@ -1002,7 +1006,7 @@ struct ApiVersion {
 // Extracts the value of `API_VERSION_ATTRIBUTE` and handles errors.
 // Returns:
 // - Err if the version is malformed
-// - `ApiVersion` on success. IF a version is set or not is determined by the fields of `ApiVersion`
+// - `ApiVersion` on success. If a version is set or not is determined by the fields of `ApiVersion`
 fn extract_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<ApiVersion> {
 	// First fetch all `API_VERSION_ATTRIBUTE` values (should be only one)
 	let api_ver = attrs
