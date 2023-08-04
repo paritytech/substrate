@@ -27,8 +27,6 @@ use crate::{
 	weights::WeightInfo,
 	AccountIdOf, BalanceOf, CodeHash, Config, HoldReason, Pallet, TrieId, Weight, LOG_TARGET,
 };
-#[cfg(feature = "try-runtime")]
-use crate::{BalanceOf, ContractInfo};
 use core::ops::Deref;
 #[cfg(feature = "try-runtime")]
 use frame_support::{dispatch::Vec, traits::fungible::InspectHold};
@@ -263,18 +261,18 @@ impl<T: Config> MigrationStep for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade_step() -> Result<Vec<u8>, TryRuntimeError> {
-		let sample: Vec<_> = ContractInfoOf::<T>::iter().take(100).collect();
+		let sample: Vec<_> = old::ContractInfoOf::<T>::iter().take(100).collect();
 
 		log::debug!(target: LOG_TARGET, "Taking sample of {} contracts", sample.len());
 
-		let state: Vec<(T::AccountId, ContractInfo<T>, BalanceOf<T>, BalanceOf<T>)> = sample
+		let state: Vec<(T::AccountId, old::ContractInfo<T>, BalanceOf<T>, BalanceOf<T>)> = sample
 			.iter()
 			.map(|(account, contract)| {
 				(
 					account.clone(),
 					contract.clone(),
 					T::Currency::total_balance(&account),
-					T::Currency::total_balance(&contract.deposit_account()),
+					T::Currency::total_balance(&contract.deposit_account),
 				)
 			})
 			.collect();
@@ -296,7 +294,7 @@ impl<T: Config> MigrationStep for Migration<T> {
 			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
 
 			ensure!(
-				old_total_balance.saturating_add(old_account_balance) ==
+				old_account_balance.saturating_add(old_deposit_balance) ==
 					T::Currency::total_balance(&account),
 				"total balance mismatch"
 			);
