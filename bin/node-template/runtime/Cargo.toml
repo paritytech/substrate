@@ -117,6 +117,7 @@ try-runtime = [
 	"pallet-transaction-payment/try-runtime",
 	"sp-runtime/try-runtime"
 ]
+experimental = ["pallet-aura/experimental"]
 
 #Enabling this flag will disable GenesisBuilder API implementation in runtime.
 disable-genesis-builder = []
