@@ -40,11 +40,11 @@ use sp_staking::{
 use sp_std::prelude::*;
 use std::collections::BTreeMap;
 
+use codec::Decode;
 use frame_election_provider_support::{
 	bounds::ElectionBoundsBuilder, onchain, ElectionDataProvider, ExtendedBalance,
 	SequentialPhragmen, Weight,
 };
-use codec::Decode;
 use pallet_election_provider_multi_phase::{
 	unsigned::MinerConfig, Call, ElectionCompute, QueuedSolution, SolutionAccuracyOf,
 };
