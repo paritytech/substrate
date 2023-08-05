@@ -33,7 +33,7 @@ use jsonrpsee::{
 	types::SubscriptionResult,
 };
 
-use sc_rpc_api::{state::ReadProof, DenyUnsafe};
+use sc_rpc_api::DenyUnsafe;
 use sp_core::{
 	storage::{PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey},
 	Bytes,

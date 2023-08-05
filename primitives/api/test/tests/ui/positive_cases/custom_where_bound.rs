@@ -1,12 +1,9 @@
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-use sp_runtime::traits::{Block as BlockT, GetNodeBlockType};
+use sp_runtime::traits::Block as BlockT;
 use substrate_test_runtime_client::runtime::Block;
 
 struct Runtime {}
-impl GetNodeBlockType for Runtime {
-	type NodeBlock = Block;
-}
 
 pub trait CustomTrait: Encode + Decode + TypeInfo {}
 

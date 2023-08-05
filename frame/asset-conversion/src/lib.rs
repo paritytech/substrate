@@ -53,7 +53,7 @@
 //! (This can be run against the kitchen sync node in the `node` folder of this repo.)
 #![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
-use frame_support::traits::Incrementable;
+use frame_support::traits::{DefensiveOption, Incrementable};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -72,17 +72,19 @@ use frame_support::{
 	ensure,
 	traits::tokens::{AssetId, Balance},
 };
-use frame_system::{ensure_signed, pallet_prelude::OriginFor};
+use frame_system::{
+	ensure_signed,
+	pallet_prelude::{BlockNumberFor, OriginFor},
+};
 pub use pallet::*;
 use sp_arithmetic::traits::Unsigned;
 use sp_runtime::{
 	traits::{
 		CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Ensure, MaybeDisplay, TrailingZeroInput,
-		Zero,
 	},
 	DispatchError,
 };
-use sp_std::vec;
+use sp_std::prelude::*;
 pub use types::*;
 pub use weights::WeightInfo;
 
@@ -108,10 +110,9 @@ pub mod pallet {
 		traits::{IntegerSquareRoot, One, Zero},
 		Saturating,
 	};
-	use sp_std::prelude::*;
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -142,10 +143,11 @@ pub mod pallet {
 		/// Identifier for the class of non-native asset.
 		/// Note: A `From<u32>` bound here would prevent `MultiLocation` from being used as an
 		/// `AssetId`.
-		type AssetId: AssetId + PartialOrd;
+		type AssetId: AssetId;
 
 		/// Type that identifies either the native currency or a token class from `Assets`.
-		type MultiAssetId: AssetId + Ord;
+		/// `Ord` is added because of `get_pool_id`.
+		type MultiAssetId: AssetId + Ord + From<Self::AssetId>;
 
 		/// Type to convert an `AssetId` into `MultiAssetId`.
 		type MultiAssetIdConverter: MultiAssetIdConverter<Self::MultiAssetId, Self::AssetId>;
@@ -201,8 +203,8 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// The benchmarks need a way to create asset ids from u32s.
-		#[cfg(any(test, feature = "runtime-benchmarks"))]
-		type BenchmarkHelper: BenchmarkHelper<Self::AssetId>;
+		#[cfg(feature = "runtime-benchmarks")]
+		type BenchmarkHelper: BenchmarkHelper<Self::AssetId, Self::MultiAssetId>;
 	}
 
 	/// Map from `PoolAssetId` to `PoolInfo`. This establishes whether a pool has been officially
@@ -227,6 +229,8 @@ pub mod pallet {
 			/// The pool id associated with the pool. Note that the order of the assets may not be
 			/// the same as the order specified in the create pool extrinsic.
 			pool_id: PoolIdOf<T>,
+			/// The account ID of the pool.
+			pool_account: T::AccountId,
 			/// The id of the liquidity tokens that will be minted when assets are added to this
 			/// pool.
 			lp_token: T::PoolAssetId,
@@ -241,13 +245,13 @@ pub mod pallet {
 			/// The pool id of the pool that the liquidity was added to.
 			pool_id: PoolIdOf<T>,
 			/// The amount of the first asset that was added to the pool.
-			amount1_provided: AssetBalanceOf<T>,
+			amount1_provided: T::AssetBalance,
 			/// The amount of the second asset that was added to the pool.
-			amount2_provided: AssetBalanceOf<T>,
+			amount2_provided: T::AssetBalance,
 			/// The id of the lp token that was minted.
 			lp_token: T::PoolAssetId,
 			/// The amount of lp tokens that were minted of that id.
-			lp_token_minted: AssetBalanceOf<T>,
+			lp_token_minted: T::AssetBalance,
 		},
 
 		/// A successful call of the `RemoveLiquidity` extrinsic will create this event.
@@ -259,13 +263,13 @@ pub mod pallet {
 			/// The pool id that the liquidity was removed from.
 			pool_id: PoolIdOf<T>,
 			/// The amount of the first asset that was removed from the pool.
-			amount1: AssetBalanceOf<T>,
+			amount1: T::AssetBalance,
 			/// The amount of the second asset that was removed from the pool.
-			amount2: AssetBalanceOf<T>,
+			amount2: T::AssetBalance,
 			/// The id of the lp token that was burned.
 			lp_token: T::PoolAssetId,
 			/// The amount of lp tokens that were burned of that id.
-			lp_token_burned: AssetBalanceOf<T>,
+			lp_token_burned: T::AssetBalance,
 			/// Liquidity withdrawal fee (%).
 			withdrawal_fee: Permill,
 		},
@@ -280,9 +284,9 @@ pub mod pallet {
 			/// E.g. A -> Dot -> B
 			path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
 			/// The amount of the first asset that was swapped.
-			amount_in: AssetBalanceOf<T>,
+			amount_in: T::AssetBalance,
 			/// The amount of the second asset that was received.
-			amount_out: AssetBalanceOf<T>,
+			amount_out: T::AssetBalance,
 		},
 		/// An amount has been transferred from one account to another.
 		Transfer {
@@ -293,7 +297,7 @@ pub mod pallet {
 			/// The asset that was transferred.
 			asset: T::MultiAssetId,
 			/// The amount of the asset that was transferred.
-			amount: AssetBalanceOf<T>,
+			amount: T::AssetBalance,
 		},
 	}
 
@@ -301,13 +305,18 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Provided assets are equal.
 		EqualAssets,
+		/// Provided asset is not supported for pool.
+		UnsupportedAsset,
 		/// Pool already exists.
 		PoolExists,
 		/// Desired amount can't be zero.
 		WrongDesiredAmount,
 		/// Provided amount should be greater than or equal to the existential deposit/asset's
 		/// minimal amount.
-		AmountLessThanMinimal,
+		AmountOneLessThanMinimal,
+		/// Provided amount should be greater than or equal to the existential deposit/asset's
+		/// minimal amount.
+		AmountTwoLessThanMinimal,
 		/// Reserve needs to always be greater than or equal to the existential deposit/asset's
 		/// minimal amount.
 		ReserveLeftLessThanMinimal,
@@ -347,29 +356,21 @@ pub mod pallet {
 		PathError,
 		/// The provided path must consists of unique assets.
 		NonUniquePath,
+		/// It was not possible to get or increment the Id of the pool.
+		IncorrectPoolAssetId,
+		/// Unable to find an element in an array/vec that should have one-to-one correspondence
+		/// with another. For example, an array of assets constituting a `path` should have a
+		/// corresponding array of `amounts` along the path.
+		CorrespondenceError,
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
-			#[cfg(test)]
-			sp_io::TestExternalities::new_empty().execute_with(|| {
-				// ensure that the `AccountId` is set properly and doesn't generate the same
-				// pool account for different pool ids.
-				let native = T::MultiAssetIdConverter::get_native();
-				let asset_1 =
-					T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(1));
-				let asset_2 =
-					T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(2));
-				assert!(asset_1 != asset_2, "must return different assets for different ids.");
-				let pool_account_1 = Self::get_pool_account(&(native.clone(), asset_1));
-				let pool_account_2 = Self::get_pool_account(&(native, asset_2));
-				assert!(sp_std::mem::size_of::<T::AccountId>() >= sp_std::mem::size_of::<u128>());
-				assert!(
-					pool_account_1 != pool_account_2,
-					"AccountId should be set at least to u128"
-				);
-			});
+			assert!(
+				T::MaxSwapPathLength::get() > 1,
+				"the `MaxSwapPathLength` should be greater than 1",
+			);
 		}
 	}
 
@@ -390,14 +391,13 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			ensure!(asset1 != asset2, Error::<T>::EqualAssets);
 
-			let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
-			let (asset1, asset2) = pool_id.clone();
-
-			if !T::AllowMultiAssetPools::get() && !T::MultiAssetIdConverter::is_native(&asset1) {
+			// prepare pool_id
+			let pool_id = Self::get_pool_id(asset1, asset2);
+			ensure!(!Pools::<T>::contains_key(&pool_id), Error::<T>::PoolExists);
+			let (asset1, asset2) = &pool_id;
+			if !T::AllowMultiAssetPools::get() && !T::MultiAssetIdConverter::is_native(asset1) {
 				Err(Error::<T>::PoolMustContainNativeCurrency)?;
 			}
-
-			ensure!(!Pools::<T>::contains_key(&pool_id), Error::<T>::PoolExists);
 
 			let pool_account = Self::get_pool_account(&pool_id);
 			frame_system::Pallet::<T>::inc_providers(&pool_account);
@@ -410,19 +410,28 @@ pub mod pallet {
 				Preserve,
 			)?;
 
-			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(&asset1) {
-				if !T::Assets::contains(&asset, &pool_account) {
-					T::Assets::touch(asset, pool_account.clone(), sender.clone())?;
-				}
+			// try to convert both assets
+			match T::MultiAssetIdConverter::try_convert(asset1) {
+				MultiAssetIdConversionResult::Converted(asset) =>
+					if !T::Assets::contains(&asset, &pool_account) {
+						T::Assets::touch(asset, pool_account.clone(), sender.clone())?
+					},
+				MultiAssetIdConversionResult::Unsupported(_) => Err(Error::<T>::UnsupportedAsset)?,
+				MultiAssetIdConversionResult::Native => (),
 			}
-			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(&asset2) {
-				if !T::Assets::contains(&asset, &pool_account) {
-					T::Assets::touch(asset, pool_account.clone(), sender.clone())?;
-				}
+			match T::MultiAssetIdConverter::try_convert(asset2) {
+				MultiAssetIdConversionResult::Converted(asset) =>
+					if !T::Assets::contains(&asset, &pool_account) {
+						T::Assets::touch(asset, pool_account.clone(), sender.clone())?
+					},
+				MultiAssetIdConversionResult::Unsupported(_) => Err(Error::<T>::UnsupportedAsset)?,
+				MultiAssetIdConversionResult::Native => (),
 			}
 
-			let lp_token = NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value());
-			let next_lp_token_id = lp_token.increment();
+			let lp_token = NextPoolAssetId::<T>::get()
+				.or(T::PoolAssetId::initial_value())
+				.ok_or(Error::<T>::IncorrectPoolAssetId)?;
+			let next_lp_token_id = lp_token.increment().ok_or(Error::<T>::IncorrectPoolAssetId)?;
 			NextPoolAssetId::<T>::set(Some(next_lp_token_id));
 
 			T::PoolAssets::create(lp_token.clone(), pool_account.clone(), false, 1u32.into())?;
@@ -431,7 +440,12 @@ pub mod pallet {
 			let pool_info = PoolInfo { lp_token: lp_token.clone() };
 			Pools::<T>::insert(pool_id.clone(), pool_info);
 
-			Self::deposit_event(Event::PoolCreated { creator: sender, pool_id, lp_token });
+			Self::deposit_event(Event::PoolCreated {
+				creator: sender,
+				pool_id,
+				pool_account,
+				lp_token,
+			});
 
 			Ok(())
 		}
@@ -451,10 +465,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset1: T::MultiAssetId,
 			asset2: T::MultiAssetId,
-			amount1_desired: AssetBalanceOf<T>,
-			amount2_desired: AssetBalanceOf<T>,
-			amount1_min: AssetBalanceOf<T>,
-			amount2_min: AssetBalanceOf<T>,
+			amount1_desired: T::AssetBalance,
+			amount2_desired: T::AssetBalance,
+			amount1_min: T::AssetBalance,
+			amount2_min: T::AssetBalance,
 			mint_to: T::AccountId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -477,8 +491,8 @@ pub mod pallet {
 			let maybe_pool = Pools::<T>::get(pool_id.clone());
 			let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
 
-			let amount1: AssetBalanceOf<T>;
-			let amount2: AssetBalanceOf<T>;
+			let amount1: T::AssetBalance;
+			let amount2: T::AssetBalance;
 			let pool_account = Self::get_pool_account(&pool_id);
 			let reserve1 = Self::get_balance(&pool_account, &asset1)?;
 			let reserve2 = Self::get_balance(&pool_account, &asset2)?;
@@ -512,16 +526,16 @@ pub mod pallet {
 			}
 
 			Self::validate_minimal_amount(amount1.saturating_add(reserve1), &asset1)
-				.map_err(|_| Error::<T>::AmountLessThanMinimal)?;
+				.map_err(|_| Error::<T>::AmountOneLessThanMinimal)?;
 			Self::validate_minimal_amount(amount2.saturating_add(reserve2), &asset2)
-				.map_err(|_| Error::<T>::AmountLessThanMinimal)?;
+				.map_err(|_| Error::<T>::AmountTwoLessThanMinimal)?;
 
 			Self::transfer(&asset1, &sender, &pool_account, amount1, true)?;
 			Self::transfer(&asset2, &sender, &pool_account, amount2, true)?;
 
 			let total_supply = T::PoolAssets::total_issuance(pool.lp_token.clone());
 
-			let lp_token_amount: AssetBalanceOf<T>;
+			let lp_token_amount: T::AssetBalance;
 			if total_supply.is_zero() {
 				lp_token_amount = Self::calc_lp_amount_for_zero_supply(&amount1, &amount2)?;
 				T::PoolAssets::mint_into(
@@ -564,9 +578,9 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset1: T::MultiAssetId,
 			asset2: T::MultiAssetId,
-			lp_token_burn: AssetBalanceOf<T>,
-			amount1_min_receive: AssetBalanceOf<T>,
-			amount2_min_receive: AssetBalanceOf<T>,
+			lp_token_burn: T::AssetBalance,
+			amount1_min_receive: T::AssetBalance,
+			amount2_min_receive: T::AssetBalance,
 			withdraw_to: T::AccountId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -642,33 +656,20 @@ pub mod pallet {
 		pub fn swap_exact_tokens_for_tokens(
 			origin: OriginFor<T>,
 			path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
-			amount_in: AssetBalanceOf<T>,
-			amount_out_min: AssetBalanceOf<T>,
+			amount_in: T::AssetBalance,
+			amount_out_min: T::AssetBalance,
 			send_to: T::AccountId,
 			keep_alive: bool,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-
-			ensure!(
-				amount_in > Zero::zero() && amount_out_min > Zero::zero(),
-				Error::<T>::ZeroAmount
-			);
-			Self::validate_swap_path(&path)?;
-
-			let amounts = Self::get_amounts_out(&amount_in, &path)?;
-			let amount_out = *amounts.last().expect("Has always more than 1 element");
-			ensure!(amount_out >= amount_out_min, Error::<T>::ProvidedMinimumNotSufficientForSwap);
-
-			Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
-
-			Self::deposit_event(Event::SwapExecuted {
-				who: sender,
-				send_to,
+			Self::do_swap_exact_tokens_for_tokens(
+				sender,
 				path,
 				amount_in,
-				amount_out,
-			});
-
+				Some(amount_out_min),
+				send_to,
+				keep_alive,
+			)?;
 			Ok(())
 		}
 
@@ -683,95 +684,181 @@ pub mod pallet {
 		pub fn swap_tokens_for_exact_tokens(
 			origin: OriginFor<T>,
 			path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
-			amount_out: AssetBalanceOf<T>,
-			amount_in_max: AssetBalanceOf<T>,
+			amount_out: T::AssetBalance,
+			amount_in_max: T::AssetBalance,
 			send_to: T::AccountId,
 			keep_alive: bool,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-
-			ensure!(
-				amount_out > Zero::zero() && amount_in_max > Zero::zero(),
-				Error::<T>::ZeroAmount
-			);
-			Self::validate_swap_path(&path)?;
-
-			let amounts = Self::get_amounts_in(&amount_out, &path)?;
-			let amount_in = *amounts.first().expect("Always has more than one element");
-			ensure!(amount_in <= amount_in_max, Error::<T>::ProvidedMaximumNotSufficientForSwap);
-
-			Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
-
-			Self::deposit_event(Event::SwapExecuted {
-				who: sender,
-				send_to,
+			Self::do_swap_tokens_for_exact_tokens(
+				sender,
 				path,
-				amount_in,
 				amount_out,
-			});
-
+				Some(amount_in_max),
+				send_to,
+				keep_alive,
+			)?;
 			Ok(())
 		}
 	}
 
 	impl<T: Config> Pallet<T> {
+		/// Swap exactly `amount_in` of asset `path[0]` for asset `path[1]`.
+		/// If an `amount_out_min` is specified, it will return an error if it is unable to acquire
+		/// the amount desired.
+		///
+		/// Withdraws the `path[0]` asset from `sender`, deposits the `path[1]` asset to `send_to`,
+		/// respecting `keep_alive`.
+		///
+		/// If successful, returns the amount of `path[1]` acquired for the `amount_in`.
+		pub fn do_swap_exact_tokens_for_tokens(
+			sender: T::AccountId,
+			path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
+			amount_in: T::AssetBalance,
+			amount_out_min: Option<T::AssetBalance>,
+			send_to: T::AccountId,
+			keep_alive: bool,
+		) -> Result<T::AssetBalance, DispatchError> {
+			ensure!(amount_in > Zero::zero(), Error::<T>::ZeroAmount);
+			if let Some(amount_out_min) = amount_out_min {
+				ensure!(amount_out_min > Zero::zero(), Error::<T>::ZeroAmount);
+			}
+
+			Self::validate_swap_path(&path)?;
+
+			let amounts = Self::get_amounts_out(&amount_in, &path)?;
+			let amount_out =
+				*amounts.last().defensive_ok_or("get_amounts_out() returned an empty result")?;
+
+			if let Some(amount_out_min) = amount_out_min {
+				ensure!(
+					amount_out >= amount_out_min,
+					Error::<T>::ProvidedMinimumNotSufficientForSwap
+				);
+			}
+
+			Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
+			Ok(amount_out)
+		}
+
+		/// Take the `path[0]` asset and swap some amount for `amount_out` of the `path[1]`. If an
+		/// `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
+		/// too costly.
+		///
+		/// Withdraws `path[0]` asset from `sender`, deposits the `path[1]` asset to `send_to`,
+		/// respecting `keep_alive`.
+		///
+		/// If successful returns the amount of the `path[0]` taken to provide `path[1]`.
+		pub fn do_swap_tokens_for_exact_tokens(
+			sender: T::AccountId,
+			path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
+			amount_out: T::AssetBalance,
+			amount_in_max: Option<T::AssetBalance>,
+			send_to: T::AccountId,
+			keep_alive: bool,
+		) -> Result<T::AssetBalance, DispatchError> {
+			ensure!(amount_out > Zero::zero(), Error::<T>::ZeroAmount);
+			if let Some(amount_in_max) = amount_in_max {
+				ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
+			}
+
+			Self::validate_swap_path(&path)?;
+
+			let amounts = Self::get_amounts_in(&amount_out, &path)?;
+			let amount_in =
+				*amounts.first().defensive_ok_or("get_amounts_in() returned an empty result")?;
+
+			if let Some(amount_in_max) = amount_in_max {
+				ensure!(
+					amount_in <= amount_in_max,
+					Error::<T>::ProvidedMaximumNotSufficientForSwap
+				);
+			}
+
+			Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
+			Ok(amount_in)
+		}
+
+		/// Transfer an `amount` of `asset_id`, respecting the `keep_alive` requirements.
 		fn transfer(
 			asset_id: &T::MultiAssetId,
 			from: &T::AccountId,
 			to: &T::AccountId,
-			amount: AssetBalanceOf<T>,
+			amount: T::AssetBalance,
 			keep_alive: bool,
 		) -> Result<T::AssetBalance, DispatchError> {
-			Self::deposit_event(Event::Transfer {
-				from: from.clone(),
-				to: to.clone(),
-				asset: (*asset_id).clone(),
-				amount,
-			});
-			if T::MultiAssetIdConverter::is_native(asset_id) {
-				let preservation = match keep_alive {
-					true => Preserve,
-					false => Expendable,
-				};
-				let amount = Self::asset_to_native(amount)?;
-				Ok(Self::native_to_asset(T::Currency::transfer(from, to, amount, preservation)?)?)
-			} else {
-				T::Assets::transfer(
-					T::MultiAssetIdConverter::try_convert(&asset_id)
-						.map_err(|_| Error::<T>::Overflow)?,
-					from,
-					to,
+			let result = match T::MultiAssetIdConverter::try_convert(asset_id) {
+				MultiAssetIdConversionResult::Converted(asset_id) =>
+					T::Assets::transfer(asset_id, from, to, amount, Expendable),
+				MultiAssetIdConversionResult::Native => {
+					let preservation = match keep_alive {
+						true => Preserve,
+						false => Expendable,
+					};
+					let amount = Self::convert_asset_balance_to_native_balance(amount)?;
+					Ok(Self::convert_native_balance_to_asset_balance(T::Currency::transfer(
+						from,
+						to,
+						amount,
+						preservation,
+					)?)?)
+				},
+				MultiAssetIdConversionResult::Unsupported(_) =>
+					Err(Error::<T>::UnsupportedAsset.into()),
+			};
+
+			if result.is_ok() {
+				Self::deposit_event(Event::Transfer {
+					from: from.clone(),
+					to: to.clone(),
+					asset: (*asset_id).clone(),
 					amount,
-					Expendable,
-				)
+				});
 			}
+			result
 		}
 
-		pub(crate) fn native_to_asset(amount: T::Balance) -> Result<T::AssetBalance, Error<T>> {
+		/// Convert a `Balance` type to an `AssetBalance`.
+		pub(crate) fn convert_native_balance_to_asset_balance(
+			amount: T::Balance,
+		) -> Result<T::AssetBalance, Error<T>> {
 			T::HigherPrecisionBalance::from(amount)
 				.try_into()
 				.map_err(|_| Error::<T>::Overflow)
 		}
 
-		pub(crate) fn asset_to_native(amount: T::AssetBalance) -> Result<T::Balance, Error<T>> {
+		/// Convert an `AssetBalance` type to a `Balance`.
+		pub(crate) fn convert_asset_balance_to_native_balance(
+			amount: T::AssetBalance,
+		) -> Result<T::Balance, Error<T>> {
 			T::HigherPrecisionBalance::from(amount)
 				.try_into()
 				.map_err(|_| Error::<T>::Overflow)
 		}
 
+		/// Convert a `HigherPrecisionBalance` type to an `AssetBalance`.
+		pub(crate) fn convert_hpb_to_asset_balance(
+			amount: T::HigherPrecisionBalance,
+		) -> Result<T::AssetBalance, Error<T>> {
+			amount.try_into().map_err(|_| Error::<T>::Overflow)
+		}
+
+		/// Swap assets along a `path`, depositing in `send_to`.
 		pub(crate) fn do_swap(
-			sender: &T::AccountId,
-			amounts: &Vec<AssetBalanceOf<T>>,
-			path: &BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
-			send_to: &T::AccountId,
+			sender: T::AccountId,
+			amounts: &Vec<T::AssetBalance>,
+			path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
+			send_to: T::AccountId,
 			keep_alive: bool,
 		) -> Result<(), DispatchError> {
-			if let Some([asset1, asset2]) = path.get(0..2) {
+			ensure!(amounts.len() > 1, Error::<T>::CorrespondenceError);
+			if let Some([asset1, asset2]) = &path.get(0..2) {
 				let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
 				let pool_account = Self::get_pool_account(&pool_id);
-				let first_amount = amounts.first().expect("Always has more than one element");
+				// amounts should always contain a corresponding element to path.
+				let first_amount = amounts.first().ok_or(Error::<T>::CorrespondenceError)?;
 
-				Self::transfer(asset1, sender, &pool_account, *first_amount, keep_alive)?;
+				Self::transfer(asset1, &sender, &pool_account, *first_amount, keep_alive)?;
 
 				let mut i = 0;
 				let path_len = path.len() as u32;
@@ -781,7 +868,7 @@ pub mod pallet {
 						let pool_account = Self::get_pool_account(&pool_id);
 
 						let amount_out =
-							amounts.get((i + 1) as usize).ok_or(Error::<T>::PathError)?;
+							amounts.get((i + 1) as usize).ok_or(Error::<T>::CorrespondenceError)?;
 
 						let to = if i < path_len - 2 {
 							let asset3 = path.get((i + 2) as usize).ok_or(Error::<T>::PathError)?;
@@ -802,6 +889,15 @@ pub mod pallet {
 					}
 					i.saturating_inc();
 				}
+				Self::deposit_event(Event::SwapExecuted {
+					who: sender,
+					send_to,
+					path,
+					amount_in: *first_amount,
+					amount_out: *amounts.last().expect("Always has more than 1 element"),
+				});
+			} else {
+				return Err(Error::<T>::InvalidPath.into())
 			}
 			Ok(())
 		}
@@ -817,32 +913,46 @@ pub mod pallet {
 				.expect("infinite length input; no invalid inputs for type; qed")
 		}
 
+		/// Get the `owner`'s balance of `asset`, which could be the chain's native asset or another
+		/// fungible. Returns a value in the form of an `AssetBalance`.
 		fn get_balance(
 			owner: &T::AccountId,
 			asset: &T::MultiAssetId,
 		) -> Result<T::AssetBalance, Error<T>> {
-			if T::MultiAssetIdConverter::is_native(asset) {
-				Self::native_to_asset(<<T as Config>::Currency>::reducible_balance(
-					owner, Expendable, Polite,
-				))
-			} else {
-				Ok(<<T as Config>::Assets>::reducible_balance(
-					T::MultiAssetIdConverter::try_convert(asset)
-						.map_err(|_| Error::<T>::Overflow)?,
-					owner,
-					Expendable,
-					Polite,
-				))
+			match T::MultiAssetIdConverter::try_convert(asset) {
+				MultiAssetIdConversionResult::Converted(asset_id) => Ok(
+					<<T as Config>::Assets>::reducible_balance(asset_id, owner, Expendable, Polite),
+				),
+				MultiAssetIdConversionResult::Native =>
+					Self::convert_native_balance_to_asset_balance(
+						<<T as Config>::Currency>::reducible_balance(owner, Expendable, Polite),
+					),
+				MultiAssetIdConversionResult::Unsupported(_) =>
+					Err(Error::<T>::UnsupportedAsset.into()),
 			}
 		}
 
-		/// Returns a pool id constructed from 2 sorted assets.
-		/// Native asset should be lower than the other asset ids.
+		/// Returns a pool id constructed from 2 assets.
+		/// 1. Native asset should be lower than the other asset ids.
+		/// 2. Two native or two non-native assets are compared by their `Ord` implementation.
+		///
+		/// We expect deterministic order, so (asset1, asset2) or (asset2, asset1) returns the same
+		/// result.
 		pub fn get_pool_id(asset1: T::MultiAssetId, asset2: T::MultiAssetId) -> PoolIdOf<T> {
-			if asset1 <= asset2 {
-				(asset1, asset2)
-			} else {
-				(asset2, asset1)
+			match (
+				T::MultiAssetIdConverter::is_native(&asset1),
+				T::MultiAssetIdConverter::is_native(&asset2),
+			) {
+				(true, false) => return (asset1, asset2),
+				(false, true) => return (asset2, asset1),
+				_ => {
+					// else we want to be deterministic based on `Ord` implementation
+					if asset1 <= asset2 {
+						(asset1, asset2)
+					} else {
+						(asset2, asset1)
+					}
+				},
 			}
 		}
 
@@ -851,7 +961,7 @@ pub mod pallet {
 		pub fn get_reserves(
 			asset1: &T::MultiAssetId,
 			asset2: &T::MultiAssetId,
-		) -> Result<(AssetBalanceOf<T>, AssetBalanceOf<T>), Error<T>> {
+		) -> Result<(T::AssetBalance, T::AssetBalance), Error<T>> {
 			let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
 			let pool_account = Self::get_pool_account(&pool_id);
 
@@ -865,11 +975,12 @@ pub mod pallet {
 			Ok((balance1, balance2))
 		}
 
+		/// Leading to an amount at the end of a `path`, get the required amounts in.
 		pub(crate) fn get_amounts_in(
-			amount_out: &AssetBalanceOf<T>,
+			amount_out: &T::AssetBalance,
 			path: &BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
-		) -> Result<Vec<AssetBalanceOf<T>>, DispatchError> {
-			let mut amounts: Vec<AssetBalanceOf<T>> = vec![*amount_out];
+		) -> Result<Vec<T::AssetBalance>, DispatchError> {
+			let mut amounts: Vec<T::AssetBalance> = vec![*amount_out];
 
 			for assets_pair in path.windows(2).rev() {
 				if let [asset1, asset2] = assets_pair {
@@ -884,11 +995,12 @@ pub mod pallet {
 			Ok(amounts)
 		}
 
+		/// Following an amount into a `path`, get the corresponding amounts out.
 		pub(crate) fn get_amounts_out(
-			amount_in: &AssetBalanceOf<T>,
+			amount_in: &T::AssetBalance,
 			path: &BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
-		) -> Result<Vec<AssetBalanceOf<T>>, DispatchError> {
-			let mut amounts: Vec<AssetBalanceOf<T>> = vec![*amount_in];
+		) -> Result<Vec<T::AssetBalance>, DispatchError> {
+			let mut amounts: Vec<T::AssetBalance> = vec![*amount_in];
 
 			for assets_pair in path.windows(2) {
 				if let [asset1, asset2] = assets_pair {
@@ -906,9 +1018,9 @@ pub mod pallet {
 		pub fn quote_price_exact_tokens_for_tokens(
 			asset1: T::MultiAssetId,
 			asset2: T::MultiAssetId,
-			amount: AssetBalanceOf<T>,
+			amount: T::AssetBalance,
 			include_fee: bool,
-		) -> Option<AssetBalanceOf<T>> {
+		) -> Option<T::AssetBalance> {
 			let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
 			let pool_account = Self::get_pool_account(&pool_id);
 
@@ -929,9 +1041,9 @@ pub mod pallet {
 		pub fn quote_price_tokens_for_exact_tokens(
 			asset1: T::MultiAssetId,
 			asset2: T::MultiAssetId,
-			amount: AssetBalanceOf<T>,
+			amount: T::AssetBalance,
 			include_fee: bool,
-		) -> Option<AssetBalanceOf<T>> {
+		) -> Option<T::AssetBalance> {
 			let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
 			let pool_account = Self::get_pool_account(&pool_id);
 
@@ -950,18 +1062,18 @@ pub mod pallet {
 
 		/// Calculates the optimal amount from the reserves.
 		pub fn quote(
-			amount: &AssetBalanceOf<T>,
-			reserve1: &AssetBalanceOf<T>,
-			reserve2: &AssetBalanceOf<T>,
-		) -> Result<AssetBalanceOf<T>, Error<T>> {
+			amount: &T::AssetBalance,
+			reserve1: &T::AssetBalance,
+			reserve2: &T::AssetBalance,
+		) -> Result<T::AssetBalance, Error<T>> {
 			// amount * reserve2 / reserve1
 			Self::mul_div(amount, reserve2, reserve1)
 		}
 
 		pub(super) fn calc_lp_amount_for_zero_supply(
-			amount1: &AssetBalanceOf<T>,
-			amount2: &AssetBalanceOf<T>,
-		) -> Result<AssetBalanceOf<T>, Error<T>> {
+			amount1: &T::AssetBalance,
+			amount2: &T::AssetBalance,
+		) -> Result<T::AssetBalance, Error<T>> {
 			let amount1 = T::HigherPrecisionBalance::from(*amount1);
 			let amount2 = T::HigherPrecisionBalance::from(*amount2);
 
@@ -976,10 +1088,10 @@ pub mod pallet {
 		}
 
 		fn mul_div(
-			a: &AssetBalanceOf<T>,
-			b: &AssetBalanceOf<T>,
-			c: &AssetBalanceOf<T>,
-		) -> Result<AssetBalanceOf<T>, Error<T>> {
+			a: &T::AssetBalance,
+			b: &T::AssetBalance,
+			c: &T::AssetBalance,
+		) -> Result<T::AssetBalance, Error<T>> {
 			let a = T::HigherPrecisionBalance::from(*a);
 			let b = T::HigherPrecisionBalance::from(*b);
 			let c = T::HigherPrecisionBalance::from(*c);
@@ -993,15 +1105,15 @@ pub mod pallet {
 			result.try_into().map_err(|_| Error::<T>::Overflow)
 		}
 
-		/// Calculates amount out
+		/// Calculates amount out.
 		///
 		/// Given an input amount of an asset and pair reserves, returns the maximum output amount
-		/// of the other asset
+		/// of the other asset.
 		pub fn get_amount_out(
-			amount_in: &AssetBalanceOf<T>,
-			reserve_in: &AssetBalanceOf<T>,
-			reserve_out: &AssetBalanceOf<T>,
-		) -> Result<AssetBalanceOf<T>, Error<T>> {
+			amount_in: &T::AssetBalance,
+			reserve_in: &T::AssetBalance,
+			reserve_out: &T::AssetBalance,
+		) -> Result<T::AssetBalance, Error<T>> {
 			let amount_in = T::HigherPrecisionBalance::from(*amount_in);
 			let reserve_in = T::HigherPrecisionBalance::from(*reserve_in);
 			let reserve_out = T::HigherPrecisionBalance::from(*reserve_out);
@@ -1028,15 +1140,15 @@ pub mod pallet {
 			result.try_into().map_err(|_| Error::<T>::Overflow)
 		}
 
-		/// Calculates amount in
+		/// Calculates amount in.
 		///
 		/// Given an output amount of an asset and pair reserves, returns a required input amount
-		/// of the other asset
+		/// of the other asset.
 		pub fn get_amount_in(
-			amount_out: &AssetBalanceOf<T>,
-			reserve_in: &AssetBalanceOf<T>,
-			reserve_out: &AssetBalanceOf<T>,
-		) -> Result<AssetBalanceOf<T>, Error<T>> {
+			amount_out: &T::AssetBalance,
+			reserve_in: &T::AssetBalance,
+			reserve_out: &T::AssetBalance,
+		) -> Result<T::AssetBalance, Error<T>> {
 			let amount_out = T::HigherPrecisionBalance::from(*amount_out);
 			let reserve_in = T::HigherPrecisionBalance::from(*reserve_in);
 			let reserve_out = T::HigherPrecisionBalance::from(*reserve_out);
@@ -1070,6 +1182,7 @@ pub mod pallet {
 			result.try_into().map_err(|_| Error::<T>::Overflow)
 		}
 
+		/// Ensure that a `value` meets the minimum balance requirements of an `asset` class.
 		fn validate_minimal_amount(
 			value: T::AssetBalance,
 			asset: &T::MultiAssetId,
@@ -1081,13 +1194,16 @@ pub mod pallet {
 					()
 				);
 			} else {
-				let asset_id = T::MultiAssetIdConverter::try_convert(asset).map_err(|_| ())?;
+				let MultiAssetIdConversionResult::Converted(asset_id) = T::MultiAssetIdConverter::try_convert(asset) else {
+					return Err(())
+				};
 				let minimal = T::Assets::minimum_balance(asset_id);
 				ensure!(value >= minimal, ());
 			}
 			Ok(())
 		}
 
+		/// Ensure that a path is valid.
 		fn validate_swap_path(
 			path: &BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
 		) -> Result<(), DispatchError> {
@@ -1098,7 +1214,8 @@ pub mod pallet {
 			for assets_pair in path.windows(2) {
 				if let [asset1, asset2] = assets_pair {
 					let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
-					let new_element = pools.try_insert(pool_id).expect("can't get here");
+					let new_element =
+						pools.try_insert(pool_id).map_err(|_| Error::<T>::Overflow)?;
 					if !new_element {
 						return Err(Error::<T>::NonUniquePath.into())
 					}
@@ -1107,63 +1224,57 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[cfg(any(test, feature = "runtime-benchmarks"))]
 		/// Returns the next pool asset id for benchmark purposes only.
+		#[cfg(any(test, feature = "runtime-benchmarks"))]
 		pub fn get_next_pool_asset_id() -> T::PoolAssetId {
-			NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value())
+			NextPoolAssetId::<T>::get()
+				.or(T::PoolAssetId::initial_value())
+				.expect("Next pool asset ID can not be None")
 		}
 	}
 }
 
-impl<T: Config>
-	frame_support::traits::tokens::fungibles::SwapForNative<
-		T::RuntimeOrigin,
-		T::AccountId,
-		T::Balance,
-		T::AssetBalance,
-		T::AssetId,
-	> for Pallet<T>
-where
-	<T as pallet::Config>::Currency:
-		frame_support::traits::tokens::fungible::Inspect<<T as frame_system::Config>::AccountId>,
-{
-	// If successful returns the amount in.
-	fn swap_tokens_for_exact_native(
+impl<T: Config> Swap<T::AccountId, T::HigherPrecisionBalance, T::MultiAssetId> for Pallet<T> {
+	fn swap_exact_tokens_for_tokens(
 		sender: T::AccountId,
-		asset_id: T::AssetId,
-		amount_out: T::Balance,
-		amount_in_max: Option<T::AssetBalance>,
+		path: Vec<T::MultiAssetId>,
+		amount_in: T::HigherPrecisionBalance,
+		amount_out_min: Option<T::HigherPrecisionBalance>,
 		send_to: T::AccountId,
 		keep_alive: bool,
-	) -> Result<T::AssetBalance, DispatchError> {
-		ensure!(amount_out > Zero::zero(), Error::<T>::ZeroAmount);
-		if let Some(amount_in_max) = amount_in_max {
-			ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
-		}
-		let mut path = sp_std::vec::Vec::new();
-		path.push(T::MultiAssetIdConverter::into_multiasset_id(&asset_id));
-		path.push(T::MultiAssetIdConverter::get_native());
-		let path = path.try_into().unwrap();
-
-		let amount_out = Self::native_to_asset(amount_out)?;
-
-		let amounts = Self::get_amounts_in(&amount_out, &path)?;
-		let amount_in = *amounts.first().expect("Always has more than one element");
-		if let Some(amount_in_max) = amount_in_max {
-			ensure!(amount_in <= amount_in_max, Error::<T>::ProvidedMaximumNotSufficientForSwap);
-		}
-
-		Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
-
-		Self::deposit_event(Event::SwapExecuted {
-			who: sender,
-			send_to,
+	) -> Result<T::HigherPrecisionBalance, DispatchError> {
+		let path = path.try_into().map_err(|_| Error::<T>::PathError)?;
+		let amount_out_min = amount_out_min.map(Self::convert_hpb_to_asset_balance).transpose()?;
+		let amount_out = Self::do_swap_exact_tokens_for_tokens(
+			sender,
 			path,
-			amount_in,
-			amount_out,
-		});
+			Self::convert_hpb_to_asset_balance(amount_in)?,
+			amount_out_min,
+			send_to,
+			keep_alive,
+		)?;
+		Ok(amount_out.into())
+	}
 
-		Ok(amount_in)
+	fn swap_tokens_for_exact_tokens(
+		sender: T::AccountId,
+		path: Vec<T::MultiAssetId>,
+		amount_out: T::HigherPrecisionBalance,
+		amount_in_max: Option<T::HigherPrecisionBalance>,
+		send_to: T::AccountId,
+		keep_alive: bool,
+	) -> Result<T::HigherPrecisionBalance, DispatchError> {
+		let path = path.try_into().map_err(|_| Error::<T>::PathError)?;
+		let amount_in_max = amount_in_max.map(Self::convert_hpb_to_asset_balance).transpose()?;
+		let amount_in = Self::do_swap_tokens_for_exact_tokens(
+			sender,
+			path,
+			Self::convert_hpb_to_asset_balance(amount_out)?,
+			amount_in_max,
+			send_to,
+			keep_alive,
+		)?;
+		Ok(amount_in.into())
 	}
 }
 
@@ -1191,3 +1302,5 @@ sp_api::decl_runtime_apis! {
 		fn get_reserves(asset1: AssetId, asset2: AssetId) -> Option<(Balance, Balance)>;
 	}
 }
+
+sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);

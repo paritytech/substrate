@@ -59,7 +59,7 @@
 //! 	use frame_system::pallet_prelude::*;
 //!
 //! 	#[pallet::pallet]
-//! 	pub struct Pallet<T>(PhantomData<T>);
+//! 	pub struct Pallet<T>(_);
 //!
 //! 	#[pallet::config]
 //! 	pub trait Config: frame_system::Config {}
@@ -141,7 +141,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -289,7 +289,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			if let Some(ref key) = self.key {
 				Key::<T>::put(key);

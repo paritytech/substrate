@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 static_assertions = "1.1.0"
 serde = { version = "1.0.163", default-features = false, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
 sp-arithmetic = { version = "16.0.0", default-features = false, path = "../../../primitives/arithmetic" }
@@ -49,15 +49,17 @@ std = [
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
-	"sp-state-machine",
 	"sp-std/std",
 	"sp-version/std",
 	"test-pallet/std",
+	"sp-state-machine/std"
 ]
+experimental = ["frame-support/experimental"]
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"frame-executive/try-runtime",
+	"sp-runtime/try-runtime"
 ]
 # WARNING:
 # Only CI runs with this feature enabled. This feature is for testing stuff related to the FRAME macros

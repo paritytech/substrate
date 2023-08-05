@@ -1,7 +1,7 @@
 error: Invalid pallet part specified, the pallet `Pallet` doesn't have the `Call` part. Available parts are: `Pallet`, `Storage`.
-  --> tests/construct_runtime_ui/exclude_undefined_part.rs:34:34
+  --> tests/construct_runtime_ui/exclude_undefined_part.rs:31:34
    |
-34 |         Pallet: pallet exclude_parts { Call },
+31 |         Pallet: pallet exclude_parts { Call },
    |                                        ^^^^
 
 error[E0412]: cannot find type `RuntimeCall` in this scope

@@ -194,18 +194,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 					let on_empty = on_empty.unwrap_or_else(|| default_on_empty(value));
 					args.args.push(syn::GenericArgument::Type(on_empty));
 				},
-				StorageGenerics::Map { hasher, key, value, query_kind, on_empty, max_values } => {
-					args.args.push(syn::GenericArgument::Type(hasher));
-					args.args.push(syn::GenericArgument::Type(key));
-					args.args.push(syn::GenericArgument::Type(value.clone()));
-					let mut query_kind = query_kind.unwrap_or_else(|| default_query_kind.clone());
-					set_result_query_type_parameter(&mut query_kind)?;
-					args.args.push(syn::GenericArgument::Type(query_kind));
-					let on_empty = on_empty.unwrap_or_else(|| default_on_empty(value));
-					args.args.push(syn::GenericArgument::Type(on_empty));
-					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
-					args.args.push(syn::GenericArgument::Type(max_values));
-				},
+				StorageGenerics::Map { hasher, key, value, query_kind, on_empty, max_values } |
 				StorageGenerics::CountedMap {
 					hasher,
 					key,
@@ -248,7 +237,14 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
 					args.args.push(syn::GenericArgument::Type(max_values));
 				},
-				StorageGenerics::NMap { keygen, value, query_kind, on_empty, max_values } => {
+				StorageGenerics::NMap { keygen, value, query_kind, on_empty, max_values } |
+				StorageGenerics::CountedNMap {
+					keygen,
+					value,
+					query_kind,
+					on_empty,
+					max_values,
+				} => {
 					args.args.push(syn::GenericArgument::Type(keygen));
 					args.args.push(syn::GenericArgument::Type(value.clone()));
 					let mut query_kind = query_kind.unwrap_or_else(|| default_query_kind.clone());
@@ -265,7 +261,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 
 			let (value_idx, query_idx, on_empty_idx) = match storage_def.metadata {
 				Metadata::Value { .. } => (1, 2, 3),
-				Metadata::NMap { .. } => (2, 3, 4),
+				Metadata::NMap { .. } | Metadata::CountedNMap { .. } => (2, 3, 4),
 				Metadata::Map { .. } | Metadata::CountedMap { .. } => (3, 4, 5),
 				Metadata::DoubleMap { .. } => (5, 6, 7),
 			};
@@ -351,6 +347,17 @@ fn augment_final_docs(def: &mut Def) {
 		Metadata::NMap { keys, value, .. } => {
 			let doc_line = format!(
 				"Storage type is [`StorageNMap`] with keys type ({}) and value type {}.",
+				keys.iter()
+					.map(|k| k.to_token_stream().to_string())
+					.collect::<Vec<_>>()
+					.join(", "),
+				value.to_token_stream()
+			);
+			push_string_literal(&doc_line, storage);
+		},
+		Metadata::CountedNMap { keys, value, .. } => {
+			let doc_line = format!(
+				"Storage type is [`CountedStorageNMap`] with keys type ({}) and value type {}.",
 				keys.iter()
 					.map(|k| k.to_token_stream().to_string())
 					.collect::<Vec<_>>()
@@ -579,6 +586,36 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						}
 					)
 				},
+				Metadata::CountedNMap { keygen, value, .. } => {
+					let query = match storage.query_kind.as_ref().expect("Checked by def") {
+						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
+							Option<#value>
+						),
+						QueryKind::ResultQuery(error_path, _) => {
+							quote::quote_spanned!(storage.attr_span =>
+								Result<#value, #error_path>
+							)
+						},
+						QueryKind::ValueQuery => quote::quote!(#value),
+					};
+					quote::quote_spanned!(storage.attr_span =>
+						#(#cfg_attrs)*
+						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
+							#[doc = #getter_doc_line]
+							pub fn #getter<KArg>(key: KArg) -> #query
+							where
+								KArg: #frame_support::storage::types::EncodeLikeTuple<
+									<#keygen as #frame_support::storage::types::KeyGenerator>::KArg
+								>
+									+ #frame_support::storage::types::TupleToEncodedIter,
+							{
+								// NOTE: we can't use any trait here because CountedStorageNMap
+								// doesn't implement any.
+								<#full_ident>::get(key)
+							}
+						}
+					)
+				},
 			}
 		} else {
 			Default::default()
@@ -595,40 +632,72 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 		let cfg_attrs = &storage_def.cfg_attrs;
 
-		let maybe_counter = if let Metadata::CountedMap { .. } = storage_def.metadata {
-			let counter_prefix_struct_ident = counter_prefix_ident(&storage_def.ident);
-			let counter_prefix_struct_const = counter_prefix(&prefix_struct_const);
-
-			quote::quote_spanned!(storage_def.attr_span =>
-				#(#cfg_attrs)*
-				#[doc(hidden)]
-				#prefix_struct_vis struct #counter_prefix_struct_ident<#type_use_gen>(
-					core::marker::PhantomData<(#type_use_gen,)>
-				);
-				#(#cfg_attrs)*
-				impl<#type_impl_gen> #frame_support::traits::StorageInstance
-					for #counter_prefix_struct_ident<#type_use_gen>
-					#config_where_clause
-				{
-					fn pallet_prefix() -> &'static str {
-						<
-							<T as #frame_system::Config>::PalletInfo
-							as #frame_support::traits::PalletInfo
-						>::name::<Pallet<#type_use_gen>>()
-							.expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`.")
+		let maybe_counter = match storage_def.metadata {
+			Metadata::CountedMap { .. } => {
+				let counter_prefix_struct_ident = counter_prefix_ident(&storage_def.ident);
+				let counter_prefix_struct_const = counter_prefix(&prefix_struct_const);
+				quote::quote_spanned!(storage_def.attr_span =>
+					#(#cfg_attrs)*
+					#[doc(hidden)]
+					#prefix_struct_vis struct #counter_prefix_struct_ident<#type_use_gen>(
+						core::marker::PhantomData<(#type_use_gen,)>
+					);
+					#(#cfg_attrs)*
+					impl<#type_impl_gen> #frame_support::traits::StorageInstance
+						for #counter_prefix_struct_ident<#type_use_gen>
+						#config_where_clause
+					{
+						fn pallet_prefix() -> &'static str {
+							<
+								<T as #frame_system::Config>::PalletInfo
+								as #frame_support::traits::PalletInfo
+							>::name::<Pallet<#type_use_gen>>()
+								.expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`.")
+						}
+						const STORAGE_PREFIX: &'static str = #counter_prefix_struct_const;
 					}
-					const STORAGE_PREFIX: &'static str = #counter_prefix_struct_const;
-				}
-				#(#cfg_attrs)*
-				impl<#type_impl_gen> #frame_support::storage::types::CountedStorageMapInstance
-					for #prefix_struct_ident<#type_use_gen>
-					#config_where_clause
-				{
-					type CounterPrefix = #counter_prefix_struct_ident<#type_use_gen>;
-				}
-			)
-		} else {
-			proc_macro2::TokenStream::default()
+					#(#cfg_attrs)*
+					impl<#type_impl_gen> #frame_support::storage::types::CountedStorageMapInstance
+						for #prefix_struct_ident<#type_use_gen>
+						#config_where_clause
+					{
+						type CounterPrefix = #counter_prefix_struct_ident<#type_use_gen>;
+					}
+				)
+			},
+			Metadata::CountedNMap { .. } => {
+				let counter_prefix_struct_ident = counter_prefix_ident(&storage_def.ident);
+				let counter_prefix_struct_const = counter_prefix(&prefix_struct_const);
+				quote::quote_spanned!(storage_def.attr_span =>
+					#(#cfg_attrs)*
+					#[doc(hidden)]
+					#prefix_struct_vis struct #counter_prefix_struct_ident<#type_use_gen>(
+						core::marker::PhantomData<(#type_use_gen,)>
+					);
+					#(#cfg_attrs)*
+					impl<#type_impl_gen> #frame_support::traits::StorageInstance
+						for #counter_prefix_struct_ident<#type_use_gen>
+						#config_where_clause
+					{
+						fn pallet_prefix() -> &'static str {
+							<
+								<T as #frame_system::Config>::PalletInfo
+								as #frame_support::traits::PalletInfo
+							>::name::<Pallet<#type_use_gen>>()
+								.expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`.")
+						}
+						const STORAGE_PREFIX: &'static str = #counter_prefix_struct_const;
+					}
+					#(#cfg_attrs)*
+					impl<#type_impl_gen> #frame_support::storage::types::CountedStorageNMapInstance
+						for #prefix_struct_ident<#type_use_gen>
+						#config_where_clause
+					{
+						type CounterPrefix = #counter_prefix_struct_ident<#type_use_gen>;
+					}
+				)
+			},
+			_ => proc_macro2::TokenStream::default(),
 		};
 
 		quote::quote_spanned!(storage_def.attr_span =>

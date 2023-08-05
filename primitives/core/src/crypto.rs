@@ -486,7 +486,7 @@ pub trait ByteArray: AsRef<[u8]> + AsMut<[u8]> + for<'a> TryFrom<&'a [u8], Error
 }
 
 /// Trait suitable for typical cryptographic key public type.
-pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {}
+pub trait Public: CryptoType + ByteArray + Derive + PartialEq + Eq + Clone + Send {}
 
 /// An opaque 32-byte cryptographic identifier.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -834,7 +834,7 @@ impl sp_std::str::FromStr for SecretUri {
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
 #[cfg(feature = "full_crypto")]
-pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
+pub trait Pair: CryptoType + Sized {
 	/// The type which is used to encode a public key.
 	type Public: Public + Hash;
 
@@ -872,7 +872,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 		(pair, phrase.to_owned(), seed)
 	}
 
-	/// Returns the KeyPair from the English BIP39 seed `phrase`, or `None` if it's invalid.
+	/// Returns the KeyPair from the English BIP39 seed `phrase`, or an error if it's invalid.
 	#[cfg(feature = "std")]
 	fn from_phrase(
 		phrase: &str,
@@ -907,7 +907,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	}
 
 	/// Make a new key pair from secret seed material. The slice must be the correct size or
-	/// it will return `None`.
+	/// an error will be returned.
 	///
 	/// @WARNING: THIS WILL ONLY BE SECURE IF THE `seed` IS SECURE. If it can be guessed
 	/// by an attacker then they can also derive your key.
@@ -949,8 +949,6 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// Notably, integer junction indices may be legally prefixed with arbitrary number of zeros.
 	/// Similarly an empty password (ending the SURI with `///`) is perfectly valid and will
 	/// generally be equivalent to no password at all.
-	///
-	/// `None` is returned if no matches are found.
 	#[cfg(feature = "std")]
 	fn from_string_with_seed(
 		s: &str,
@@ -1146,6 +1144,8 @@ pub mod key_types {
 	pub const ACCOUNT: KeyTypeId = KeyTypeId(*b"acco");
 	/// Key type for Aura module, built-in. Identified as `aura`.
 	pub const AURA: KeyTypeId = KeyTypeId(*b"aura");
+	/// Key type for BEEFY module.
+	pub const BEEFY: KeyTypeId = KeyTypeId(*b"beef");
 	/// Key type for ImOnline module, built-in. Identified as `imon`.
 	pub const IM_ONLINE: KeyTypeId = KeyTypeId(*b"imon");
 	/// Key type for AuthorityDiscovery module, built-in. Identified as `audi`.
@@ -1157,6 +1157,52 @@ pub mod key_types {
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
+
+/// Create random values of `Self` given a stream of entropy.
+pub trait FromEntropy: Sized {
+	/// Create a random value of `Self` given a stream of random bytes on `input`. May only fail if
+	/// `input` has an error.
+	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error>;
+}
+
+impl FromEntropy for bool {
+	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
+		Ok(input.read_byte()? % 2 == 1)
+	}
+}
+
+macro_rules! impl_from_entropy {
+	($type:ty , $( $others:tt )*) => {
+		impl_from_entropy!($type);
+		impl_from_entropy!($( $others )*);
+	};
+	($type:ty) => {
+		impl FromEntropy for $type {
+			fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
+				<Self as codec::Decode>::decode(input)
+			}
+		}
+	}
+}
+
+macro_rules! impl_from_entropy_base {
+	($type:ty , $( $others:tt )*) => {
+		impl_from_entropy_base!($type);
+		impl_from_entropy_base!($( $others )*);
+	};
+	($type:ty) => {
+		impl_from_entropy!($type,
+			[$type; 1], [$type; 2], [$type; 3], [$type; 4], [$type; 5], [$type; 6], [$type; 7], [$type; 8],
+			[$type; 9], [$type; 10], [$type; 11], [$type; 12], [$type; 13], [$type; 14], [$type; 15], [$type; 16],
+			[$type; 17], [$type; 18], [$type; 19], [$type; 20], [$type; 21], [$type; 22], [$type; 23], [$type; 24],
+			[$type; 25], [$type; 26], [$type; 27], [$type; 28], [$type; 29], [$type; 30], [$type; 31], [$type; 32],
+			[$type; 36], [$type; 40], [$type; 44], [$type; 48], [$type; 56], [$type; 64], [$type; 72], [$type; 80],
+			[$type; 96], [$type; 112], [$type; 128], [$type; 160], [$type; 192], [$type; 224], [$type; 256]
+		);
+	}
+}
+
+impl_from_entropy_base!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 
 #[cfg(test)]
 mod tests {

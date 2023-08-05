@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.163", optional = true }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
@@ -29,7 +29,12 @@ sp-core = { version = "21.0.0", default-features = false, path = "../../primitiv
 
 [features]
 default = ["std"]
-runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
+runtime-benchmarks = [
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks"
+]
 std = [
 	"frame-benchmarking?/std",
 	"codec/std",
@@ -42,4 +47,8 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 ]
-try-runtime = [ "frame-support/try-runtime" ]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"sp-runtime/try-runtime"
+]

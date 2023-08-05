@@ -48,14 +48,15 @@ use sc_network_test::{
 use sc_utils::notification::NotificationReceiver;
 use serde::{Deserialize, Serialize};
 use sp_api::{ApiRef, ProvideRuntimeApi};
+use sp_application_crypto::key_types::BEEFY as BEEFY_KEY_TYPE;
 use sp_consensus::BlockOrigin;
 use sp_consensus_beefy::{
-	crypto::{AuthorityId, Signature},
+	ecdsa_crypto::{AuthorityId, Signature},
 	known_payloads,
 	mmr::{find_mmr_root_digest, MmrRootProvider},
 	BeefyApi, Commitment, ConsensusLog, EquivocationProof, Keyring as BeefyKeyring, MmrRootHash,
 	OpaqueKeyOwnershipProof, Payload, SignedCommitment, ValidatorSet, ValidatorSetId,
-	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, KEY_TYPE as BeefyKeyType,
+	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 use sp_core::H256;
 use sp_keystore::{testing::MemoryKeystore, Keystore, KeystorePtr};
@@ -293,7 +294,7 @@ impl ProvideRuntimeApi<Block> for TestApi {
 	}
 }
 sp_api::mock_impl_runtime_apis! {
-	impl BeefyApi<Block> for RuntimeApi {
+	impl BeefyApi<Block, AuthorityId> for RuntimeApi {
 		fn beefy_genesis() -> Option<NumberFor<Block>> {
 			Some(self.inner.beefy_genesis)
 		}
@@ -352,7 +353,7 @@ pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
 pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> KeystorePtr {
 	let keystore = MemoryKeystore::new();
 	keystore
-		.ecdsa_generate_new(BeefyKeyType, Some(&authority.to_seed()))
+		.ecdsa_generate_new(BEEFY_KEY_TYPE, Some(&authority.to_seed()))
 		.expect("Creates authority key");
 	keystore.into()
 }
@@ -386,7 +387,7 @@ fn initialize_beefy<API>(
 ) -> impl Future<Output = ()>
 where
 	API: ProvideRuntimeApi<Block> + Sync + Send,
-	API::Api: BeefyApi<Block> + MmrApi<Block, MmrRootHash, NumberFor<Block>>,
+	API::Api: BeefyApi<Block, AuthorityId> + MmrApi<Block, MmrRootHash, NumberFor<Block>>,
 {
 	let tasks = FuturesUnordered::new();
 
@@ -1263,18 +1264,34 @@ async fn beefy_reports_equivocations() {
 
 	let peers = peers.into_iter().enumerate();
 	// finalize block #1 -> BEEFY should not finalize anything (each node votes on different MMR).
-	finalize_block_and_wait_for_beefy(&net, peers, &hashes[1], &[]).await;
+	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
+	peers.clone().for_each(|(index, _)| {
+		let client = net.lock().peer(index).client().as_client();
+		client.finalize_block(hashes[1], None).unwrap();
+	});
 
-	// Verify neither Bob or Bob_Prime report themselves as equivocating.
-	assert!(api_bob.reported_equivocations.as_ref().unwrap().lock().is_empty());
-	assert!(api_bob_prime.reported_equivocations.as_ref().unwrap().lock().is_empty());
+	// run for up to 5 seconds waiting for Alice's report of Bob/Bob_Prime equivocation.
+	for wait_ms in [250, 500, 1250, 3000] {
+		run_for(Duration::from_millis(wait_ms), &net).await;
+		if !api_alice.reported_equivocations.as_ref().unwrap().lock().is_empty() {
+			break
+		}
+	}
 
-	// Verify Alice reports Bob/Bob_Prime equivocation.
+	// Verify expected equivocation
 	let alice_reported_equivocations = api_alice.reported_equivocations.as_ref().unwrap().lock();
 	assert_eq!(alice_reported_equivocations.len(), 1);
 	let equivocation_proof = alice_reported_equivocations.get(0).unwrap();
 	assert_eq!(equivocation_proof.first.id, BeefyKeyring::Bob.public());
 	assert_eq!(equivocation_proof.first.commitment.block_number, 1);
+
+	// Verify neither Bob or Bob_Prime report themselves as equivocating.
+	assert!(api_bob.reported_equivocations.as_ref().unwrap().lock().is_empty());
+	assert!(api_bob_prime.reported_equivocations.as_ref().unwrap().lock().is_empty());
+
+	// sanity verify no new blocks have been finalized by BEEFY
+	streams_empty_after_timeout(best_blocks, &net, None).await;
+	streams_empty_after_timeout(versioned_finality_proof, &net, None).await;
 }
 
 #[tokio::test]

@@ -15,19 +15,67 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! I/O host interface for substrate runtime.
+//! # Substrate Primitives: IO
+//!
+//! This crate contains interfaces for the runtime to communicate with the outside world, ergo `io`.
+//! In other context, such interfaces are referred to as "**host functions**".
+//!
+//! Each set of host functions are defined with an instance of the
+//! [`sp_runtime_interface::runtime_interface`] macro.
+//!
+//! Most notably, this crate contains host functions for:
+//!
+//! - [`hashing`]
+//! - [`crypto`]
+//! - [`trie`]
+//! - [`offchain`]
+//! - [`storage`]
+//! - [`allocator`]
+//! - [`logging`]
+//!
+//! All of the default host functions provided by this crate, and by default contained in all
+//! substrate-based clients are amalgamated in [`SubstrateHostFunctions`].
+//!
+//! ## Externalities
+//!
+//! Host functions go hand in hand with the concept of externalities. Externalities are an
+//! environment in which host functions are provided, and thus can be accessed. Some host functions
+//! are only accessible in an externality environment that provides it.
+//!
+//! A typical error for substrate developers is the following:
+//!
+//! ```should_panic
+//! use sp_io::storage::get;
+//! # fn main() {
+//! let data = get(b"hello world");
+//! # }
+//! ```
+//!
+//! This code will panic with the following error:
+//!
+//! ```no_compile
+//! thread 'main' panicked at '`get_version_1` called outside of an Externalities-provided environment.'
+//! ```
+//!
+//! Such error messages should always be interpreted as "code accessing host functions accessed
+//! outside of externalities".
+//!
+//! An externality is any type that implements [`sp_externalities::Externalities`]. A simple example
+//! of which is [`TestExternalities`], which is commonly used in tests and is exported from this
+//! crate.
+//!
+//! ```
+//! use sp_io::{storage::get, TestExternalities};
+//! # fn main() {
+//! TestExternalities::default().execute_with(|| {
+//! 	let data = get(b"hello world");
+//! });
+//! # }
+//! ```
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(enable_alloc_error_handler, feature(alloc_error_handler))]
-#![cfg_attr(
-	feature = "std",
-	doc = "Substrate runtime standard library as compiled when linked with Rust's standard library."
-)]
-#![cfg_attr(
-	not(feature = "std"),
-	doc = "Substrate's runtime standard library as compiled without Rust's standard library."
-)]
 
 use sp_std::vec::Vec;
 
@@ -54,6 +102,9 @@ use sp_core::{
 	storage::StateVersion,
 	LogLevel, LogLevelFilter, OpaquePeerId, H256,
 };
+
+#[cfg(feature = "bls-experimental")]
+use sp_core::bls377;
 
 #[cfg(feature = "std")]
 use sp_trie::{LayoutV0, LayoutV1, TrieConfiguration};
@@ -776,9 +827,7 @@ pub trait Crypto {
 				return false
 			};
 
-			let Ok(sig) = ed25519_dalek::Signature::from_bytes(&sig.0) else {
-				return false
-			};
+			let Ok(sig) = ed25519_dalek::Signature::from_bytes(&sig.0) else { return false };
 
 			public_key.verify(msg, &sig).is_ok()
 		} else {
@@ -1139,6 +1188,21 @@ pub trait Crypto {
 			.recover_ecdsa(&msg, &sig)
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		Ok(pubkey.serialize())
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	/// Generate an `bls12-377` key for the given key type using an optional `seed` and
+	/// store it in the keystore.
+	///
+	/// The `seed` needs to be a valid utf8.
+	///
+	/// Returns the public key.
+	fn bls377_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> bls377::Public {
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.bls377_generate_new(id, seed)
+			.expect("`bls377_generate` failed")
 	}
 }
 

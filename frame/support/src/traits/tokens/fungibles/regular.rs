@@ -62,7 +62,8 @@ pub trait Inspect<AccountId>: Sized {
 	/// The minimum balance any single account may have.
 	fn minimum_balance(asset: Self::AssetId) -> Self::Balance;
 
-	/// Get the total amount of funds whose ultimate bneficial ownership can be determined as `who`.
+	/// Get the total amount of funds whose ultimate beneficial ownership can be determined as
+	/// `who`.
 	///
 	/// This may include funds which are wholly inaccessible to `who`, either temporarily or even
 	/// indefinitely.
@@ -121,7 +122,7 @@ pub trait Inspect<AccountId>: Sized {
 
 /// Special dust type which can be type-safely converted into a `Credit`.
 #[must_use]
-pub struct Dust<A, T: Unbalanced<A>>(pub(crate) T::AssetId, pub(crate) T::Balance);
+pub struct Dust<A, T: Unbalanced<A>>(pub T::AssetId, pub T::Balance);
 
 impl<A, T: Balanced<A>> Dust<A, T> {
 	/// Convert `Dust` into an instance of `Credit`.
@@ -135,7 +136,7 @@ impl<A, T: Balanced<A>> Dust<A, T> {
 /// **WARNING**
 /// Do not use this directly unless you want trouble, since it allows you to alter account balances
 /// without keeping the issuance up to date. It has no safeguards against accidentally creating
-/// token imbalances in your system leading to accidental imflation or deflation. It's really just
+/// token imbalances in your system leading to accidental inflation or deflation. It's really just
 /// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
 /// use.
 pub trait Unbalanced<AccountId>: Inspect<AccountId> {
@@ -582,17 +583,4 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	fn done_issue(_asset: Self::AssetId, _amount: Self::Balance) {}
 	fn done_deposit(_asset: Self::AssetId, _who: &AccountId, _amount: Self::Balance) {}
 	fn done_withdraw(_asset: Self::AssetId, _who: &AccountId, _amount: Self::Balance) {}
-}
-
-/// Use an on-chain exchange to convert the asset to the equivalent in native tokens.
-pub trait SwapForNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
-	// If successful returns the amount in native tokens.
-	fn swap_tokens_for_exact_native(
-		sender: AccountId,
-		asset_id: AssetId,
-		amount_out: Balance,
-		amount_in_max: Option<AssetBalance>,
-		send_to: AccountId,
-		keep_alive: bool,
-	) -> Result<AssetBalance, DispatchError>;
 }

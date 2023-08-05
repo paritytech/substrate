@@ -188,7 +188,8 @@ pub trait NetworkPeers {
 	/// this step if the peer set is in reserved only mode.
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
-	/// invalid peer ID (which includes the local peer ID).
+	/// invalid peer ID (which includes the local peer ID), or if `protocol` does not
+	/// refer to a known protocol.
 	fn set_reserved_peers(
 		&self,
 		protocol: ProtocolName,
@@ -201,7 +202,8 @@ pub trait NetworkPeers {
 	/// consist of only `/p2p/<peerid>`.
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
-	/// invalid peer ID (which includes the local peer ID).
+	/// invalid peer ID (which includes the local peer ID), or if `protocol` does not
+	/// refer to a know protocol.
 	fn add_peers_to_reserved_set(
 		&self,
 		protocol: ProtocolName,
@@ -209,7 +211,13 @@ pub trait NetworkPeers {
 	) -> Result<(), String>;
 
 	/// Remove peers from a peer set.
-	fn remove_peers_from_reserved_set(&self, protocol: ProtocolName, peers: Vec<PeerId>);
+	///
+	/// Returns `Err` if `protocol` does not refer to a known protocol.
+	fn remove_peers_from_reserved_set(
+		&self,
+		protocol: ProtocolName,
+		peers: Vec<PeerId>,
+	) -> Result<(), String>;
 
 	/// Returns the number of peers in the sync peer set we're connected to.
 	fn sync_num_connected(&self) -> usize;
@@ -277,7 +285,11 @@ where
 		T::add_peers_to_reserved_set(self, protocol, peers)
 	}
 
-	fn remove_peers_from_reserved_set(&self, protocol: ProtocolName, peers: Vec<PeerId>) {
+	fn remove_peers_from_reserved_set(
+		&self,
+		protocol: ProtocolName,
+		peers: Vec<PeerId>,
+	) -> Result<(), String> {
 		T::remove_peers_from_reserved_set(self, protocol, peers)
 	}
 
@@ -402,9 +414,9 @@ pub trait NetworkNotification {
 	/// a receiver. With a `NotificationSender` at hand, sending a notification is done in two
 	/// steps:
 	///
-	/// 1.  [`NotificationSender::ready`] is used to wait for the sender to become ready
+	/// 1. [`NotificationSender::ready`] is used to wait for the sender to become ready
 	/// for another notification, yielding a [`NotificationSenderReady`] token.
-	/// 2.  [`NotificationSenderReady::send`] enqueues the notification for sending. This operation
+	/// 2. [`NotificationSenderReady::send`] enqueues the notification for sending. This operation
 	/// can only fail if the underlying notification substream or connection has suddenly closed.
 	///
 	/// An error is returned by [`NotificationSenderReady::send`] if there exists no open

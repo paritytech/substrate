@@ -618,9 +618,7 @@ impl State {
 		try_runtime_check: bool,
 	) -> sc_cli::Result<RemoteExternalities<Block>>
 	where
-		Block::Hash: FromStr,
 		Block::Header: DeserializeOwned,
-		Block::Hash: DeserializeOwned,
 		<Block::Hash as FromStr>::Err: Debug,
 	{
 		let builder = match self {
@@ -732,7 +730,6 @@ impl TryRuntimeCmd {
 	where
 		Block: BlockT<Hash = H256> + DeserializeOwned,
 		Block::Header: DeserializeOwned,
-		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
 		<NumberFor<Block> as FromStr>::Err: Debug,
 		<NumberFor<Block> as TryInto<u64>>::Error: Debug,
@@ -798,7 +795,6 @@ impl CliConfiguration for TryRuntimeCmd {
 /// Get the hash type of the generic `Block` from a `hash_str`.
 pub(crate) fn hash_of<Block: BlockT>(hash_str: &str) -> sc_cli::Result<Block::Hash>
 where
-	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
 {
 	hash_str
@@ -862,7 +858,7 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
-	extensions: Extensions,
+	mut extensions: Extensions,
 ) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
 	let mut changes = Default::default();
 	let encoded_results = StateMachine::new(
@@ -871,11 +867,11 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 		executor,
 		method,
 		data,
-		extensions,
+		&mut extensions,
 		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend).runtime_code()?,
 		CallContext::Offchain,
 	)
-	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
+	.execute()
 	.map_err(|e| format!("failed to execute '{}': {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
@@ -891,7 +887,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
-	extensions: Extensions,
+	mut extensions: Extensions,
 	maybe_export_proof: Option<PathBuf>,
 ) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
 	use parity_scale_codec::Encode;
@@ -910,11 +906,11 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 		executor,
 		method,
 		data,
-		extensions,
+		&mut extensions,
 		&runtime_code,
 		CallContext::Offchain,
 	)
-	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
+	.execute()
 	.map_err(|e| format!("failed to execute {}: {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 

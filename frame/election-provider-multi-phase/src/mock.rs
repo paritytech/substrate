@@ -44,7 +44,7 @@ use sp_npos_elections::{
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	PerU16,
+	BuildStorage, PerU16,
 };
 use std::sync::Arc;
 
@@ -53,12 +53,9 @@ pub type UncheckedExtrinsic =
 	sp_runtime::generic::UncheckedExtrinsic<AccountId, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
-	pub struct Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub struct Runtime
 	{
-		System: frame_system::{Pallet, Call, Event<T>, Config},
+		System: frame_system::{Pallet, Call, Event<T>, Config<T>},
 		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
 		MultiPhase: multi_phase::{Pallet, Call, Event<T>},
 	}
@@ -210,14 +207,13 @@ impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = BlockNumber;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type DbWeight = ();
@@ -322,8 +318,8 @@ impl onchain::Config for OnChainSeqPhragmen {
 
 pub struct MockFallback;
 impl ElectionProviderBase for MockFallback {
+	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
-	type BlockNumber = u64;
 	type Error = &'static str;
 	type DataProvider = StakingMock;
 	type MaxWinners = MaxWinners;
@@ -438,8 +434,8 @@ pub struct ExtBuilder {}
 
 pub struct StakingMock;
 impl ElectionDataProvider for StakingMock {
+	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
-	type BlockNumber = u64;
 	type MaxVotesPerVoter = MaxNominations;
 
 	fn electable_targets(bounds: DataProviderBounds) -> data_provider::Result<Vec<AccountId>> {
@@ -506,12 +502,6 @@ impl ElectionDataProvider for StakingMock {
 		let mut current = Targets::get();
 		current.push(target);
 		Targets::set(current);
-
-		// to be on-par with staking, we add a self vote as well. the stake is really not that
-		// important.
-		let mut current = Voters::get();
-		current.push((target, ExistentialDeposit::get() as u64, bounded_vec![target]));
-		Voters::set(current);
 	}
 }
 
@@ -575,7 +565,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
-			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+			frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
 		let _ = pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![
