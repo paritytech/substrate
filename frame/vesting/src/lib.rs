@@ -74,9 +74,12 @@ use sp_runtime::{
 		AtLeast32BitUnsigned, Bounded, Convert, MaybeSerializeDeserialize, One, Saturating,
 		StaticLookup, Zero,
 	},
-	RuntimeDebug, SaturatedConversion,
+	RuntimeDebug,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
+
+#[cfg(any(feature = "try-runtime", test))]
+use sp_runtime::SaturatedConversion;
 
 pub use pallet::*;
 pub use vesting_info::*;
