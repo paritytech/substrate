@@ -1258,6 +1258,8 @@ impl pallet_contracts::Config for Runtime {
 	type Migrations = pallet_contracts::migration::codegen::BenchMigrations;
 	type MaxDelegateDependencies = ConstU32<32>;
 	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
+	#[cfg(feature = "unsafe-debug")]
+	type Debug = ();
 }
 
 impl pallet_sudo::Config for Runtime {

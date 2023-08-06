@@ -39,18 +39,18 @@
 //! ## Examples
 //!
 //! 1. **Appending** some data to the list can happen either by [`Pallet::append_one`]:
-#![doc = docify::embed!("frame/paged-list/src/tests.rs", append_one_works)]
+#![doc = docify::embed!("src/tests.rs", append_one_works)]
 //! 2. or by [`Pallet::append_many`]. This should always be preferred to repeated calls to
 //! [`Pallet::append_one`]:
-#![doc = docify::embed!("frame/paged-list/src/tests.rs", append_many_works)]
+#![doc = docify::embed!("src/tests.rs", append_many_works)]
 //! 3. If you want to append many values (ie. in a loop), then best use the [`Pallet::appender`]:
-#![doc = docify::embed!("frame/paged-list/src/tests.rs", appender_works)]
+#![doc = docify::embed!("src/tests.rs", appender_works)]
 //! 4. **Iterating** over the list can be done with [`Pallet::iter`]. It uses the standard
 //! `Iterator` trait:
-#![doc = docify::embed!("frame/paged-list/src/tests.rs", iter_works)]
+#![doc = docify::embed!("src/tests.rs", iter_works)]
 //! 5. **Draining** elements happens through the [`Pallet::drain`] iterator. Note that even
 //! *peeking* a value will already remove it.
-#![doc = docify::embed!("frame/paged-list/src/tests.rs", drain_works)]
+#![doc = docify::embed!("src/tests.rs", drain_works)]
 //!
 //! ## Pallet API
 //!

@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(feature = "unsafe-debug")]
+use crate::unsafe_debug::ExecutionObserver;
 use crate::{
 	gas::GasMeter,
 	storage::{self, DepositAccount, WriteOutcome},
@@ -344,7 +346,7 @@ pub trait Ext: sealing::Sealed {
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ExportedFunction {
 	/// The constructor function which is executed on deployment of a contract.
 	Constructor,
@@ -904,10 +906,20 @@ where
 			// Every non delegate call or instantiate also optionally transfers the balance.
 			self.initial_transfer()?;
 
+			#[cfg(feature = "unsafe-debug")]
+			let (code_hash, input_clone) = {
+				let code_hash = *executable.code_hash();
+				T::Debug::before_call(&code_hash, entry_point, &input_data);
+				(code_hash, input_data.clone())
+			};
+
 			// Call into the Wasm blob.
 			let output = executable
 				.execute(self, &entry_point, input_data)
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
+
+			#[cfg(feature = "unsafe-debug")]
+			T::Debug::after_call(&code_hash, entry_point, input_clone, &output);
 
 			// Avoid useless work that would be reverted anyways.
 			if output.did_revert() {

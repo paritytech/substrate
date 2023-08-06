@@ -1874,45 +1874,18 @@ checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "docify"
-version = "0.1.14"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15aa210b350ff62db3149ac5d0b2a0287c01ee91354e16290de344082b2b3ff6"
+checksum = "029de870d175d11969524d91a3fb2cbf6d488b853bff99d41cf65e533ac7d9d2"
 dependencies = [
- "docify_macros 0.1.14",
-]
-
-[[package]]
-name = "docify"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6491709f76fb7ceb951244daf624d480198b427556084391d6e3c33d3ae74b9"
-dependencies = [
- "docify_macros 0.2.0",
+ "docify_macros",
 ]
 
 [[package]]
 name = "docify_macros"
-version = "0.1.14"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bf3504ed030133996c59a9954669a7a4f869f93a7e74389e16149843db16f57"
-dependencies = [
- "common-path",
- "derive-syn-parse",
- "lazy_static",
- "prettyplease 0.2.6",
- "proc-macro2",
- "quote",
- "regex",
- "syn 2.0.18",
- "termcolor",
- "walkdir",
-]
-
-[[package]]
-name = "docify_macros"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffc5338a9f72ce29a81377d9039798fcc926fb471b2004666caf48e446dffbbf"
+checksum = "cac43324656a1b05eb0186deb51f27d2d891c704c37f34de281ef6297ba193e5"
 dependencies = [
  "common-path",
  "derive-syn-parse",
@@ -1922,6 +1895,7 @@ dependencies = [
  "regex",
  "syn 2.0.18",
  "termcolor",
+ "toml 0.7.4",
  "walkdir",
 ]
 
@@ -6275,7 +6249,7 @@ dependencies = [
 name = "pallet-fast-unstake"
 version = "4.0.0-dev"
 dependencies = [
- "docify 0.2.0",
+ "docify",
  "frame-benchmarking",
  "frame-election-provider-support",
  "frame-support",
@@ -6739,7 +6713,7 @@ dependencies = [
 name = "pallet-paged-list"
 version = "0.1.0"
 dependencies = [
- "docify 0.1.14",
+ "docify",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
