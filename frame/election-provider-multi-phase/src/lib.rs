@@ -668,9 +668,8 @@ pub mod pallet {
 		type MaxWinners: Get<u32>;
 
 		/// The maximum number of electing voters and electable targets to put in the snapshot.
-		/// At the moment, snapshots
-		/// are only over a single block, but once multi-block elections are introduced they will
-		/// take place over multiple blocks.
+		/// At the moment, snapshots are only over a single block, but once multi-block elections
+		/// are introduced they will take place over multiple blocks.
 		type ElectionBounds: Get<ElectionBounds>;
 
 		/// Handler for the slashed deposits.
@@ -1944,8 +1943,8 @@ mod tests {
 	use crate::{
 		mock::{
 			multi_phase_events, raw_solution, roll_to, roll_to_signed, roll_to_unsigned, AccountId,
-			ExtBuilder, MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin,
-			SignedMaxSubmissions, System,
+			ElectionsBounds, ExtBuilder, MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime,
+			RuntimeOrigin, SignedMaxSubmissions, System, TargetIndex, Targets, Voters,
 		},
 		Phase,
 	};
@@ -2550,9 +2549,9 @@ mod tests {
 		ExtBuilder::default().build_and_execute(|| {
 			// sets bounds on number of targets.
 			let new_bounds = ElectionBoundsBuilder::default().targets_count(1_000.into()).build();
-			crate::mock::ElectionsBounds::set(new_bounds);
+			ElectionsBounds::set(new_bounds);
 
-			crate::mock::Targets::set((0..(1_000 as AccountId) + 1).collect::<Vec<_>>());
+			Targets::set((0..(1_000 as AccountId) + 1).collect::<Vec<_>>());
 
 			// Signed phase failed to open.
 			roll_to(15);
@@ -2589,9 +2588,9 @@ mod tests {
 		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
 			// sets bounds on number of targets.
 			let new_bounds = ElectionBoundsBuilder::default().targets_count(1_000.into()).build();
-			crate::mock::ElectionsBounds::set(new_bounds);
+			ElectionsBounds::set(new_bounds);
 
-			crate::mock::Targets::set((0..(1_000 as AccountId) + 1).collect::<Vec<_>>());
+			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
 
 			// Signed phase failed to open.
 			roll_to(15);
@@ -2621,10 +2620,10 @@ mod tests {
 		// but if there are too many voters, we simply truncate them.
 		ExtBuilder::default().build_and_execute(|| {
 			// we have 8 voters in total.
-			assert_eq!(crate::mock::Voters::get().len(), 8);
+			assert_eq!(Voters::get().len(), 8);
 			// but we want to take 2.
 			let new_bounds = ElectionBoundsBuilder::default().voters_count(2.into()).build();
-			crate::mock::ElectionsBounds::set(new_bounds);
+			ElectionsBounds::set(new_bounds);
 
 			// Signed phase opens just fine.
 			roll_to_signed();

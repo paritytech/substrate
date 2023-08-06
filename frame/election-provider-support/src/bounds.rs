@@ -22,7 +22,7 @@
 //! This module defines and implements types that help creating and handling election bounds.
 //! [`DataProviderBounds`] encapsulates the upper limits for the results provided by `DataProvider`
 //! implementors. Those limits can be defined over two axis: number of elements returned (`count`)
-//!  and/or the size of the returned SCALE encoded structure (`size`).
+//! and/or the size of the returned SCALE encoded structure (`size`).
 //!
 //! [`ElectionBoundsBuilder`] is a helper to construct data election bounds and it aims at
 //! preventing the caller from mistake the order of size and count limits.
@@ -51,7 +51,7 @@
 //!
 //! ### Implementation details
 //!
-//! A default or `None` bound means that no bounds are enfirced (i.e. unlimited result size). In
+//! A default or `None` bound means that no bounds are enforced (i.e. unlimited result size). In
 //! general, be careful when using unbounded election bounds in production.
 
 use core::ops::Add;

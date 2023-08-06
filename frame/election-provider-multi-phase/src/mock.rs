@@ -299,7 +299,7 @@ parameter_types! {
 
 	#[derive(Debug)]
 	pub static MaxWinners: u32 = 200;
-	// `ElectionBounds` and `OnChainElectionsBounds` are defined separately to set them independenyly in the tests.
+	// `ElectionBounds` and `OnChainElectionsBounds` are defined separately to set them independently in the tests.
 	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::default().build();
 	pub static OnChainElectionsBounds: ElectionBounds = ElectionBoundsBuilder::default().build();
 	pub static EpochLength: u64 = 30;

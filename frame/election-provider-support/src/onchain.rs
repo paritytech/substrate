@@ -85,8 +85,8 @@ pub trait Config {
 	/// always be more than `DataProvider::desired_target`.
 	type MaxWinners: Get<u32>;
 
-	/// Elections bounds, to use when calling into
-	/// [`Config::DataProvider`]. It might be overwritten in the `InstantElectionProvider` impl.
+	/// Elections bounds, to use when calling into [`Config::DataProvider`]. It might be overwritten
+	/// in the `InstantElectionProvider` impl.
 	type Bounds: Get<ElectionBounds>;
 }
 

@@ -24,6 +24,7 @@
 //! [`ElectionDataProvider::electing_voters`]. The [`StaticTracker`] implementation uses
 //! [`codec::Encode::size_hint`] to estimate the SCALE encoded size of the snapshot voters struct
 //! as it is being constructed without requiring extra stack allocations.
+//!
 //! The [`StaticTracker::try_register_voter`] is called to update the static tracker internal
 //! state, if It will return an error if the resulting SCALE encoded size (in bytes) is larger than
 //! the provided `DataProviderBounds`.
@@ -75,7 +76,7 @@ use frame_election_provider_support::{
 	ElectionDataProvider, VoterOf,
 };
 
-/// Keeps track of the SCALE encoded byte length of the snapshot's voters struct.
+/// Keeps track of the SCALE encoded byte length of the snapshot's voters or targets.
 ///
 /// The tracker calculates the bytes used based on static rules, without requiring any actual
 /// encoding or extra allocations.
