@@ -364,7 +364,6 @@ pub mod pallet {
 		/// Remove the royalty associated to an NFT item only if the item no longer exists.
 		///
 		/// This will also redeem the deposit initially paid for creating the item royalty.
-		/// If the royalty was set with `ForceOrigin` then no deposit will be redeemed.
 		///
 		/// Origin must be Signed and must be the depositor of `ItemRoyalty` or the `ForceOrigin`.
 		///

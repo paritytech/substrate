@@ -1609,7 +1609,6 @@ impl pallet_nfts_royalty::Config for Runtime {
 	type NftItemId = <Self as pallet_nfts::Config>::ItemId;
 	type Nfts = Nfts;
 	type MaxRecipients = ConstU32<5>;
-	type CollectionRoyaltyDeposit = ConstU128<1>;
 	type ItemRoyaltyDeposit = ConstU128<1>;
 }
 
