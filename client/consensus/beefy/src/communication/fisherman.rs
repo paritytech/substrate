@@ -26,7 +26,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_consensus_beefy::{
 	check_invalid_fork_proof,
-	crypto::{AuthorityId, Signature},
+	ecdsa_crypto::{AuthorityId, Signature},
 	BeefyApi, InvalidForkCommitmentProof, Payload, PayloadProvider, ValidatorSet, VoteMessage, Commitment, OpaqueKeyOwnershipProof, SignedCommitment,
 };
 use sp_runtime::{
@@ -70,7 +70,7 @@ where
 	BE: Backend<B>,
 	P: PayloadProvider<B>,
 	R: ProvideRuntimeApi<B> + Send + Sync,
-	R::Api: BeefyApi<B>,
+	R::Api: BeefyApi<B, AuthorityId>,
 {
 	fn expected_header_and_payload(&self, number: NumberFor<B>) -> Result<(B::Header, Payload), Error> {
 		// This should be un-ambiguous since `number` is finalized.
@@ -205,7 +205,7 @@ where
 	BE: Backend<B>,
 	P: PayloadProvider<B>,
 	R: ProvideRuntimeApi<B> + Send + Sync,
-	R::Api: BeefyApi<B>,
+	R::Api: BeefyApi<B, AuthorityId>,
 {
 	/// Check `vote` for contained block against expected payload.
 	///

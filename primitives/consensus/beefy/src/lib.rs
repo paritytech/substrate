@@ -442,7 +442,7 @@ sp_api::decl_runtime_apis! {
 		/// hardcoded to return `None`). Only useful in an offchain context.
 		fn submit_report_invalid_fork_unsigned_extrinsic(
 			invalid_fork_proof:
-				InvalidForkCommitmentProof<NumberFor<Block>, crypto::AuthorityId, crypto::Signature>,
+				InvalidForkCommitmentProof<NumberFor<Block>, AuthorityId, <AuthorityId as RuntimeAppPublic>::Signature>,
 			key_owner_proofs: Vec<OpaqueKeyOwnershipProof>,
 		) -> Option<()>;
 
