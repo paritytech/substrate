@@ -19,7 +19,7 @@
 
 use crate::{
 	storage::ContractInfo, BalanceOf, CodeInfo, Config, Error, Event, HoldReason, Inspect, Origin,
-	Pallet, StorageDeposit as Deposit, System,
+	Pallet, StorageDeposit as Deposit, System, LOG_TARGET,
 };
 
 use frame_support::{
@@ -525,7 +525,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 		match amount {
 			Deposit::Charge(amount) | Deposit::Refund(amount) if amount.is_zero() => return Ok(()),
 			Deposit::Charge(amount) => {
-				// System::<T>::inc_providers(contract);
+				System::<T>::inc_providers(contract);
 				// This could fail if the `origin` does not have enough liquidity. Ideally, though,
 				// this should have been checked before with `check_limit`.
 				T::Currency::transfer_and_hold(
@@ -572,14 +572,13 @@ impl<T: Config> Ext<T> for ReservingExt {
 					// runtime logic. In the rare case this happens we try to refund as much as we
 					// can, thus the `Precision::BestEffort`.
 					log::error!(
-						target: "runtime::contracts",
+						target: LOG_TARGET,
 						"Failed to repatriate full storage deposit {:?} from contract {:?} to origin {:?}. Transferred {:?}.",
 						amount, contract, origin, transferred,
 					);
+				} else {
+					let _ = System::<T>::dec_providers(contract);
 				}
-				// else {
-				// 	let _ = System::<T>::dec_providers(contract);
-				// }
 			},
 		}
 		Ok(())
