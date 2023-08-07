@@ -108,6 +108,8 @@ where
 
 	// The formula is min((3k / n)^2, 1)
 	// where k = offenders_number and n = validators_number
+	// TODO: progressive slashing may not be the appropriate solution for BEEFY,
+	// or we may want to saturate it before 1/3rd
 	fn slash_fraction(&self, offenders_count: u32) -> Perbill {
 		// Perbill type domain is [0, 1] by definition
 		Perbill::from_rational(3 * offenders_count, self.validator_set_count).square()
@@ -125,7 +127,6 @@ where
 pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, R, P, L)>);
 
 /// Equivocation evidence convenience alias.
-// TODO: use an enum that takes either `EquivocationProof` or `InvalidForkVoteProof`
 pub type EquivocationEvidenceFor<T> = (
 	EquivocationProof<
 		BlockNumberFor<T>,
@@ -134,6 +135,33 @@ pub type EquivocationEvidenceFor<T> = (
 	>,
 	<T as Config>::KeyOwnerProof,
 );
+
+/// Invalid fork evidence convenience alias.
+// pub type InvalidForkEvidenceFor<T> = (
+// 	InvalidForkCommitmentProof<
+// 		BlockNumberFor<T>,
+// 		<T as Config>::BeefyId,
+// 		<<T as Config>::BeefyId as RuntimeAppPublic>::Signature,
+// 	>,
+// 	<T as Config>::KeyOwnerProof,
+// );
+
+// ->
+// pub enum EquivocationEvidenceFor<T: Config> {
+// 	EquivocationProof(
+// 		EquivocationProof<
+// 				BlockNumberFor<T>,
+// 			<T as Config>::BeefyId,
+// 			<<T as Config>::BeefyId as RuntimeAppPublic>::Signature,
+// 			>,
+// 		<T as Config>::KeyOwnerProof,
+// 	),
+// 	InvalidForkCommitmentProof(sp_consensus_beefy::InvalidForkCommitmentProof<
+// 			BlockNumberFor<T>,
+// 		<T as Config>::BeefyId,
+// 		<<T as Config>::BeefyId as RuntimeAppPublic>::Signature,
+// 		>)
+// }
 
 impl<T, R, P, L> OffenceReportSystem<Option<T::AccountId>, EquivocationEvidenceFor<T>>
 	for EquivocationReportSystem<T, R, P, L>

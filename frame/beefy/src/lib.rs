@@ -47,15 +47,19 @@ use sp_consensus_beefy::{
 
 mod default_weights;
 mod equivocation;
+mod invalid_fork_reporting;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 
 pub use crate::equivocation::{EquivocationOffence, EquivocationReportSystem, TimeSlot};
+pub use crate::invalid_fork_reporting::{InvalidForkOffence, InvalidForkReportSystem};
+
 pub use pallet::*;
 
 use crate::equivocation::EquivocationEvidenceFor;
+use crate::invalid_fork_reporting::InvalidForkEvidenceFor;
 
 const LOG_TARGET: &str = "runtime::beefy";
 
@@ -112,9 +116,15 @@ pub mod pallet {
 		/// Defines methods to publish, check and process an equivocation offence.
 		type EquivocationReportSystem: OffenceReportSystem<
 			Option<Self::AccountId>,
-			// TODO: make below an enum that takes either `EquivocationProof` or
-			// `InvalidForkCommitmentProof`
 			EquivocationEvidenceFor<Self>,
+		>;
+
+		/// The equivocation handling subsystem.
+		///
+		/// Defines methods to publish, check and process an equivocation offence.
+		type InvalidForkReportSystem: OffenceReportSystem<
+			Option<Self::AccountId>,
+			InvalidForkEvidenceFor<Self>,
 		>;
 	}
 
@@ -310,7 +320,7 @@ pub mod pallet {
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count(), T::MaxNominators::get(),))]
+		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proofs.validator_count(), T::MaxNominators::get(),))]
 		pub fn report_invalid_fork_commitment_unsigned(
 			origin: OriginFor<T>,
 			invalid_fork_proof: Box<
@@ -320,15 +330,13 @@ pub mod pallet {
 					<T::BeefyId as RuntimeAppPublic>::Signature,
 				>,
 			>,
-			key_owner_proof: T::KeyOwnerProof,
+			key_owner_proofs: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
-
-			// TODO:
-			// T::EquivocationReportSystem::process_evidence(
-			// 	None,
-			// 	(*invalid_fork_proof, key_owner_proof),
-			// )?;
+T::InvalidForkReportSystem::process_evidence(
+				None,
+				(*invalid_fork_proof, key_owner_proofs),
+			)?;
 			Ok(Pays::No.into())
 		}
 	}
