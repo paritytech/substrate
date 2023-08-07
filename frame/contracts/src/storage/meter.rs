@@ -88,7 +88,6 @@ pub trait Ext<T: Config> {
 		origin: &T::AccountId,
 		contract: &T::AccountId,
 		amount: &DepositOf<T>,
-		terminated: bool,
 	) -> Result<(), DispatchError>;
 }
 
@@ -237,7 +236,6 @@ impl Diff {
 struct Charge<T: Config> {
 	contract: T::AccountId,
 	amount: DepositOf<T>,
-	terminated: bool,
 }
 
 /// Records the storage changes of a storage meter.
@@ -322,11 +320,7 @@ where
 			.saturating_add(&own_deposit);
 		self.charges.extend_from_slice(&absorbed.charges);
 		if !own_deposit.is_zero() {
-			self.charges.push(Charge {
-				contract: contract.clone(),
-				amount: own_deposit,
-				terminated: absorbed.is_terminated(),
-			});
+			self.charges.push(Charge { contract: contract.clone(), amount: own_deposit });
 		}
 	}
 
@@ -338,11 +332,6 @@ where
 	/// True if the contract is alive.
 	fn is_alive(&self) -> bool {
 		matches!(self.own_contribution, Contribution::Alive(_))
-	}
-
-	/// True if the contract is terminated.
-	fn is_terminated(&self) -> bool {
-		matches!(self.own_contribution, Contribution::Terminated(_))
 	}
 }
 
@@ -386,10 +375,10 @@ where
 			Origin::Signed(o) => o,
 		};
 		for charge in self.charges.iter().filter(|c| matches!(c.amount, Deposit::Refund(_))) {
-			E::charge(origin, &charge.contract, &charge.amount, charge.terminated)?;
+			E::charge(origin, &charge.contract, &charge.amount)?;
 		}
 		for charge in self.charges.iter().filter(|c| matches!(c.amount, Deposit::Charge(_))) {
-			E::charge(origin, &charge.contract, &charge.amount, charge.terminated)?;
+			E::charge(origin, &charge.contract, &charge.amount)?;
 		}
 		Ok(self.total_deposit)
 	}
@@ -417,7 +406,7 @@ where
 	/// deposit charge separately from the storage charge.
 	pub fn charge_deposit(&mut self, contract: T::AccountId, amount: DepositOf<T>) {
 		self.total_deposit = self.total_deposit.saturating_add(&amount);
-		self.charges.push(Charge { contract, amount, terminated: false });
+		self.charges.push(Charge { contract, amount });
 	}
 
 	/// Charge from `origin` a storage deposit plus the ed for contract instantiation.
@@ -444,12 +433,15 @@ where
 		// contract execution does conclude and hence would lead to a double charge.
 		self.total_deposit = deposit.clone();
 
-		// We also need to make sure that the contract's account itself exists.
+		// We need to make sure that the contract's account itself exists.
 		T::Currency::transfer(origin, contract, ed, Preservation::Preserve)?;
 
 		System::<T>::inc_consumers(contract)?;
 
-		E::charge(origin, contract, &deposit.saturating_sub(&Deposit::Charge(ed)), false)?;
+		// Normally, deposit charges are deferred to be able to coalesce them with refunds.
+		// However, we need to charge immediately so that the account is created before
+		// charges possibly below the ed are collected and fail.
+		E::charge(origin, contract, &deposit.saturating_sub(&Deposit::Charge(ed)))?;
 
 		Ok(deposit)
 	}
@@ -529,7 +521,6 @@ impl<T: Config> Ext<T> for ReservingExt {
 		origin: &T::AccountId,
 		contract: &T::AccountId,
 		amount: &DepositOf<T>,
-		_terminated: bool,
 	) -> Result<(), DispatchError> {
 		match amount {
 			Deposit::Charge(amount) | Deposit::Refund(amount) if amount.is_zero() => return Ok(()),
@@ -628,7 +619,6 @@ mod tests {
 		origin: AccountIdOf<Test>,
 		contract: AccountIdOf<Test>,
 		amount: DepositOf<Test>,
-		terminated: bool,
 	}
 
 	#[derive(Default, Debug, PartialEq, Eq, Clone)]
@@ -662,14 +652,12 @@ mod tests {
 			origin: &AccountIdOf<Test>,
 			contract: &AccountIdOf<Test>,
 			amount: &DepositOf<Test>,
-			terminated: bool,
 		) -> Result<(), DispatchError> {
 			TestExtTestValue::mutate(|ext| {
 				ext.charges.push(Charge {
 					origin: origin.clone(),
 					contract: contract.clone(),
 					amount: amount.clone(),
-					terminated,
 				})
 			});
 			Ok(())
@@ -752,24 +740,9 @@ mod tests {
 				expected: TestExt {
 					limit_checks: vec![LimitCheck { origin: ALICE, limit: 100, min_leftover: 0 }],
 					charges: vec![
-						Charge {
-							origin: ALICE,
-							contract: CHARLIE,
-							amount: Deposit::Refund(10),
-							terminated: false,
-						},
-						Charge {
-							origin: ALICE,
-							contract: CHARLIE,
-							amount: Deposit::Refund(20),
-							terminated: false,
-						},
-						Charge {
-							origin: ALICE,
-							contract: BOB,
-							amount: Deposit::Charge(2),
-							terminated: false,
-						},
+						Charge { origin: ALICE, contract: CHARLIE, amount: Deposit::Refund(10) },
+						Charge { origin: ALICE, contract: CHARLIE, amount: Deposit::Refund(20) },
+						Charge { origin: ALICE, contract: BOB, amount: Deposit::Charge(2) },
 					],
 				},
 			},
@@ -843,18 +816,8 @@ mod tests {
 				expected: TestExt {
 					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
 					charges: vec![
-						Charge {
-							origin: ALICE,
-							contract: CHARLIE,
-							amount: Deposit::Refund(119),
-							terminated: true,
-						},
-						Charge {
-							origin: ALICE,
-							contract: BOB,
-							amount: Deposit::Charge(12),
-							terminated: false,
-						},
+						Charge { origin: ALICE, contract: CHARLIE, amount: Deposit::Refund(119) },
+						Charge { origin: ALICE, contract: BOB, amount: Deposit::Charge(12) },
 					],
 				},
 			},

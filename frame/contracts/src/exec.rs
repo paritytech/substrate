@@ -631,7 +631,6 @@ impl<T: Config> CachedContract<T> {
 	/// Terminate and return the contract info.
 	fn terminate(&mut self, account_id: &T::AccountId) -> ContractInfo<T> {
 		self.load(account_id);
-		let _ = get_cached_or_panic_after_load!(self);
 		get_cached_or_panic_after_load!(mem::replace(self, Self::Terminated))
 	}
 }
