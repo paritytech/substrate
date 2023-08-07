@@ -56,7 +56,7 @@ use sp_consensus_beefy::{
 	ecdsa_crypto::{AuthorityId, Signature},
 	known_payloads,
 	mmr::{find_mmr_root_digest, MmrRootProvider},
-	BeefyApi, Commitment, ConsensusLog, EquivocationProof, Keyring as BeefyKeyring, MmrRootHash,
+	BeefyApi, Commitment, ConsensusLog, VoteEquivocationProof, Keyring as BeefyKeyring, MmrRootHash,
 	OpaqueKeyOwnershipProof, Payload, SignedCommitment, ValidatorSet, ValidatorSetId,
 	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
@@ -271,7 +271,7 @@ pub(crate) struct TestApi {
 	pub validator_set: BeefyValidatorSet,
 	pub mmr_root_hash: MmrRootHash,
 	pub reported_equivocations:
-		Option<Arc<Mutex<Vec<EquivocationProof<NumberFor<Block>, AuthorityId, Signature>>>>>,
+		Option<Arc<Mutex<Vec<VoteEquivocationProof<NumberFor<Block>, AuthorityId, Signature>>>>>,
 }
 
 impl TestApi {
@@ -325,7 +325,7 @@ sp_api::mock_impl_runtime_apis! {
 		}
 
 		fn submit_report_equivocation_unsigned_extrinsic(
-			proof: EquivocationProof<NumberFor<Block>, AuthorityId, Signature>,
+			proof: VoteEquivocationProof<NumberFor<Block>, AuthorityId, Signature>,
 			_dummy: OpaqueKeyOwnershipProof,
 		) -> Option<()> {
 			if let Some(equivocations_buf) = self.inner.reported_equivocations.as_ref() {

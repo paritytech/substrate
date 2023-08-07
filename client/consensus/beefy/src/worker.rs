@@ -43,7 +43,7 @@ use sp_consensus::SyncOracle;
 use sp_consensus_beefy::{
 	check_equivocation_proof,
 	ecdsa_crypto::{AuthorityId, Signature},
-	BeefyApi, Commitment, ConsensusLog, EquivocationProof, PayloadProvider, ValidatorSet,
+	BeefyApi, Commitment, ConsensusLog, VoteEquivocationProof, PayloadProvider, ValidatorSet,
 	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 use sp_runtime::{
@@ -934,7 +934,7 @@ where
 	/// isn't necessarily the best block if there are pending authority set changes.
 	pub(crate) fn report_equivocation(
 		&self,
-		proof: EquivocationProof<NumberFor<B>, AuthorityId, Signature>,
+		proof: VoteEquivocationProof<NumberFor<B>, AuthorityId, Signature>,
 	) -> Result<(), Error> {
 		let rounds = self.persisted_state.voting_oracle.active_rounds()?;
 		let (validators, validator_set_id) = (rounds.validators(), rounds.validator_set_id());

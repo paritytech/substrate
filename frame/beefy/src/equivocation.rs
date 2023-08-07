@@ -41,7 +41,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use log::{error, info};
-use sp_consensus_beefy::{EquivocationProof, ValidatorSetId, KEY_TYPE as BEEFY_KEY_TYPE};
+use sp_consensus_beefy::{VoteEquivocationProof, ValidatorSetId, KEY_TYPE as BEEFY_KEY_TYPE};
 use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
@@ -125,9 +125,9 @@ where
 pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, R, P, L)>);
 
 /// Equivocation evidence convenience alias.
-// TODO: use an enum that takes either `EquivocationProof` or `InvalidForkVoteProof`
+// TODO: use an enum that takes either `VoteEquivocationProof` or `ForkEquivocationProof`
 pub type EquivocationEvidenceFor<T> = (
-	EquivocationProof<
+	VoteEquivocationProof<
 		BlockNumberFor<T>,
 		<T as Config>::BeefyId,
 		<<T as Config>::BeefyId as RuntimeAppPublic>::Signature,

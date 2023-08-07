@@ -41,7 +41,7 @@ use sp_staking::{offence::OffenceReportSystem, SessionIndex};
 use sp_std::prelude::*;
 
 use sp_consensus_beefy::{
-	AuthorityIndex, BeefyAuthorityId, ConsensusLog, EquivocationProof, OnNewValidatorSet,
+	AuthorityIndex, BeefyAuthorityId, ConsensusLog, VoteEquivocationProof, OnNewValidatorSet,
 	ValidatorSet, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
@@ -112,7 +112,7 @@ pub mod pallet {
 		/// Defines methods to publish, check and process an equivocation offence.
 		type EquivocationReportSystem: OffenceReportSystem<
 			Option<Self::AccountId>,
-			// TODO: make below an enum that takes either `EquivocationProof` or
+			// TODO: make below an enum that takes either `VoteEquivocationProof` or
 			// `InvalidForkCommitmentProof`
 			EquivocationEvidenceFor<Self>,
 		>;
@@ -217,7 +217,7 @@ pub mod pallet {
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
 			equivocation_proof: Box<
-				EquivocationProof<
+				VoteEquivocationProof<
 					BlockNumberFor<T>,
 					T::BeefyId,
 					<T::BeefyId as RuntimeAppPublic>::Signature,
@@ -252,7 +252,7 @@ pub mod pallet {
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
 			equivocation_proof: Box<
-				EquivocationProof<
+				VoteEquivocationProof<
 					BlockNumberFor<T>,
 					T::BeefyId,
 					<T::BeefyId as RuntimeAppPublic>::Signature,
@@ -359,7 +359,7 @@ impl<T: Config> Pallet<T> {
 	/// an unsigned extrinsic with a call to `report_equivocation_unsigned` and
 	/// will push the transaction to the pool. Only useful in an offchain context.
 	pub fn submit_unsigned_equivocation_report(
-		equivocation_proof: EquivocationProof<
+		equivocation_proof: VoteEquivocationProof<
 			BlockNumberFor<T>,
 			T::BeefyId,
 			<T::BeefyId as RuntimeAppPublic>::Signature,

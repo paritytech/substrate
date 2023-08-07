@@ -17,7 +17,7 @@
 
 #![cfg(feature = "std")]
 
-use crate::{ecdsa_crypto, Commitment, EquivocationProof, Payload, ValidatorSetId, VoteMessage};
+use crate::{ecdsa_crypto, Commitment, VoteEquivocationProof, Payload, ValidatorSetId, VoteMessage};
 use codec::Encode;
 use sp_core::{ecdsa, keccak_256, Pair};
 use std::collections::HashMap;
@@ -95,7 +95,7 @@ impl From<Keyring> for ecdsa_crypto::Public {
 pub fn generate_equivocation_proof(
 	vote1: (u64, Payload, ValidatorSetId, &Keyring),
 	vote2: (u64, Payload, ValidatorSetId, &Keyring),
-) -> EquivocationProof<u64, ecdsa_crypto::Public, ecdsa_crypto::Signature> {
+) -> VoteEquivocationProof<u64, ecdsa_crypto::Public, ecdsa_crypto::Signature> {
 	let signed_vote = |block_number: u64,
 	                   payload: Payload,
 	                   validator_set_id: ValidatorSetId,
@@ -106,5 +106,5 @@ pub fn generate_equivocation_proof(
 	};
 	let first = signed_vote(vote1.0, vote1.1, vote1.2, vote1.3);
 	let second = signed_vote(vote2.0, vote2.1, vote2.2, vote2.3);
-	EquivocationProof { first, second }
+	VoteEquivocationProof { first, second }
 }

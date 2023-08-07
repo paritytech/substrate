@@ -229,14 +229,14 @@ pub struct VoteMessage<Number, Id, Signature> {
 /// BEEFY happens when a voter votes on the same round/block for different payloads.
 /// Proving is achieved by collecting the signed commitments of conflicting votes.
 #[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
-pub struct EquivocationProof<Number, Id, Signature> {
+pub struct VoteEquivocationProof<Number, Id, Signature> {
 	/// The first vote in the equivocation.
 	pub first: VoteMessage<Number, Id, Signature>,
 	/// The second vote in the equivocation.
 	pub second: VoteMessage<Number, Id, Signature>,
 }
 
-impl<Number, Id, Signature> EquivocationProof<Number, Id, Signature> {
+impl<Number, Id, Signature> VoteEquivocationProof<Number, Id, Signature> {
 	/// Returns the authority id of the equivocator.
 	pub fn offender_id(&self) -> &Id {
 		&self.first.id
@@ -302,7 +302,7 @@ where
 /// Verifies the equivocation proof by making sure that both votes target
 /// different blocks and that its signatures are valid.
 pub fn check_equivocation_proof<Number, Id, MsgHash>(
-	report: &EquivocationProof<Number, Id, <Id as RuntimeAppPublic>::Signature>,
+	report: &VoteEquivocationProof<Number, Id, <Id as RuntimeAppPublic>::Signature>,
 ) -> bool
 where
 	Id: BeefyAuthorityId<MsgHash> + PartialEq,
@@ -428,7 +428,7 @@ sp_api::decl_runtime_apis! {
 		/// hardcoded to return `None`). Only useful in an offchain context.
 		fn submit_report_equivocation_unsigned_extrinsic(
 			equivocation_proof:
-				EquivocationProof<NumberFor<Block>, AuthorityId, <AuthorityId as RuntimeAppPublic>::Signature>,
+				VoteEquivocationProof<NumberFor<Block>, AuthorityId, <AuthorityId as RuntimeAppPublic>::Signature>,
 			key_owner_proof: OpaqueKeyOwnershipProof,
 		) -> Option<()>;
 
