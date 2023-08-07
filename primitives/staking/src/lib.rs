@@ -47,7 +47,7 @@ pub enum StakingAccount<AccountId> {
 	Controller(AccountId),
 }
 
-#[cfg(not(feature = "no-std"))]
+#[cfg(feature = "std")]
 impl<AccountId> From<AccountId> for StakingAccount<AccountId> {
 	fn from(account: AccountId) -> Self {
 		StakingAccount::Stash(account)

@@ -701,7 +701,6 @@ pub mod pallet {
 		ForceEra { mode: Forcing },
 	}
 
-	#[derive(PartialEq)]
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Not a controller account.
@@ -836,8 +835,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 
-			Self::ledger(StakingAccount::Stash(stash.clone()))
-				.map_or(Ok(()), |_| Err(Error::<T>::AlreadyBonded))?;
+			if StakingLedger::<T>::is_bonded(StakingAccount::Stash(stash.clone())) {
+				return Err(Error::<T>::AlreadyBonded.into())
+			}
 
 			// Reject a bond which is considered to be _dust_.
 			if value < T::Currency::minimum_balance() {

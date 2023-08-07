@@ -1686,8 +1686,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn status(
 		who: &Self::AccountId,
 	) -> Result<sp_staking::StakerStatus<Self::AccountId>, DispatchError> {
-		let is_bonded = Self::bonded(who).is_some();
-		if !is_bonded {
+		if !StakingLedger::<T>::is_bonded(StakingAccount::Stash(who.clone())) {
 			return Err(Error::<T>::NotStash.into())
 		}
 

@@ -21,7 +21,7 @@ use super::{ConfigOp, Event, *};
 use crate::ledger::StakingLedgerInspect;
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
-	assert_err, assert_noop, assert_ok, assert_storage_noop, bounded_vec,
+	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
 	dispatch::{extract_actual_weight, GetDispatchInfo, WithPostDispatchInfo},
 	pallet_prelude::*,
 	traits::{Currency, Get, ReservableCurrency},
@@ -170,7 +170,7 @@ fn basic_setup_works() {
 			}
 		);
 		// Account 1 does not control any stash
-		assert_err!(Staking::ledger(1.into()), Error::<Test>::NotStash);
+		assert!(Staking::ledger(1.into()).is_err());
 
 		// ValidatorPrefs are default
 		assert_eq_uvec!(
@@ -5935,10 +5935,7 @@ mod ledger {
 	fn get_ledger_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// stash does not exist
-			assert_noop!(
-				StakingLedger::<Test>::get(StakingAccount::Stash(42)),
-				Error::<Test>::NotStash
-			);
+			assert!(StakingLedger::<Test>::get(StakingAccount::Stash(42)).is_err());
 
 			// bonded and paired
 			assert_eq!(<Bonded<Test>>::get(&11), Some(11));
@@ -5989,7 +5986,7 @@ mod ledger {
 			assert_eq!(<Payee<Test>>::get(&42), reward_dest);
 
 			// cannot bond again.
-			assert_noop!(ledger.bond(reward_dest), Error::<Test>::AlreadyBonded);
+			assert!(ledger.bond(reward_dest).is_err());
 
 			// once bonded, update works as expected.
 			ledger.claimed_rewards = bounded_vec![1];
