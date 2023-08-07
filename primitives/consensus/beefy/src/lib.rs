@@ -299,9 +299,9 @@ where
 	BeefyAuthorityId::<MsgHash>::verify(authority_id, signature, &encoded_commitment)
 }
 
-/// Verifies the equivocation proof by making sure that both votes target
+/// Verifies the vote equivocation proof by making sure that both votes target
 /// different blocks and that its signatures are valid.
-pub fn check_equivocation_proof<Number, Id, MsgHash>(
+pub fn check_vote_equivocation_proof<Number, Id, MsgHash>(
 	report: &VoteEquivocationProof<Number, Id, <Id as RuntimeAppPublic>::Signature>,
 ) -> bool
 where

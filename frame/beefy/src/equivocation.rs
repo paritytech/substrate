@@ -211,7 +211,7 @@ where
 			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
 		// Validate equivocation proof (check votes are different and signatures are valid).
-		if !sp_consensus_beefy::check_equivocation_proof(&equivocation_proof) {
+		if !sp_consensus_beefy::check_vote_equivocation_proof(&equivocation_proof) {
 			return Err(Error::<T>::InvalidVoteEquivocationProof.into())
 		}
 

@@ -41,7 +41,7 @@ use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_consensus::SyncOracle;
 use sp_consensus_beefy::{
-	check_equivocation_proof,
+	check_vote_equivocation_proof,
 	ecdsa_crypto::{AuthorityId, Signature},
 	BeefyApi, Commitment, ConsensusLog, VoteEquivocationProof, PayloadProvider, ValidatorSet,
 	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
@@ -940,7 +940,7 @@ where
 		let (validators, validator_set_id) = (rounds.validators(), rounds.validator_set_id());
 		let offender_id = proof.offender_id().clone();
 
-		if !check_equivocation_proof::<_, _, BeefySignatureHasher>(&proof) {
+		if !check_vote_equivocation_proof::<_, _, BeefySignatureHasher>(&proof) {
 			debug!(target: LOG_TARGET, "🥩 Skip report for bad equivocation {:?}", proof);
 			return Ok(())
 		} else if let Some(local_id) = self.key_store.authority_id(validators) {
