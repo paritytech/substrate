@@ -221,7 +221,7 @@ test-linux-stable:
       --locked
       --release
       --verbose
-      --features runtime-benchmarks,try-runtime,experimental
+      --features runtime-benchmarks,try-runtime,experimental,unsafe-debug
       --manifest-path ./bin/node/cli/Cargo.toml
       --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
     # we need to update cache only from one job
