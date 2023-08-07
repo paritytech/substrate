@@ -597,10 +597,11 @@ pub fn do_slash<T: Config>(
 	slashed_imbalance: &mut NegativeImbalanceOf<T>,
 	slash_era: EraIndex,
 ) {
-	let mut ledger = match Pallet::<T>::ledger(sp_staking::StakingAccount::Stash(stash.clone())) {
-		Ok(ledger) => ledger,
-		Err(_) => return, // nothing to do.
-	};
+	let mut ledger =
+		match Pallet::<T>::ledger(sp_staking::StakingAccount::Stash(stash.clone())).defensive() {
+			Ok(ledger) => ledger,
+			Err(_) => return, // nothing to do.
+		};
 
 	let value = ledger.slash(value, T::Currency::minimum_balance(), slash_era);
 

@@ -73,6 +73,10 @@ impl<T: Config> Pallet<T> {
 		StakingLedger::<T>::get(account)
 	}
 
+	pub fn payee(account: StakingAccount<T::AccountId>) -> RewardDestination<T::AccountId> {
+		StakingLedger::<T>::reward_destination(account)
+	}
+
 	/// Fetches the controller bonded to a stash account, if any.
 	pub fn bonded(stash: &T::AccountId) -> Option<T::AccountId> {
 		StakingLedger::<T>::paired_account(Stash(stash.clone()))
@@ -298,7 +302,7 @@ impl<T: Config> Pallet<T> {
 	/// Actually make a payment to a staker. This uses the currency's reward function
 	/// to pay the right payee for the given staker account.
 	fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
-		let dest = Self::payee(stash);
+		let dest = Self::payee(StakingAccount::Stash(stash.clone()));
 		match dest {
 			RewardDestination::Controller => Self::bonded(stash)
 				.map(|controller| T::Currency::deposit_creating(&controller, amount)),
@@ -668,10 +672,9 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn kill_stash(stash: &T::AccountId, num_slashing_spans: u32) -> DispatchResult {
 		slashing::clear_stash_metadata::<T>(&stash, num_slashing_spans)?;
 
-		// removes controller from `Bonded` and staking ledger from `Ledger`.
+		// removes controller from `Bonded` and staking ledger from `Ledger`, as well as reward
+		// setting of the stash in `Payee`.
 		StakingLedger::<T>::kill(&stash)?;
-		<Bonded<T>>::remove(&stash);
-		<Payee<T>>::remove(&stash);
 
 		Self::do_remove_validator(&stash);
 		Self::do_remove_nominator(&stash);

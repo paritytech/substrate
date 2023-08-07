@@ -1,4 +1,4 @@
-// This file is part of Substrate.
+//173 This file is part of Substrate.
 
 // Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
@@ -1063,7 +1063,7 @@ fn reward_destination_works() {
 		mock::make_all_reward_payment(0);
 
 		// Check that RewardDestination is Staked (default)
-		assert_eq!(Staking::payee(&11), RewardDestination::Staked);
+		assert_eq!(Staking::payee(11.into()), RewardDestination::Staked);
 		// Check that reward went to the stash account of validator
 		assert_eq!(Balances::free_balance(11), 1000 + total_payout_0);
 		// Check that amount at stake increased accordingly
@@ -1089,7 +1089,7 @@ fn reward_destination_works() {
 		mock::make_all_reward_payment(1);
 
 		// Check that RewardDestination is Stash
-		assert_eq!(Staking::payee(&11), RewardDestination::Stash);
+		assert_eq!(Staking::payee(11.into()), RewardDestination::Stash);
 		// Check that reward went to the stash account
 		assert_eq!(Balances::free_balance(11), 1000 + total_payout_0 + total_payout_1);
 		// Check that amount at stake is NOT increased
@@ -1118,7 +1118,7 @@ fn reward_destination_works() {
 		mock::make_all_reward_payment(2);
 
 		// Check that RewardDestination is Controller
-		assert_eq!(Staking::payee(&11), RewardDestination::Controller);
+		assert_eq!(Staking::payee(11.into()), RewardDestination::Controller);
 		// Check that reward went to the controller account
 		assert_eq!(Balances::free_balance(11), 23150 + total_payout_2);
 		// Check that amount at stake is NOT increased
@@ -5981,13 +5981,15 @@ mod ledger {
 			assert!(<Bonded<Test>>::get(&42).is_none());
 
 			let mut ledger: StakingLedger<Test> = StakingLedger::default_from(42);
+			let reward_dest = RewardDestination::Account(10);
 
-			assert_ok!(ledger.bond());
+			assert_ok!(ledger.bond(reward_dest));
 			assert!(StakingLedger::<Test>::is_bonded(StakingAccount::Stash(42)));
 			assert!(<Bonded<Test>>::get(&42).is_some());
+			assert_eq!(<Payee<Test>>::get(&42), reward_dest);
 
 			// cannot bond again.
-			assert_noop!(ledger.bond(), Error::<Test>::AlreadyBonded);
+			assert_noop!(ledger.bond(reward_dest), Error::<Test>::AlreadyBonded);
 
 			// once bonded, update works as expected.
 			ledger.claimed_rewards = bounded_vec![1];

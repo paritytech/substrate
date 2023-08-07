@@ -328,7 +328,6 @@ pub mod pallet {
 	///
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
-	#[pallet::getter(fn payee)]
 	pub type Payee<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, RewardDestination<T::AccountId>, ValueQuery>;
 
@@ -854,7 +853,7 @@ pub mod pallet {
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
 			Self::deposit_event(Event::<T>::Bonded { stash: stash.clone(), amount: value });
-			let ledger: StakingLedger<T> = StakingLedger::<T>::new(
+			let ledger = StakingLedger::<T>::new(
 				stash.clone(),
 				value,
 				value,
@@ -869,8 +868,7 @@ pub mod pallet {
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
-			ledger.bond()?;
-			<Payee<T>>::insert(&stash, payee);
+			ledger.bond(payee)?;
 
 			Ok(())
 		}
@@ -1214,8 +1212,10 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(Controller(controller))?;
-			let stash = &ledger.stash;
-			<Payee<T>>::insert(stash, payee);
+			let _ = ledger
+				.set_payee(payee)
+				.defensive_proof("ledger was retrieved from storage, thus its bonded; qed.");
+
 			Ok(())
 		}
 
