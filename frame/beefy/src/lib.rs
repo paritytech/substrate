@@ -112,8 +112,6 @@ pub mod pallet {
 		/// Defines methods to publish, check and process an equivocation offence.
 		type EquivocationReportSystem: OffenceReportSystem<
 			Option<Self::AccountId>,
-			// TODO: make below an enum that takes either `VoteEquivocationProof` or
-			// `InvalidForkCommitmentProof`
 			EquivocationEvidenceFor<Self>,
 		>;
 	}
@@ -199,6 +197,8 @@ pub mod pallet {
 		InvalidKeyOwnershipProof,
 		/// An equivocation proof provided as part of a voter equivocation report is invalid.
 		InvalidVoteEquivocationProof,
+		/// An equivocation proof provided as part of a fork equivocation report is invalid.
+		InvalidForkEquivocationProof,
 		/// A given equivocation report is valid but already previously reported.
 		DuplicateOffenceReport,
 	}
@@ -286,7 +286,7 @@ pub mod pallet {
 		))]
 		pub fn report_fork_equivocation(
 			origin: OriginFor<T>,
-			fork_equivocation_proof: Box<
+			equivocation_proof: Box<
 				ForkEquivocationProof<
 					BlockNumberFor<T>,
 					T::BeefyId,
@@ -315,18 +315,19 @@ pub mod pallet {
 		/// block authors will call it (validated in `ValidateUnsigned`), as such
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
+		/// TODO: fix key_owner_proofs[0].validator_count()
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count(), T::MaxNominators::get(),))]
+		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proofs[0].validator_count(), T::MaxNominators::get(),))]
 		pub fn report_fork_equivocation_unsigned(
 			origin: OriginFor<T>,
-			fork_equivocation_proof: Box<
+			equivocation_proof: Box<
 				ForkEquivocationProof<
 					BlockNumberFor<T>,
 					T::BeefyId,
 					<T::BeefyId as RuntimeAppPublic>::Signature,
 				>,
 			>,
-			key_owner_proof: T::KeyOwnerProof,
+			key_owner_proofs: Vec<T::KeyOwnerProof>,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 

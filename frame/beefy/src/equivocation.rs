@@ -41,7 +41,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use log::{error, info};
-use sp_consensus_beefy::{VoteEquivocationProof, ValidatorSetId, KEY_TYPE as BEEFY_KEY_TYPE};
+use sp_consensus_beefy::{VoteEquivocationProof, ForkEquivocationProof, ValidatorSetId, KEY_TYPE as BEEFY_KEY_TYPE};
 use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
@@ -134,11 +134,13 @@ pub enum EquivocationEvidenceFor<T: Config> {
 			>,
 		<T as Config>::KeyOwnerProof,
 	),
-	// ForkEquivocationProof(sp_consensus_beefy::ForkEquivocationProof<
-	// 		BlockNumberFor<T>,
-	// 	<T as Config>::BeefyId,
-	// 	<<T as Config>::BeefyId as RuntimeAppPublic>::Signature,
-	// 	>)
+	ForkEquivocationProof(
+		ForkEquivocationProof<BlockNumberFor<T>,
+							  <T as Config>::BeefyId,
+							  <<T as Config>::BeefyId as RuntimeAppPublic>::Signature,
+							  >,
+		Vec<<T as Config>::KeyOwnerProof>,
+	)
 }
 
 impl<T, R, P, L> OffenceReportSystem<Option<T::AccountId>, EquivocationEvidenceFor<T>>
@@ -166,6 +168,12 @@ where
 					key_owner_proof,
 				}
 			}
+			EquivocationEvidenceFor::ForkEquivocationProof(equivocation_proof, key_owner_proofs) => {
+				Call::report_fork_equivocation_unsigned {
+					equivocation_proof: Box::new(equivocation_proof),
+					key_owner_proofs,
+				}
+			}
 		};
 
 		let res = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
@@ -179,20 +187,35 @@ where
 	fn check_evidence(
 		evidence: EquivocationEvidenceFor<T>,
 	) -> Result<(), TransactionValidityError> {
-		let (offender, time_slot) = match evidence {
+		let (offenders, key_owner_proofs, time_slot) = match &evidence {
 			EquivocationEvidenceFor::VoteEquivocationProof(equivocation_proof, key_owner_proof) => {
-				let key = (BEEFY_KEY_TYPE, equivocation_proof.offender_id().clone());
-
 				// Check if the offence has already been reported, and if so then we can discard the report.
 				let time_slot = TimeSlot {
 					set_id: equivocation_proof.set_id(),
 					round: *equivocation_proof.round_number(),
 				};
-				(P::check_proof(key, key_owner_proof).ok_or(InvalidTransaction::BadProof)?, time_slot)
-			}
+				(vec![equivocation_proof.offender_id()], vec![key_owner_proof.clone()], time_slot)
+			},
+			EquivocationEvidenceFor::ForkEquivocationProof(equivocation_proof, key_owner_proofs) => {
+				// Check if the offence has already been reported, and if so then we can discard the report.
+				let time_slot = TimeSlot {
+					set_id: equivocation_proof.set_id(),
+					round: *equivocation_proof.round_number(),
+				};
+				let offenders = equivocation_proof.offender_ids(); // clone data here
+				(offenders, key_owner_proofs.to_owned(), time_slot)
+			},
 		};
 
-		if R::is_known_offence(&[offender], &time_slot) {
+		// Validate the key ownership proof extracting the id of the offender.
+		let offenders = offenders
+			.into_iter()
+			.zip(key_owner_proofs.iter())
+			.map(|(key, key_owner_proof)| P::check_proof((BEEFY_KEY_TYPE, key.clone()), key_owner_proof.clone()))
+			.collect::<Option<Vec<_>>>()
+			.ok_or(InvalidTransaction::BadProof)?;
+
+		if R::is_known_offence(&offenders, &time_slot) {
 			Err(InvalidTransaction::Stale.into())
 		} else {
 			Ok(())
@@ -205,31 +228,44 @@ where
 	) -> Result<(), DispatchError> {
 		let reporter = reporter.or_else(|| <pallet_authorship::Pallet<T>>::author());
 
-		let (equivocation_proof, key_owner_proof, offender) = match evidence {
-			EquivocationEvidenceFor::VoteEquivocationProof(equivocation_proof, key_owner_proof) =>
-				(
-					equivocation_proof.clone(),
-					key_owner_proof,
-					equivocation_proof.offender_id().clone(),
-				),
+		let (offenders, key_owner_proofs, set_id, round) = match &evidence {
+			EquivocationEvidenceFor::VoteEquivocationProof(equivocation_proof, key_owner_proof) => {
+				(vec![equivocation_proof.offender_id()], vec![key_owner_proof.clone()], equivocation_proof.set_id(), *equivocation_proof.round_number())
+			},
+			EquivocationEvidenceFor::ForkEquivocationProof(equivocation_proof, key_owner_proofs) => {
+				let offenders = equivocation_proof.offender_ids(); // clone data here
+				(offenders, key_owner_proofs.to_owned(), equivocation_proof.set_id(), *equivocation_proof.round_number())
+			},
 		};
 
 		// We check the equivocation within the context of its set id (and
 		// associated session) and round. We also need to know the validator
 		// set count at the time of the offence since it is required to calculate
 		// the slash amount.
-		let set_id = equivocation_proof.set_id();
-		let round = *equivocation_proof.round_number();
-		let session_index = key_owner_proof.session();
-		let validator_set_count = key_owner_proof.validator_count();
+		let session_index = key_owner_proofs[0].session();
+		let validator_set_count = key_owner_proofs[0].validator_count();
 
-		// Validate the key ownership proof extracting the id of the offender.
-		let offender = P::check_proof((BEEFY_KEY_TYPE, offender), key_owner_proof)
+		// Validate the key ownership proof extracting the ids of the offenders.
+		let offenders = offenders
+			.into_iter()
+			.zip(key_owner_proofs.iter())
+			.map(|(key, key_owner_proof)| P::check_proof((BEEFY_KEY_TYPE, key.clone()), key_owner_proof.clone()))
+			.collect::<Option<Vec<_>>>()
 			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
-		// Validate equivocation proof (check votes are different and signatures are valid).
-		if !sp_consensus_beefy::check_vote_equivocation_proof(&equivocation_proof) {
-			return Err(Error::<T>::InvalidVoteEquivocationProof.into())
+		match &evidence {
+			EquivocationEvidenceFor::VoteEquivocationProof(equivocation_proof, _) => {
+				// Validate equivocation proof (check votes are different and signatures are valid).
+				if !sp_consensus_beefy::check_vote_equivocation_proof(&equivocation_proof) {
+					return Err(Error::<T>::InvalidVoteEquivocationProof.into())
+				}
+			},
+			EquivocationEvidenceFor::ForkEquivocationProof(equivocation_proof, _) => {
+				// Validate equivocation proof (check commitment is to unexpected payload and signatures are valid).
+				if !sp_consensus_beefy::check_fork_equivocation_proof(&equivocation_proof) {
+					return Err(Error::<T>::InvalidForkEquivocationProof.into())
+				}
+			},
 		}
 
 		// Check that the session id for the membership proof is within the
@@ -244,7 +280,7 @@ where
 			time_slot: TimeSlot { set_id, round },
 			session_index,
 			validator_set_count,
-			offenders: vec![offender],
+			offenders,
 		};
 
 		R::report_offence(reporter.into_iter().collect(), offence)
