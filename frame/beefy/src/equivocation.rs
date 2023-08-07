@@ -212,15 +212,15 @@ where
 
 		// Validate equivocation proof (check votes are different and signatures are valid).
 		if !sp_consensus_beefy::check_equivocation_proof(&equivocation_proof) {
-			return Err(Error::<T>::InvalidEquivocationProof.into())
+			return Err(Error::<T>::InvalidVoteEquivocationProof.into())
 		}
 
 		// Check that the session id for the membership proof is within the
 		// bounds of the set id reported in the equivocation.
 		let set_id_session_index =
-			crate::SetIdSession::<T>::get(set_id).ok_or(Error::<T>::InvalidEquivocationProof)?;
+			crate::SetIdSession::<T>::get(set_id).ok_or(Error::<T>::InvalidVoteEquivocationProof)?;
 		if session_index != set_id_session_index {
-			return Err(Error::<T>::InvalidEquivocationProof.into())
+			return Err(Error::<T>::InvalidVoteEquivocationProof.into())
 		}
 
 		let offence = EquivocationOffence {

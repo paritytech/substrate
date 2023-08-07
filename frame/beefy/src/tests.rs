@@ -451,7 +451,7 @@ fn report_equivocation_invalid_set_id() {
 				Box::new(equivocation_proof),
 				key_owner_proof,
 			),
-			Error::<Test>::InvalidEquivocationProof,
+			Error::<Test>::InvalidVoteEquivocationProof,
 		);
 	});
 }
@@ -494,7 +494,7 @@ fn report_equivocation_invalid_session() {
 				Box::new(equivocation_proof),
 				key_owner_proof,
 			),
-			Error::<Test>::InvalidEquivocationProof,
+			Error::<Test>::InvalidVoteEquivocationProof,
 		);
 	});
 }
@@ -573,7 +573,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 					Box::new(equivocation_proof),
 					key_owner_proof.clone(),
 				),
-				Error::<Test>::InvalidEquivocationProof,
+				Error::<Test>::InvalidVoteEquivocationProof,
 			);
 		};
 

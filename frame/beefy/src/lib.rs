@@ -197,8 +197,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// A key ownership proof provided as part of an equivocation report is invalid.
 		InvalidKeyOwnershipProof,
-		/// An equivocation proof provided as part of an equivocation report is invalid.
-		InvalidEquivocationProof,
+		/// An equivocation proof provided as part of a voter equivocation report is invalid.
+		InvalidVoteEquivocationProof,
 		/// A given equivocation report is valid but already previously reported.
 		DuplicateOffenceReport,
 	}
