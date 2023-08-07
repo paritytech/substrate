@@ -25,9 +25,9 @@ use sc_client_api::Backend;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_consensus_beefy::{
-	check_invalid_fork_proof,
+	check_fork_equivocation_proof,
 	ecdsa_crypto::{AuthorityId, Signature},
-	BeefyApi, InvalidForkCommitmentProof, Payload, PayloadProvider, ValidatorSet, VoteMessage, Commitment, OpaqueKeyOwnershipProof, SignedCommitment,
+	BeefyApi, ForkEquivocationProof, Payload, PayloadProvider, ValidatorSet, VoteMessage, Commitment, OpaqueKeyOwnershipProof, SignedCommitment,
 };
 use sp_runtime::{
 	generic::BlockId,
@@ -110,7 +110,7 @@ where
 		let validator_set = self.active_validator_set_at(correct_header)?;
 		let set_id = validator_set.id();
 
-		let proof = InvalidForkCommitmentProof {
+		let proof = ForkEquivocationProof {
 			commitment: signed_commitment.commitment.clone(),
 			signatories: vec![],
 			expected_payload: correct_payload.clone(),
@@ -118,7 +118,7 @@ where
 
 		if signed_commitment.commitment.validator_set_id != set_id ||
 			signed_commitment.commitment.payload != *correct_payload ||
-			!check_invalid_fork_proof::<NumberFor<B>, AuthorityId, BeefySignatureHasher>(&proof)
+			!check_fork_equivocation_proof::<NumberFor<B>, AuthorityId, BeefySignatureHasher>(&proof)
 		{
 			debug!(target: LOG_TARGET, "🥩 Skip report for bad invalid fork proof {:?}", proof);
 			return Ok(())
@@ -155,14 +155,14 @@ where
 
 	fn report_invalid_fork_commitments(
 		&self,
-		proof: InvalidForkCommitmentProof<NumberFor<B>, AuthorityId, Signature>,
+		proof: ForkEquivocationProof<NumberFor<B>, AuthorityId, Signature>,
 		correct_header: &B::Header,
 	) -> Result<(), Error> {
 		let validator_set = self.active_validator_set_at(correct_header)?;
 		let set_id = validator_set.id();
 
 		if proof.commitment.validator_set_id != set_id ||
-			!check_invalid_fork_proof::<NumberFor<B>, AuthorityId, BeefySignatureHasher>(&proof)
+			!check_fork_equivocation_proof::<NumberFor<B>, AuthorityId, BeefySignatureHasher>(&proof)
 		{
 			debug!(target: LOG_TARGET, "🥩 Skip report for bad invalid fork proof {:?}", proof);
 			return Ok(())
@@ -218,7 +218,7 @@ where
 		let (header, expected_payload) = self.expected_header_and_payload(number)?;
 		if vote.commitment.payload != expected_payload {
 			let validator_set = self.active_validator_set_at(&header)?;
-			let proof = InvalidForkCommitmentProof { commitment: vote.commitment, signatories: vec![(vote.id, vote.signature)], expected_payload };
+			let proof = ForkEquivocationProof { commitment: vote.commitment, signatories: vec![(vote.id, vote.signature)], expected_payload };
 			self.report_invalid_fork_commitments(proof, &header)?;
 		}
 		Ok(())
@@ -258,7 +258,7 @@ where
 			let signatories = validator_set.validators().iter().cloned().zip(signatures.into_iter())
 																		.filter_map(|(id, signature)| signature.map(|sig| (id, sig))).collect();
 
-			let proof = InvalidForkCommitmentProof { commitment, signatories, expected_payload };
+			let proof = ForkEquivocationProof { commitment, signatories, expected_payload };
 			self.report_invalid_fork_commitments(
 				proof,
 				&header,

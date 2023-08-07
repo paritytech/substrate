@@ -63,7 +63,7 @@ const LOG_TARGET: &str = "runtime::beefy";
 pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::BlockNumberFor;
-	use sp_consensus_beefy::InvalidForkCommitmentProof;
+	use sp_consensus_beefy::ForkEquivocationProof;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -281,7 +281,7 @@ pub mod pallet {
 		pub fn report_invalid_fork_commitment(
 			origin: OriginFor<T>,
 			invalid_fork_proof: Box<
-				InvalidForkCommitmentProof<
+				ForkEquivocationProof<
 					BlockNumberFor<T>,
 					T::BeefyId,
 					<T::BeefyId as RuntimeAppPublic>::Signature,
@@ -314,7 +314,7 @@ pub mod pallet {
 		pub fn report_invalid_fork_commitment_unsigned(
 			origin: OriginFor<T>,
 			invalid_fork_proof: Box<
-				InvalidForkCommitmentProof<
+				ForkEquivocationProof<
 					BlockNumberFor<T>,
 					T::BeefyId,
 					<T::BeefyId as RuntimeAppPublic>::Signature,
@@ -374,7 +374,7 @@ impl<T: Config> Pallet<T> {
 	/// a call to `report_invalid_fork_unsigned` and will push the transaction
 	/// to the pool. Only useful in an offchain context.
 	pub fn submit_unsigned_invalid_fork_report(
-		_invalid_fork_proof: sp_consensus_beefy::InvalidForkCommitmentProof<BlockNumberFor<T>, T::BeefyId,
+		_invalid_fork_proof: sp_consensus_beefy::ForkEquivocationProof<BlockNumberFor<T>, T::BeefyId,
 			<T::BeefyId as RuntimeAppPublic>::Signature,
 >,
 		_key_owner_proofs: Vec<T::KeyOwnerProof>,

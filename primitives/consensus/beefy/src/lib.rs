@@ -251,10 +251,10 @@ impl<Number, Id, Signature> VoteEquivocationProof<Number, Id, Signature> {
 	}
 }
 
-/// Proof of invalid commitment on a given set id.
-/// This proof shows commitment signed on a different fork than finalized by GRANDPA.
+/// Proof of authority misbehavior on a given set id.
+/// This proof shows commitment signed on a different fork.
 #[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
-pub struct InvalidForkCommitmentProof<Number, Id, Signature> {
+pub struct ForkEquivocationProof<Number, Id, Signature> {
 	/// Commitment for a block on different fork than one at the same height in
 	/// this client's chain.
 	/// TODO: maybe replace {commitment, signatories} with SignedCommitment
@@ -268,7 +268,7 @@ pub struct InvalidForkCommitmentProof<Number, Id, Signature> {
 	pub expected_payload: Payload,
 }
 
-impl<Number, Id, Signature> InvalidForkCommitmentProof<Number, Id, Signature> {
+impl<Number, Id, Signature> ForkEquivocationProof<Number, Id, Signature> {
 	/// Returns the authority id of the misbehaving voter.
 	pub fn offender_ids(&self) -> Vec<&Id> {
 		self.signatories.iter().map(|(id, _)| id).collect()
@@ -345,15 +345,15 @@ where
 /// finalized by GRANDPA. This is fine too, since the slashing risk of committing to
 /// an incorrect block implies validators will only sign blocks they *know* will be
 /// finalized by GRANDPA.
-pub fn check_invalid_fork_proof<Number, Id, MsgHash>(
-	proof: &InvalidForkCommitmentProof<Number, Id, <Id as RuntimeAppPublic>::Signature>,
+pub fn check_fork_equivocation_proof<Number, Id, MsgHash>(
+	proof: &ForkEquivocationProof<Number, Id, <Id as RuntimeAppPublic>::Signature>,
 ) -> bool
 where
 	Id: BeefyAuthorityId<MsgHash> + PartialEq,
 	Number: Clone + Encode + PartialEq,
 	MsgHash: Hash,
 {
-	let InvalidForkCommitmentProof { commitment, signatories, expected_payload } = proof;
+	let ForkEquivocationProof { commitment, signatories, expected_payload } = proof;
 
 	// check that `payload` on the `vote` is different that the `expected_payload` (checked first
 	// since cheap failfast).
@@ -442,7 +442,7 @@ sp_api::decl_runtime_apis! {
 		/// hardcoded to return `None`). Only useful in an offchain context.
 		fn submit_report_invalid_fork_unsigned_extrinsic(
 			invalid_fork_proof:
-				InvalidForkCommitmentProof<NumberFor<Block>, AuthorityId, <AuthorityId as RuntimeAppPublic>::Signature>,
+				ForkEquivocationProof<NumberFor<Block>, AuthorityId, <AuthorityId as RuntimeAppPublic>::Signature>,
 			key_owner_proofs: Vec<OpaqueKeyOwnershipProof>,
 		) -> Option<()>;
 
