@@ -67,6 +67,12 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 		.any(|c| matches!(c.composite_keyword, CompositeKeyword::HoldReason(_)))
 		.then_some(quote::quote!(HoldReason,));
 
+	let task_part = def
+		.composites
+		.iter()
+		.any(|c| matches!(c.composite_keyword, CompositeKeyword::Task(_)))
+		.then_some(quote::quote!(Task,));
+
 	let lock_id_part = def
 		.composites
 		.iter()
@@ -101,7 +107,7 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 					tokens = [{
 						expanded::{
 							Pallet, #call_part #storage_part #event_part #error_part #origin_part #config_part
-							#inherent_part #validate_unsigned_part #freeze_reason_part
+							#inherent_part #validate_unsigned_part #freeze_reason_part #task_part
 							#hold_reason_part #lock_id_part #slash_reason_part
 						}
 					}]
