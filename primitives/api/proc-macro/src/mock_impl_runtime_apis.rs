@@ -66,7 +66,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 	Ok(quote!(
 		impl #crate_::ApiExt<#block_type> for #self_ty {
-			type StateBackend = #crate_::InMemoryBackend<#crate_::HashFor<#block_type>>;
+			type StateBackend = #crate_::InMemoryBackend<#crate_::HashingFor<#block_type>>;
 
 			fn execute_in_transaction<F: FnOnce(&Self) -> #crate_::TransactionOutcome<R>, R>(
 				&self,

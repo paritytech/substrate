@@ -37,7 +37,7 @@ pub struct Key<Hasher, KeyType>(core::marker::PhantomData<(Hasher, KeyType)>);
 /// A trait that contains the current key as an associated type.
 pub trait KeyGenerator {
 	type Key: EncodeLike<Self::Key> + StaticTypeInfo;
-	type KArg: Encode;
+	type KArg: Encode + EncodeLike<Self::KArg>;
 	type HashFn: FnOnce(&[u8]) -> Vec<u8>;
 	type HArg;
 
@@ -196,6 +196,11 @@ impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P);
 impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q);
 impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q, R);
 
+impl<'a, T: EncodeLike<U> + EncodeLikeTuple<U>, U: Encode> EncodeLikeTuple<U>
+	for codec::Ref<'a, T, U>
+{
+}
+
 /// Trait to indicate that a tuple can be converted into an iterator of a vector of encoded bytes.
 pub trait TupleToEncodedIter {
 	fn to_encoded_iter(&self) -> sp_std::vec::IntoIter<Vec<u8>>;
@@ -212,6 +217,15 @@ impl TupleToEncodedIter for Tuple {
 impl<T: TupleToEncodedIter> TupleToEncodedIter for &T {
 	fn to_encoded_iter(&self) -> sp_std::vec::IntoIter<Vec<u8>> {
 		(*self).to_encoded_iter()
+	}
+}
+
+impl<'a, T: EncodeLike<U> + TupleToEncodedIter, U: Encode> TupleToEncodedIter
+	for codec::Ref<'a, T, U>
+{
+	fn to_encoded_iter(&self) -> sp_std::vec::IntoIter<Vec<u8>> {
+		use core::ops::Deref as _;
+		self.deref().to_encoded_iter()
 	}
 }
 

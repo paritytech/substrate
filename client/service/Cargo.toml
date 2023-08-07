@@ -19,7 +19,10 @@ default = ["rocksdb"]
 rocksdb = ["sc-client-db/rocksdb"]
 # exposes the client type
 test-helpers = []
-runtime-benchmarks = ["sc-client-db/runtime-benchmarks"]
+runtime-benchmarks = [
+	"sc-client-db/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks"
+]
 
 [dependencies]
 jsonrpsee = { version = "0.16.2", features = ["server"] }

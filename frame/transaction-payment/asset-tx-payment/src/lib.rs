@@ -56,7 +56,6 @@ use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
-	FixedPointOperand,
 };
 
 #[cfg(test)]
@@ -156,8 +155,8 @@ pub struct ChargeAssetTxPayment<T: Config> {
 impl<T: Config> ChargeAssetTxPayment<T>
 where
 	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
-	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
-	BalanceOf<T>: Send + Sync + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
+	AssetBalanceOf<T>: Send + Sync,
+	BalanceOf<T>: Send + Sync + IsType<ChargeAssetBalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
 	Credit<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
 {
@@ -213,8 +212,8 @@ impl<T: Config> sp_std::fmt::Debug for ChargeAssetTxPayment<T> {
 impl<T: Config> SignedExtension for ChargeAssetTxPayment<T>
 where
 	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
-	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
-	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
+	AssetBalanceOf<T>: Send + Sync,
+	BalanceOf<T>: Send + Sync + From<u64> + IsType<ChargeAssetBalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
 	Credit<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
 {

@@ -186,7 +186,7 @@ where
 		&self,
 		ex: &graph::ExtrinsicFor<Self>,
 	) -> (graph::ExtrinsicHash<Self>, usize) {
-		ex.using_encoded(|x| (<traits::HashFor<Block> as traits::Hash>::hash(x), x.len()))
+		ex.using_encoded(|x| (<traits::HashingFor<Block> as traits::Hash>::hash(x), x.len()))
 	}
 
 	fn block_header(

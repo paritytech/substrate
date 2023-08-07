@@ -9,8 +9,8 @@ The Contracts module provides functionality for the runtime to deploy and execut
 
 ## Overview
 
-This module extends accounts based on the `Currency` trait to have smart-contract functionality. It can
-be used with other modules that implement accounts based on `Currency`. These "smart-contract accounts"
+This module extends accounts based on the [`frame_support::traits::fungible`] traits to have smart-contract functionality. It can
+be used with other modules that implement accounts based on [`frame_support::traits::fungible`]. These "smart-contract accounts"
 have the ability to instantiate smart-contracts and make calls to other contract and non-contract accounts.
 
 The smart-contract code is stored once, and later retrievable via its `code_hash`.

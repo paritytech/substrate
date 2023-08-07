@@ -43,6 +43,7 @@ use sc_executor::{
 use sc_keystore::LocalKeystore;
 use sc_network::{
 	config::{FullNetworkConfiguration, SyncMode},
+	peer_store::PeerStore,
 	NetworkService, NetworkStateInfo, NetworkStatusProvider,
 };
 use sc_network_bitswap::BitswapRequestHandler;
@@ -785,12 +786,14 @@ where
 	};
 
 	let (state_request_protocol_config, state_request_protocol_name) = {
+		let num_peer_hint = net_config.network_config.default_peers_set_num_full as usize +
+			net_config.network_config.default_peers_set.reserved_nodes.len();
 		// Allow both outgoing and incoming requests.
 		let (handler, protocol_config) = StateRequestHandler::new(
 			&protocol_id,
 			config.chain_spec.fork_id(),
 			client.clone(),
-			net_config.network_config.default_peers_set_num_full as usize,
+			num_peer_hint,
 		);
 		let config_name = protocol_config.name.clone();
 
@@ -858,6 +861,18 @@ where
 	);
 	net_config.add_notification_protocol(transactions_handler_proto.set_config());
 
+	// Create `PeerStore` and initialize it with bootnode peer ids.
+	let peer_store = PeerStore::new(
+		net_config
+			.network_config
+			.boot_nodes
+			.iter()
+			.map(|bootnode| bootnode.peer_id)
+			.collect(),
+	);
+	let peer_store_handle = peer_store.handle();
+	spawn_handle.spawn("peer-store", Some("networking"), peer_store.run());
+
 	let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
 	let (engine, sync_service, block_announce_config) = SyncingEngine::new(
@@ -889,6 +904,7 @@ where
 			})
 		},
 		network_config: net_config,
+		peer_store: peer_store_handle,
 		genesis_hash,
 		protocol_id: protocol_id.clone(),
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
