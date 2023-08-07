@@ -174,8 +174,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Set the royalty for an existing NFT item.
 		///
-		/// Either the origin must be both the owner of the `item` and
-		/// of the `collection` or the origin must be `ForceOrigin`.
+		/// The origin must be the owner of the `item`.
 		///
 		/// - `collection`: The NFT collection of the NFT item.
 		/// - `item`: The NFT item to set the royalty for.
@@ -194,31 +193,26 @@ pub mod pallet {
 			royalty_percentage: Permill,
 			recipients: Vec<RoyaltyDetails<T::AccountId>>,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
-				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
+			let caller = ensure_signed(origin)?;
 
 			ensure!(
 				T::Nfts::items(&collection_id).any(|id| id == item_id),
 				Error::<T>::NftDoesNotExist
 			);
 
-			if let Some(check_owner) = maybe_check_owner.clone() {
-				// Check that the sender is the owner of the item
-				ensure!(
-					T::Nfts::owner(&collection_id, &item_id) == Some(check_owner.clone()),
-					Error::<T>::NoPermission
-				);
+			// Check that the sender is the owner of the item
+			ensure!(
+				T::Nfts::owner(&collection_id, &item_id) == Some(caller.clone()),
+				Error::<T>::NoPermission
+			);
 
-				// Check that the sender is also the owner of the collection
-				ensure!(
-					T::Nfts::collection_owner(&collection_id) == Some(check_owner.clone()),
-					Error::<T>::NoPermission
-				);
+			// Check that the sender is also the owner of the collection
+			ensure!(
+				T::Nfts::collection_owner(&collection_id) == Some(caller.clone()),
+				Error::<T>::NoPermission
+			);
 
-				let collection_and_item_owner = &check_owner;
-				T::Currency::reserve(collection_and_item_owner, T::ItemRoyaltyDeposit::get())?;
-			}
+			T::Currency::reserve(&caller, T::ItemRoyaltyDeposit::get())?;
 
 			// Check whether the item already has a royalty, if so do not allow to set it again
 			ensure!(
@@ -244,7 +238,7 @@ pub mod pallet {
 				(collection_id, item_id),
 				RoyaltyConfig::<T::AccountId, BalanceOf<T>, T::MaxRecipients> {
 					royalty_percentage,
-					depositor: maybe_check_owner.clone(),
+					depositor: Some(caller),
 					deposit: T::ItemRoyaltyDeposit::get(),
 					recipients: royalties_recipients.clone(),
 				},
