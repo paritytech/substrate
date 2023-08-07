@@ -154,7 +154,7 @@ where
 		use frame_system::offchain::SubmitTransaction;
 		let (equivocation_proof, key_owner_proof) = evidence;
 
-		let call = Call::report_equivocation_unsigned {
+		let call = Call::report_vote_equivocation_unsigned {
 			equivocation_proof: Box::new(equivocation_proof),
 			key_owner_proof,
 		};
@@ -238,12 +238,12 @@ where
 }
 
 /// Methods for the `ValidateUnsigned` implementation:
-/// It restricts calls to `report_equivocation_unsigned` to local calls (i.e. extrinsics generated
+/// It restricts calls to `report_vote_equivocation_unsigned` to local calls (i.e. extrinsics generated
 /// on this node) or that already in a block. This guarantees that only block authors can include
 /// unsigned equivocation reports.
 impl<T: Config> Pallet<T> {
 	pub fn validate_unsigned(source: TransactionSource, call: &Call<T>) -> TransactionValidity {
-		if let Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
+		if let Call::report_vote_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
 			// discard equivocation report not coming from the local node
 			match source {
 				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
@@ -281,7 +281,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn pre_dispatch(call: &Call<T>) -> Result<(), TransactionValidityError> {
-		if let Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
+		if let Call::report_vote_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
 			let evidence = (*equivocation_proof.clone(), key_owner_proof.clone());
 			T::EquivocationReportSystem::check_evidence(evidence)
 		} else {

@@ -300,7 +300,7 @@ fn report_equivocation_current_set_works() {
 		let key_owner_proof = Historical::prove((BEEFY_KEY_TYPE, &equivocation_key)).unwrap();
 
 		// report the equivocation and the tx should be dispatched successfully
-		assert_ok!(Beefy::report_equivocation_unsigned(
+		assert_ok!(Beefy::report_vote_equivocation_unsigned(
 			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,
@@ -383,7 +383,7 @@ fn report_equivocation_old_set_works() {
 		);
 
 		// report the equivocation and the tx should be dispatched successfully
-		assert_ok!(Beefy::report_equivocation_unsigned(
+		assert_ok!(Beefy::report_vote_equivocation_unsigned(
 			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,
@@ -446,7 +446,7 @@ fn report_equivocation_invalid_set_id() {
 
 		// the call for reporting the equivocation should error
 		assert_err!(
-			Beefy::report_equivocation_unsigned(
+			Beefy::report_vote_equivocation_unsigned(
 				RuntimeOrigin::none(),
 				Box::new(equivocation_proof),
 				key_owner_proof,
@@ -489,7 +489,7 @@ fn report_equivocation_invalid_session() {
 		// report an equivocation for the current set using an key ownership
 		// proof from the previous set, the session should be invalid.
 		assert_err!(
-			Beefy::report_equivocation_unsigned(
+			Beefy::report_vote_equivocation_unsigned(
 				RuntimeOrigin::none(),
 				Box::new(equivocation_proof),
 				key_owner_proof,
@@ -537,7 +537,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 		// report an equivocation for the current set using a key ownership
 		// proof for a different key than the one in the equivocation proof.
 		assert_err!(
-			Beefy::report_equivocation_unsigned(
+			Beefy::report_vote_equivocation_unsigned(
 				RuntimeOrigin::none(),
 				Box::new(equivocation_proof),
 				invalid_key_owner_proof,
@@ -568,7 +568,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 
 		let assert_invalid_equivocation_proof = |equivocation_proof| {
 			assert_err!(
-				Beefy::report_equivocation_unsigned(
+				Beefy::report_vote_equivocation_unsigned(
 					RuntimeOrigin::none(),
 					Box::new(equivocation_proof),
 					key_owner_proof.clone(),
@@ -646,7 +646,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 
 		let key_owner_proof = Historical::prove((BEEFY_KEY_TYPE, &equivocation_key)).unwrap();
 
-		let call = Call::report_equivocation_unsigned {
+		let call = Call::report_vote_equivocation_unsigned {
 			equivocation_proof: Box::new(equivocation_proof.clone()),
 			key_owner_proof: key_owner_proof.clone(),
 		};
@@ -681,7 +681,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		assert_ok!(<Beefy as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&call));
 
 		// we submit the report
-		Beefy::report_equivocation_unsigned(
+		Beefy::report_vote_equivocation_unsigned(
 			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,
@@ -752,7 +752,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		let key_owner_proof = Historical::prove((BEEFY_KEY_TYPE, &equivocation_key)).unwrap();
 
 		// check the dispatch info for the call.
-		let info = Call::<Test>::report_equivocation_unsigned {
+		let info = Call::<Test>::report_vote_equivocation_unsigned {
 			equivocation_proof: Box::new(equivocation_proof.clone()),
 			key_owner_proof: key_owner_proof.clone(),
 		}
@@ -763,7 +763,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// report the equivocation.
-		let post_info = Beefy::report_equivocation_unsigned(
+		let post_info = Beefy::report_vote_equivocation_unsigned(
 			RuntimeOrigin::none(),
 			Box::new(equivocation_proof.clone()),
 			key_owner_proof.clone(),
@@ -777,7 +777,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 		// report the equivocation again which is invalid now since it is
 		// duplicate.
-		let post_info = Beefy::report_equivocation_unsigned(
+		let post_info = Beefy::report_vote_equivocation_unsigned(
 			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,

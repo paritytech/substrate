@@ -324,7 +324,7 @@ sp_api::mock_impl_runtime_apis! {
 			Some(self.inner.validator_set.clone())
 		}
 
-		fn submit_report_equivocation_unsigned_extrinsic(
+		fn submit_report_vote_equivocation_unsigned_extrinsic(
 			proof: VoteEquivocationProof<NumberFor<Block>, AuthorityId, Signature>,
 			_dummy: OpaqueKeyOwnershipProof,
 		) -> Option<()> {

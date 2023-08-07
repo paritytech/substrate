@@ -981,7 +981,7 @@ where
 		// submit equivocation report at **best** block
 		let best_block_hash = self.backend.blockchain().info().best_hash;
 		runtime_api
-			.submit_report_equivocation_unsigned_extrinsic(best_block_hash, proof, key_owner_proof)
+			.submit_report_vote_equivocation_unsigned_extrinsic(best_block_hash, proof, key_owner_proof)
 			.map_err(Error::RuntimeApi)?;
 
 		Ok(())

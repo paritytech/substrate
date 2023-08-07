@@ -249,7 +249,7 @@ pub mod pallet {
 			key_owner_proof.validator_count(),
 			T::MaxNominators::get(),
 		))]
-		pub fn report_equivocation_unsigned(
+		pub fn report_vote_equivocation_unsigned(
 			origin: OriginFor<T>,
 			equivocation_proof: Box<
 				VoteEquivocationProof<
@@ -278,9 +278,9 @@ pub mod pallet {
 			key_owner_proof.validator_count(),
 			T::MaxNominators::get(),
 		))]
-		pub fn report_invalid_fork_commitment(
+		pub fn report_fork_equivocation(
 			origin: OriginFor<T>,
-			invalid_fork_proof: Box<
+			fork_equivocation_proof: Box<
 				ForkEquivocationProof<
 					BlockNumberFor<T>,
 					T::BeefyId,
@@ -294,7 +294,7 @@ pub mod pallet {
 			// TODO:
 			// T::EquivocationReportSystem::process_evidence(
 			// 	Some(reporter),
-			// 	(*invalid_fork_proof, key_owner_proof),
+			// 	(*fork_equivocation_proof, key_owner_proof),
 			// )?;
 			// Waive the fee since the report is valid and beneficial
 			Ok(Pays::No.into())
@@ -311,9 +311,9 @@ pub mod pallet {
 		/// reporter.
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count(), T::MaxNominators::get(),))]
-		pub fn report_invalid_fork_commitment_unsigned(
+		pub fn report_fork_equivocation_unsigned(
 			origin: OriginFor<T>,
-			invalid_fork_proof: Box<
+			fork_equivocation_proof: Box<
 				ForkEquivocationProof<
 					BlockNumberFor<T>,
 					T::BeefyId,
@@ -327,7 +327,7 @@ pub mod pallet {
 			// TODO:
 			// T::EquivocationReportSystem::process_evidence(
 			// 	None,
-			// 	(*invalid_fork_proof, key_owner_proof),
+			// 	(*fork_equivocation_proof, key_owner_proof),
 			// )?;
 			Ok(Pays::No.into())
 		}
@@ -358,7 +358,7 @@ impl<T: Config> Pallet<T> {
 	/// Submits an extrinsic to report an equivocation. This method will create
 	/// an unsigned extrinsic with a call to `report_equivocation_unsigned` and
 	/// will push the transaction to the pool. Only useful in an offchain context.
-	pub fn submit_unsigned_equivocation_report(
+	pub fn submit_unsigned_vote_equivocation_report(
 		equivocation_proof: VoteEquivocationProof<
 			BlockNumberFor<T>,
 			T::BeefyId,
@@ -371,15 +371,15 @@ impl<T: Config> Pallet<T> {
 
 	/// Submits an extrinsic to report an invalid fork signed by potentially
 	/// multiple signatories. This method will create an unsigned extrinsic with
-	/// a call to `report_invalid_fork_unsigned` and will push the transaction
+	/// a call to `report_fork_equivocation_unsigned` and will push the transaction
 	/// to the pool. Only useful in an offchain context.
-	pub fn submit_unsigned_invalid_fork_report(
-		_invalid_fork_proof: sp_consensus_beefy::ForkEquivocationProof<BlockNumberFor<T>, T::BeefyId,
+	pub fn submit_unsigned_fork_equivocation_report(
+		_fork_equivocation_proof: sp_consensus_beefy::ForkEquivocationProof<BlockNumberFor<T>, T::BeefyId,
 			<T::BeefyId as RuntimeAppPublic>::Signature,
 >,
 		_key_owner_proofs: Vec<T::KeyOwnerProof>,
 	) -> Option<()> {
-		// T::EquivocationReportSystem::publish_evidence((invalid_fork_proof, key_owner_proofs)).ok()
+		// T::EquivocationReportSystem::publish_evidence((fork_equivocation_proof, key_owner_proofs)).ok()
 		None
 	}
 

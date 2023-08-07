@@ -147,13 +147,13 @@ where
 		// submit invalid fork vote report at **best** block
 		let best_block_hash = self.backend.blockchain().info().best_hash;
 		runtime_api
-			.submit_report_invalid_fork_unsigned_extrinsic(best_block_hash, proof, key_owner_proofs)
+			.submit_report_fork_equivocation_unsigned_extrinsic(best_block_hash, proof, key_owner_proofs)
 			.map_err(Error::RuntimeApi)?;
 
 		Ok(())
 	}
 
-	fn report_invalid_fork_commitments(
+	fn report_fork_equivocation(
 		&self,
 		proof: ForkEquivocationProof<NumberFor<B>, AuthorityId, Signature>,
 		correct_header: &B::Header,
@@ -192,7 +192,7 @@ where
 		// submit invalid fork vote report at **best** block
 		let best_block_hash = self.backend.blockchain().info().best_hash;
 		runtime_api
-			.submit_report_invalid_fork_unsigned_extrinsic(best_block_hash, proof, key_owner_proofs)
+			.submit_report_fork_equivocation_unsigned_extrinsic(best_block_hash, proof, key_owner_proofs)
 			.map_err(Error::RuntimeApi)?;
 
 		Ok(())
@@ -219,7 +219,7 @@ where
 		if vote.commitment.payload != expected_payload {
 			let validator_set = self.active_validator_set_at(&header)?;
 			let proof = ForkEquivocationProof { commitment: vote.commitment, signatories: vec![(vote.id, vote.signature)], expected_payload };
-			self.report_invalid_fork_commitments(proof, &header)?;
+			self.report_fork_equivocation(proof, &header)?;
 		}
 		Ok(())
 	}
@@ -259,7 +259,7 @@ where
 																		.filter_map(|(id, signature)| signature.map(|sig| (id, sig))).collect();
 
 			let proof = ForkEquivocationProof { commitment, signatories, expected_payload };
-			self.report_invalid_fork_commitments(
+			self.report_fork_equivocation(
 				proof,
 				&header,
 			)?;

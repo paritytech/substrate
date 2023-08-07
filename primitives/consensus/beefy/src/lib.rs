@@ -426,8 +426,8 @@ sp_api::decl_runtime_apis! {
 		/// `None` when creation of the extrinsic fails, e.g. if equivocation
 		/// reporting is disabled for the given runtime (i.e. this method is
 		/// hardcoded to return `None`). Only useful in an offchain context.
-		fn submit_report_equivocation_unsigned_extrinsic(
-			equivocation_proof:
+		fn submit_report_vote_equivocation_unsigned_extrinsic(
+			vote_equivocation_proof:
 				VoteEquivocationProof<NumberFor<Block>, AuthorityId, <AuthorityId as RuntimeAppPublic>::Signature>,
 			key_owner_proof: OpaqueKeyOwnershipProof,
 		) -> Option<()>;
@@ -440,8 +440,8 @@ sp_api::decl_runtime_apis! {
 		/// `None` when creation of the extrinsic fails, e.g. if equivocation
 		/// reporting is disabled for the given runtime (i.e. this method is
 		/// hardcoded to return `None`). Only useful in an offchain context.
-		fn submit_report_invalid_fork_unsigned_extrinsic(
-			invalid_fork_proof:
+		fn submit_report_fork_equivocation_unsigned_extrinsic(
+			fork_equivocation_proof:
 				ForkEquivocationProof<NumberFor<Block>, AuthorityId, <AuthorityId as RuntimeAppPublic>::Signature>,
 			key_owner_proofs: Vec<OpaqueKeyOwnershipProof>,
 		) -> Option<()>;
