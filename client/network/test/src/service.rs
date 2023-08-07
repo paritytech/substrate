@@ -178,6 +178,12 @@ impl TestNetworkBuilder {
 			protocol_config
 		};
 
+		let peer_store = PeerStore::new(
+			network_config.boot_nodes.iter().map(|bootnode| bootnode.peer_id).collect(),
+		);
+		let peer_store_handle = peer_store.handle();
+		tokio::spawn(peer_store.run().boxed());
+
 		let (chain_sync_network_provider, chain_sync_network_handle) =
 			self.chain_sync_network.unwrap_or(NetworkServiceProvider::new());
 		let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
@@ -196,6 +202,7 @@ impl TestNetworkBuilder {
 			state_request_protocol_config.name.clone(),
 			None,
 			rx,
+			peer_store_handle.clone(),
 		)
 		.unwrap();
 		let mut link = self.link.unwrap_or(Box::new(chain_sync_service.clone()));
@@ -224,12 +231,6 @@ impl TestNetworkBuilder {
 		] {
 			full_net_config.add_request_response_protocol(config);
 		}
-
-		let peer_store = PeerStore::new(
-			network_config.boot_nodes.iter().map(|bootnode| bootnode.peer_id).collect(),
-		);
-		let peer_store_handle = peer_store.handle();
-		tokio::spawn(peer_store.run().boxed());
 
 		let genesis_hash =
 			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");

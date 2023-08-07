@@ -816,7 +816,7 @@ where
 	/// Returns a result if the handshake of this peer was indeed accepted.
 	pub fn on_sync_peer_disconnected(&mut self, peer: PeerId) {
 		let Some(info) = self.peers.remove(&peer) else {
-			log::error!(target: LOG_TARGET, "{peer} does not exist in `SyncingEngine`");
+			log::debug!(target: LOG_TARGET, "{peer} does not exist in `SyncingEngine`");
 			return
 		};
 

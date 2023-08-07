@@ -895,6 +895,12 @@ where
 			protocol_config
 		};
 
+		let peer_store = PeerStore::new(
+			network_config.boot_nodes.iter().map(|bootnode| bootnode.peer_id).collect(),
+		);
+		let peer_store_handle = peer_store.handle();
+		self.spawn_task(peer_store.run().boxed());
+
 		let block_announce_validator = config
 			.block_announce_validator
 			.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator));
@@ -918,6 +924,7 @@ where
 				state_request_protocol_config.name.clone(),
 				Some(warp_protocol_config.name.clone()),
 				rx,
+				peer_store_handle.clone(),
 			)
 			.unwrap();
 		let sync_service_import_queue = Box::new(sync_service.clone());
@@ -938,12 +945,6 @@ where
 		for config in notif_configs {
 			full_net_config.add_notification_protocol(config);
 		}
-
-		let peer_store = PeerStore::new(
-			network_config.boot_nodes.iter().map(|bootnode| bootnode.peer_id).collect(),
-		);
-		let peer_store_handle = peer_store.handle();
-		self.spawn_task(peer_store.run().boxed());
 
 		let genesis_hash =
 			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");

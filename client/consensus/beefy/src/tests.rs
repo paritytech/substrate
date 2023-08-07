@@ -1022,9 +1022,7 @@ async fn should_initialize_voter_at_genesis() {
 	assert_eq!(state, persisted_state);
 }
 
-// TODO(aaro): fix
 #[tokio::test]
-#[ignore]
 async fn should_initialize_voter_at_custom_genesis() {
 	let keys = &[BeefyKeyring::Alice];
 	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
@@ -1043,7 +1041,25 @@ async fn should_initialize_voter_at_custom_genesis() {
 	net.peer(0).client().as_client().finalize_block(hashes[8], None).unwrap();
 
 	// load persistent state - nothing in DB, should init at genesis
-	let persisted_state = voter_init_setup(&mut net, &mut finality, &api).await.unwrap();
+	//
+	// NOTE: code from `voter_init_setup()` is moved here because the new network event system
+	// doesn't allow creating a new `GossipEngine` as the notification handle is consumed by the
+	// first `GossipEngine`
+	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
+	let (gossip_validator, _) = GossipValidator::new(known_peers);
+	let gossip_validator = Arc::new(gossip_validator);
+	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
+		net.peer(0).network_service().clone(),
+		net.peer(0).sync_service().clone(),
+		net.peer(0).take_notification_service(&beefy_gossip_proto_name()).unwrap(),
+		"/beefy/whatever",
+		gossip_validator,
+		None,
+	);
+	let (beefy_genesis, best_grandpa) =
+		wait_for_runtime_pallet(&api, &mut gossip_engine, &mut finality).await.unwrap();
+	let persisted_state =
+		load_or_init_voter_state(&*backend, &api, beefy_genesis, best_grandpa, 1).unwrap();
 
 	// Test initialization at session boundary.
 	// verify voter initialized with single session starting at block `custom_pallet_genesis` (7)
@@ -1073,7 +1089,11 @@ async fn should_initialize_voter_at_custom_genesis() {
 
 	net.peer(0).client().as_client().finalize_block(hashes[10], None).unwrap();
 	// load persistent state - state preset in DB, but with different pallet genesis
-	let new_persisted_state = voter_init_setup(&mut net, &mut finality, &api).await.unwrap();
+	// the network state persists and uses the old `GossipEngine` initialized for `peer(0)`
+	let (beefy_genesis, best_grandpa) =
+		wait_for_runtime_pallet(&api, &mut gossip_engine, &mut finality).await.unwrap();
+	let new_persisted_state =
+		load_or_init_voter_state(&*backend, &api, beefy_genesis, best_grandpa, 1).unwrap();
 
 	// verify voter initialized with single session starting at block `new_pallet_genesis` (10)
 	let sessions = new_persisted_state.voting_oracle().sessions();
