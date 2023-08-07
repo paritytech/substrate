@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,43 +15,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Storage n-map type. Particularly implements `StorageNMap` and `StoragePrefixedMap`
-//! traits and their methods directly.
+//! Counted storage n-map type.
 
 use crate::{
-	metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR},
 	storage::{
 		types::{
 			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, OptionQuery, QueryKindTrait,
-			StorageEntryMetadataBuilder, TupleToEncodedIter,
+			StorageEntryMetadataBuilder, StorageNMap, StorageValue, TupleToEncodedIter, ValueQuery,
 		},
-		KeyGenerator, PrefixIterator, StorageAppend, StorageDecodeLength, StoragePrefixedMap,
+		KeyGenerator, PrefixIterator, StorageAppend, StorageDecodeLength,
 	},
 	traits::{Get, GetDefault, StorageInfo, StorageInstance},
+	Never,
 };
-use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
-use sp_runtime::SaturatedConversion;
+use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
+use sp_api::metadata_ir::StorageEntryMetadataIR;
+use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
-/// A type that allow to store values for an arbitrary number of keys in the form of
-/// `(Key<Hasher1, key1>, Key<Hasher2, key2>, ..., Key<HasherN, keyN>)`.
+/// A wrapper around a `StorageNMap` and a `StorageValue<Value=u32>` to keep track of how many items
+/// are in a map, without needing to iterate over all of the values.
 ///
-/// Each value is stored at:
-/// ```nocompile
-/// Twox128(Prefix::pallet_prefix())
-/// 		++ Twox128(Prefix::STORAGE_PREFIX)
-/// 		++ Hasher1(encode(key1))
-/// 		++ Hasher2(encode(key2))
-/// 	++ ...
-/// 	++ HasherN(encode(keyN))
-/// ```
+/// This storage item has some additional storage read and write overhead when manipulating values
+/// compared to a regular storage map.
 ///
-/// # Warning
+/// For functions where we only add or remove a value, a single storage read is needed to check if
+/// that value already exists. For mutate functions, two storage reads are used to check if the
+/// value existed before and after the mutation.
 ///
-/// If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher`
-/// such as `blake2_128_concat` must be used for the key hashers. Otherwise, other values
-/// in storage can be compromised.
-pub struct StorageNMap<
+/// Whenever the counter needs to be updated, an additional read and write occurs to update that
+/// counter.
+pub struct CountedStorageNMap<
 	Prefix,
 	Key,
 	Value,
@@ -60,77 +54,76 @@ pub struct StorageNMap<
 	MaxValues = GetDefault,
 >(core::marker::PhantomData<(Prefix, Key, Value, QueryKind, OnEmpty, MaxValues)>);
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-	crate::storage::generator::StorageNMap<Key, Value>
-	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-where
-	Prefix: StorageInstance,
-	Key: super::key::KeyGenerator,
-	Value: FullCodec,
-	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: Get<QueryKind::Query> + 'static,
-	MaxValues: Get<Option<u32>>,
-{
-	type Query = QueryKind::Query;
-	fn module_prefix() -> &'static [u8] {
-		Prefix::pallet_prefix().as_bytes()
-	}
-	fn storage_prefix() -> &'static [u8] {
-		Prefix::STORAGE_PREFIX.as_bytes()
-	}
-	fn from_optional_value_to_query(v: Option<Value>) -> Self::Query {
-		QueryKind::from_optional_value_to_query(v)
-	}
-	fn from_query_to_optional_value(v: Self::Query) -> Option<Value> {
-		QueryKind::from_query_to_optional_value(v)
-	}
+/// The requirement for an instance of [`CountedStorageNMap`].
+pub trait CountedStorageNMapInstance: StorageInstance {
+	/// The prefix to use for the counter storage value.
+	type CounterPrefix: StorageInstance;
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> crate::storage::StoragePrefixedMap<Value>
-	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-where
-	Prefix: StorageInstance,
-	Key: super::key::KeyGenerator,
-	Value: FullCodec,
-	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: Get<QueryKind::Query> + 'static,
-	MaxValues: Get<Option<u32>>,
+// Private helper trait to access map from counted storage n-map
+trait MapWrapper {
+	type Map;
+}
+
+impl<P: CountedStorageNMapInstance, K, V, Q, O, M> MapWrapper
+	for CountedStorageNMap<P, K, V, Q, O, M>
 {
-	fn module_prefix() -> &'static [u8] {
-		<Self as crate::storage::generator::StorageNMap<Key, Value>>::module_prefix()
-	}
-	fn storage_prefix() -> &'static [u8] {
-		<Self as crate::storage::generator::StorageNMap<Key, Value>>::storage_prefix()
+	type Map = StorageNMap<P, K, V, Q, O, M>;
+}
+
+type CounterFor<P> =
+	StorageValue<<P as CountedStorageNMapInstance>::CounterPrefix, u32, ValueQuery>;
+
+/// On removal logic for updating counter while draining upon some prefix with
+/// [`crate::storage::PrefixIterator`].
+pub struct OnRemovalCounterUpdate<Prefix>(core::marker::PhantomData<Prefix>);
+
+impl<Prefix: CountedStorageNMapInstance> crate::storage::PrefixIteratorOnRemoval
+	for OnRemovalCounterUpdate<Prefix>
+{
+	fn on_removal(_key: &[u8], _value: &[u8]) {
+		CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
 	}
 }
 
 impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-	StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+	CountedStorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
-	Prefix: StorageInstance,
+	Prefix: CountedStorageNMapInstance,
 	Key: super::key::KeyGenerator,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
+	/// The key used to store the counter of the map.
+	pub fn counter_storage_final_key() -> [u8; 32] {
+		CounterFor::<Prefix>::hashed_key()
+	}
+
+	/// The prefix used to generate the key of the map.
+	pub fn map_storage_final_prefix() -> Vec<u8> {
+		use crate::storage::generator::StorageNMap;
+		<Self as MapWrapper>::Map::prefix_hash()
+	}
+
 	/// Get the storage key used to fetch a value corresponding to a specific key.
 	pub fn hashed_key_for<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
 		key: KArg,
 	) -> Vec<u8> {
-		<Self as crate::storage::StorageNMap<Key, Value>>::hashed_key_for(key)
+		<Self as MapWrapper>::Map::hashed_key_for(key)
 	}
 
 	/// Does the value (explicitly) exist in storage?
 	pub fn contains_key<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(key: KArg) -> bool {
-		<Self as crate::storage::StorageNMap<Key, Value>>::contains_key(key)
+		<Self as MapWrapper>::Map::contains_key(key)
 	}
 
 	/// Load the value associated with the given key from the map.
 	pub fn get<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
 		key: KArg,
 	) -> QueryKind::Query {
-		<Self as crate::storage::StorageNMap<Key, Value>>::get(key)
+		<Self as MapWrapper>::Map::get(key)
 	}
 
 	/// Try to get the value for the given key from the map.
@@ -139,22 +132,32 @@ where
 	pub fn try_get<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
 		key: KArg,
 	) -> Result<Value, ()> {
-		<Self as crate::storage::StorageNMap<Key, Value>>::try_get(key)
+		<Self as MapWrapper>::Map::try_get(key)
 	}
 
 	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	/// It decrements the counter when the value is removed.
 	pub fn set<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
 		key: KArg,
 		query: QueryKind::Query,
 	) {
-		<Self as crate::storage::StorageNMap<Key, Value>>::set(key, query)
+		let option = QueryKind::from_query_to_optional_value(query);
+		if option.is_none() {
+			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
+		}
+		<Self as MapWrapper>::Map::set(key, QueryKind::from_optional_value_to_query(option))
 	}
 
 	/// Take a value from storage, removing it afterwards.
 	pub fn take<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
 		key: KArg,
 	) -> QueryKind::Query {
-		<Self as crate::storage::StorageNMap<Key, Value>>::take(key)
+		let removed_value =
+			<Self as MapWrapper>::Map::mutate_exists(key, |value| core::mem::replace(value, None));
+		if removed_value.is_some() {
+			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
+		}
+		QueryKind::from_optional_value_to_query(removed_value)
 	}
 
 	/// Swap the values of two key-pairs.
@@ -164,42 +167,29 @@ where
 		KArg1: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,
 		KArg2: EncodeLikeTuple<KOther::KArg> + TupleToEncodedIter,
 	{
-		<Self as crate::storage::StorageNMap<Key, Value>>::swap::<KOther, _, _>(key1, key2)
+		<Self as MapWrapper>::Map::swap::<KOther, _, _>(key1, key2)
 	}
 
 	/// Store a value to be associated with the given keys from the map.
 	pub fn insert<KArg, VArg>(key: KArg, val: VArg)
 	where
-		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,
+		KArg: EncodeLikeTuple<Key::KArg> + EncodeLike<Key::KArg> + TupleToEncodedIter,
 		VArg: EncodeLike<Value>,
 	{
-		<Self as crate::storage::StorageNMap<Key, Value>>::insert(key, val)
+		if !<Self as MapWrapper>::Map::contains_key(Ref::from(&key)) {
+			CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
+		}
+		<Self as MapWrapper>::Map::insert(key, val)
 	}
 
 	/// Remove the value under the given keys.
-	pub fn remove<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(key: KArg) {
-		<Self as crate::storage::StorageNMap<Key, Value>>::remove(key)
-	}
-
-	/// Remove all values starting with `partial_key` in the overlay and up to `limit` in the
-	/// backend.
-	///
-	/// All values in the client overlay will be deleted, if there is some `limit` then up to
-	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
-	/// the client backend are deleted.
-	///
-	/// # Note
-	///
-	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
-	/// removed and the same result being returned. This happens because the keys to delete in the
-	/// overlay are not taken into account when deleting keys in the backend.
-	#[deprecated = "Use `clear_prefix` instead"]
-	pub fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
-	where
-		Key: HasKeyPrefix<KP>,
-	{
-		#[allow(deprecated)]
-		<Self as crate::storage::StorageNMap<Key, Value>>::remove_prefix(partial_key, limit)
+	pub fn remove<KArg: EncodeLikeTuple<Key::KArg> + EncodeLike<Key::KArg> + TupleToEncodedIter>(
+		key: KArg,
+	) {
+		if <Self as MapWrapper>::Map::contains_key(Ref::from(&key)) {
+			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
+		}
+		<Self as MapWrapper>::Map::remove(key)
 	}
 
 	/// Attempt to remove items from the map matching a `partial_key` prefix.
@@ -233,11 +223,12 @@ where
 	where
 		Key: HasKeyPrefix<KP>,
 	{
-		<Self as crate::storage::StorageNMap<Key, Value>>::clear_prefix(
-			partial_key,
-			limit,
-			maybe_cursor,
-		)
+		let result = <Self as MapWrapper>::Map::clear_prefix(partial_key, limit, maybe_cursor);
+		match result.maybe_cursor {
+			None => CounterFor::<Prefix>::kill(),
+			Some(_) => CounterFor::<Prefix>::mutate(|x| x.saturating_reduce(result.unique)),
+		}
+		result
 	}
 
 	/// Iterate over values that share the first key.
@@ -245,7 +236,7 @@ where
 	where
 		Key: HasKeyPrefix<KP>,
 	{
-		<Self as crate::storage::StorageNMap<Key, Value>>::iter_prefix_values(partial_key)
+		<Self as MapWrapper>::Map::iter_prefix_values(partial_key)
 	}
 
 	/// Mutate the value under the given keys.
@@ -254,7 +245,8 @@ where
 		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,
 		F: FnOnce(&mut QueryKind::Query) -> R,
 	{
-		<Self as crate::storage::StorageNMap<Key, Value>>::mutate(key, f)
+		Self::try_mutate(key, |v| Ok::<R, Never>(f(v)))
+			.expect("`Never` can not be constructed; qed")
 	}
 
 	/// Mutate the value under the given keys when the closure returns `Ok`.
@@ -263,7 +255,14 @@ where
 		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,
 		F: FnOnce(&mut QueryKind::Query) -> Result<R, E>,
 	{
-		<Self as crate::storage::StorageNMap<Key, Value>>::try_mutate(key, f)
+		Self::try_mutate_exists(key, |option_value_ref| {
+			let option_value = core::mem::replace(option_value_ref, None);
+			let mut query = QueryKind::from_optional_value_to_query(option_value);
+			let res = f(&mut query);
+			let option_value = QueryKind::from_query_to_optional_value(query);
+			let _ = core::mem::replace(option_value_ref, option_value);
+			res
+		})
 	}
 
 	/// Mutate the value under the given keys. Deletes the item if mutated to a `None`.
@@ -272,7 +271,8 @@ where
 		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,
 		F: FnOnce(&mut Option<Value>) -> R,
 	{
-		<Self as crate::storage::StorageNMap<Key, Value>>::mutate_exists(key, f)
+		Self::try_mutate_exists(key, |v| Ok::<R, Never>(f(v)))
+			.expect("`Never` can not be constructed; qed")
 	}
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
@@ -283,7 +283,22 @@ where
 		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,
 		F: FnOnce(&mut Option<Value>) -> Result<R, E>,
 	{
-		<Self as crate::storage::StorageNMap<Key, Value>>::try_mutate_exists(key, f)
+		<Self as MapWrapper>::Map::try_mutate_exists(key, |option_value| {
+			let existed = option_value.is_some();
+			let res = f(option_value);
+			let exist = option_value.is_some();
+
+			if res.is_ok() {
+				if existed && !exist {
+					// Value was deleted
+					CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
+				} else if !existed && exist {
+					// Value was added
+					CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
+				}
+			}
+			res
+		})
 	}
 
 	/// Append the given item to the value in the storage.
@@ -297,12 +312,15 @@ where
 	/// on overwrite.
 	pub fn append<Item, EncodeLikeItem, KArg>(key: KArg, item: EncodeLikeItem)
 	where
-		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,
+		KArg: EncodeLikeTuple<Key::KArg> + EncodeLike<Key::KArg> + TupleToEncodedIter,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
 		Value: StorageAppend<Item>,
 	{
-		<Self as crate::storage::StorageNMap<Key, Value>>::append(key, item)
+		if !<Self as MapWrapper>::Map::contains_key(Ref::from(&key)) {
+			CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
+		}
+		<Self as MapWrapper>::Map::append(key, item)
 	}
 
 	/// Read the length of the storage value without decoding the entire value under the
@@ -323,7 +341,7 @@ where
 	where
 		Value: StorageDecodeLength,
 	{
-		<Self as crate::storage::StorageNMap<Key, Value>>::decode_len(key)
+		<Self as MapWrapper>::Map::decode_len(key)
 	}
 
 	/// Migrate an item with the given `key` from defunct `hash_fns` to the current hashers.
@@ -333,24 +351,7 @@ where
 	where
 		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,
 	{
-		<Self as crate::storage::StorageNMap<Key, Value>>::migrate_keys::<_>(key, hash_fns)
-	}
-
-	/// Remove all values in the overlay and up to `limit` in the backend.
-	///
-	/// All values in the client overlay will be deleted, if there is some `limit` then up to
-	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
-	/// the client backend are deleted.
-	///
-	/// # Note
-	///
-	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
-	/// removed and the same result being returned. This happens because the keys to delete in the
-	/// overlay are not taken into account when deleting keys in the backend.
-	#[deprecated = "Use `clear` instead"]
-	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
-		#[allow(deprecated)]
-		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit).into()
+		<Self as MapWrapper>::Map::migrate_keys::<_>(key, hash_fns)
 	}
 
 	/// Attempt to remove all items from the map.
@@ -377,14 +378,19 @@ where
 	/// operating on the same map should always pass `Some`, and this should be equal to the
 	/// previous call result's `maybe_cursor` field.
 	pub fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::MultiRemovalResults {
-		<Self as crate::storage::StoragePrefixedMap<Value>>::clear(limit, maybe_cursor)
+		let result = <Self as MapWrapper>::Map::clear(limit, maybe_cursor);
+		match result.maybe_cursor {
+			None => CounterFor::<Prefix>::kill(),
+			Some(_) => CounterFor::<Prefix>::mutate(|x| x.saturating_reduce(result.unique)),
+		}
+		result
 	}
 
 	/// Iter over all value of the storage.
 	///
 	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	pub fn iter_values() -> crate::storage::PrefixIterator<Value> {
-		<Self as crate::storage::StoragePrefixedMap<Value>>::iter_values()
+		<Self as MapWrapper>::Map::iter_values()
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
@@ -400,15 +406,38 @@ where
 	/// # Usage
 	///
 	/// This would typically be called inside the module implementation of on_runtime_upgrade.
-	pub fn translate_values<OldValue: Decode, F: FnMut(OldValue) -> Option<Value>>(f: F) {
-		<Self as crate::storage::StoragePrefixedMap<Value>>::translate_values(f)
+	pub fn translate_values<OldValue: Decode, F: FnMut(OldValue) -> Option<Value>>(mut f: F) {
+		<Self as MapWrapper>::Map::translate_values(|old_value| {
+			let res = f(old_value);
+			if res.is_none() {
+				CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
+			}
+			res
+		})
+	}
+
+	/// Initialize the counter with the actual number of items in the map.
+	///
+	/// This function iterates through all the items in the map and sets the counter. This operation
+	/// can be very heavy, so use with caution.
+	///
+	/// Returns the number of items in the map which is used to set the counter.
+	pub fn initialize_counter() -> u32 {
+		let count = Self::iter_values().count() as u32;
+		CounterFor::<Prefix>::set(count);
+		count
+	}
+
+	/// Return the count.
+	pub fn count() -> u32 {
+		CounterFor::<Prefix>::get()
 	}
 }
 
 impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-	StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+	CountedStorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
-	Prefix: StorageInstance,
+	Prefix: CountedStorageNMapInstance,
 	Key: super::key::ReversibleKeyGenerator,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
@@ -425,7 +454,7 @@ where
 	where
 		Key: HasReversibleKeyPrefix<KP>,
 	{
-		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_prefix(kp)
+		<Self as MapWrapper>::Map::iter_prefix(kp)
 	}
 
 	/// Enumerate all elements in the map with prefix key `kp` after a specified `starting_raw_key`
@@ -436,14 +465,14 @@ where
 	pub fn iter_prefix_from<KP>(
 		kp: KP,
 		starting_raw_key: Vec<u8>,
-	) -> crate::storage::PrefixIterator<(<Key as HasKeyPrefix<KP>>::Suffix, Value)>
+	) -> crate::storage::PrefixIterator<
+		(<Key as HasKeyPrefix<KP>>::Suffix, Value),
+		OnRemovalCounterUpdate<Prefix>,
+	>
 	where
 		Key: HasReversibleKeyPrefix<KP>,
 	{
-		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_prefix_from(
-			kp,
-			starting_raw_key,
-		)
+		<Self as MapWrapper>::Map::iter_prefix_from(kp, starting_raw_key).convert_on_removal()
 	}
 
 	/// Enumerate all suffix keys in the map with prefix key `kp` in no particular order.
@@ -456,7 +485,7 @@ where
 	where
 		Key: HasReversibleKeyPrefix<KP>,
 	{
-		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_key_prefix(kp)
+		<Self as MapWrapper>::Map::iter_key_prefix(kp)
 	}
 
 	/// Enumerate all suffix keys in the map with prefix key `kp` after a specified
@@ -471,10 +500,7 @@ where
 	where
 		Key: HasReversibleKeyPrefix<KP>,
 	{
-		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_key_prefix_from(
-			kp,
-			starting_raw_key,
-		)
+		<Self as MapWrapper>::Map::iter_key_prefix_from(kp, starting_raw_key)
 	}
 
 	/// Remove all elements from the map with prefix key `kp` and iterate through them in no
@@ -484,18 +510,22 @@ where
 	/// results.
 	pub fn drain_prefix<KP>(
 		kp: KP,
-	) -> crate::storage::PrefixIterator<(<Key as HasKeyPrefix<KP>>::Suffix, Value)>
+	) -> crate::storage::PrefixIterator<
+		(<Key as HasKeyPrefix<KP>>::Suffix, Value),
+		OnRemovalCounterUpdate<Prefix>,
+	>
 	where
 		Key: HasReversibleKeyPrefix<KP>,
 	{
-		<Self as crate::storage::IterableStorageNMap<Key, Value>>::drain_prefix(kp)
+		<Self as MapWrapper>::Map::drain_prefix(kp).convert_on_removal()
 	}
 
 	/// Enumerate all elements in the map in no particular order.
 	///
 	/// If you add or remove values to the map while doing this, you'll get undefined results.
-	pub fn iter() -> crate::storage::PrefixIterator<(Key::Key, Value)> {
-		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter()
+	pub fn iter(
+	) -> crate::storage::PrefixIterator<(Key::Key, Value), OnRemovalCounterUpdate<Prefix>> {
+		<Self as MapWrapper>::Map::iter().convert_on_removal()
 	}
 
 	/// Enumerate all elements in the map after a specified `starting_key` in no particular order.
@@ -503,15 +533,15 @@ where
 	/// If you add or remove values to the map while doing this, you'll get undefined results.
 	pub fn iter_from(
 		starting_raw_key: Vec<u8>,
-	) -> crate::storage::PrefixIterator<(Key::Key, Value)> {
-		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_from(starting_raw_key)
+	) -> crate::storage::PrefixIterator<(Key::Key, Value), OnRemovalCounterUpdate<Prefix>> {
+		<Self as MapWrapper>::Map::iter_from(starting_raw_key).convert_on_removal()
 	}
 
 	/// Enumerate all keys in the map in no particular order.
 	///
 	/// If you add or remove values to the map while doing this, you'll get undefined results.
 	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<Key::Key> {
-		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_keys()
+		<Self as MapWrapper>::Map::iter_keys()
 	}
 
 	/// Enumerate all keys in the map after a specified `starting_raw_key` in no particular order.
@@ -520,30 +550,37 @@ where
 	pub fn iter_keys_from(
 		starting_raw_key: Vec<u8>,
 	) -> crate::storage::KeyPrefixIterator<Key::Key> {
-		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_keys_from(starting_raw_key)
+		<Self as MapWrapper>::Map::iter_keys_from(starting_raw_key)
 	}
 
 	/// Remove all elements from the map and iterate through them in no particular order.
 	///
 	/// If you add elements to the map while doing this, you'll get undefined results.
-	pub fn drain() -> crate::storage::PrefixIterator<(Key::Key, Value)> {
-		<Self as crate::storage::IterableStorageNMap<Key, Value>>::drain()
+	pub fn drain(
+	) -> crate::storage::PrefixIterator<(Key::Key, Value), OnRemovalCounterUpdate<Prefix>> {
+		<Self as MapWrapper>::Map::drain().convert_on_removal()
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	///
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
-	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
-	pub fn translate<O: Decode, F: FnMut(Key::Key, O) -> Option<Value>>(f: F) {
-		<Self as crate::storage::IterableStorageNMap<Key, Value>>::translate(f)
+	/// NOTE: If a value can't be decoded because the storage is corrupted, then it is skipped.
+	pub fn translate<O: Decode, F: FnMut(Key::Key, O) -> Option<Value>>(mut f: F) {
+		<Self as MapWrapper>::Map::translate(|key, old_value| {
+			let res = f(key, old_value);
+			if res.is_none() {
+				CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
+			}
+			res
+		})
 	}
 }
 
 impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMetadataBuilder
-	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+	for CountedStorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
-	Prefix: StorageInstance,
+	Prefix: CountedStorageNMapInstance,
 	Key: super::key::KeyGenerator,
 	Value: FullCodec + scale_info::StaticTypeInfo,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
@@ -551,28 +588,18 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadataIR>) {
-		let docs = if cfg!(feature = "no-metadata-docs") { vec![] } else { docs };
-
-		let entry = StorageEntryMetadataIR {
-			name: Prefix::STORAGE_PREFIX,
-			modifier: QueryKind::METADATA,
-			ty: StorageEntryTypeIR::Map {
-				key: scale_info::meta_type::<Key::Key>(),
-				hashers: Key::HASHER_METADATA.to_vec(),
-				value: scale_info::meta_type::<Value>(),
-			},
-			default: OnEmpty::get().encode(),
-			docs,
-		};
-
-		entries.push(entry);
+		<Self as MapWrapper>::Map::build_metadata(docs, entries);
+		CounterFor::<Prefix>::build_metadata(
+			vec![&"Counter for the related counted storage map"],
+			entries,
+		);
 	}
 }
 
 impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> crate::traits::StorageInfoTrait
-	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+	for CountedStorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
-	Prefix: StorageInstance,
+	Prefix: CountedStorageNMapInstance,
 	Key: super::key::KeyGenerator + super::key::KeyGeneratorMaxEncodedLen,
 	Value: FullCodec + MaxEncodedLen,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
@@ -580,25 +607,15 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	fn storage_info() -> Vec<StorageInfo> {
-		vec![StorageInfo {
-			pallet_name: Self::module_prefix().to_vec(),
-			storage_name: Self::storage_prefix().to_vec(),
-			prefix: Self::final_prefix().to_vec(),
-			max_values: MaxValues::get(),
-			max_size: Some(
-				Key::key_max_encoded_len()
-					.saturating_add(Value::max_encoded_len())
-					.saturated_into(),
-			),
-		}]
+		[<Self as MapWrapper>::Map::storage_info(), CounterFor::<Prefix>::storage_info()].concat()
 	}
 }
 
 /// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
 impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> crate::traits::PartialStorageInfoTrait
-	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+	for CountedStorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
-	Prefix: StorageInstance,
+	Prefix: CountedStorageNMapInstance,
 	Key: super::key::KeyGenerator,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
@@ -606,23 +623,22 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	fn partial_storage_info() -> Vec<StorageInfo> {
-		vec![StorageInfo {
-			pallet_name: Self::module_prefix().to_vec(),
-			storage_name: Self::storage_prefix().to_vec(),
-			prefix: Self::final_prefix().to_vec(),
-			max_values: MaxValues::get(),
-			max_size: None,
-		}]
+		[
+			<Self as MapWrapper>::Map::partial_storage_info(),
+			CounterFor::<Prefix>::partial_storage_info(),
+		]
+		.concat()
 	}
 }
+
 #[cfg(test)]
 mod test {
 	use super::*;
 	use crate::{
 		hash::{StorageHasher as _, *},
-		metadata_ir::{StorageEntryModifierIR, StorageHasherIR},
 		storage::types::{Key as NMapKey, ValueQuery},
 	};
+	use sp_api::metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;
@@ -631,6 +647,9 @@ mod test {
 			"test"
 		}
 		const STORAGE_PREFIX: &'static str = "Foo";
+	}
+	impl CountedStorageNMapInstance for Prefix {
+		type CounterPrefix = Prefix;
 	}
 
 	struct ADefault;
@@ -642,12 +661,12 @@ mod test {
 
 	#[test]
 	fn test_1_key() {
-		type A = StorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, u32, OptionQuery>;
+		type A = CountedStorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, u32, OptionQuery>;
 		type AValueQueryWithAnOnEmpty =
-			StorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, u32, ValueQuery, ADefault>;
-		type B = StorageNMap<Prefix, NMapKey<Blake2_256, u16>, u32, ValueQuery>;
-		type C = StorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, u8, ValueQuery>;
-		type WithLen = StorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, Vec<u32>>;
+			CountedStorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, u32, ValueQuery, ADefault>;
+		type B = CountedStorageNMap<Prefix, NMapKey<Blake2_256, u16>, u32, ValueQuery>;
+		type C = CountedStorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, u8, ValueQuery>;
+		type WithLen = CountedStorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, Vec<u32>>;
 
 		TestExternalities::default().execute_with(|| {
 			let mut k: Vec<u8> = vec![];
@@ -659,19 +678,13 @@ mod test {
 			assert_eq!(A::contains_key((3,)), false);
 			assert_eq!(A::get((3,)), None);
 			assert_eq!(AValueQueryWithAnOnEmpty::get((3,)), 98);
+			assert_eq!(A::count(), 0);
 
 			A::insert((3,), 10);
 			assert_eq!(A::contains_key((3,)), true);
 			assert_eq!(A::get((3,)), Some(10));
 			assert_eq!(AValueQueryWithAnOnEmpty::get((3,)), 10);
-
-			{
-				#[crate::storage_alias]
-				type Foo = StorageNMap<test, (NMapKey<Blake2_128Concat, u16>), u32>;
-
-				assert_eq!(Foo::contains_key((3,)), true);
-				assert_eq!(Foo::get((3,)), Some(10));
-			}
+			assert_eq!(A::count(), 1);
 
 			A::swap::<NMapKey<Blake2_128Concat, u16>, _, _>((3,), (2,));
 			assert_eq!(A::contains_key((3,)), false);
@@ -680,15 +693,18 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::get((3,)), 98);
 			assert_eq!(A::get((2,)), Some(10));
 			assert_eq!(AValueQueryWithAnOnEmpty::get((2,)), 10);
+			assert_eq!(A::count(), 1);
 
 			A::remove((2,));
 			assert_eq!(A::contains_key((2,)), false);
 			assert_eq!(A::get((2,)), None);
+			assert_eq!(A::count(), 0);
 
 			AValueQueryWithAnOnEmpty::mutate((2,), |v| *v = *v * 2);
 			AValueQueryWithAnOnEmpty::mutate((2,), |v| *v = *v * 2);
 			assert_eq!(A::contains_key((2,)), true);
 			assert_eq!(A::get((2,)), Some(98 * 4));
+			assert_eq!(A::count(), 1);
 
 			A::remove((2,));
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate((2,), |v| {
@@ -701,6 +717,7 @@ mod test {
 			});
 			assert_eq!(A::contains_key((2,)), true);
 			assert_eq!(A::get((2,)), Some(98 * 4));
+			assert_eq!(A::count(), 1);
 
 			A::remove((2,));
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate((2,), |v| {
@@ -708,6 +725,7 @@ mod test {
 				Err(())
 			});
 			assert_eq!(A::contains_key((2,)), false);
+			assert_eq!(A::count(), 0);
 
 			A::remove((2,));
 			AValueQueryWithAnOnEmpty::mutate_exists((2,), |v| {
@@ -721,6 +739,7 @@ mod test {
 			});
 			assert_eq!(A::contains_key((2,)), true);
 			assert_eq!(A::get((2,)), Some(100));
+			assert_eq!(A::count(), 1);
 
 			A::remove((2,));
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate_exists((2,), |v| {
@@ -743,6 +762,7 @@ mod test {
 			});
 			assert_eq!(A::contains_key((2,)), true);
 			assert_eq!(A::get((2,)), Some(100));
+			assert_eq!(A::count(), 1);
 
 			A::insert((2,), 10);
 			assert_eq!(A::take((2,)), Some(10));
@@ -750,6 +770,7 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::take((2,)), 98);
 			assert_eq!(A::contains_key((2,)), false);
 			assert_eq!(A::try_get((2,)), Err(()));
+			assert_eq!(A::count(), 0);
 
 			B::insert((2,), 10);
 			assert_eq!(
@@ -758,32 +779,38 @@ mod test {
 			);
 			assert_eq!(A::contains_key((2,)), true);
 			assert_eq!(A::get((2,)), Some(10));
+			assert_eq!(A::count(), 1);
 
 			A::insert((3,), 10);
 			A::insert((4,), 10);
+			assert_eq!(A::count(), 3);
 			let _ = A::clear(u32::max_value(), None);
-			assert_eq!(A::contains_key((3,)), false);
-			assert_eq!(A::contains_key((4,)), false);
+			assert!(!A::contains_key((2,)) && !A::contains_key((3,)) && !A::contains_key((4,)));
+			assert_eq!(A::count(), 0);
 
 			A::insert((3,), 10);
 			A::insert((4,), 10);
 			assert_eq!(A::iter_values().collect::<Vec<_>>(), vec![10, 10]);
+			assert_eq!(A::count(), 2);
 
 			C::insert((3,), 10);
 			C::insert((4,), 10);
 			A::translate_values::<u8, _>(|v| Some((v * 2).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 20), (3, 20)]);
+			assert_eq!(A::count(), 2);
 
 			A::insert((3,), 10);
 			A::insert((4,), 10);
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 10), (3, 10)]);
 			assert_eq!(A::drain().collect::<Vec<_>>(), vec![(4, 10), (3, 10)]);
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(A::count(), 0);
 
 			C::insert((3,), 10);
 			C::insert((4,), 10);
 			A::translate::<u8, _>(|k1, v| Some((k1 as u16 * v as u16).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 40), (3, 30)]);
+			assert_eq!(A::count(), 2);
 
 			let mut entries = vec![];
 			A::build_metadata(vec![], &mut entries);
@@ -805,6 +832,17 @@ mod test {
 					StorageEntryMetadataIR {
 						name: "Foo",
 						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
+						default: vec![0, 0, 0, 0],
+						docs: if cfg!(feature = "no-metadata-docs") {
+							vec![]
+						} else {
+							vec!["Counter for the related counted storage map"]
+						},
+					},
+					StorageEntryMetadataIR {
+						name: "Foo",
+						modifier: StorageEntryModifierIR::Default,
 						ty: StorageEntryTypeIR::Map {
 							hashers: vec![StorageHasherIR::Blake2_128Concat],
 							key: scale_info::meta_type::<u16>(),
@@ -812,7 +850,18 @@ mod test {
 						},
 						default: 98u32.encode(),
 						docs: vec![],
-					}
+					},
+					StorageEntryMetadataIR {
+						name: "Foo",
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
+						default: vec![0, 0, 0, 0],
+						docs: if cfg!(feature = "no-metadata-docs") {
+							vec![]
+						} else {
+							vec!["Counter for the related counted storage map"]
+						},
+					},
 				]
 			);
 
@@ -825,28 +874,32 @@ mod test {
 
 	#[test]
 	fn test_2_keys() {
-		type A = StorageNMap<
+		type A = CountedStorageNMap<
 			Prefix,
 			(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>),
 			u32,
 			OptionQuery,
 		>;
-		type AValueQueryWithAnOnEmpty = StorageNMap<
+		type AValueQueryWithAnOnEmpty = CountedStorageNMap<
 			Prefix,
 			(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>),
 			u32,
 			ValueQuery,
 			ADefault,
 		>;
-		type B =
-			StorageNMap<Prefix, (NMapKey<Blake2_256, u16>, NMapKey<Twox128, u8>), u32, ValueQuery>;
-		type C = StorageNMap<
+		type B = CountedStorageNMap<
+			Prefix,
+			(NMapKey<Blake2_256, u16>, NMapKey<Twox128, u8>),
+			u32,
+			ValueQuery,
+		>;
+		type C = CountedStorageNMap<
 			Prefix,
 			(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>),
 			u8,
 			ValueQuery,
 		>;
-		type WithLen = StorageNMap<
+		type WithLen = CountedStorageNMap<
 			Prefix,
 			(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>),
 			Vec<u32>,
@@ -863,11 +916,13 @@ mod test {
 			assert_eq!(A::contains_key((3, 30)), false);
 			assert_eq!(A::get((3, 30)), None);
 			assert_eq!(AValueQueryWithAnOnEmpty::get((3, 30)), 98);
+			assert_eq!(A::count(), 0);
 
 			A::insert((3, 30), 10);
 			assert_eq!(A::contains_key((3, 30)), true);
 			assert_eq!(A::get((3, 30)), Some(10));
 			assert_eq!(AValueQueryWithAnOnEmpty::get((3, 30)), 10);
+			assert_eq!(A::count(), 1);
 
 			A::swap::<(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>), _, _>(
 				(3, 30),
@@ -879,15 +934,18 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::get((3, 30)), 98);
 			assert_eq!(A::get((2, 20)), Some(10));
 			assert_eq!(AValueQueryWithAnOnEmpty::get((2, 20)), 10);
+			assert_eq!(A::count(), 1);
 
 			A::remove((2, 20));
 			assert_eq!(A::contains_key((2, 20)), false);
 			assert_eq!(A::get((2, 20)), None);
+			assert_eq!(A::count(), 0);
 
 			AValueQueryWithAnOnEmpty::mutate((2, 20), |v| *v = *v * 2);
 			AValueQueryWithAnOnEmpty::mutate((2, 20), |v| *v = *v * 2);
 			assert_eq!(A::contains_key((2, 20)), true);
 			assert_eq!(A::get((2, 20)), Some(98 * 4));
+			assert_eq!(A::count(), 1);
 
 			A::remove((2, 20));
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate((2, 20), |v| {
@@ -895,6 +953,7 @@ mod test {
 				Err(())
 			});
 			assert_eq!(A::contains_key((2, 20)), false);
+			assert_eq!(A::count(), 0);
 
 			A::remove((2, 20));
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate((2, 20), |v| {
@@ -902,6 +961,7 @@ mod test {
 				Err(())
 			});
 			assert_eq!(A::contains_key((2, 20)), false);
+			assert_eq!(A::count(), 0);
 
 			A::remove((2, 20));
 			AValueQueryWithAnOnEmpty::mutate_exists((2, 20), |v| {
@@ -910,11 +970,13 @@ mod test {
 			});
 			assert_eq!(A::contains_key((2, 20)), true);
 			assert_eq!(A::get((2, 20)), Some(10));
+			assert_eq!(A::count(), 1);
 			AValueQueryWithAnOnEmpty::mutate_exists((2, 20), |v| {
 				*v = Some(v.unwrap() * 10);
 			});
 			assert_eq!(A::contains_key((2, 20)), true);
 			assert_eq!(A::get((2, 20)), Some(100));
+			assert_eq!(A::count(), 1);
 
 			A::remove((2, 20));
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate_exists((2, 20), |v| {
@@ -931,12 +993,14 @@ mod test {
 			assert_eq!(A::contains_key((2, 20)), true);
 			assert_eq!(A::get((2, 20)), Some(100));
 			assert_eq!(A::try_get((2, 20)), Ok(100));
+			assert_eq!(A::count(), 1);
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate_exists((2, 20), |v| {
 				*v = Some(v.unwrap() * 10);
 				Err(())
 			});
 			assert_eq!(A::contains_key((2, 20)), true);
 			assert_eq!(A::get((2, 20)), Some(100));
+			assert_eq!(A::count(), 1);
 
 			A::insert((2, 20), 10);
 			assert_eq!(A::take((2, 20)), Some(10));
@@ -944,6 +1008,7 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::take((2, 20)), 98);
 			assert_eq!(A::contains_key((2, 20)), false);
 			assert_eq!(A::try_get((2, 20)), Err(()));
+			assert_eq!(A::count(), 0);
 
 			B::insert((2, 20), 10);
 			assert_eq!(
@@ -958,32 +1023,43 @@ mod test {
 			);
 			assert_eq!(A::contains_key((2, 20)), true);
 			assert_eq!(A::get((2, 20)), Some(10));
+			assert_eq!(A::count(), 1);
 
 			A::insert((3, 30), 10);
 			A::insert((4, 40), 10);
+			assert_eq!(A::count(), 3);
 			let _ = A::clear(u32::max_value(), None);
-			assert_eq!(A::contains_key((3, 30)), false);
-			assert_eq!(A::contains_key((4, 40)), false);
+			// one of the item has been removed
+			assert!(
+				!A::contains_key((2, 20)) && !A::contains_key((3, 30)) && !A::contains_key((4, 40))
+			);
+			assert_eq!(A::count(), 0);
+
+			assert_eq!(A::count(), 0);
 
 			A::insert((3, 30), 10);
 			A::insert((4, 40), 10);
 			assert_eq!(A::iter_values().collect::<Vec<_>>(), vec![10, 10]);
+			assert_eq!(A::count(), 2);
 
 			C::insert((3, 30), 10);
 			C::insert((4, 40), 10);
 			A::translate_values::<u8, _>(|v| Some((v * 2).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40), 20), ((3, 30), 20)]);
+			assert_eq!(A::count(), 2);
 
 			A::insert((3, 30), 10);
 			A::insert((4, 40), 10);
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40), 10), ((3, 30), 10)]);
 			assert_eq!(A::drain().collect::<Vec<_>>(), vec![((4, 40), 10), ((3, 30), 10)]);
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(A::count(), 0);
 
 			C::insert((3, 30), 10);
 			C::insert((4, 40), 10);
 			A::translate::<u8, _>(|(k1, k2), v| Some((k1 * k2 as u16 * v as u16).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40), 1600), ((3, 30), 900)]);
+			assert_eq!(A::count(), 2);
 
 			let mut entries = vec![];
 			A::build_metadata(vec![], &mut entries);
@@ -1008,6 +1084,17 @@ mod test {
 					StorageEntryMetadataIR {
 						name: "Foo",
 						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
+						default: vec![0, 0, 0, 0],
+						docs: if cfg!(feature = "no-metadata-docs") {
+							vec![]
+						} else {
+							vec!["Counter for the related counted storage map"]
+						},
+					},
+					StorageEntryMetadataIR {
+						name: "Foo",
+						modifier: StorageEntryModifierIR::Default,
 						ty: StorageEntryTypeIR::Map {
 							hashers: vec![
 								StorageHasherIR::Blake2_128Concat,
@@ -1018,7 +1105,18 @@ mod test {
 						},
 						default: 98u32.encode(),
 						docs: vec![],
-					}
+					},
+					StorageEntryMetadataIR {
+						name: "Foo",
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
+						default: vec![0, 0, 0, 0],
+						docs: if cfg!(feature = "no-metadata-docs") {
+							vec![]
+						} else {
+							vec!["Counter for the related counted storage map"]
+						},
+					},
 				]
 			);
 
@@ -1033,12 +1131,13 @@ mod test {
 			A::insert((4, 41), 14);
 			assert_eq!(A::iter_prefix_values((3,)).collect::<Vec<_>>(), vec![12, 11]);
 			assert_eq!(A::iter_prefix_values((4,)).collect::<Vec<_>>(), vec![13, 14]);
+			assert_eq!(A::count(), 5);
 		});
 	}
 
 	#[test]
 	fn test_3_keys() {
-		type A = StorageNMap<
+		type A = CountedStorageNMap<
 			Prefix,
 			(
 				NMapKey<Blake2_128Concat, u16>,
@@ -1048,7 +1147,7 @@ mod test {
 			u32,
 			OptionQuery,
 		>;
-		type AValueQueryWithAnOnEmpty = StorageNMap<
+		type AValueQueryWithAnOnEmpty = CountedStorageNMap<
 			Prefix,
 			(
 				NMapKey<Blake2_128Concat, u16>,
@@ -1059,13 +1158,13 @@ mod test {
 			ValueQuery,
 			ADefault,
 		>;
-		type B = StorageNMap<
+		type B = CountedStorageNMap<
 			Prefix,
 			(NMapKey<Blake2_256, u16>, NMapKey<Blake2_256, u16>, NMapKey<Twox128, u16>),
 			u32,
 			ValueQuery,
 		>;
-		type C = StorageNMap<
+		type C = CountedStorageNMap<
 			Prefix,
 			(
 				NMapKey<Blake2_128Concat, u16>,
@@ -1075,7 +1174,7 @@ mod test {
 			u8,
 			ValueQuery,
 		>;
-		type WithLen = StorageNMap<
+		type WithLen = CountedStorageNMap<
 			Prefix,
 			(
 				NMapKey<Blake2_128Concat, u16>,
@@ -1097,11 +1196,13 @@ mod test {
 			assert_eq!(A::contains_key((1, 10, 100)), false);
 			assert_eq!(A::get((1, 10, 100)), None);
 			assert_eq!(AValueQueryWithAnOnEmpty::get((1, 10, 100)), 98);
+			assert_eq!(A::count(), 0);
 
 			A::insert((1, 10, 100), 30);
 			assert_eq!(A::contains_key((1, 10, 100)), true);
 			assert_eq!(A::get((1, 10, 100)), Some(30));
 			assert_eq!(AValueQueryWithAnOnEmpty::get((1, 10, 100)), 30);
+			assert_eq!(A::count(), 1);
 
 			A::swap::<
 				(
@@ -1118,15 +1219,18 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::get((1, 10, 100)), 98);
 			assert_eq!(A::get((2, 20, 200)), Some(30));
 			assert_eq!(AValueQueryWithAnOnEmpty::get((2, 20, 200)), 30);
+			assert_eq!(A::count(), 1);
 
 			A::remove((2, 20, 200));
 			assert_eq!(A::contains_key((2, 20, 200)), false);
 			assert_eq!(A::get((2, 20, 200)), None);
+			assert_eq!(A::count(), 0);
 
 			AValueQueryWithAnOnEmpty::mutate((2, 20, 200), |v| *v = *v * 2);
 			AValueQueryWithAnOnEmpty::mutate((2, 20, 200), |v| *v = *v * 2);
 			assert_eq!(A::contains_key((2, 20, 200)), true);
 			assert_eq!(A::get((2, 20, 200)), Some(98 * 4));
+			assert_eq!(A::count(), 1);
 
 			A::remove((2, 20, 200));
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate((2, 20, 200), |v| {
@@ -1134,6 +1238,7 @@ mod test {
 				Err(())
 			});
 			assert_eq!(A::contains_key((2, 20, 200)), false);
+			assert_eq!(A::count(), 0);
 
 			A::remove((2, 20, 200));
 			AValueQueryWithAnOnEmpty::mutate_exists((2, 20, 200), |v| {
@@ -1142,11 +1247,13 @@ mod test {
 			});
 			assert_eq!(A::contains_key((2, 20, 200)), true);
 			assert_eq!(A::get((2, 20, 200)), Some(10));
+			assert_eq!(A::count(), 1);
 			AValueQueryWithAnOnEmpty::mutate_exists((2, 20, 200), |v| {
 				*v = Some(v.unwrap() * 10);
 			});
 			assert_eq!(A::contains_key((2, 20, 200)), true);
 			assert_eq!(A::get((2, 20, 200)), Some(100));
+			assert_eq!(A::count(), 1);
 
 			A::remove((2, 20, 200));
 			let _: Result<(), ()> =
@@ -1165,6 +1272,7 @@ mod test {
 			assert_eq!(A::contains_key((2, 20, 200)), true);
 			assert_eq!(A::get((2, 20, 200)), Some(100));
 			assert_eq!(A::try_get((2, 20, 200)), Ok(100));
+			assert_eq!(A::count(), 1);
 			let _: Result<(), ()> =
 				AValueQueryWithAnOnEmpty::try_mutate_exists((2, 20, 200), |v| {
 					*v = Some(v.unwrap() * 10);
@@ -1172,6 +1280,7 @@ mod test {
 				});
 			assert_eq!(A::contains_key((2, 20, 200)), true);
 			assert_eq!(A::get((2, 20, 200)), Some(100));
+			assert_eq!(A::count(), 1);
 
 			A::insert((2, 20, 200), 10);
 			assert_eq!(A::take((2, 20, 200)), Some(10));
@@ -1179,6 +1288,7 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::take((2, 20, 200)), 98);
 			assert_eq!(A::contains_key((2, 20, 200)), false);
 			assert_eq!(A::try_get((2, 20, 200)), Err(()));
+			assert_eq!(A::count(), 0);
 
 			B::insert((2, 20, 200), 10);
 			assert_eq!(
@@ -1194,21 +1304,30 @@ mod test {
 			);
 			assert_eq!(A::contains_key((2, 20, 200)), true);
 			assert_eq!(A::get((2, 20, 200)), Some(10));
+			assert_eq!(A::count(), 1);
 
 			A::insert((3, 30, 300), 10);
 			A::insert((4, 40, 400), 10);
+			assert_eq!(A::count(), 3);
 			let _ = A::clear(u32::max_value(), None);
-			assert_eq!(A::contains_key((3, 30, 300)), false);
-			assert_eq!(A::contains_key((4, 40, 400)), false);
+			// one of the item has been removed
+			assert!(
+				!A::contains_key((2, 20, 200)) &&
+					!A::contains_key((3, 30, 300)) &&
+					!A::contains_key((4, 40, 400))
+			);
+			assert_eq!(A::count(), 0);
 
 			A::insert((3, 30, 300), 10);
 			A::insert((4, 40, 400), 10);
 			assert_eq!(A::iter_values().collect::<Vec<_>>(), vec![10, 10]);
+			assert_eq!(A::count(), 2);
 
 			C::insert((3, 30, 300), 10);
 			C::insert((4, 40, 400), 10);
 			A::translate_values::<u8, _>(|v| Some((v * 2).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40, 400), 20), ((3, 30, 300), 20)]);
+			assert_eq!(A::count(), 2);
 
 			A::insert((3, 30, 300), 10);
 			A::insert((4, 40, 400), 10);
@@ -1218,6 +1337,7 @@ mod test {
 				vec![((4, 40, 400), 10), ((3, 30, 300), 10)]
 			);
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(A::count(), 0);
 
 			C::insert((3, 30, 300), 10);
 			C::insert((4, 40, 400), 10);
@@ -1225,6 +1345,7 @@ mod test {
 				Some((k1 * k2 as u16 * v as u16 / k3 as u16).into())
 			});
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40, 400), 4), ((3, 30, 300), 3)]);
+			assert_eq!(A::count(), 2);
 
 			let mut entries = vec![];
 			A::build_metadata(vec![], &mut entries);
@@ -1250,6 +1371,17 @@ mod test {
 					StorageEntryMetadataIR {
 						name: "Foo",
 						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
+						default: vec![0, 0, 0, 0],
+						docs: if cfg!(feature = "no-metadata-docs") {
+							vec![]
+						} else {
+							vec!["Counter for the related counted storage map"]
+						},
+					},
+					StorageEntryMetadataIR {
+						name: "Foo",
+						modifier: StorageEntryModifierIR::Default,
 						ty: StorageEntryTypeIR::Map {
 							hashers: vec![
 								StorageHasherIR::Blake2_128Concat,
@@ -1261,7 +1393,18 @@ mod test {
 						},
 						default: 98u32.encode(),
 						docs: vec![],
-					}
+					},
+					StorageEntryMetadataIR {
+						name: "Foo",
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
+						default: vec![0, 0, 0, 0],
+						docs: if cfg!(feature = "no-metadata-docs") {
+							vec![]
+						} else {
+							vec!["Counter for the related counted storage map"]
+						},
+					},
 				]
 			);
 
@@ -1278,6 +1421,7 @@ mod test {
 			assert_eq!(A::iter_prefix_values((4,)).collect::<Vec<_>>(), vec![14, 13]);
 			assert_eq!(A::iter_prefix_values((3, 30)).collect::<Vec<_>>(), vec![11, 12]);
 			assert_eq!(A::iter_prefix_values((4, 40)).collect::<Vec<_>>(), vec![14, 13]);
+			assert_eq!(A::count(), 5);
 		});
 	}
 }
