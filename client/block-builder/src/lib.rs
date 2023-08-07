@@ -204,15 +204,6 @@ where
 		})
 	}
 
-	/// Called after inherents but before extrinsics have been applied.
-	pub fn after_inherents(&self) -> Result<(), Error> {
-		if self.version >= 7 {
-			self.api.after_inherents(self.parent_hash).map_err(Into::into)
-		} else {
-			Ok(())
-		}
-	}
-
 	/// Push onto the block's list of extrinsics.
 	///
 	/// This will ensure the extrinsic can be validly executed (by executing it).

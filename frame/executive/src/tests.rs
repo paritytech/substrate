@@ -974,7 +974,7 @@ fn inherents_ok_while_exts_forbidden_works() {
 	});
 
 	new_test_ext(1).execute_with(|| {
-		// Tell `after_inherents` to forbid extrinsics:
+		// Tell `initialize_block` to forbid extrinsics:
 		Executive::execute_block(Block::new(header, vec![xt1]));
 	});
 }
@@ -1029,7 +1029,7 @@ fn transactions_in_normal_block_works() {
 	});
 
 	new_test_ext(1).execute_with(|| {
-		// Tell `after_inherents` to forbid extrinsics:
+		// Tell `initialize_block` to forbid extrinsics:
 		Executive::execute_block(Block::new(header, vec![xt1, xt2]));
 	});
 }

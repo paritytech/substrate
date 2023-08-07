@@ -348,7 +348,6 @@ where
 		self.apply_inherents(&mut block_builder, inherent_data)?;
 
 		let block_timer = time::Instant::now();
-		block_builder.after_inherents()?;
 		let end_reason = match block_builder.executive_mode {
 			ExtrinsicInclusionMode::AllExtrinsics =>
 				self.apply_transactions(&mut block_builder, deadline, block_size_limit).await?,
