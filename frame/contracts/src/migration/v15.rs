@@ -27,7 +27,6 @@ use crate::{
 	weights::WeightInfo,
 	AccountIdOf, BalanceOf, CodeHash, Config, HoldReason, Pallet, TrieId, Weight, LOG_TARGET,
 };
-use core::ops::Deref;
 #[cfg(feature = "try-runtime")]
 use frame_support::{dispatch::Vec, traits::fungible::InspectHold};
 use frame_support::{
@@ -41,6 +40,8 @@ use frame_support::{
 };
 use frame_system::Pallet as System;
 use sp_core::hexdisplay::HexDisplay;
+#[cfg(feature = "runtime-benchmarks")]
+use sp_runtime::traits::{Hash, TrailingZeroInput};
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 use sp_runtime::{traits::Zero, Saturating};
@@ -49,26 +50,12 @@ mod old {
 	use super::*;
 
 	#[derive(
-		Encode, Decode, Clone, PartialEq, Eq, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen,
-	)]
-	#[scale_info(skip_type_params(T))]
-	pub struct DepositAccount<T: Config>(pub AccountIdOf<T>);
-
-	impl<T: Config> Deref for DepositAccount<T> {
-		type Target = AccountIdOf<T>;
-
-		fn deref(&self) -> &Self::Target {
-			&self.0
-		}
-	}
-
-	#[derive(
 		Encode, Decode, CloneNoBound, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen,
 	)]
 	#[scale_info(skip_type_params(T))]
 	pub struct ContractInfo<T: Config> {
 		pub trie_id: TrieId,
-		pub deposit_account: DepositAccount<T>,
+		pub deposit_account: AccountIdOf<T>,
 		pub code_hash: CodeHash<T>,
 		pub storage_bytes: u32,
 		pub storage_items: u32,
@@ -89,13 +76,13 @@ mod old {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-pub fn store_old_contract_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>)
-where
-	<T as frame_system::Config>::AccountId: From<[u8; 32]>,
-{
+pub fn store_old_contract_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>) {
+	let entropy = (b"contract_depo_v1", account.clone()).using_encoded(T::Hashing::hash);
+	let deposit_account = Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+		.expect("infinite length input; no invalid inputs for type; qed");
 	let info = old::ContractInfo {
 		trie_id: info.trie_id.clone(),
-		deposit_account: old::DepositAccount([0u8; 32].into()),
+		deposit_account,
 		code_hash: info.code_hash,
 		storage_bytes: Default::default(),
 		storage_items: Default::default(),
@@ -176,22 +163,19 @@ impl<T: Config> MigrationStep for Migration<T> {
 
 			// Move balance reserved from the deposit account back to the contract account.
 			// Let the deposit account die.
+			log::debug!(
+				target: LOG_TARGET,
+				"Transferring {:?} from the deposit account 0x{:?} to the contract 0x{:?}.",
+				reducible_deposit_balance,
+				HexDisplay::from(&deposit_account.encode()),
+				HexDisplay::from(&account.encode())
+			);
 			let transferred_deposit_balance = T::Currency::transfer(
 				deposit_account,
 				&account,
 				reducible_deposit_balance,
 				Preservation::Expendable,
 			)
-			.map(|_| {
-				log::debug!(
-					target: LOG_TARGET,
-					"{:?} transferred from the deposit account 0x{:?} to the contract 0x{:?}.",
-					reducible_deposit_balance,
-					HexDisplay::from(&deposit_account.encode()),
-					HexDisplay::from(&account.encode())
-				);
-				reducible_deposit_balance
-			})
 			.unwrap_or_else(|err| {
 				log::error!(
 					target: LOG_TARGET,
@@ -212,19 +196,18 @@ impl<T: Config> MigrationStep for Migration<T> {
 					HexDisplay::from(&account.encode())
 				);
 			} else {
+				log::debug!(
+					target: LOG_TARGET,
+					"Holding {:?} as storage deposit on the contract 0x{:?}.",
+					transferred_deposit_balance,
+					HexDisplay::from(&account.encode())
+				);
+
 				T::Currency::hold(
 					&HoldReason::StorageDepositReserve.into(),
 					&account,
 					transferred_deposit_balance,
 				)
-				.map(|_| {
-					log::debug!(
-						target: LOG_TARGET,
-						"Successfully held {:?} as storage deposit on the contract 0x{:?}.",
-						transferred_deposit_balance,
-						HexDisplay::from(&account.encode())
-					);
-				})
 				.unwrap_or_else(|err| {
 					log::error!(
 						target: LOG_TARGET,
