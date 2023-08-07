@@ -5980,13 +5980,13 @@ mod ledger {
 			let mut ledger: StakingLedger<Test> = StakingLedger::default_from(42);
 			let reward_dest = RewardDestination::Account(10);
 
-			assert_ok!(ledger.bond(reward_dest));
+			assert_ok!(ledger.clone().bond(reward_dest));
 			assert!(StakingLedger::<Test>::is_bonded(StakingAccount::Stash(42)));
 			assert!(<Bonded<Test>>::get(&42).is_some());
 			assert_eq!(<Payee<Test>>::get(&42), reward_dest);
 
 			// cannot bond again.
-			assert!(ledger.bond(reward_dest).is_err());
+			assert!(ledger.clone().bond(reward_dest).is_err());
 
 			// once bonded, update works as expected.
 			ledger.claimed_rewards = bounded_vec![1];

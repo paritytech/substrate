@@ -124,6 +124,7 @@ impl<T: Config> Pallet<T> {
 		if let Some(current_era) = Self::current_era() {
 			ledger = ledger.consolidate_unlocked(current_era)
 		}
+		let new_total = ledger.total;
 
 		let used_weight =
 			if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
@@ -143,9 +144,9 @@ impl<T: Config> Pallet<T> {
 
 		// `old_total` should never be less than the new total because
 		// `consolidate_unlocked` strictly subtracts balance.
-		if ledger.total < old_total {
+		if new_total < old_total {
 			// Already checked that this won't overflow by entry condition.
-			let value = old_total - ledger.total;
+			let value = old_total - new_total;
 			Self::deposit_event(Event::<T>::Withdrawn { stash, amount: value });
 		}
 
@@ -183,6 +184,7 @@ impl<T: Config> Pallet<T> {
 				Err(Error::<T>::NotStash.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))
 			}
 		})?;
+		let stash = ledger.stash.clone();
 
 		ledger
 			.claimed_rewards
@@ -201,7 +203,7 @@ impl<T: Config> Pallet<T> {
 				.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 		}
 
-		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
+		let exposure = <ErasStakersClipped<T>>::get(&era, &stash);
 
 		// Input data seems good, no errors allowed after this point
 
@@ -216,11 +218,8 @@ impl<T: Config> Pallet<T> {
 
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
 		let total_reward_points = era_reward_points.total;
-		let validator_reward_points = era_reward_points
-			.individual
-			.get(&ledger.stash)
-			.copied()
-			.unwrap_or_else(Zero::zero);
+		let validator_reward_points =
+			era_reward_points.individual.get(&stash).copied().unwrap_or_else(Zero::zero);
 
 		// Nothing to do if they have no reward points.
 		if validator_reward_points.is_zero() {
@@ -247,18 +246,15 @@ impl<T: Config> Pallet<T> {
 
 		Self::deposit_event(Event::<T>::PayoutStarted {
 			era_index: era,
-			validator_stash: ledger.stash.clone(),
+			validator_stash: stash.clone(),
 		});
 
 		let mut total_imbalance = PositiveImbalanceOf::<T>::zero();
 		// We can now make total validator payout:
 		if let Some(imbalance) =
-			Self::make_payout(&ledger.stash, validator_staking_payout + validator_commission_payout)
+			Self::make_payout(&stash, validator_staking_payout + validator_commission_payout)
 		{
-			Self::deposit_event(Event::<T>::Rewarded {
-				stash: ledger.stash,
-				amount: imbalance.peek(),
-			});
+			Self::deposit_event(Event::<T>::Rewarded { stash, amount: imbalance.peek() });
 			total_imbalance.subsume(imbalance);
 		}
 

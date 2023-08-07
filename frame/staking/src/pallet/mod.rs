@@ -912,8 +912,7 @@ pub mod pallet {
 				ledger.update()?;
 				// update this staker in the sorted list, if they exist in it.
 				if T::VoterList::contains(&stash) {
-					let _ =
-						T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash)).defensive();
+					let _ = T::VoterList::on_update(&stash, Self::weight_of(&stash)).defensive();
 				}
 
 				Self::deposit_event(Event::<T>::Bonded { stash, amount: extra });
@@ -968,6 +967,7 @@ pub mod pallet {
 			// to `Self::do_withdraw_unbonded` above.
 			let mut ledger = Self::ledger(Controller(controller))?;
 			let mut value = value.min(ledger.active);
+			let stash = ledger.stash.clone();
 
 			ensure!(
 				ledger.unlocking.len() < T::MaxUnlockingChunks::get() as usize,
@@ -983,9 +983,9 @@ pub mod pallet {
 					ledger.active = Zero::zero();
 				}
 
-				let min_active_bond = if Nominators::<T>::contains_key(&ledger.stash) {
+				let min_active_bond = if Nominators::<T>::contains_key(&stash) {
 					MinNominatorBond::<T>::get()
-				} else if Validators::<T>::contains_key(&ledger.stash) {
+				} else if Validators::<T>::contains_key(&stash) {
 					MinValidatorBond::<T>::get()
 				} else {
 					Zero::zero()
@@ -1012,12 +1012,11 @@ pub mod pallet {
 				ledger.update()?;
 
 				// update this staker in the sorted list, if they exist in it.
-				if T::VoterList::contains(&ledger.stash) {
-					let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
-						.defensive();
+				if T::VoterList::contains(&stash) {
+					let _ = T::VoterList::on_update(&stash, Self::weight_of(&stash)).defensive();
 				}
 
-				Self::deposit_event(Event::<T>::Unbonded { stash: ledger.stash, amount: value });
+				Self::deposit_event(Event::<T>::Unbonded { stash, amount: value });
 			}
 
 			let actual_weight = if let Some(withdraw_weight) = maybe_withdraw_weight {
@@ -1506,16 +1505,18 @@ pub mod pallet {
 				amount: rebonded_value,
 			});
 
+			let stash = ledger.stash.clone();
+			let final_unlocking = ledger.unlocking.len();
+
 			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			ledger.update()?;
-			if T::VoterList::contains(&ledger.stash) {
-				let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
-					.defensive();
+			if T::VoterList::contains(&stash) {
+				let _ = T::VoterList::on_update(&stash, Self::weight_of(&stash)).defensive();
 			}
 
 			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
 				.saturating_add(initial_unlocking)
-				.saturating_sub(ledger.unlocking.len() as u32);
+				.saturating_sub(final_unlocking as u32);
 			Ok(Some(T::WeightInfo::rebond(removed_chunks)).into())
 		}
 

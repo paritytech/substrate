@@ -210,7 +210,7 @@ impl<T: Config> StakingLedger<T> {
 	///
 	/// Note: To ensure lock consistency, all the [`Ledger`] storage updates should be made through
 	/// this helper function.
-	pub(crate) fn update(&self) -> Result<(), Error<T>> {
+	pub(crate) fn update(self) -> Result<(), Error<T>> {
 		if !<Bonded<T>>::contains_key(&self.stash) {
 			return Err(Error::<T>::NotStash)
 		}
@@ -230,7 +230,7 @@ impl<T: Config> StakingLedger<T> {
 	/// Bonds a ledger.
 	///
 	/// It sets the reward preferences for the bonded stash.
-	pub(crate) fn bond(&self, payee: RewardDestination<T::AccountId>) -> Result<(), Error<T>> {
+	pub(crate) fn bond(self, payee: RewardDestination<T::AccountId>) -> Result<(), Error<T>> {
 		if <Bonded<T>>::contains_key(&self.stash) {
 			Err(Error::<T>::AlreadyBonded)
 		} else {
