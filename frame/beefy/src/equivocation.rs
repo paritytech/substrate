@@ -79,8 +79,8 @@ where
 	pub session_index: SessionIndex,
 	/// The size of the validator set at the time of the offence.
 	pub validator_set_count: u32,
-	/// The authority which produced this equivocation.
-	pub offender: Offender,
+	/// The authorities which produced this equivocation.
+	pub offenders: Vec<Offender>,
 }
 
 impl<Offender: Clone, N> Offence<Offender> for EquivocationOffence<Offender, N>
@@ -91,7 +91,7 @@ where
 	type TimeSlot = TimeSlot<N>;
 
 	fn offenders(&self) -> Vec<Offender> {
-		vec![self.offender.clone()]
+		self.offenders.clone()
 	}
 
 	fn session_index(&self) -> SessionIndex {
@@ -227,7 +227,7 @@ where
 			time_slot: TimeSlot { set_id, round },
 			session_index,
 			validator_set_count,
-			offender,
+			offenders: vec![offender],
 		};
 
 		R::report_offence(reporter.into_iter().collect(), offence)
