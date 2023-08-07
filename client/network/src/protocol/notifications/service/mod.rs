@@ -544,7 +544,6 @@ impl ProtocolHandle {
 	}
 
 	/// Get the number of connected peers.
-	// TODO(aaro): remove if possible
 	pub fn num_peers(&self) -> usize {
 		self.num_peers
 	}

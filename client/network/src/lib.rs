@@ -277,10 +277,11 @@ pub use sc_network_common::{
 pub use service::{
 	signature::Signature,
 	traits::{
-		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkEventStream, NetworkNotification,
-		NetworkPeers, NetworkRequest, NetworkSigner, NetworkStateInfo, NetworkStatus,
-		NetworkStatusProvider, NetworkSyncForkRequest, NotificationSender as NotificationSenderT,
-		NotificationSenderError, NotificationSenderReady, NotificationService,
+		KademliaKey, MessageSink, NetworkBlock, NetworkDHTProvider, NetworkEventStream,
+		NetworkNotification, NetworkPeers, NetworkRequest, NetworkSigner, NetworkStateInfo,
+		NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest,
+		NotificationSender as NotificationSenderT, NotificationSenderError,
+		NotificationSenderReady, NotificationService,
 	},
 	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender, NotificationsSink,
 	OutboundFailure, PublicKey,

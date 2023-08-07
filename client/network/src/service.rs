@@ -383,14 +383,12 @@ where
 
 		let protocol = Protocol::new(
 			From::from(&params.role),
-			&network_config,
 			&params.metrics_registry,
 			notification_protocols,
 			params.block_announce_config,
 			params.peer_store.clone(),
 			protocol_handles.clone(),
 			from_protocol_controllers,
-			params.tx,
 		)?;
 
 		// Build the swarm.

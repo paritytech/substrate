@@ -873,7 +873,6 @@ where
 	let peer_store_handle = peer_store.handle();
 	spawn_handle.spawn("peer-store", Some("networking"), peer_store.run());
 
-	let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
 	let (engine, sync_service, block_announce_config) = SyncingEngine::new(
 		Roles::from(&config.role),
@@ -889,7 +888,6 @@ where
 		block_request_protocol_name,
 		state_request_protocol_name,
 		warp_request_protocol_name,
-		rx, // TODO(aaro): remove
 		peer_store_handle.clone(),
 	)?;
 	let sync_service_import_queue = sync_service.clone();
@@ -911,7 +909,6 @@ where
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_announce_config,
-		tx,
 	};
 
 	let has_bootnodes = !network_params.network_config.network_config.boot_nodes.is_empty();

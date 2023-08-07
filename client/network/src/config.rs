@@ -43,7 +43,6 @@ pub use sc_network_common::{
 	sync::{warp::WarpSyncProvider, SyncMode},
 	ExHashT,
 };
-use sc_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::Block as BlockT;
 
 use std::{
@@ -744,13 +743,9 @@ pub struct Params<Block: BlockT> {
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
 
-	// TODO(aaro): remove
+	// TODO(aaro): remove maybe?
 	/// Block announce protocol configuration
 	pub block_announce_config: NonDefaultSetConfig,
-
-	// TODO(aaro): remove
-	/// TX channel for direct communication with `SyncingEngine` and `Protocol`.
-	pub tx: TracingUnboundedSender<crate::event::SyncEvent<Block>>,
 }
 
 /// Full network configuration.

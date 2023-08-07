@@ -38,7 +38,7 @@ use log::{debug, error, warn};
 
 use prometheus_endpoint::Registry;
 use sc_network_common::role::Roles;
-use sc_utils::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
+use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_runtime::traits::Block as BlockT;
 
 use std::{
@@ -100,14 +100,12 @@ impl<B: BlockT> Protocol<B> {
 	/// Create a new instance.
 	pub fn new(
 		roles: Roles,
-		_network_config: &config::NetworkConfiguration,
 		registry: &Option<Registry>,
 		notification_protocols: Vec<config::NonDefaultSetConfig>,
 		block_announces_protocol: config::NonDefaultSetConfig,
 		peer_store_handle: PeerStoreHandle,
 		protocol_controller_handles: Vec<protocol_controller::ProtocolHandle>,
 		from_protocol_controllers: TracingUnboundedReceiver<protocol_controller::Message>,
-		_tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
 	) -> error::Result<Self> {
 		let (behaviour, notification_protocols) = {
 			let installed_protocols = iter::once(block_announces_protocol.protocol_name().clone())
