@@ -229,7 +229,10 @@ pub mod pallet {
 
 			T::EquivocationReportSystem::process_evidence(
 				Some(reporter),
-				(*equivocation_proof, key_owner_proof),
+				EquivocationEvidenceFor::VoteEquivocationProof(
+					*equivocation_proof,
+					key_owner_proof,
+				),
 			)?;
 			// Waive the fee since the report is valid and beneficial
 			Ok(Pays::No.into())
@@ -264,7 +267,10 @@ pub mod pallet {
 
 			T::EquivocationReportSystem::process_evidence(
 				None,
-				(*equivocation_proof, key_owner_proof),
+				EquivocationEvidenceFor::<T>::VoteEquivocationProof(
+					*equivocation_proof,
+					key_owner_proof,
+				),
 			)?;
 			Ok(Pays::No.into())
 		}
@@ -366,7 +372,13 @@ impl<T: Config> Pallet<T> {
 		>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::EquivocationReportSystem::publish_evidence((equivocation_proof, key_owner_proof)).ok()
+		T::EquivocationReportSystem::publish_evidence(
+			EquivocationEvidenceFor::<T>::VoteEquivocationProof(
+				equivocation_proof,
+				key_owner_proof,
+			),
+		)
+		.ok()
 	}
 
 	/// Submits an extrinsic to report an invalid fork signed by potentially

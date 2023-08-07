@@ -125,15 +125,21 @@ where
 pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, R, P, L)>);
 
 /// Equivocation evidence convenience alias.
-// TODO: use an enum that takes either `VoteEquivocationProof` or `ForkEquivocationProof`
-pub type EquivocationEvidenceFor<T> = (
-	VoteEquivocationProof<
-		BlockNumberFor<T>,
-		<T as Config>::BeefyId,
-		<<T as Config>::BeefyId as RuntimeAppPublic>::Signature,
-	>,
-	<T as Config>::KeyOwnerProof,
-);
+pub enum EquivocationEvidenceFor<T: Config> {
+	VoteEquivocationProof(
+		VoteEquivocationProof<
+				BlockNumberFor<T>,
+			<T as Config>::BeefyId,
+			<<T as Config>::BeefyId as RuntimeAppPublic>::Signature,
+			>,
+		<T as Config>::KeyOwnerProof,
+	),
+	// ForkEquivocationProof(sp_consensus_beefy::ForkEquivocationProof<
+	// 		BlockNumberFor<T>,
+	// 	<T as Config>::BeefyId,
+	// 	<<T as Config>::BeefyId as RuntimeAppPublic>::Signature,
+	// 	>)
+}
 
 impl<T, R, P, L> OffenceReportSystem<Option<T::AccountId>, EquivocationEvidenceFor<T>>
 	for EquivocationReportSystem<T, R, P, L>
@@ -152,11 +158,14 @@ where
 
 	fn publish_evidence(evidence: EquivocationEvidenceFor<T>) -> Result<(), ()> {
 		use frame_system::offchain::SubmitTransaction;
-		let (equivocation_proof, key_owner_proof) = evidence;
 
-		let call = Call::report_vote_equivocation_unsigned {
-			equivocation_proof: Box::new(equivocation_proof),
-			key_owner_proof,
+		let call = match evidence {
+			EquivocationEvidenceFor::VoteEquivocationProof(equivocation_proof, key_owner_proof) => {
+				Call::report_vote_equivocation_unsigned {
+					equivocation_proof: Box::new(equivocation_proof),
+					key_owner_proof,
+				}
+			}
 		};
 
 		let res = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
@@ -170,16 +179,17 @@ where
 	fn check_evidence(
 		evidence: EquivocationEvidenceFor<T>,
 	) -> Result<(), TransactionValidityError> {
-		let (equivocation_proof, key_owner_proof) = evidence;
+		let (offender, time_slot) = match evidence {
+			EquivocationEvidenceFor::VoteEquivocationProof(equivocation_proof, key_owner_proof) => {
+				let key = (BEEFY_KEY_TYPE, equivocation_proof.offender_id().clone());
 
-		// Check the membership proof to extract the offender's id
-		let key = (BEEFY_KEY_TYPE, equivocation_proof.offender_id().clone());
-		let offender = P::check_proof(key, key_owner_proof).ok_or(InvalidTransaction::BadProof)?;
-
-		// Check if the offence has already been reported, and if so then we can discard the report.
-		let time_slot = TimeSlot {
-			set_id: equivocation_proof.set_id(),
-			round: *equivocation_proof.round_number(),
+				// Check if the offence has already been reported, and if so then we can discard the report.
+				let time_slot = TimeSlot {
+					set_id: equivocation_proof.set_id(),
+					round: *equivocation_proof.round_number(),
+				};
+				(P::check_proof(key, key_owner_proof).ok_or(InvalidTransaction::BadProof)?, time_slot)
+			}
 		};
 
 		if R::is_known_offence(&[offender], &time_slot) {
@@ -193,9 +203,16 @@ where
 		reporter: Option<T::AccountId>,
 		evidence: EquivocationEvidenceFor<T>,
 	) -> Result<(), DispatchError> {
-		let (equivocation_proof, key_owner_proof) = evidence;
 		let reporter = reporter.or_else(|| <pallet_authorship::Pallet<T>>::author());
-		let offender = equivocation_proof.offender_id().clone();
+
+		let (equivocation_proof, key_owner_proof, offender) = match evidence {
+			EquivocationEvidenceFor::VoteEquivocationProof(equivocation_proof, key_owner_proof) =>
+				(
+					equivocation_proof.clone(),
+					key_owner_proof,
+					equivocation_proof.offender_id().clone(),
+				),
+		};
 
 		// We check the equivocation within the context of its set id (and
 		// associated session) and round. We also need to know the validator
@@ -256,7 +273,10 @@ impl<T: Config> Pallet<T> {
 				},
 			}
 
-			let evidence = (*equivocation_proof.clone(), key_owner_proof.clone());
+			let evidence = EquivocationEvidenceFor::<T>::VoteEquivocationProof(
+				*equivocation_proof.clone(),
+				key_owner_proof.clone(),
+			);
 			T::EquivocationReportSystem::check_evidence(evidence)?;
 
 			let longevity =
@@ -281,8 +301,13 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn pre_dispatch(call: &Call<T>) -> Result<(), TransactionValidityError> {
-		if let Call::report_vote_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
-			let evidence = (*equivocation_proof.clone(), key_owner_proof.clone());
+		if let Call::report_vote_equivocation_unsigned { equivocation_proof, key_owner_proof } =
+			call
+		{
+			let evidence = EquivocationEvidenceFor::<T>::VoteEquivocationProof(
+				*equivocation_proof.clone(),
+				key_owner_proof.clone(),
+			);
 			T::EquivocationReportSystem::check_evidence(evidence)
 		} else {
 			Err(InvalidTransaction::Call.into())
