@@ -101,7 +101,7 @@ pub mod v3 {
 	impl<T: Config<Hash = PreimageHash>> OnRuntimeUpgrade for MigrateToV4<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
-			ensure!(StorageVersion::get::<Pallet<T>>() == 3, "Can only upgrade from version 3");
+			// ensure!(StorageVersion::get::<Pallet<T>>() == 3, "Can only upgrade from version 3");
 
 			let agendas = Agenda::<T>::iter_keys().count() as u32;
 			let decodable_agendas = Agenda::<T>::iter_values().count() as u32;
@@ -157,16 +157,16 @@ pub mod v3 {
 		}
 
 		fn on_runtime_upgrade() -> Weight {
-			let version = StorageVersion::get::<Pallet<T>>();
-			if version != 3 {
-				log::warn!(
-					target: TARGET,
-					"skipping v3 to v4 migration: executed on wrong storage version.\
-				Expected version 3, found {:?}",
-					version,
-				);
-				return T::DbWeight::get().reads(1)
-			}
+			// let version = StorageVersion::get::<Pallet<T>>();
+			// if version != 3 {
+			// 	log::warn!(
+			// 		target: TARGET,
+			// 		"skipping v3 to v4 migration: executed on wrong storage version.\
+			// 	Expected version 3, found {:?}",
+			// 		version,
+			// 	);
+			// 	return T::DbWeight::get().reads(1)
+			// }
 
 			crate::Pallet::<T>::migrate_v3_to_v4()
 		}
