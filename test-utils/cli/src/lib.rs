@@ -62,9 +62,9 @@ pub fn start_node_inline(args: Vec<&str>) -> Result<(), sc_service::error::Error
 
 	// Prepend the args with some dummy value because the first arg is skipped.
 	let cli_call = std::iter::once("node-template").chain(args);
-	let cli = node_template::cli::Cli::from_iter(cli_call);
+	let cli = node_cli::Cli::from_iter(cli_call);
 	let runner = cli.create_runner(&cli.run).unwrap();
-	runner.run_node_until_exit(|config| async move { node_template::service::new_full(config) })
+	runner.run_node_until_exit(|config| async move { node_cli::service::new_full(config, cli) })
 }
 
 /// Starts a new Substrate node in development mode with a temporary chain.

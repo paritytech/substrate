@@ -13,9 +13,6 @@ build = "build.rs"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
-[lib]
-name = "node_template"
-
 [[bin]]
 name = "node-template"
 

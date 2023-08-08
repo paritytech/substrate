@@ -49,7 +49,6 @@ impl SubstrateCli for Cli {
 }
 
 /// Parse and run command line arguments
-#[allow(dead_code)]
 pub fn run() -> sc_cli::Result<()> {
 	let cli = Cli::from_args();
 
