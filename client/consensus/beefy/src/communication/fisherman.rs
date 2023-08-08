@@ -98,58 +98,6 @@ where
 			.ok_or_else(|| Error::Backend("could not get BEEFY validator set".into()))
 	}
 
-	fn report_invalid_payload(
-		&self,
-		signed_commitment: SignedCommitment<NumberFor<B>, Signature>,
-		correct_payload: &Payload,
-		correct_header: &B::Header,
-	) -> Result<(), Error> {
-		let validator_set = self.active_validator_set_at(correct_header)?;
-		let set_id = validator_set.id();
-
-		let proof = ForkEquivocationProof {
-			commitment: signed_commitment.commitment.clone(),
-			signatories: vec![],
-			correct_header: correct_header.clone(),
-		};
-
-		if signed_commitment.commitment.validator_set_id != set_id ||
-			signed_commitment.commitment.payload != *correct_payload ||
-			!check_fork_equivocation_proof::<NumberFor<B>, AuthorityId, BeefySignatureHasher, B::Header>(&proof)
-		{
-			debug!(target: LOG_TARGET, "🥩 Skip report for bad invalid fork proof {:?}", proof);
-			return Ok(())
-		}
-
-		let offender_ids = proof.signatories.iter().cloned().map(|(id, _sig)| id).collect::<Vec<_>>();
-		let runtime_api = self.runtime.runtime_api();
-
-		// generate key ownership proof at that block
-		let key_owner_proofs = offender_ids.iter()
-										   .filter_map(|id| {
-											   match runtime_api.generate_key_ownership_proof(correct_header.hash(), set_id, id.clone()) {
-												   Ok(Some(proof)) => Some(Ok(proof)),
-												   Ok(None) => {
-													   debug!(
-														   target: LOG_TARGET,
-														   "🥩 Invalid fork vote offender not part of the authority set."
-													   );
-													   None
-												   },
-												   Err(e) => Some(Err(Error::RuntimeApi(e))),
-											   }
-										   })
-										   .collect::<Result<_, _>>()?;
-
-		// submit invalid fork vote report at **best** block
-		let best_block_hash = self.backend.blockchain().info().best_hash;
-		runtime_api
-			.submit_report_fork_equivocation_unsigned_extrinsic(best_block_hash, proof, key_owner_proofs)
-			.map_err(Error::RuntimeApi)?;
-
-		Ok(())
-	}
-
 	fn report_fork_equivocation(
 		&self,
 		proof: ForkEquivocationProof<NumberFor<B>, AuthorityId, Signature, B::Header>,
