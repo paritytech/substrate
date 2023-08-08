@@ -1061,7 +1061,7 @@ pub(crate) mod tests {
 	use sp_api::HeaderT;
 	use sp_blockchain::Backend as BlockchainBackendT;
 	use sp_consensus_beefy::{
-		generate_equivocation_proof, known_payloads, known_payloads::MMR_ROOT_ID,
+		generate_vote_equivocation_proof, known_payloads, known_payloads::MMR_ROOT_ID,
 		mmr::MmrRootProvider, Keyring, Payload, SignedCommitment,
 	};
 	use sp_runtime::traits::One;
@@ -1609,7 +1609,7 @@ pub(crate) mod tests {
 	}
 
 	#[tokio::test]
-	async fn should_not_report_bad_old_or_self_equivocations() {
+	async fn should_not_report_bad_old_or_self_vote_equivocations() {
 		let block_num = 1;
 		let set_id = 1;
 		let keys = [Keyring::Alice];
@@ -1630,7 +1630,7 @@ pub(crate) mod tests {
 		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
 
 		// generate an equivocation proof, with Bob as perpetrator
-		let good_proof = generate_equivocation_proof(
+		let good_proof = generate_vote_equivocation_proof(
 			(block_num, payload1.clone(), set_id, &Keyring::Bob),
 			(block_num, payload2.clone(), set_id, &Keyring::Bob),
 		);
@@ -1638,11 +1638,11 @@ pub(crate) mod tests {
 			// expect voter (Alice) to successfully report it
 			assert_eq!(worker.report_equivocation(good_proof.clone()), Ok(()));
 			// verify Alice reports Bob equivocation to runtime
-			let reported = api_alice.reported_equivocations.as_ref().unwrap().lock();
+			let reported = api_alice.reported_vote_equivocations.as_ref().unwrap().lock();
 			assert_eq!(reported.len(), 1);
 			assert_eq!(*reported.get(0).unwrap(), good_proof);
 		}
-		api_alice.reported_equivocations.as_ref().unwrap().lock().clear();
+		api_alice.reported_vote_equivocations.as_ref().unwrap().lock().clear();
 
 		// now let's try with a bad proof
 		let mut bad_proof = good_proof.clone();
@@ -1650,7 +1650,7 @@ pub(crate) mod tests {
 		// bad proofs are simply ignored
 		assert_eq!(worker.report_equivocation(bad_proof), Ok(()));
 		// verify nothing reported to runtime
-		assert!(api_alice.reported_equivocations.as_ref().unwrap().lock().is_empty());
+		assert!(api_alice.reported_vote_equivocations.as_ref().unwrap().lock().is_empty());
 
 		// now let's try with old set it
 		let mut old_proof = good_proof.clone();
@@ -1659,16 +1659,16 @@ pub(crate) mod tests {
 		// old proofs are simply ignored
 		assert_eq!(worker.report_equivocation(old_proof), Ok(()));
 		// verify nothing reported to runtime
-		assert!(api_alice.reported_equivocations.as_ref().unwrap().lock().is_empty());
+		assert!(api_alice.reported_vote_equivocations.as_ref().unwrap().lock().is_empty());
 
 		// now let's try reporting a self-equivocation
-		let self_proof = generate_equivocation_proof(
+		let self_proof = generate_vote_equivocation_proof(
 			(block_num, payload1.clone(), set_id, &Keyring::Alice),
 			(block_num, payload2.clone(), set_id, &Keyring::Alice),
 		);
 		// equivocations done by 'self' are simply ignored (not reported)
 		assert_eq!(worker.report_equivocation(self_proof), Ok(()));
 		// verify nothing reported to runtime
-		assert!(api_alice.reported_equivocations.as_ref().unwrap().lock().is_empty());
+		assert!(api_alice.reported_vote_equivocations.as_ref().unwrap().lock().is_empty());
 	}
 }

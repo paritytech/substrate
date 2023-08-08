@@ -91,8 +91,8 @@ impl From<Keyring> for ecdsa_crypto::Public {
 	}
 }
 
-/// Create a new `EquivocationProof` based on given arguments.
-pub fn generate_equivocation_proof(
+/// Create a new `VoteEquivocationProof` based on given arguments.
+pub fn generate_vote_equivocation_proof(
 	vote1: (u64, Payload, ValidatorSetId, &Keyring),
 	vote2: (u64, Payload, ValidatorSetId, &Keyring),
 ) -> VoteEquivocationProof<u64, ecdsa_crypto::Public, ecdsa_crypto::Signature> {

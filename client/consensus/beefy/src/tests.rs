@@ -270,7 +270,9 @@ pub(crate) struct TestApi {
 	pub beefy_genesis: u64,
 	pub validator_set: BeefyValidatorSet,
 	pub mmr_root_hash: MmrRootHash,
-	pub reported_equivocations:
+	pub reported_vote_equivocations:
+		Option<Arc<Mutex<Vec<VoteEquivocationProof<NumberFor<Block>, AuthorityId, Signature>>>>>,
+	pub reported_fork_equivocations:
 		Option<Arc<Mutex<Vec<VoteEquivocationProof<NumberFor<Block>, AuthorityId, Signature>>>>>,
 }
 
@@ -284,7 +286,8 @@ impl TestApi {
 			beefy_genesis,
 			validator_set: validator_set.clone(),
 			mmr_root_hash,
-			reported_equivocations: None,
+			reported_vote_equivocations: None,
+			reported_fork_equivocations: None,
 		}
 	}
 
@@ -293,12 +296,13 @@ impl TestApi {
 			beefy_genesis: 1,
 			validator_set: validator_set.clone(),
 			mmr_root_hash: GOOD_MMR_ROOT,
-			reported_equivocations: None,
+			reported_vote_equivocations: None,
+			reported_fork_equivocations: None,
 		}
 	}
 
 	pub fn allow_equivocations(&mut self) {
-		self.reported_equivocations = Some(Arc::new(Mutex::new(vec![])));
+		self.reported_vote_equivocations = Some(Arc::new(Mutex::new(vec![])));
 	}
 }
 
@@ -328,7 +332,7 @@ sp_api::mock_impl_runtime_apis! {
 			proof: VoteEquivocationProof<NumberFor<Block>, AuthorityId, Signature>,
 			_dummy: OpaqueKeyOwnershipProof,
 		) -> Option<()> {
-			if let Some(equivocations_buf) = self.inner.reported_equivocations.as_ref() {
+			if let Some(equivocations_buf) = self.inner.reported_vote_equivocations.as_ref() {
 				equivocations_buf.lock().push(proof);
 				None
 			} else {
@@ -1245,7 +1249,7 @@ async fn beefy_finalizing_after_pallet_genesis() {
 }
 
 #[tokio::test]
-async fn beefy_reports_equivocations() {
+async fn beefy_reports_vote_equivocations() {
 	sp_tracing::try_init_simple();
 
 	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie];
@@ -1295,21 +1299,21 @@ async fn beefy_reports_equivocations() {
 	// run for up to 5 seconds waiting for Alice's report of Bob/Bob_Prime equivocation.
 	for wait_ms in [250, 500, 1250, 3000] {
 		run_for(Duration::from_millis(wait_ms), &net).await;
-		if !api_alice.reported_equivocations.as_ref().unwrap().lock().is_empty() {
+		if !api_alice.reported_vote_equivocations.as_ref().unwrap().lock().is_empty() {
 			break
 		}
 	}
 
 	// Verify expected equivocation
-	let alice_reported_equivocations = api_alice.reported_equivocations.as_ref().unwrap().lock();
+	let alice_reported_equivocations = api_alice.reported_vote_equivocations.as_ref().unwrap().lock();
 	assert_eq!(alice_reported_equivocations.len(), 1);
 	let equivocation_proof = alice_reported_equivocations.get(0).unwrap();
 	assert_eq!(equivocation_proof.first.id, BeefyKeyring::Bob.public());
 	assert_eq!(equivocation_proof.first.commitment.block_number, 1);
 
 	// Verify neither Bob or Bob_Prime report themselves as equivocating.
-	assert!(api_bob.reported_equivocations.as_ref().unwrap().lock().is_empty());
-	assert!(api_bob_prime.reported_equivocations.as_ref().unwrap().lock().is_empty());
+	assert!(api_bob.reported_vote_equivocations.as_ref().unwrap().lock().is_empty());
+	assert!(api_bob_prime.reported_vote_equivocations.as_ref().unwrap().lock().is_empty());
 
 	// sanity verify no new blocks have been finalized by BEEFY
 	streams_empty_after_timeout(best_blocks, &net, None).await;
