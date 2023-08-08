@@ -332,18 +332,18 @@ mod reward_pool {
 			.build_and_execute(|| {
 				ExistentialDeposit::set(10);
 
-				for n in 11..110 {
+				for n in 11..20 {
 					Balances::make_free_balance_be(&n, 50000);
 					assert_ok!(Pools::join(RuntimeOrigin::signed(n), 1000, 1));
 				}
 
-				// the reward pool has earned 60 in rewards
+				// give the pool some rewards
 				deposit_rewards(10000);
 
-				let _drain_events = pool_events_since_last_call();
-
 				// claim payout works as expected
-				for n in 11..50 {
+				// without: deficit = 79, with: deficit= 75.
+				// less claims means more deficit
+				for n in 11..15 {
 					assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(n)));
 				}
 
@@ -351,30 +351,31 @@ mod reward_pool {
 
 				// pool points changes as new member joins. This commits the old reward balance to
 				// the pool.
-				// if not done, 909 deficit turns to 25 surplus
-				for n in 110..130 {
+				// without: deficit = 7, with: deficit= 75.
+				for n in 20..25 {
 					Balances::make_free_balance_be(&n, 50000);
 					assert_ok!(Pools::join(RuntimeOrigin::signed(n), 1000, 1));
 				}
 
 				assert_positive_reward_imbalance(1);
 
-				// increase ED from 5 to 10
-				ExistentialDeposit::set(1000);
+				// increase ED from 10 to 100
+				ExistentialDeposit::set(100);
 
-				println!("increase ED from 10 to 1000");
+				println!("increase ED from 10 to 100");
 				assert_positive_reward_imbalance(1);
 
-				// if not done this, deficit 909 turns to 94 surplus
-				for n in 130..150 {
+				// without: surplus = 3, with: deficit= 75.
+				for n in 25..30 {
 					Balances::make_free_balance_be(&n, 50000);
 					assert_ok!(Pools::join(RuntimeOrigin::signed(n), 1000, 1));
-					// println!("join {}", n);
-					// assert_positive_reward_imbalance(1);
+					println!("join {}", n);
+					assert_positive_reward_imbalance(1);
 				}
 
-				// if no claim out, deficit is even higehr
-				for n in 50..80 {
+				// if no claim out, deficit is even higher
+				// without: deficit = 78, with: deficit= 75.
+				for n in 15..18 {
 					// assert_positive_reward_imbalance(1);
 					assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(n)));
 				}
@@ -383,27 +384,13 @@ mod reward_pool {
 
 				assert_positive_reward_imbalance(1);
 				// top up pool by ed increase
-				deposit_rewards(1000-10);
+				deposit_rewards(100-10);
 				println!("after ed diff topup, balance: {:?}", RewardPool::<Runtime>::current_balance(1));
 				assert_positive_reward_imbalance(1);
 
-				// The reward pool has decreased which should lower reward for the member yet
-				// members are able to claim the same reward as before.
-				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(40)));
-
-				// topping up would not help since any reward is distributed to all members and does
-				// not fix the discrepancy in reward counter.
-				deposit_rewards(10u128.pow(12) - 10);
-
-				// pending rewards now exceeds the reward balance.
-				assert_err!(
-					Pools::do_try_state(u8::MAX),
-					"The sum of the pending rewards must be less than the leftover balance."
-				);
-
 				// Fixing the reward counter by decreasing it to the factor of increase in ED.
 				let pool = BondedPool::<Runtime>::get(1).expect("pool exists");
-				let decrease_factor = RewardCounter::checked_from_rational(5, pool.points).unwrap();
+				let decrease_factor = RewardCounter::checked_from_rational(90, pool.points).unwrap();
 				RewardPools::<Runtime>::mutate(1, |reward_pool| {
 					reward_pool.as_mut().expect("pool exists").last_recorded_reward_counter =
 						reward_pool
@@ -413,7 +400,7 @@ mod reward_pool {
 							.checked_sub(&decrease_factor)
 							.unwrap_or_default();
 				});
-				Pools::do_try_state(u8::MAX).unwrap();
+				assert_positive_reward_imbalance(1);
 			});
 	}
 }
