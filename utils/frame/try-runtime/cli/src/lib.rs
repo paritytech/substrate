@@ -737,6 +737,8 @@ impl TryRuntimeCmd {
 		HostFns: HostFunctions,
 		BBIP: BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>>,
 	{
+		log::warn!("❗❗❗❗❗IMPORTANT: DEPRECATION NOTICE❗❗❗❗❗");
+		log::warn!("Substrate's `try-runtime` subcommand has been migrated to a standalone CLI: https://github.com/paritytech/try-runtime-cli. It is no longer being maintained here and will be removed in the future. Please use the new standalone CLI.");
 		match &self.command {
 			Command::OnRuntimeUpgrade(ref cmd) =>
 				commands::on_runtime_upgrade::on_runtime_upgrade::<Block, HostFns>(
