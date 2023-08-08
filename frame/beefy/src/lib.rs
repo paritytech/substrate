@@ -279,9 +279,10 @@ pub mod pallet {
 		/// invalid fork proof and validate the given key ownership proof
 		/// against the extracted offender. If both are valid, the offence
 		/// will be reported.
+		// TODO: fix key_owner_proofs[0].validator_count()
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::report_equivocation(
-			key_owner_proof.validator_count(),
+			key_owner_proofs[0].validator_count(),
 			T::MaxNominators::get(),
 		))]
 		pub fn report_fork_equivocation(
@@ -293,15 +294,14 @@ pub mod pallet {
 					<T::BeefyId as RuntimeAppPublic>::Signature,
 				>,
 			>,
-			key_owner_proof: T::KeyOwnerProof,
+			key_owner_proofs: Vec<T::KeyOwnerProof>,
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
 
-			// TODO:
-			// T::EquivocationReportSystem::process_evidence(
-			// 	Some(reporter),
-			// 	(*fork_equivocation_proof, key_owner_proof),
-			// )?;
+			T::EquivocationReportSystem::process_evidence(
+				Some(reporter),
+				EquivocationEvidenceFor::ForkEquivocationProof(*equivocation_proof, key_owner_proofs),
+			)?;
 			// Waive the fee since the report is valid and beneficial
 			Ok(Pays::No.into())
 		}
@@ -315,7 +315,7 @@ pub mod pallet {
 		/// block authors will call it (validated in `ValidateUnsigned`), as such
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
-		/// TODO: fix key_owner_proofs[0].validator_count()
+		// TODO: fix key_owner_proofs[0].validator_count()
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proofs[0].validator_count(), T::MaxNominators::get(),))]
 		pub fn report_fork_equivocation_unsigned(

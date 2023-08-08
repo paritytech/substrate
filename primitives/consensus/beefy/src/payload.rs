@@ -43,7 +43,7 @@ pub mod known_payloads {
 pub struct Payload(Vec<(BeefyPayloadId, Vec<u8>)>);
 
 impl Payload {
-	/// Construct a new payload given an initial vallue
+	/// Construct a new payload given an initial value
 	pub fn from_single_entry(id: BeefyPayloadId, value: Vec<u8>) -> Self {
 		Self(vec![(id, value)])
 	}

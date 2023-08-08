@@ -205,7 +205,7 @@ mod mmr_root_provider {
 mod tests {
 	use super::*;
 	use crate::H256;
-	use sp_runtime::{traits::BlakeTwo256, Digest, DigestItem, OpaqueExtrinsic};
+	use sp_runtime::{traits::BlakeTwo256, Digest, DigestItem};
 
 	#[test]
 	fn should_construct_version_correctly() {
