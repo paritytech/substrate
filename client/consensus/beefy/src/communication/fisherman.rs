@@ -156,9 +156,8 @@ where
 	fn report_fork_equivocation(
 		&self,
 		proof: ForkEquivocationProof<NumberFor<B>, AuthorityId, Signature, B::Header>,
-		correct_header: &B::Header,
 	) -> Result<(), Error> {
-		let validator_set = self.active_validator_set_at(correct_header)?;
+		let validator_set = self.active_validator_set_at(&proof.correct_header)?;
 		let set_id = validator_set.id();
 
 		if proof.commitment.validator_set_id != set_id ||
@@ -168,7 +167,7 @@ where
 			return Ok(())
 		}
 
-		let hash = correct_header.hash();
+		let hash = proof.correct_header.hash();
 		let offender_ids = proof.signatories.iter().cloned().map(|(id, _sig)| id).collect::<Vec<_>>();
 		let runtime_api = self.runtime.runtime_api();
 
@@ -219,7 +218,7 @@ where
 		if vote.commitment.payload != expected_payload {
 			let validator_set = self.active_validator_set_at(&correct_header)?;
 			let proof = ForkEquivocationProof { commitment: vote.commitment, signatories: vec![(vote.id, vote.signature)], correct_header: correct_header.clone() };
-			self.report_fork_equivocation(proof, &correct_header)?;
+			self.report_fork_equivocation(proof)?;
 		}
 		Ok(())
 	}
@@ -259,10 +258,7 @@ where
 																		.filter_map(|(id, signature)| signature.map(|sig| (id, sig))).collect();
 
 			let proof = ForkEquivocationProof { commitment, signatories, correct_header: correct_header.clone() };
-			self.report_fork_equivocation(
-				proof,
-				&correct_header,
-			)?;
+			self.report_fork_equivocation(proof)?;
 		}
 		Ok(())
 	}
