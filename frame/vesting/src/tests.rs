@@ -1257,7 +1257,7 @@ fn play_out_all_schedules() {
 			v.push(user12_sched3.ending_block_as_balance::<Identity>());
 
 			// Loop through all schedules
-			let max_value = v.iter().max().unwrap_or(&500);
+			let max_value = v.iter().max().unwrap_or(&380);
 			for i in 0..*max_value {
 				System::set_block_number(i);
 				assert_ok!(Vesting::do_try_state());

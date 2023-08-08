@@ -197,10 +197,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.build_storage()
 	.unwrap()
 	.into();
-	ext.execute_with(|| {
-		System::set_block_number(1);
-		Tips::do_try_state().unwrap();
-	});
+	ext.execute_with(|| System::set_block_number(1));
 	ext
 }
 
@@ -311,6 +308,7 @@ fn close_tip_works() {
 
 		System::set_block_number(2);
 		Tips::do_try_state().unwrap();
+
 		assert_noop!(Tips::close_tip(RuntimeOrigin::none(), h.into()), BadOrigin);
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
@@ -367,9 +365,14 @@ fn retract_tip_works() {
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 10));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(12), h, 10));
 		Tips::do_try_state().unwrap();
+
 		assert_noop!(Tips::retract_tip(RuntimeOrigin::signed(10), h), Error::<Test>::NotFinder);
 		assert_ok!(Tips::retract_tip(RuntimeOrigin::signed(0), h));
+		Tips::do_try_state().unwrap();
+
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
+
 		assert_noop!(
 			Tips::close_tip(RuntimeOrigin::signed(0), h.into()),
 			Error::<Test>::UnknownTip
@@ -382,9 +385,14 @@ fn retract_tip_works() {
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 10));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(12), h, 10));
 		Tips::do_try_state().unwrap();
+
 		assert_noop!(Tips::retract_tip(RuntimeOrigin::signed(0), h), Error::<Test>::NotFinder);
 		assert_ok!(Tips::retract_tip(RuntimeOrigin::signed(10), h));
+		Tips::do_try_state().unwrap();
+
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
+
 		assert_noop!(
 			Tips::close_tip(RuntimeOrigin::signed(10), h.into()),
 			Error::<Test>::UnknownTip
@@ -400,8 +408,11 @@ fn tip_median_calculation_works() {
 		let h = tip_hash();
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 10));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(12), h, 1000000));
+		Tips::do_try_state().unwrap();
+
 		System::set_block_number(2);
 		Tips::do_try_state().unwrap();
+
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
 	});
@@ -420,8 +431,11 @@ fn tip_changing_works() {
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(12), h, 1000));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 100));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(10), h, 10));
+		Tips::do_try_state().unwrap();
+
 		System::set_block_number(2);
 		Tips::do_try_state().unwrap();
+
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
 	});
@@ -615,15 +629,15 @@ fn report_awesome_and_tip_works_second_instance() {
 		assert_ok!(Tips1::tip(RuntimeOrigin::signed(11), h, 10));
 		assert_ok!(Tips1::tip(RuntimeOrigin::signed(12), h, 10));
 		assert_noop!(Tips1::tip(RuntimeOrigin::signed(9), h, 10), BadOrigin);
+		Tips::do_try_state().unwrap();
 
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
 
 		assert_ok!(Tips1::close_tip(RuntimeOrigin::signed(100), h.into()));
 		// Treasury 1 unchanged
 		assert_eq!(Balances::free_balance(&Treasury::account_id()), 101);
 		// Treasury 2 gave the funds
 		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 191);
-
-		Tips::do_try_state().unwrap();
 	});
 }
