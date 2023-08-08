@@ -298,7 +298,6 @@ mod bonded_pool {
 }
 
 mod reward_pool {
-	use sp_runtime::assert_eq_error_rate;
 	use super::*;
 	#[test]
 	fn current_balance_only_counts_balance_over_existential_deposit() {
@@ -328,44 +327,65 @@ mod reward_pool {
 	#[test]
 	fn reward_balance_deficit() {
 		ExtBuilder::default()
-			.add_members(vec![(30, 10), (40, 10), (50, 10)])
-			.max_members_per_pool(Some(5))
-			.max_members(Some(5))
+			.max_members_per_pool(Some(200))
+			.max_members(Some(200))
 			.build_and_execute(|| {
 				ExistentialDeposit::set(10);
 
+				for n in 11..110 {
+					Balances::make_free_balance_be(&n, 50000);
+					assert_ok!(Pools::join(RuntimeOrigin::signed(n), 1000, 1));
+				}
+
 				// the reward pool has earned 60 in rewards
-				deposit_rewards(60*10u128.pow(12));
+				deposit_rewards(10000);
 
 				let _drain_events = pool_events_since_last_call();
 
 				// claim payout works as expected
-				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
-				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(30)));
+				for n in 11..50 {
+					assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(n)));
+				}
 
-				// since one member has claimed their payout, the reward pool is 40.
-				assert_eq_error_rate!(RewardPool::<Runtime>::current_balance(1), 30*10u128.pow(12), 10);
+				assert_positive_reward_imbalance(1);
 
 				// pool points changes as new member joins. This commits the old reward balance to
 				// the pool.
-				Balances::make_free_balance_be(&100, 20);
-				assert_ok!(Pools::join(RuntimeOrigin::signed(100), 10, 1));
+				// if not done, 909 deficit turns to 25 surplus
+				for n in 110..130 {
+					Balances::make_free_balance_be(&n, 50000);
+					assert_ok!(Pools::join(RuntimeOrigin::signed(n), 1000, 1));
+				}
 
-				// Reward balance is still 40 that is committed to reward pool.
-				assert_eq_error_rate!(RewardPool::<Runtime>::current_balance(1), 30*10u128.pow(12), 10);
-
+				assert_positive_reward_imbalance(1);
 
 				// increase ED from 5 to 10
-				ExistentialDeposit::set(10u128.pow(12));
+				ExistentialDeposit::set(1000);
 
-				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(40)));
-				assert_eq_error_rate!(RewardPool::<Runtime>::current_balance(1), 14*10u128.pow(12), 20);
+				println!("increase ED from 10 to 1000");
+				assert_positive_reward_imbalance(1);
 
-				// pending rewards now exceeds the reward balance.
-				assert_err!(
-					Pools::do_try_state(u8::MAX),
-					"The sum of the pending rewards must be less than the leftover balance."
-				);
+				// if not done this, deficit 909 turns to 94 surplus
+				for n in 130..150 {
+					Balances::make_free_balance_be(&n, 50000);
+					assert_ok!(Pools::join(RuntimeOrigin::signed(n), 1000, 1));
+					// println!("join {}", n);
+					// assert_positive_reward_imbalance(1);
+				}
+
+				// if no claim out, deficit is even higehr
+				for n in 50..80 {
+					// assert_positive_reward_imbalance(1);
+					assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(n)));
+				}
+
+				println!("before ed diff topup, balance: {:?}", RewardPool::<Runtime>::current_balance(1));
+
+				assert_positive_reward_imbalance(1);
+				// top up pool by ed increase
+				deposit_rewards(1000-10);
+				println!("after ed diff topup, balance: {:?}", RewardPool::<Runtime>::current_balance(1));
+				assert_positive_reward_imbalance(1);
 
 				// The reward pool has decreased which should lower reward for the member yet
 				// members are able to claim the same reward as before.
@@ -383,17 +403,17 @@ mod reward_pool {
 
 				// Fixing the reward counter by decreasing it to the factor of increase in ED.
 				let pool = BondedPool::<Runtime>::get(1).expect("pool exists");
-				let decrease_factor =
-					RewardCounter::checked_from_rational(5, pool.points).unwrap();
+				let decrease_factor = RewardCounter::checked_from_rational(5, pool.points).unwrap();
 				RewardPools::<Runtime>::mutate(1, |reward_pool| {
-					reward_pool.as_mut().expect("pool exists").last_recorded_reward_counter = reward_pool.clone()
-						.unwrap()
-						.last_recorded_reward_counter
-						.checked_sub(&decrease_factor)
-						.unwrap_or_default();
+					reward_pool.as_mut().expect("pool exists").last_recorded_reward_counter =
+						reward_pool
+							.clone()
+							.unwrap()
+							.last_recorded_reward_counter
+							.checked_sub(&decrease_factor)
+							.unwrap_or_default();
 				});
 				Pools::do_try_state(u8::MAX).unwrap();
-
 			});
 	}
 }

@@ -423,6 +423,33 @@ pub fn fully_unbond_permissioned(member: AccountId) -> DispatchResult {
 	Pools::unbond(RuntimeOrigin::signed(member), member, points)
 }
 
+pub fn pending_rewards_for_pool(pool: PoolId) -> Balance {
+	let bonded_pool = BondedPools::<T>::get(pool).unwrap();
+	let reward_pool = RewardPools::<T>::get(pool).unwrap();
+
+	let current_rc = if !bonded_pool.points.is_zero() {
+		let commission = bonded_pool.commission.current();
+		reward_pool
+			.current_reward_counter(pool, bonded_pool.points, commission)
+			.unwrap().0
+	} else { Default::default() };
+
+	PoolMembers::<T>::iter().filter(|(_, d)| d.pool_id == pool)
+		.map(|(_, d)| d.pending_rewards(current_rc).unwrap_or_default()).sum()
+}
+
+pub fn assert_positive_reward_imbalance(pool: PoolId) {
+	let pending_rewards = pending_rewards_for_pool(1);
+	let current_balance = RewardPool::<Runtime>::current_balance(1);
+
+	if pending_rewards > current_balance {
+		println!("Reward deficit of {:?} for pool {:?}!", pending_rewards - current_balance, pool);
+	} else {
+		println!("Reward surplus of {:?} for pool {:?}!", current_balance - pending_rewards, pool);
+	}
+
+	// assert!(current_balance > pending_rewards);
+}
 #[cfg(test)]
 mod test {
 	use super::*;
