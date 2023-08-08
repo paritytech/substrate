@@ -57,7 +57,6 @@ pub fn start_node_without_binary() -> Result<(), sc_service::error::Error> {
 	let cli = node_template::cli::Cli::from_iter(vec![
 		"node-template", // first arg is ignored, this could be anything.
 		"--dev",
-		"--tmp",
 		"--rpc-port=45789",
 	]);
 	let runner = cli.create_runner(&cli.run).unwrap();
