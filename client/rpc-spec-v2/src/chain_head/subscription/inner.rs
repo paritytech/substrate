@@ -241,7 +241,7 @@ impl<Block: BlockT> SubscriptionState<Block> {
 	/// Generate the next operation ID for this subscription.
 	fn next_operation_id(&mut self) -> usize {
 		let op_id = self.next_operation_id;
-		self.next_operation_id += 1;
+		self.next_operation_id = self.next_operation_id.wrapping_add(1);
 		op_id
 	}
 }
