@@ -35,8 +35,8 @@ use std::{
 };
 use tokio::io::{AsyncBufReadExt, AsyncRead};
 
-/// Similar to [`crate::start_node`] spawns a node, but works in environments where the substarte
-/// binary is not accessible with `cargo_bin("substrate-node")` and allows customising the args
+/// Similar to [`crate::start_node`] spawns a node, but works in environments where the substrate
+/// binary is not accessible with `cargo_bin("substrate-node")`, and allows customising the args
 /// passed in.
 ///
 /// Helpful if you need a Substrate dev node running in the background of a project external to
