@@ -36,22 +36,19 @@ use sp_runtime::{
 use std::{marker::PhantomData, sync::Arc};
 
 pub(crate) trait BeefyFisherman<B: Block>: Send + Sync {
-	/// Check `vote` for contained finalized block against expected payload.
-	///
-	/// Note: this fn expects `vote.commitment.block_number` to be finalized.
+	/// Check `vote` for contained block against expected payload.
 	fn check_vote(
 		&self,
 		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
 	) -> Result<(), Error>;
 
+	/// Check `signed_commitment` for contained block against expected payload.
 	fn check_signed_commitment(
 		&self,
 		signed_commitment: SignedCommitment<NumberFor<B>, Signature>,
 	) -> Result<(), Error>;
 
-	/// Check `proof` for contained finalized block against expected payload.
-	///
-	/// Note: this fn expects block referenced in `proof` to be finalized.
+	/// Check `proof` for contained block against expected payload.
 	fn check_proof(&self, proof: BeefyVersionedFinalityProof<B>) -> Result<(), Error>;
 }
 
@@ -207,8 +204,6 @@ where
 	R::Api: BeefyApi<B, AuthorityId>,
 {
 	/// Check `vote` for contained block against expected payload.
-	///
-	/// Note: this fn expects `vote.commitment.block_number` to be finalized.
 	fn check_vote(
 		&self,
 		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
