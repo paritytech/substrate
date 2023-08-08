@@ -338,7 +338,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::propose_spend())]
 		#[allow(deprecated)]
 		#[deprecated(
-			note = "`propose_spend` will be removed in January 2024. Use `spend` instead."
+			note = "`propose_spend` will be removed in February 2024. Use `spend` instead."
 		)]
 		pub fn propose_spend(
 			origin: OriginFor<T>,
@@ -370,7 +370,7 @@ pub mod pallet {
 		#[pallet::weight((T::WeightInfo::reject_proposal(), DispatchClass::Operational))]
 		#[allow(deprecated)]
 		#[deprecated(
-			note = "`reject_proposal` will be removed in January 2024. Use `spend` instead."
+			note = "`reject_proposal` will be removed in February 2024. Use `spend` instead."
 		)]
 		pub fn reject_proposal(
 			origin: OriginFor<T>,
@@ -402,7 +402,7 @@ pub mod pallet {
 		#[pallet::weight((T::WeightInfo::approve_proposal(T::MaxApprovals::get()), DispatchClass::Operational))]
 		#[allow(deprecated)]
 		#[deprecated(
-			note = "`approve_proposal` will be removed in January 2024. Use `spend` instead."
+			note = "`approve_proposal` will be removed in February 2024. Use `spend` instead."
 		)]
 		pub fn approve_proposal(
 			origin: OriginFor<T>,
