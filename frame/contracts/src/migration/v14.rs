@@ -16,9 +16,9 @@
 // limitations under the License.
 
 //! Update the code owner balance, make the code upload deposit balance to be held instead of
-//! reserved. Since [`Currency`](frame_support::traits::Currency) has been [deprecated]
-//! (https://github.com/paritytech/substrate/pull/12951), we need the deposits to be handled by the
-//! [`frame_support::traits::fungible`] traits.
+//! reserved. Since [`Currency`](frame_support::traits::Currency) has been
+//! [deprecated](https://github.com/paritytech/substrate/pull/12951), we need the deposits to be
+//! handled by the [`frame_support::traits::fungible`] traits.
 
 use crate::{
 	exec::AccountIdOf,
