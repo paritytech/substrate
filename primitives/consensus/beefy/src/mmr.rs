@@ -134,7 +134,7 @@ pub struct BeefyAuthoritySet<AuthoritySetCommitment> {
 pub type BeefyNextAuthoritySet<MerkleRoot> = BeefyAuthoritySet<MerkleRoot>;
 
 /// Extract the MMR root hash from a digest in the given header, if it exists.
-pub fn find_mmr_root_digest<B: Block>(header: &B::Header) -> Option<MmrRootHash> {
+pub fn find_mmr_root_digest<H: Header>(header: &H) -> Option<MmrRootHash> {
 	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
 
 	let filter = |log: ConsensusLog<AuthorityId>| match log {
@@ -181,7 +181,7 @@ mod mmr_root_provider {
 
 		/// Simple wrapper that gets MMR root from header digests or from client state.
 		fn mmr_root_from_digest_or_runtime(&self, header: &B::Header) -> Option<MmrRootHash> {
-			find_mmr_root_digest::<B>(header).or_else(|| {
+			find_mmr_root_digest::<B::Header>(header).or_else(|| {
 				self.runtime.runtime_api().mmr_root(header.hash()).ok().and_then(|r| r.ok())
 			})
 		}
@@ -233,7 +233,6 @@ mod tests {
 	#[test]
 	fn extract_mmr_root_digest() {
 		type Header = sp_runtime::generic::Header<u64, BlakeTwo256>;
-		type Block = sp_runtime::generic::Block<Header, OpaqueExtrinsic>;
 		let mut header = Header::new(
 			1u64,
 			Default::default(),
@@ -243,7 +242,7 @@ mod tests {
 		);
 
 		// verify empty digest shows nothing
-		assert!(find_mmr_root_digest::<Block>(&header).is_none());
+		assert!(find_mmr_root_digest::<Header>(&header).is_none());
 
 		let mmr_root_hash = H256::random();
 		header.digest_mut().push(DigestItem::Consensus(
@@ -252,7 +251,7 @@ mod tests {
 		));
 
 		// verify validator set is correctly extracted from digest
-		let extracted = find_mmr_root_digest::<Block>(&header);
+		let extracted = find_mmr_root_digest::<Header>(&header);
 		assert_eq!(extracted, Some(mmr_root_hash));
 	}
 }

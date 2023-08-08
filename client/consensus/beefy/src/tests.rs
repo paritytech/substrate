@@ -44,7 +44,7 @@ use sc_consensus::{
 };
 use sc_network::{config::RequestResponseConfig, ProtocolName};
 use sc_network_test::{
-	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
+	Block, BlockImportAdapter, Header, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
 	PeersFullClient, TestNetFactory,
 };
 use sc_utils::notification::NotificationReceiver;
@@ -1406,7 +1406,7 @@ async fn gossipped_finality_proofs() {
 
 	// Simulate Charlie vote on #2
 	let header = net.lock().peer(2).client().as_client().expect_header(finalize).unwrap();
-	let mmr_root = find_mmr_root_digest::<Block>(&header).unwrap();
+	let mmr_root = find_mmr_root_digest::<Header>(&header).unwrap();
 	let payload = Payload::from_single_entry(known_payloads::MMR_ROOT_ID, mmr_root.encode());
 	let commitment = Commitment { payload, block_number, validator_set_id: validator_set.id() };
 	let signature = sign_commitment(&BeefyKeyring::Charlie, &commitment);
