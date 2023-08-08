@@ -11456,6 +11456,7 @@ dependencies = [
  "node-template",
  "regex",
  "sc-cli",
+ "sc-service",
  "sp-rpc",
  "substrate-rpc-client",
  "tokio",

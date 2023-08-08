@@ -22,4 +22,5 @@ tokio = { version = "1.22.0", features = ["full"] }
 node-primitives = { path = "../../bin/node/primitives" }
 node-template = { path = "../../bin/node-template/node" }
 sc-cli = { path = "../../client/cli" }
+sc-service = { path = "../../client/service" }
 futures = "0.3.28"

@@ -51,26 +51,17 @@ use tokio::io::{AsyncBufReadExt, AsyncRead};
 /// 	common::start_node_without_binary();
 /// });
 /// ```
-pub fn start_node_without_binary() {
+pub fn start_node_without_binary() -> Result<(), sc_service::error::Error> {
 	use sc_cli::SubstrateCli;
 
 	let cli = node_template::cli::Cli::from_iter(vec![
-		"node-template",
+		"node-template", // first arg is ignored, this could be anything.
 		"--dev",
 		"--tmp",
 		"--rpc-port=45789",
 	]);
 	let runner = cli.create_runner(&cli.run).unwrap();
-	match runner.run_node_until_exit(|config| async move {
-		node_template::service::new_full(config).map_err(sc_cli::Error::Service)
-	}) {
-		Ok(_) => {
-			println!("Node process exited successfully.");
-		},
-		Err(e) => {
-			println!("Node process exited with error: {:?}", e);
-		},
-	};
+	runner.run_node_until_exit(|config| async move { node_template::service::new_full(config) })
 }
 
 /// Starts a new Substrate node in development mode with a temporary chain.
