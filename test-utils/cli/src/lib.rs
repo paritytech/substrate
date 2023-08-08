@@ -35,8 +35,9 @@ use std::{
 };
 use tokio::io::{AsyncBufReadExt, AsyncRead};
 
-/// Similar to [`crate::start_node`] spawns a dev node on port `45789`, but works in environments
-/// where the substarte binary is not accessible with `cargo_bin("substrate-node")`.
+/// Similar to [`crate::start_node`] spawns a node, but works in environments where the substarte
+/// binary is not accessible with `cargo_bin("substrate-node")` and allows customising the args
+/// passed in.
 ///
 /// Helpful if you need a Substrate dev node running in the background of a project external to
 /// `substrate`.
@@ -48,18 +49,15 @@ use tokio::io::{AsyncBufReadExt, AsyncRead};
 /// ```ignore
 /// // Spawn a dev node in the background.
 /// let _ = std::thread::spawn(move || {
-/// 	common::start_node_without_binary();
+/// 	common::start_node_inline(vec!["--dev", "--rpc-port=45789"]);
 /// });
 /// ```
-pub fn start_node_without_binary() -> Result<(), sc_service::error::Error> {
+pub fn start_node_inline(args: Vec<String>) -> Result<(), sc_service::error::Error> {
 	use sc_cli::SubstrateCli;
 
-	let cli = node_template::cli::Cli::from_iter(vec![
-		"node-template", // first arg is ignored, this could be anything.
-		"--dev",
-		"--tmp",
-		"--rpc-port=45789",
-	]);
+	// Prepend the args with some dummy value because the first arg is skipped.
+	let cli_call = std::iter::once("node-template".to_string()).chain(args);
+	let cli = node_template::cli::Cli::from_iter(cli_call);
 	let runner = cli.create_runner(&cli.run).unwrap();
 	runner.run_node_until_exit(|config| async move { node_template::service::new_full(config) })
 }
