@@ -201,6 +201,25 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub identities: Vec<T::AccountId>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			GenesisConfig { identities: Default::default() }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			// todo: insert genesis accounts
+		}
+	}
+
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Too many subs-accounts.
