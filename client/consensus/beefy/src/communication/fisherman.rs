@@ -223,31 +223,15 @@ where
 		Ok(())
 	}
 
-	/// Check `commitment` for contained block against expected payload.
+	/// Check `signed_commitment` for contained block against expected payload.
 	fn check_signed_commitment(
 		&self,
 		signed_commitment: SignedCommitment<NumberFor<B>, Signature>,
 	) -> Result<(), Error> {
-		let number = signed_commitment.commitment.block_number;
-		let (header, expected_payload) = self.expected_header_and_payload(number)?;
-		if signed_commitment.commitment.payload != expected_payload {
-			let validator_set = self.active_validator_set_at(&header)?;
-			self.report_invalid_payload(signed_commitment, &expected_payload, &header)?;
-		}
-		Ok(())
-	}
-
-	/// Check `proof` for contained block against expected payload.
-	///
-	/// Note: this fn expects block referenced in `proof` to be finalized.
-	fn check_proof(&self, proof: BeefyVersionedFinalityProof<B>) -> Result<(), Error> {
-		let (commitment, signatures) = match proof {
-			BeefyVersionedFinalityProof::<B>::V1(inner) => (inner.commitment, inner.signatures),
-		};
+		let SignedCommitment {commitment, signatures} = signed_commitment;
 		let number = commitment.block_number;
 		let (correct_header, expected_payload) = self.expected_header_and_payload(number)?;
 		if commitment.payload != expected_payload {
-			// TODO: create/get grandpa proof for block number
 			let validator_set = self.active_validator_set_at(&correct_header)?;
 			if signatures.len() != validator_set.validators().len() {
 				// invalid proof
@@ -261,5 +245,14 @@ where
 			self.report_fork_equivocation(proof)?;
 		}
 		Ok(())
+	}
+
+	/// Check `proof` for contained block against expected payload.
+	fn check_proof(&self, proof: BeefyVersionedFinalityProof<B>) -> Result<(), Error> {
+		match proof {
+			BeefyVersionedFinalityProof::<B>::V1(signed_commitment) => {
+				self.check_signed_commitment(signed_commitment)
+			}
+		}
 	}
 }
