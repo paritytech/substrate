@@ -34,7 +34,7 @@ sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transaction-pool" }
 
 [dev-dependencies]
-array-bytes = "4.1"
+array-bytes = "6.1"
 assert_matches = "1.3.0"
 criterion = "0.4.0"
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }

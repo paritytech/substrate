@@ -14,8 +14,8 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-lru = "0.10.0"
 parking_lot = "0.12.1"
+schnellru = "0.2.1"
 tracing = "0.1.29"
 
 codec = { package = "parity-scale-codec", version = "3.6.1" }
@@ -32,7 +32,7 @@ sp-version = { version = "22.0.0", path = "../../primitives/version" }
 sp-wasm-interface = { version = "14.0.0", path = "../../primitives/wasm-interface" }
 
 [dev-dependencies]
-array-bytes = "4.1"
+array-bytes = "6.1"
 assert_matches = "1.3.0"
 wat = "1.0"
 sc-runtime-test = { version = "2.0.0", path = "runtime-test" }
@@ -57,5 +57,19 @@ harness = false
 [features]
 default = ["std"]
 # This crate does not have `no_std` support, we just require this for tests
-std = []
+std = [
+	"sc-runtime-test/std",
+	"sp-api/std",
+	"sp-core/std",
+	"sp-externalities/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-runtime-interface/std",
+	"sp-state-machine/std",
+	"sp-tracing/std",
+	"sp-trie/std",
+	"sp-version/std",
+	"sp-wasm-interface/std",
+	"substrate-test-runtime/std"
+]
 wasm-extern-trace = []

@@ -9,7 +9,7 @@ description = "BEEFY Client gadget for substrate"
 homepage = "https://substrate.io"
 
 [dependencies]
-array-bytes = "4.1"
+array-bytes = "6.1"
 async-channel = "1.8.0"
 async-trait = "0.1.57"
 codec = { package = "parity-scale-codec", version = "3.6.1", features = ["derive"] }

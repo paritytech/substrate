@@ -23,6 +23,7 @@ mod keyword {
 	syn::custom_keyword!(I);
 	syn::custom_keyword!(compact);
 	syn::custom_keyword!(GenesisBuild);
+	syn::custom_keyword!(BuildGenesisConfig);
 	syn::custom_keyword!(Config);
 	syn::custom_keyword!(T);
 	syn::custom_keyword!(Pallet);
@@ -488,26 +489,32 @@ pub fn check_type_def_gen(
 /// Check the syntax:
 /// * either `GenesisBuild<T>`
 /// * or `GenesisBuild<T, I>`
+/// * or `BuildGenesisConfig`
 ///
-/// return the instance if found.
-pub fn check_genesis_builder_usage(type_: &syn::Path) -> syn::Result<InstanceUsage> {
+/// return the instance if found for `GenesisBuild`
+/// return None for BuildGenesisConfig
+pub fn check_genesis_builder_usage(type_: &syn::Path) -> syn::Result<Option<InstanceUsage>> {
 	let expected = "expected `GenesisBuild<T>` or `GenesisBuild<T, I>`";
-	pub struct Checker(InstanceUsage);
+	pub struct Checker(Option<InstanceUsage>);
 	impl syn::parse::Parse for Checker {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
 			let mut instance_usage = InstanceUsage { span: input.span(), has_instance: false };
 
-			input.parse::<keyword::GenesisBuild>()?;
-			input.parse::<syn::Token![<]>()?;
-			input.parse::<keyword::T>()?;
-			if input.peek(syn::Token![,]) {
-				instance_usage.has_instance = true;
-				input.parse::<syn::Token![,]>()?;
-				input.parse::<keyword::I>()?;
+			if input.peek(keyword::GenesisBuild) {
+				input.parse::<keyword::GenesisBuild>()?;
+				input.parse::<syn::Token![<]>()?;
+				input.parse::<keyword::T>()?;
+				if input.peek(syn::Token![,]) {
+					instance_usage.has_instance = true;
+					input.parse::<syn::Token![,]>()?;
+					input.parse::<keyword::I>()?;
+				}
+				input.parse::<syn::Token![>]>()?;
+				return Ok(Self(Some(instance_usage)))
+			} else {
+				input.parse::<keyword::BuildGenesisConfig>()?;
+				return Ok(Self(None))
 			}
-			input.parse::<syn::Token![>]>()?;
-
-			Ok(Self(instance_usage))
 		}
 	}
 

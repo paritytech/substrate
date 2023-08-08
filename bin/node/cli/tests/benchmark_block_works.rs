@@ -33,13 +33,13 @@ async fn benchmark_block_works() {
 	common::run_node_for_a_while(base_dir.path(), &["--dev", "--no-hardware-benchmarks"]).await;
 
 	// Invoke `benchmark block` with all options to make sure that they are valid.
-	let status = Command::new(cargo_bin("substrate"))
+	let status = Command::new(cargo_bin("substrate-node"))
 		.args(["benchmark", "block", "--dev"])
 		.arg("-d")
 		.arg(base_dir.path())
 		.args(["--from", "1", "--to", "1"])
 		.args(["--repeat", "1"])
-		.args(["--execution", "wasm", "--wasm-execution", "compiled"])
+		.args(["--wasm-execution=compiled"])
 		.status()
 		.unwrap();
 

@@ -57,6 +57,9 @@ std = [
 	"sp-io/std",
 	"sp-std/std",
 	"sp-weights/std",
+	"sp-api/std",
+	"sp-state-machine/std",
+	"sp-tracing/std"
 ]
 
 # Serde support without relying on std features.
