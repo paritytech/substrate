@@ -500,6 +500,13 @@ pub mod pallet {
 			Self::deposit_event(Event::Remarked { sender: who, hash });
 			Ok(().into())
 		}
+
+		// #[pallet::call_index(8)]
+		// #[pallet::weight(0)]
+		// pub fn do_task(origin: OriginFor<T>, task: Task) -> DispatchResultWithPostInfo {
+		// 	let who = ensure_signed(origin)?;
+		// 	Ok(().into())
+		// }
 	}
 
 	/// Event for the System pallet.
