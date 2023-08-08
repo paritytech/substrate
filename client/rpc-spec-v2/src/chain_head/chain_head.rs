@@ -232,10 +232,7 @@ where
 					hash
 				);
 				self.subscriptions.remove_subscription(&follow_subscription);
-				FollowEvent::<Block::Hash>::OperationError(OperationError {
-					operation_id: block_guard.operation_id(),
-					error: "Requested block was pruned".to_string(),
-				})
+				return Err(ChainHeadRpcError::InvalidBlock.into())
 			},
 			Err(error) => FollowEvent::<Block::Hash>::OperationError(OperationError {
 				operation_id: block_guard.operation_id(),
