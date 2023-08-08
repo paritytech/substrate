@@ -1,5 +1,8 @@
 use super::*;
-use crate::{self as pools};
+use crate::{
+	self as pools,
+	mock::RewardImbalance::{Deficit, Surplus},
+};
 use frame_support::{assert_ok, parameter_types, PalletId};
 use frame_system::RawOrigin;
 use sp_runtime::{BuildStorage, FixedU128};
@@ -431,25 +434,56 @@ pub fn pending_rewards_for_pool(pool: PoolId) -> Balance {
 		let commission = bonded_pool.commission.current();
 		reward_pool
 			.current_reward_counter(pool, bonded_pool.points, commission)
-			.unwrap().0
-	} else { Default::default() };
+			.unwrap()
+			.0
+	} else {
+		Default::default()
+	};
 
-	PoolMembers::<T>::iter().filter(|(_, d)| d.pool_id == pool)
-		.map(|(_, d)| d.pending_rewards(current_rc).unwrap_or_default()).sum()
+	PoolMembers::<T>::iter()
+		.filter(|(_, d)| d.pool_id == pool)
+		.map(|(a, d)| {
+			let pending_reward = d.pending_rewards(current_rc).unwrap_or_default();
+			println!("pending_reward for {:?}: {:?}", a, pending_reward);
+			pending_reward
+		})
+		.sum()
 }
 
-pub fn assert_positive_reward_imbalance(pool: PoolId) {
-	let pending_rewards = pending_rewards_for_pool(1);
-	let current_balance = RewardPool::<Runtime>::current_balance(1);
+pub fn pending_rewards_for_delegator(delegator: AccountId) -> Balance {
+	let member = PoolMembers::<T>::get(delegator).unwrap();
+	let bonded_pool = BondedPools::<T>::get(member.pool_id).unwrap();
+	let reward_pool = RewardPools::<T>::get(member.pool_id).unwrap();
+
+	assert!(!bonded_pool.points.is_zero());
+
+	let commission = bonded_pool.commission.current();
+	let current_rc = reward_pool
+		.current_reward_counter(member.pool_id, bonded_pool.points, commission)
+		.unwrap()
+		.0;
+
+	member.pending_rewards(current_rc).unwrap_or_default()
+}
+
+#[derive(PartialEq, Debug)]
+pub enum RewardImbalance {
+	// zero or positive
+	Surplus(Balance),
+	Deficit(Balance),
+}
+
+pub fn reward_imbalance(pool: PoolId) -> RewardImbalance {
+	let pending_rewards = pending_rewards_for_pool(pool);
+	let current_balance = RewardPool::<Runtime>::current_balance(pool);
 
 	if pending_rewards > current_balance {
-		println!("Reward deficit of {:?} for pool {:?}!", pending_rewards - current_balance, pool);
+		Deficit(pending_rewards - current_balance)
 	} else {
-		println!("Reward surplus of {:?} for pool {:?}!", current_balance - pending_rewards, pool);
+		Surplus(current_balance - pending_rewards)
 	}
-
-	// assert!(current_balance > pending_rewards);
 }
+
 #[cfg(test)]
 mod test {
 	use super::*;

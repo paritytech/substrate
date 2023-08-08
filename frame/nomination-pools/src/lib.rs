@@ -1307,6 +1307,12 @@ impl<T: Config> RewardPool<T> {
 			.checked_add(&self.total_rewards_claimed.saturating_add(self.total_commission_claimed))
 			.ok_or(Error::<T>::OverflowRisk)?;
 
+
+		// fixme: Total payouts should never decrease..
+		// self.last_recorded_total_payouts = self.last_recorded_total_payouts.max(balance
+		// 	.checked_add(&self.total_rewards_claimed.saturating_add(self.total_commission_claimed))
+		// 	.ok_or(Error::<T>::OverflowRisk)?);
+
 		Ok(())
 	}
 
