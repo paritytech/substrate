@@ -29,7 +29,7 @@ use frame_support::{
 };
 use frame_system::{
 	ensure_none, ensure_signed,
-	pallet_prelude::{BlockNumberFor, OriginFor},
+	pallet_prelude::{BlockNumberFor, OriginFor, HeaderFor},
 };
 use sp_runtime::{
 	generic::DigestItem,
@@ -292,6 +292,7 @@ pub mod pallet {
 					BlockNumberFor<T>,
 					T::BeefyId,
 					<T::BeefyId as RuntimeAppPublic>::Signature,
+					HeaderFor<T>
 				>,
 			>,
 			key_owner_proofs: Vec<T::KeyOwnerProof>,
@@ -325,6 +326,7 @@ pub mod pallet {
 					BlockNumberFor<T>,
 					T::BeefyId,
 					<T::BeefyId as RuntimeAppPublic>::Signature,
+					HeaderFor<T>,
 				>,
 			>,
 			key_owner_proofs: Vec<T::KeyOwnerProof>,
@@ -388,7 +390,7 @@ impl<T: Config> Pallet<T> {
 	/// to the pool. Only useful in an offchain context.
 	pub fn submit_unsigned_fork_equivocation_report(
 		_fork_equivocation_proof: sp_consensus_beefy::ForkEquivocationProof<BlockNumberFor<T>, T::BeefyId,
-			<T::BeefyId as RuntimeAppPublic>::Signature,
+			<T::BeefyId as RuntimeAppPublic>::Signature, HeaderFor<T>
 >,
 		_key_owner_proofs: Vec<T::KeyOwnerProof>,
 	) -> Option<()> {

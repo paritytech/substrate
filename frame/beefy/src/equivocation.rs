@@ -39,10 +39,11 @@ use frame_support::{
 	log,
 	traits::{Get, KeyOwnerProofSystem},
 };
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::pallet_prelude::{BlockNumberFor, HeaderFor};
 use log::{error, info};
 use sp_consensus_beefy::{VoteEquivocationProof, ForkEquivocationProof, ValidatorSetId, KEY_TYPE as BEEFY_KEY_TYPE};
 use sp_runtime::{
+	traits::Zero,
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
@@ -138,6 +139,7 @@ pub enum EquivocationEvidenceFor<T: Config> {
 		ForkEquivocationProof<BlockNumberFor<T>,
 							  <T as Config>::BeefyId,
 							  <<T as Config>::BeefyId as RuntimeAppPublic>::Signature,
+							  HeaderFor<T>,
 							  >,
 		Vec<<T as Config>::KeyOwnerProof>,
 	)
@@ -261,6 +263,18 @@ where
 				}
 			},
 			EquivocationEvidenceFor::ForkEquivocationProof(equivocation_proof, _) => {
+				use sp_runtime::traits::Header;
+				let block_number = equivocation_proof.commitment.block_number;
+				let correct_header = &equivocation_proof.correct_header;
+
+				// Check that the provided header is correct.
+				if block_number <= BlockNumberFor::<T>::zero() ||
+					<frame_system::Pallet<T>>::block_hash(block_number) != correct_header.hash()
+				{
+					// TODO: maybe have a specific error for this
+					return Err(Error::<T>::InvalidForkEquivocationProof.into())
+				}
+
 				// Validate equivocation proof (check commitment is to unexpected payload and signatures are valid).
 				if !sp_consensus_beefy::check_fork_equivocation_proof(&equivocation_proof) {
 					return Err(Error::<T>::InvalidForkEquivocationProof.into())

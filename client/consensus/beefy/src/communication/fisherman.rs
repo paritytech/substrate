@@ -113,12 +113,12 @@ where
 		let proof = ForkEquivocationProof {
 			commitment: signed_commitment.commitment.clone(),
 			signatories: vec![],
-			expected_payload: correct_payload.clone(),
+			correct_header: correct_header.clone(),
 		};
 
 		if signed_commitment.commitment.validator_set_id != set_id ||
 			signed_commitment.commitment.payload != *correct_payload ||
-			!check_fork_equivocation_proof::<NumberFor<B>, AuthorityId, BeefySignatureHasher>(&proof)
+			!check_fork_equivocation_proof::<NumberFor<B>, AuthorityId, BeefySignatureHasher, B::Header>(&proof)
 		{
 			debug!(target: LOG_TARGET, "🥩 Skip report for bad invalid fork proof {:?}", proof);
 			return Ok(())
@@ -155,14 +155,14 @@ where
 
 	fn report_fork_equivocation(
 		&self,
-		proof: ForkEquivocationProof<NumberFor<B>, AuthorityId, Signature>,
+		proof: ForkEquivocationProof<NumberFor<B>, AuthorityId, Signature, B::Header>,
 		correct_header: &B::Header,
 	) -> Result<(), Error> {
 		let validator_set = self.active_validator_set_at(correct_header)?;
 		let set_id = validator_set.id();
 
 		if proof.commitment.validator_set_id != set_id ||
-			!check_fork_equivocation_proof::<NumberFor<B>, AuthorityId, BeefySignatureHasher>(&proof)
+			!check_fork_equivocation_proof::<NumberFor<B>, AuthorityId, BeefySignatureHasher, B::Header>(&proof)
 		{
 			debug!(target: LOG_TARGET, "🥩 Skip report for bad invalid fork proof {:?}", proof);
 			return Ok(())
@@ -215,11 +215,11 @@ where
 		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
 	) -> Result<(), Error> {
 		let number = vote.commitment.block_number;
-		let (header, expected_payload) = self.expected_header_and_payload(number)?;
+		let (correct_header, expected_payload) = self.expected_header_and_payload(number)?;
 		if vote.commitment.payload != expected_payload {
-			let validator_set = self.active_validator_set_at(&header)?;
-			let proof = ForkEquivocationProof { commitment: vote.commitment, signatories: vec![(vote.id, vote.signature)], expected_payload };
-			self.report_fork_equivocation(proof, &header)?;
+			let validator_set = self.active_validator_set_at(&correct_header)?;
+			let proof = ForkEquivocationProof { commitment: vote.commitment, signatories: vec![(vote.id, vote.signature)], correct_header: correct_header.clone() };
+			self.report_fork_equivocation(proof, &correct_header)?;
 		}
 		Ok(())
 	}
@@ -246,10 +246,10 @@ where
 			BeefyVersionedFinalityProof::<B>::V1(inner) => (inner.commitment, inner.signatures),
 		};
 		let number = commitment.block_number;
-		let (header, expected_payload) = self.expected_header_and_payload(number)?;
+		let (correct_header, expected_payload) = self.expected_header_and_payload(number)?;
 		if commitment.payload != expected_payload {
 			// TODO: create/get grandpa proof for block number
-			let validator_set = self.active_validator_set_at(&header)?;
+			let validator_set = self.active_validator_set_at(&correct_header)?;
 			if signatures.len() != validator_set.validators().len() {
 				// invalid proof
 				return Ok(())
@@ -258,10 +258,10 @@ where
 			let signatories = validator_set.validators().iter().cloned().zip(signatures.into_iter())
 																		.filter_map(|(id, signature)| signature.map(|sig| (id, sig))).collect();
 
-			let proof = ForkEquivocationProof { commitment, signatories, expected_payload };
+			let proof = ForkEquivocationProof { commitment, signatories, correct_header: correct_header.clone() };
 			self.report_fork_equivocation(
 				proof,
-				&header,
+				&correct_header,
 			)?;
 		}
 		Ok(())

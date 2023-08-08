@@ -47,7 +47,7 @@ use codec::{Codec, Decode, Encode};
 use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::H256;
-use sp_runtime::traits::{Hash, Keccak256, NumberFor};
+use sp_runtime::traits::{Hash, Keccak256, NumberFor, Header};
 use sp_std::prelude::*;
 
 /// Key type for BEEFY module.
@@ -254,7 +254,7 @@ impl<Number, Id, Signature> VoteEquivocationProof<Number, Id, Signature> {
 /// Proof of authority misbehavior on a given set id.
 /// This proof shows commitment signed on a different fork.
 #[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
-pub struct ForkEquivocationProof<Number, Id, Signature> {
+pub struct ForkEquivocationProof<Number, Id, Signature, Header> {
 	/// Commitment for a block on different fork than one at the same height in
 	/// this client's chain.
 	/// TODO: maybe replace {commitment, signatories} with SignedCommitment
@@ -264,11 +264,14 @@ pub struct ForkEquivocationProof<Number, Id, Signature> {
 	/// Signatures on this block
 	/// TODO: maybe change to HashMap - check once usage pattern is clear
 	pub signatories: Vec<(Id, Signature)>,
-	/// Expected payload
-	pub expected_payload: Payload,
+	/// The proof is valid if
+	/// 1. the header is in our chain
+	/// 2. its digest's payload != commitment.payload
+	/// 3. commitment is signed by signatories
+	pub correct_header: Header,
 }
 
-impl<Number, Id, Signature> ForkEquivocationProof<Number, Id, Signature> {
+impl<Number, Id, Signature, H: Header> ForkEquivocationProof<Number, Id, Signature, H> {
 	/// Returns the authority id of the misbehaving voter.
 	pub fn offender_ids(&self) -> Vec<&Id> {
 		self.signatories.iter().map(|(id, _)| id).collect()
@@ -334,9 +337,10 @@ where
 	return valid_first && valid_second
 }
 
-/// Validates [InvalidForkVoteProof] by checking:
-/// 1. `vote` is signed,
-/// 2. `vote.commitment.payload` != `expected_payload`.
+/// Validates [ForkEquivocationProof] by checking:
+/// 1. `commitment` is signed,
+/// 2. `correct_header` is valid and matches `commitment.block_number`.
+/// 2. `commitment.payload` != `expected_payload(correct_header)`.
 /// NOTE: GRANDPA finalization proof is not checked, which leads to slashing on forks.
 /// This is fine since honest validators will not be slashed on the chain finalized
 /// by GRANDPA, which is the only chain that ultimately matters.
@@ -345,19 +349,28 @@ where
 /// finalized by GRANDPA. This is fine too, since the slashing risk of committing to
 /// an incorrect block implies validators will only sign blocks they *know* will be
 /// finalized by GRANDPA.
-pub fn check_fork_equivocation_proof<Number, Id, MsgHash>(
-	proof: &ForkEquivocationProof<Number, Id, <Id as RuntimeAppPublic>::Signature>,
+pub fn check_fork_equivocation_proof<Number, Id, MsgHash, Header>(
+	proof: &ForkEquivocationProof<Number, Id, <Id as RuntimeAppPublic>::Signature, Header>,
 ) -> bool
 where
 	Id: BeefyAuthorityId<MsgHash> + PartialEq,
 	Number: Clone + Encode + PartialEq,
 	MsgHash: Hash,
+	Header: sp_api::HeaderT,
 {
-	let ForkEquivocationProof { commitment, signatories, expected_payload } = proof;
+	let ForkEquivocationProof { commitment, signatories, correct_header } = proof;
 
-	// check that `payload` on the `vote` is different that the `expected_payload` (checked first
-	// since cheap failfast).
-	if &commitment.payload != expected_payload {
+	let expected_mmr_root_digest = mmr::find_mmr_root_digest::<Header>(correct_header);
+	let expected_payload = expected_mmr_root_digest.map(|mmr_root| {
+		Payload::from_single_entry(known_payloads::MMR_ROOT_ID, mmr_root.encode())
+	});
+
+	// cheap failfasts:
+	// 1. check that `payload` on the `vote` is different that the `expected_payload`
+	// 2. if the signatories signed a payload when there should be none (for
+	// instance for a block prior to BEEFY activation), they should likewise be
+	// slashed
+	if Some(&commitment.payload) != expected_payload.as_ref() || expected_mmr_root_digest.is_none() {
 		// check check each signatory's signature on the commitment.
 		// if any are invalid, equivocation report is invalid
 		// TODO: refactor check_commitment_signature to take a slice of signatories
@@ -442,7 +455,7 @@ sp_api::decl_runtime_apis! {
 		/// hardcoded to return `None`). Only useful in an offchain context.
 		fn submit_report_fork_equivocation_unsigned_extrinsic(
 			fork_equivocation_proof:
-				ForkEquivocationProof<NumberFor<Block>, AuthorityId, <AuthorityId as RuntimeAppPublic>::Signature>,
+				ForkEquivocationProof<NumberFor<Block>, AuthorityId, <AuthorityId as RuntimeAppPublic>::Signature, Block::Header>,
 			key_owner_proofs: Vec<OpaqueKeyOwnershipProof>,
 		) -> Option<()>;
 
