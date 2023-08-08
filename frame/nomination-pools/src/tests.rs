@@ -382,18 +382,22 @@ mod reward_pool {
 				let reward_pool_2 = RewardPools::<Runtime>::get(1).unwrap();
 
 				// top up pool by ed increase
-				let ed_diff = 50 -5;
+				let ed_diff = 50 - 5;
 				deposit_rewards(ed_diff);
 				// deficit does not change
 				assert_eq!(reward_imbalance(1), Deficit(44));
 
-				// topping up does not change deficit as all new reward goes towards every existing
-				// delegator..
+				// topping up even more does not change deficit as all new reward goes towards every
+				// existing delegator..
 				deposit_rewards(4500);
 				assert_eq!(reward_imbalance(1), Deficit(44));
 
 				// last recorded total payout decreases by ed diff (bug: should never happen)
-				assert_eq!(reward_pool_1.last_recorded_total_payouts - reward_pool_2.last_recorded_total_payouts, ed_diff);
+				assert_eq!(
+					reward_pool_1.last_recorded_total_payouts -
+						reward_pool_2.last_recorded_total_payouts,
+					ed_diff
+				);
 
 				// Fixing the reward counter by decreasing it to the factor of increase in ED.
 				let pool = BondedPool::<Runtime>::get(1).expect("pool exists");
