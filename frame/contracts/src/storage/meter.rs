@@ -447,7 +447,7 @@ where
 		// We need to make sure that the contract's account itself exists.
 		T::Currency::transfer(origin, contract, ed, Preservation::Preserve)?;
 
-		System::<T>::inc_providers(contract);
+		System::<T>::inc_providers(&contract);
 
 		// Normally, deposit charges are deferred to be able to coalesce them with refunds.
 		// However, we need to charge immediately so that the account is created before
