@@ -96,7 +96,10 @@ use std::{
 
 pub use behaviour::{InboundFailure, OutboundFailure, ResponseFailure};
 pub use libp2p::identity::{DecodingError, Keypair, PublicKey};
-pub use protocol::NotificationsSink;
+pub use protocol::{NotificationCommand, NotificationsSink, ProtocolHandle};
+
+// #[cfg(test)]
+// pub use crate::protocol::
 
 mod metrics;
 mod out_events;

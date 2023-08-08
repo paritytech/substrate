@@ -283,8 +283,8 @@ pub use service::{
 		NotificationSender as NotificationSenderT, NotificationSenderError,
 		NotificationSenderReady, NotificationService,
 	},
-	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender, NotificationsSink,
-	OutboundFailure, PublicKey,
+	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationCommand, NotificationSender,
+	NotificationsSink, OutboundFailure, ProtocolHandle, PublicKey,
 };
 pub use types::ProtocolName;
 

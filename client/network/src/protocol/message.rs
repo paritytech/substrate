@@ -29,6 +29,7 @@ use sc_network_common::message::RequestId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 /// Type alias for using the message type using block type parameters.
+#[allow(unused)]
 pub type Message<B> = generic::Message<
 	<B as BlockT>::Header,
 	<B as BlockT>::Hash,

@@ -335,7 +335,7 @@ pub struct NotificationsSink {
 	inner: Arc<NotificationsSinkInner>,
 }
 
-#[cfg(test)]
+// #[cfg(test)]
 impl NotificationsSink {
 	/// Create new
 	pub fn new(

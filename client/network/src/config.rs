@@ -540,7 +540,7 @@ impl NonDefaultSetConfig {
 	}
 
 	/// Take `ProtocolHandlePair` from `NonDefaultSetConfig`
-	pub(crate) fn take_protocol_handle(self) -> ProtocolHandlePair {
+	pub fn take_protocol_handle(self) -> ProtocolHandlePair {
 		self.protocol_handle_pair
 	}
 

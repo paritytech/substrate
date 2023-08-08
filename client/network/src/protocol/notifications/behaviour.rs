@@ -23,7 +23,7 @@ use crate::{
 		service::{metrics, NotificationCommand, ProtocolHandle},
 	},
 	protocol_controller::{self, IncomingIndex, Message, SetId},
-	service::traits::ValidationResult,
+	service::traits::{Direction, ValidationResult},
 	types::ProtocolName,
 };
 
@@ -1951,9 +1951,12 @@ impl NetworkBehaviour for Notifications {
 									notifications_sink: notifications_sink.clone(),
 								};
 								self.events.push_back(ToSwarm::GenerateEvent(event));
+								let direction =
+									if inbound { Direction::Inbound } else { Direction::Outbound };
 								let _ = self.protocol_handles[protocol_index]
 									.report_substream_opened(
 										peer_id,
+										direction,
 										received_handshake,
 										negotiated_fallback,
 										notifications_sink.clone(),

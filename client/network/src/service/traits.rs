@@ -639,6 +639,23 @@ pub enum ValidationResult {
 	Reject,
 }
 
+/// Substream direction.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Direction {
+	/// Substream opened by the remote node.
+	Inbound,
+
+	/// Substream opened by the local node.
+	Outbound,
+}
+
+impl Direction {
+	/// Is the direction inbound.
+	pub fn is_inbound(&self) -> bool {
+		std::matches!(self, Direction::Inbound)
+	}
+}
+
 /// Events received by the protocol from `Notifications`.
 #[derive(Debug)]
 pub enum NotificationEvent {
@@ -660,13 +677,14 @@ pub enum NotificationEvent {
 		/// Peer ID.
 		peer: PeerId,
 
+		/// Is the substream inbound or outbound.
+		direction: Direction,
+
 		/// Received handshake.
 		handshake: Vec<u8>,
 
 		/// Negotiated fallback.
 		negotiated_fallback: Option<ProtocolName>,
-		// /// Message service associated with the peer.
-		// message_service: Box<dyn MessageServce
 	},
 
 	/// Substream was closed.
@@ -752,7 +770,7 @@ pub trait NotificationService: Debug + Send {
 	) -> Result<(), error::Error>;
 
 	/// Set handshake for the notification protocol replacing the old handshake.
-	async fn set_hanshake(&mut self, handshake: Vec<u8>) -> Result<(), ()>;
+	async fn set_handshake(&mut self, handshake: Vec<u8>) -> Result<(), ()>;
 
 	/// Get next event from the `Notifications` event stream.
 	async fn next_event(&mut self) -> Option<NotificationEvent>;

@@ -186,7 +186,6 @@ impl TestNetworkBuilder {
 
 		let (chain_sync_network_provider, chain_sync_network_handle) =
 			self.chain_sync_network.unwrap_or(NetworkServiceProvider::new());
-		let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 		let (engine, chain_sync_service, block_announce_config) = SyncingEngine::new(
 			Roles::from(&config::Role::Full),
 			client.clone(),
@@ -201,7 +200,6 @@ impl TestNetworkBuilder {
 			block_request_protocol_config.name.clone(),
 			state_request_protocol_config.name.clone(),
 			None,
-			rx,
 			peer_store_handle.clone(),
 		)
 		.unwrap();
@@ -249,7 +247,6 @@ impl TestNetworkBuilder {
 			protocol_id,
 			fork_id,
 			metrics_registry: None,
-			tx,
 		})
 		.unwrap();
 

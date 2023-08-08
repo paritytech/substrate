@@ -21,7 +21,9 @@
 use crate::{
 	error,
 	protocol::notifications::handler::NotificationsSink,
-	service::traits::{MessageSink, NotificationEvent, NotificationService, ValidationResult},
+	service::traits::{
+		Direction, MessageSink, NotificationEvent, NotificationService, ValidationResult,
+	},
 	types::ProtocolName,
 };
 
@@ -98,6 +100,9 @@ enum InnerNotificationEvent {
 		/// Peer ID.
 		peer: PeerId,
 
+		/// Direction of the substream.
+		direction: Direction,
+
 		/// Received handshake.
 		handshake: Vec<u8>,
 
@@ -136,6 +141,7 @@ enum InnerNotificationEvent {
 /// Notification commands.
 ///
 /// Sent by the installed protocols to `Notifications` to open/close/modify substreams.
+#[derive(Debug)]
 pub enum NotificationCommand {
 	/// Instruct `Notifications` to open a substream to peer.
 	OpenSubstream(PeerId),
@@ -236,7 +242,7 @@ impl NotificationService for NotificationHandle {
 	}
 
 	/// Set handshake for the notification protocol replacing the old handshake.
-	async fn set_hanshake(&mut self, handshake: Vec<u8>) -> Result<(), ()> {
+	async fn set_handshake(&mut self, handshake: Vec<u8>) -> Result<(), ()> {
 		log::trace!(target: LOG_TARGET, "{}: set handshake to {handshake:?}", self.protocol);
 
 		self.tx.send(NotificationCommand::SetHandshake(handshake)).await.map_err(|_| ())
@@ -256,6 +262,7 @@ impl NotificationService for NotificationHandle {
 					peer,
 					handshake,
 					negotiated_fallback,
+					direction,
 					sink,
 				} => {
 					self.peers.insert(
@@ -265,6 +272,7 @@ impl NotificationService for NotificationHandle {
 					return Some(NotificationEvent::NotificationStreamOpened {
 						peer,
 						handshake,
+						direction,
 						negotiated_fallback,
 					})
 				},
@@ -453,6 +461,7 @@ impl ProtocolHandle {
 	pub fn report_substream_opened(
 		&mut self,
 		peer: PeerId,
+		direction: Direction,
 		handshake: Vec<u8>,
 		negotiated_fallback: Option<ProtocolName>,
 		sink: NotificationsSink,
@@ -466,6 +475,7 @@ impl ProtocolHandle {
 			subscriber
 				.unbounded_send(InnerNotificationEvent::NotificationStreamOpened {
 					peer,
+					direction,
 					handshake: handshake.clone(),
 					negotiated_fallback: negotiated_fallback.clone(),
 					sink: sink.clone(),
