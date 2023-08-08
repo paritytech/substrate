@@ -350,25 +350,23 @@ mod reward_pool {
 				assert_eq!(reward_imbalance(1), Surplus(0));
 
 				// 12 joins the pool.
-				println!("join 12");
 				Balances::make_free_balance_be(&12, 500);
 				assert_ok!(Pools::join(RuntimeOrigin::signed(12), 100, 1));
 
 				// Current reward balance is committed to last recorded reward counter of
 				// the pool before the increase in ED.
-				println!("reward_pool: {:?}", RewardPools::<Runtime>::get(1).unwrap());
 				let bonded_pool = BondedPools::<Runtime>::get(1).unwrap();
 				let reward_pool = RewardPools::<Runtime>::get(1).unwrap();
 				assert_eq!(
 					reward_pool.last_recorded_reward_counter,
-					reward_pool.current_reward_counter(
-						1,
-						bonded_pool.points,
-						Perbill::zero()
-					).unwrap().0
+					reward_pool
+						.current_reward_counter(1, bonded_pool.points, Perbill::zero())
+						.unwrap()
+						.0
 				);
-				// println!("rc: {:?}", reward_pool.last_recorded_reward_counter);
-				println!("ED increase");
+
+				// reward pool before ED increase and reward counter getting committed.
+				let reward_pool_1 = RewardPools::<Runtime>::get(1).unwrap();
 
 				// increase ED from 10 to 100
 				ExistentialDeposit::set(50);
@@ -376,18 +374,27 @@ mod reward_pool {
 				// There is now an expected deficit of ed_diff
 				assert_eq!(reward_imbalance(1), Deficit(45));
 
-				// 13 joins the pool and reward counter is decreased.
-				println!("join 13");
+				// 13 joins the pool which commits the reward counter to reward pool.
 				Balances::make_free_balance_be(&13, 500);
 				assert_ok!(Pools::join(RuntimeOrigin::signed(13), 100, 1));
-				assert_eq!(RewardPool::<Runtime>::current_balance(1), 55);
-				println!("reward_pool: {:?}", RewardPools::<Runtime>::get(1).unwrap());
+
+				// reward pool after ED increase
+				let reward_pool_2 = RewardPools::<Runtime>::get(1).unwrap();
+
 				// top up pool by ed increase
-				deposit_rewards(50 - 5);
-				assert_eq!(RewardPool::<Runtime>::current_balance(1), 100);
+				let ed_diff = 50 -5;
+				deposit_rewards(ed_diff);
+				// deficit does not change
 				assert_eq!(reward_imbalance(1), Deficit(44));
 
-				println!("fixing the counter");
+				// topping up does not change deficit as all new reward goes towards every existing
+				// delegator..
+				deposit_rewards(4500);
+				assert_eq!(reward_imbalance(1), Deficit(44));
+
+				// last recorded total payout decreases by ed diff (bug: should never happen)
+				assert_eq!(reward_pool_1.last_recorded_total_payouts - reward_pool_2.last_recorded_total_payouts, ed_diff);
+
 				// Fixing the reward counter by decreasing it to the factor of increase in ED.
 				let pool = BondedPool::<Runtime>::get(1).expect("pool exists");
 				let decrease_factor =

@@ -442,11 +442,7 @@ pub fn pending_rewards_for_pool(pool: PoolId) -> Balance {
 
 	PoolMembers::<T>::iter()
 		.filter(|(_, d)| d.pool_id == pool)
-		.map(|(a, d)| {
-			let pending_reward = d.pending_rewards(current_rc).unwrap_or_default();
-			println!("pending_reward for {:?}: {:?}", a, pending_reward);
-			pending_reward
-		})
+		.map(|(_, d)| d.pending_rewards(current_rc).unwrap_or_default())
 		.sum()
 }
 

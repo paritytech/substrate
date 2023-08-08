@@ -1340,16 +1340,6 @@ impl<T: Config> RewardPool<T> {
 		let new_pending_commission = commission * current_payout_balance;
 		let new_pending_rewards = current_payout_balance.saturating_sub(new_pending_commission);
 
-		// ed increase fix
-		// let ed_increase: BalanceOf<T> = 300_000_000u32.into();
-		let ed_increase: BalanceOf<T> = 0u32.into();
-		let decrease_reward_counter =
-			T::RewardCounter::checked_from_rational(ed_increase, bonded_points).unwrap();
-		let last_recorded_reward_counter = self
-			.last_recorded_reward_counter
-			.checked_sub(&decrease_reward_counter)
-			.unwrap_or_default();
-
 		// * accuracy notes regarding the multiplication in `checked_from_rational`:
 		// `current_payout_balance` is a subset of the total_issuance at the very worse.
 		// `bonded_points` are similarly, in a non-slashed pool, have the same granularity as
@@ -1386,7 +1376,7 @@ impl<T: Config> RewardPool<T> {
 		// which is basically 10^-8 DOTs. See `smallest_claimable_reward` for an example of this.
 		let current_reward_counter =
 			T::RewardCounter::checked_from_rational(new_pending_rewards, bonded_points)
-				.and_then(|ref r| last_recorded_reward_counter.checked_add(r))
+				.and_then(|ref r| self.last_recorded_reward_counter.checked_add(r))
 				.ok_or(Error::<T>::OverflowRisk)?;
 
 		Ok((current_reward_counter, new_pending_commission))
