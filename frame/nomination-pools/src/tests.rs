@@ -400,9 +400,9 @@ mod reward_pool {
 				);
 
 				// Fixing the reward counter by decreasing it to the factor of increase in ED.
-				let pool = BondedPool::<Runtime>::get(1).expect("pool exists");
+				let pool = BondedPool::<Runtime>::get(1).unwrap();
 				let decrease_factor =
-					RewardCounter::checked_from_rational(45, pool.points).unwrap();
+					RewardCounter::checked_from_rational(ed_diff, pool.points).unwrap();
 				RewardPools::<Runtime>::mutate(1, |reward_pool| {
 					reward_pool.as_mut().expect("pool exists").last_recorded_reward_counter =
 						reward_pool
