@@ -28,8 +28,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// settings on the collection, including disabling the `DepositRequired` setting to allow for
 	/// unlocking the collection in the future.
 	///
-	/// - `origin`: The origin of the transaction, representing the account attempting to lock
-	/// the collection.
+	/// - `origin`: The origin of the transaction, representing the account attempting to lock the
+	///   collection.
 	/// - `collection`: The identifier of the collection to be locked.
 	/// - `lock_settings`: The collection settings to be locked.
 	pub(crate) fn do_lock_collection(
@@ -60,8 +60,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// item. This function disables the `Transferable` setting on the item, preventing it from
 	/// being transferred to other accounts.
 	///
-	/// - `origin`: The origin of the transaction, representing the account attempting to lock
-	/// the item transfer.
+	/// - `origin`: The origin of the transaction, representing the account attempting to lock the
+	///   item transfer.
 	/// - `collection`: The identifier of the collection to which the item belongs.
 	/// - `item`: The identifier of the item to be locked for transfer.
 	pub(crate) fn do_lock_item_transfer(
@@ -90,8 +90,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// item. This function enables the `Transferable` setting on the item, allowing it to be
 	/// transferred to other accounts.
 	///
-	/// - `origin`: The origin of the transaction, representing the account attempting to unlock
-	/// the item transfer.
+	/// - `origin`: The origin of the transaction, representing the account attempting to unlock the
+	///   item transfer.
 	/// - `collection`: The identifier of the collection to which the item belongs.
 	/// - `item`: The identifier of the item to be unlocked for transfer.
 	pub(crate) fn do_unlock_item_transfer(
@@ -122,8 +122,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// attributes.
 	///
 	/// - `maybe_check_origin`: An optional origin representing the account attempting to lock the
-	/// item properties. If provided, this account must have the `Admin` role within the collection.
-	/// If `None`, no permission check is performed, and the function can be called from any origin.
+	///   item properties. If provided, this account must have the `Admin` role within the
+	///   collection. If `None`, no permission check is performed, and the function can be called
+	///   from any origin.
 	/// - `collection`: The identifier of the collection to which the item belongs.
 	/// - `item`: The identifier of the item to be locked for properties.
 	/// - `lock_metadata`: A boolean indicating whether to lock the metadata of the item.

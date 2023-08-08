@@ -33,8 +33,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// emits the `TransferApproved` event.
 	///
 	/// - `maybe_check_origin`: The optional account that is required to be the owner of the item,
-	///   granting
-	/// permission to approve the transfer. If `None`, no permission check is performed.
+	///   granting permission to approve the transfer. If `None`, no permission check is performed.
 	/// - `collection`: The identifier of the collection containing the item to be transferred.
 	/// - `item`: The identifier of the item to be transferred.
 	/// - `delegate`: The account that will be allowed to take control of the item.
@@ -93,9 +92,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// function emits the `ApprovalCancelled` event.
 	///
 	/// - `maybe_check_origin`: The optional account that is required to be the owner of the item or
-	///   that the
-	/// approval is past its deadline, granting permission to cancel the approval. If `None`, no
-	/// permission check is performed.
+	///   that the approval is past its deadline, granting permission to cancel the approval. If
+	///   `None`, no permission check is performed.
 	/// - `collection`: The identifier of the collection containing the item.
 	/// - `item`: The identifier of the item.
 	/// - `delegate`: The account that was previously allowed to take control of the item.
@@ -145,8 +143,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// event.
 	///
 	/// - `maybe_check_origin`: The optional account that is required to be the owner of the item,
-	///   granting
-	/// permission to clear all transfer approvals. If `None`, no permission check is performed.
+	///   granting permission to clear all transfer approvals. If `None`, no permission check is
+	///   performed.
 	/// - `collection`: The collection ID containing the item.
 	/// - `item`: The item ID for which transfer approvals will be cleared.
 	pub(crate) fn do_clear_all_transfer_approvals(

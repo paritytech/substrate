@@ -30,19 +30,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// - `origin`: The account attempting to set the attribute.
 	/// - `collection`: The identifier of the collection to which the item belongs, or the
-	///   collection
-	/// itself if setting a collection attribute.
+	///   collection itself if setting a collection attribute.
 	/// - `maybe_item`: The identifier of the item to which the attribute belongs, or `None` if
-	///   setting
-	/// a collection attribute.
+	///   setting a collection attribute.
 	/// - `namespace`: The namespace in which the attribute is being set. It can be either
-	/// `CollectionOwner`, `ItemOwner`, or `Account` (for off-chain mints).
+	///   `CollectionOwner`, `ItemOwner`, or `Account` (for off-chain mints).
 	/// - `key`: The key of the attribute. It should be a vector of bytes within the limits defined
-	///   by
-	/// `T::KeyLimit`.
+	///   by `T::KeyLimit`.
 	/// - `value`: The value of the attribute. It should be a vector of bytes within the limits
-	///   defined by
-	/// `T::ValueLimit`.
+	///   defined by `T::ValueLimit`.
 	/// - `depositor`: The account that is paying the deposit for the attribute.
 	///
 	/// Note: For the `CollectionOwner` namespace, the collection must have the `UnlockedAttributes`
@@ -166,19 +162,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// - `set_as`: The account that the attribute should be set as.
 	/// - `collection`: The identifier of the collection to which the item belongs, or the
-	///   collection
-	/// itself if setting a collection attribute.
+	///   collection itself if setting a collection attribute.
 	/// - `maybe_item`: The identifier of the item to which the attribute belongs, or `None` if
-	///   setting
-	/// a collection attribute.
+	///   setting a collection attribute.
 	/// - `namespace`: The namespace in which the attribute is being set. It can be either
-	/// `CollectionOwner`, `ItemOwner`, or `Account` (for off-chain mints).
+	///   `CollectionOwner`, `ItemOwner`, or `Account` (for off-chain mints).
 	/// - `key`: The key of the attribute. It should be a vector of bytes within the limits defined
-	///   by
-	/// `T::KeyLimit`.
+	///   by `T::KeyLimit`.
 	/// - `value`: The value of the attribute. It should be a vector of bytes within the limits
-	///   defined by
-	/// `T::ValueLimit`.
+	///   defined by `T::ValueLimit`.
 	pub(crate) fn do_force_set_attribute(
 		set_as: Option<T::AccountId>,
 		collection: T::CollectionId,
@@ -286,16 +278,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - `maybe_check_origin`: An optional account that acts as an additional security check when
 	/// clearing the attribute. This can be `None` if no additional check is required.
 	/// - `collection`: The identifier of the collection to which the item belongs, or the
-	///   collection
-	/// itself if clearing a collection attribute.
+	///   collection itself if clearing a collection attribute.
 	/// - `maybe_item`: The identifier of the item to which the attribute belongs, or `None` if
-	///   clearing
-	/// a collection attribute.
+	///   clearing a collection attribute.
 	/// - `namespace`: The namespace in which the attribute is being cleared. It can be either
-	/// `CollectionOwner`, `ItemOwner`, or `Account` (for off-chain mints).
+	///   `CollectionOwner`, `ItemOwner`, or `Account` (for off-chain mints).
 	/// - `key`: The key of the attribute to be cleared. It should be a vector of bytes within the
-	///   limits
-	/// defined by `T::KeyLimit`.
+	///   limits defined by `T::KeyLimit`.
 	pub(crate) fn do_clear_attribute(
 		maybe_check_origin: Option<T::AccountId>,
 		collection: T::CollectionId,
