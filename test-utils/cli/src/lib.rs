@@ -47,9 +47,14 @@ use tokio::io::{AsyncBufReadExt, AsyncRead};
 ///
 /// # Example
 /// ```ignore
-/// // Spawn a dev node in the background.
+/// // Spawn a dev node.
 /// let _ = std::thread::spawn(move || {
-/// 	common::start_node_inline(vec!["--dev", "--rpc-port=45789"]);
+///     match common::start_node_inline(vec!["--dev", "--rpc-port=12345"]) {
+///         Ok(_) => {}
+///         Err(e) => {
+///             panic!("Node exited with error: {}", e);
+///         }
+///     }
 /// });
 /// ```
 pub fn start_node_inline(args: Vec<&str>) -> Result<(), sc_service::error::Error> {
