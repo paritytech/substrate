@@ -17,13 +17,13 @@
 
 #![cfg(feature = "std")]
 
-use crate::{crypto, Commitment, EquivocationProof, Payload, ValidatorSetId, VoteMessage};
+use crate::{ecdsa_crypto, Commitment, EquivocationProof, Payload, ValidatorSetId, VoteMessage};
 use codec::Encode;
 use sp_core::{ecdsa, keccak_256, Pair};
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
-/// Set of test accounts using [`crate::crypto`] types.
+/// Set of test accounts using [`crate::ecdsa_crypto`] types.
 #[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumIter)]
 pub enum Keyring {
@@ -39,19 +39,19 @@ pub enum Keyring {
 
 impl Keyring {
 	/// Sign `msg`.
-	pub fn sign(self, msg: &[u8]) -> crypto::Signature {
+	pub fn sign(self, msg: &[u8]) -> ecdsa_crypto::Signature {
 		// todo: use custom signature hashing type
 		let msg = keccak_256(msg);
 		ecdsa::Pair::from(self).sign_prehashed(&msg).into()
 	}
 
 	/// Return key pair.
-	pub fn pair(self) -> crypto::Pair {
+	pub fn pair(self) -> ecdsa_crypto::Pair {
 		ecdsa::Pair::from_string(self.to_seed().as_str(), None).unwrap().into()
 	}
 
 	/// Return public key.
-	pub fn public(self) -> crypto::Public {
+	pub fn public(self) -> ecdsa_crypto::Public {
 		self.pair().public()
 	}
 
@@ -61,19 +61,19 @@ impl Keyring {
 	}
 
 	/// Get Keyring from public key.
-	pub fn from_public(who: &crypto::Public) -> Option<Keyring> {
-		Self::iter().find(|&k| &crypto::Public::from(k) == who)
+	pub fn from_public(who: &ecdsa_crypto::Public) -> Option<Keyring> {
+		Self::iter().find(|&k| &ecdsa_crypto::Public::from(k) == who)
 	}
 }
 
 lazy_static::lazy_static! {
-	static ref PRIVATE_KEYS: HashMap<Keyring, crypto::Pair> =
+	static ref PRIVATE_KEYS: HashMap<Keyring, ecdsa_crypto::Pair> =
 		Keyring::iter().map(|i| (i, i.pair())).collect();
-	static ref PUBLIC_KEYS: HashMap<Keyring, crypto::Public> =
+	static ref PUBLIC_KEYS: HashMap<Keyring, ecdsa_crypto::Public> =
 		PRIVATE_KEYS.iter().map(|(&name, pair)| (name, pair.public())).collect();
 }
 
-impl From<Keyring> for crypto::Pair {
+impl From<Keyring> for ecdsa_crypto::Pair {
 	fn from(k: Keyring) -> Self {
 		k.pair()
 	}
@@ -85,7 +85,7 @@ impl From<Keyring> for ecdsa::Pair {
 	}
 }
 
-impl From<Keyring> for crypto::Public {
+impl From<Keyring> for ecdsa_crypto::Public {
 	fn from(k: Keyring) -> Self {
 		(*PUBLIC_KEYS).get(&k).cloned().unwrap()
 	}
@@ -95,7 +95,7 @@ impl From<Keyring> for crypto::Public {
 pub fn generate_equivocation_proof(
 	vote1: (u64, Payload, ValidatorSetId, &Keyring),
 	vote2: (u64, Payload, ValidatorSetId, &Keyring),
-) -> EquivocationProof<u64, crypto::Public, crypto::Signature> {
+) -> EquivocationProof<u64, ecdsa_crypto::Public, ecdsa_crypto::Signature> {
 	let signed_vote = |block_number: u64,
 	                   payload: Payload,
 	                   validator_set_id: ValidatorSetId,

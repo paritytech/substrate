@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Storage map type. Implements StorageDoubleMap, StorageIterableDoubleMap,
-//! StoragePrefixedDoubleMap traits and their methods directly.
+//! Storage n-map type. Particularly implements `StorageNMap` and `StoragePrefixedMap`
+//! traits and their methods directly.
 
 use crate::{
 	metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR},

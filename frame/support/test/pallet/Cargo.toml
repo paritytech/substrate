@@ -27,4 +27,5 @@ std = [
 	"frame-system/std",
 	"scale-info/std",
 	"serde/std",
+	"sp-runtime/std"
 ]

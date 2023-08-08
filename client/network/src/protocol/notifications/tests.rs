@@ -18,9 +18,13 @@
 
 #![cfg(test)]
 
-use crate::protocol::notifications::{Notifications, NotificationsOut, ProtocolConfig};
+use crate::{
+	peer_store::PeerStore,
+	protocol::notifications::{Notifications, NotificationsOut, ProtocolConfig},
+	protocol_controller::{ProtoSetConfig, ProtocolController, SetId},
+};
 
-use futures::prelude::*;
+use futures::{future::BoxFuture, prelude::*};
 use libp2p::{
 	core::{transport::MemoryTransport, upgrade, Endpoint},
 	identity, noise,
@@ -31,6 +35,7 @@ use libp2p::{
 	},
 	yamux, Multiaddr, PeerId, Transport,
 };
+use sc_utils::mpsc::tracing_unbounded;
 use std::{
 	iter,
 	pin::Pin,
@@ -65,28 +70,31 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 			.timeout(Duration::from_secs(20))
 			.boxed();
 
-		let (peerset, handle) =
-			crate::peerset::Peerset::from_config(crate::peerset::PeersetConfig {
-				sets: vec![crate::peerset::SetConfig {
-					in_peers: 25,
-					out_peers: 25,
-					bootnodes: if index == 0 {
-						keypairs
-							.iter()
-							.skip(1)
-							.map(|keypair| keypair.public().to_peer_id())
-							.collect()
-					} else {
-						vec![]
-					},
-					reserved_nodes: Default::default(),
-					reserved_only: false,
-				}],
-			});
+		let peer_store = PeerStore::new(if index == 0 {
+			keypairs.iter().skip(1).map(|keypair| keypair.public().to_peer_id()).collect()
+		} else {
+			vec![]
+		});
+
+		let (to_notifications, from_controller) =
+			tracing_unbounded("test_protocol_controller_to_notifications", 10_000);
+
+		let (controller_handle, controller) = ProtocolController::new(
+			SetId::from(0),
+			ProtoSetConfig {
+				in_peers: 25,
+				out_peers: 25,
+				reserved_nodes: Default::default(),
+				reserved_only: false,
+			},
+			to_notifications,
+			Box::new(peer_store.handle()),
+		);
 
 		let behaviour = CustomProtoWithAddr {
 			inner: Notifications::new(
-				peerset,
+				vec![controller_handle],
+				from_controller,
 				iter::once(ProtocolConfig {
 					name: "/foo".into(),
 					fallback_names: Vec::new(),
@@ -94,7 +102,8 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 					max_notification_size: 1024 * 1024,
 				}),
 			),
-			_peerset_handle: handle,
+			peer_store_future: peer_store.run().boxed(),
+			protocol_controller_future: controller.run().boxed(),
 			addrs: addrs
 				.iter()
 				.enumerate()
@@ -130,8 +139,8 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 /// Wraps around the `CustomBehaviour` network behaviour, and adds hardcoded node addresses to it.
 struct CustomProtoWithAddr {
 	inner: Notifications,
-	// We need to keep `PeersetHandle` for `Peerset` not to shut down.
-	_peerset_handle: crate::peerset::PeersetHandle,
+	peer_store_future: BoxFuture<'static, ()>,
+	protocol_controller_future: BoxFuture<'static, ()>,
 	addrs: Vec<(PeerId, Multiaddr)>,
 }
 
@@ -230,6 +239,9 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		cx: &mut Context,
 		params: &mut impl PollParameters,
 	) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
+		let _ = self.peer_store_future.poll_unpin(cx);
+		let _ = self.protocol_controller_future.poll_unpin(cx);
+
 		self.inner.poll(cx, params)
 	}
 }
@@ -272,10 +284,9 @@ fn reconnect_after_disconnect() {
 					ServiceState::NotConnected => {
 						service1_state = ServiceState::FirstConnec;
 						if service2_state == ServiceState::FirstConnec {
-							service1.behaviour_mut().disconnect_peer(
-								Swarm::local_peer_id(&service2),
-								crate::peerset::SetId::from(0),
-							);
+							service1
+								.behaviour_mut()
+								.disconnect_peer(Swarm::local_peer_id(&service2), SetId::from(0));
 						}
 					},
 					ServiceState::Disconnected => service1_state = ServiceState::ConnectedAgain,
@@ -295,10 +306,9 @@ fn reconnect_after_disconnect() {
 					ServiceState::NotConnected => {
 						service2_state = ServiceState::FirstConnec;
 						if service1_state == ServiceState::FirstConnec {
-							service1.behaviour_mut().disconnect_peer(
-								Swarm::local_peer_id(&service2),
-								crate::peerset::SetId::from(0),
-							);
+							service1
+								.behaviour_mut()
+								.disconnect_peer(Swarm::local_peer_id(&service2), SetId::from(0));
 						}
 					},
 					ServiceState::Disconnected => service2_state = ServiceState::ConnectedAgain,

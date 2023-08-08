@@ -33,7 +33,8 @@
 //! ```
 //! use pallet_contracts::migration::{v10, v11};
 //! # pub enum Runtime {};
-//! type Migrations = (v10::Migration<Runtime>, v11::Migration<Runtime>);
+//! # struct Currency;
+//! type Migrations = (v10::Migration<Runtime, Currency>, v11::Migration<Runtime>);
 //! ```
 //!
 //! ## Notes:
@@ -61,6 +62,7 @@ pub mod v10;
 pub mod v11;
 pub mod v12;
 pub mod v13;
+pub mod v14;
 include!(concat!(env!("OUT_DIR"), "/migration_codegen.rs"));
 
 use crate::{weights::WeightInfo, Config, Error, MigrationInProgress, Pallet, Weight, LOG_TARGET};
