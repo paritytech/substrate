@@ -387,8 +387,8 @@ mod reward_pool {
 				// deficit does not change
 				assert_eq!(reward_imbalance(1), Deficit(44));
 
-				// topping up even more does not change deficit as all new reward goes towards every
-				// existing delegator..
+				// topping up even more does not change deficit as all new reward is distributed to
+				// all the delegators in the pool..
 				deposit_rewards(4500);
 				assert_eq!(reward_imbalance(1), Deficit(44));
 
