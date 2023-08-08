@@ -247,6 +247,20 @@ async fn sync_no_common_longer_chain_fails() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sync_fork_multiple_responses_works() {
+	sp_tracing::try_init_simple();
+	let mut net = TestNet::new(2);
+
+	// NOTE: the test succeeds if we push <= 128 blocks below.
+	let f0_best = net.peer(0).push_blocks(129, true).pop().unwrap();
+	net.peer(1).push_blocks(130, false);
+
+	net.run_until_sync().await;
+
+	assert!(net.peer(1).has_block(f0_best));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sync_justifications() {
 	sp_tracing::try_init_simple();
 	let mut net = JustificationTestNet::new(3);
