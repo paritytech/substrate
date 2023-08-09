@@ -197,11 +197,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 
 					match next_notification {
 						Poll::Ready(Some(event)) => match event {
-							NotificationEvent::ValidateInboundSubstream {
-								peer,
-								handshake,
-								result_tx,
-							} => {
+							NotificationEvent::ValidateInboundSubstream { result_tx, .. } => {
 								let _ = result_tx.send(ValidationResult::Accept);
 							},
 							NotificationEvent::NotificationStreamOpened {
@@ -342,7 +338,7 @@ mod tests {
 		service::traits::{Direction, MessageSink, NotificationEvent},
 		Event, NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 		NotificationSenderError, NotificationSenderT as NotificationSender, NotificationService,
-		NotificationsSink, Roles,
+		Roles,
 	};
 	use sc_network_common::{role::ObservedRole, sync::SyncEventStream};
 	use sp_runtime::{

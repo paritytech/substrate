@@ -23,7 +23,6 @@ use crate::{
 	protocol::notifications::{Notifications, NotificationsOut, ProtocolConfig},
 	protocol_controller::{ProtoSetConfig, ProtocolController, SetId},
 	service::traits::{NotificationEvent, ValidationResult},
-	NotificationService,
 };
 
 use futures::{future::BoxFuture, prelude::*};
@@ -125,7 +124,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				.collect(),
 		};
 
-		let mut runtime = tokio::runtime::Runtime::new().unwrap();
+		let runtime = tokio::runtime::Runtime::new().unwrap();
 		runtime.spawn(async move {
 			loop {
 				if let NotificationEvent::ValidateInboundSubstream { result_tx, .. } =
