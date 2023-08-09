@@ -22,7 +22,7 @@ use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{hash_map::Entry, HashMap},
-	sync::{atomic::AtomicBool, Arc},
+	sync::{atomic::AtomicBool, Arc, Mutex},
 	time::{Duration, Instant},
 };
 
@@ -187,6 +187,7 @@ impl OperationState {
 	}
 }
 
+/// The registered operation passed to the `chainHead` methods.
 struct RegisteredOperation {
 	/// True if the `chainHead` generated `waitingForContinue` event.
 	requested_continue: Arc<AtomicBool>,
@@ -196,6 +197,8 @@ struct RegisteredOperation {
 	operation_id: String,
 	/// Track the operations ID of this subscription.
 	operations: Arc<Mutex<HashMap<String, OperationState>>>,
+	/// Permit a number of items to be executed by this operation.
+	permit: PermitOperations,
 }
 
 impl RegisteredOperation {
@@ -208,6 +211,13 @@ impl RegisteredOperation {
 	/// Get the operation ID.
 	pub fn operation_id(&self) -> String {
 		self.operation_id.clone()
+	}
+
+	/// Returns the number of reserved elements for this permit.
+	///
+	/// This can be smaller than the number of items requested via [`LimitOperations::reserve()`].
+	pub fn num_reserved(&self) -> usize {
+		self.permit.num_ops
 	}
 }
 
@@ -222,13 +232,26 @@ impl Drop for RegisteredOperation {
 struct Operations {
 	/// The next operation ID to be generated.
 	next_operation_id: usize,
+	/// Limit the number of ongoing operations.
+	limits: LimitOperations,
 	/// Track the operations ID of this subscription.
 	operations: Arc<Mutex<HashMap<String, OperationState>>>,
 }
 
 impl Operations {
+	/// Constructs a new [`Operations`].
+	fn new(max_operations: usize) -> Self {
+		Operations {
+			next_operation_id: 0,
+			limits: LimitOperations::new(max_operations),
+			operations: Default::default(),
+		}
+	}
+
 	/// Register a new operation.
-	pub fn register_operation(&mut self) -> RegisteredOperation {
+	pub fn register_operation(&mut self, to_reserve: usize) -> Option<RegisteredOperation> {
+		let permit = self.limits.reserve_at_most(to_reserve)?;
+
 		let operation_id = self.next_operation_id();
 
 		// At most one message can be sent.
@@ -242,7 +265,13 @@ impl Operations {
 		let operations = self.operations.clone();
 		operations.lock().insert(operation_id.clone(), state);
 
-		RegisteredOperation { requested_continue, operation_id, recv_continue, operations }
+		Some(RegisteredOperation {
+			requested_continue,
+			operation_id,
+			recv_continue,
+			operations,
+			permit,
+		})
 	}
 
 	/// Get the operation ID.
@@ -275,10 +304,8 @@ struct SubscriptionState<Block: BlockT> {
 	///
 	/// This object is cloned between methods.
 	response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
-	/// Limit the number of ongoing operations.
-	limits: LimitOperations,
-	/// The next operation ID.
-	next_operation_id: usize,
+	/// The ongoing operations of a subscription.
+	operations: Operations,
 	/// Track the block hashes available for this subscription.
 	///
 	/// This implementation assumes:
@@ -391,18 +418,11 @@ impl<Block: BlockT> SubscriptionState<Block> {
 		timestamp
 	}
 
-	/// Generate the next operation ID for this subscription.
-	fn next_operation_id(&mut self) -> usize {
-		let op_id = self.next_operation_id;
-		self.next_operation_id = self.next_operation_id.wrapping_add(1);
-		op_id
-	}
-
-	/// Reserves capacity to execute at least one operation and at most the requested items.
+	/// Register a new operation.
 	///
-	/// For more details see [`PermitOperations`].
-	fn reserve_at_most(&self, to_reserve: usize) -> Option<PermitOperations> {
-		self.limits.reserve_at_most(to_reserve)
+	/// The registered operation can execute at least one item and at most the requested items.
+	fn register_operation(&mut self, to_reserve: usize) -> Option<RegisteredOperation> {
+		self.operations.register_operation(to_reserve)
 	}
 }
 
@@ -413,8 +433,7 @@ pub struct BlockGuard<Block: BlockT, BE: Backend<Block>> {
 	hash: Block::Hash,
 	with_runtime: bool,
 	response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
-	operation_id: String,
-	permit_operations: PermitOperations,
+	operation: RegisteredOperation,
 	backend: Arc<BE>,
 }
 
@@ -432,22 +451,14 @@ impl<Block: BlockT, BE: Backend<Block>> BlockGuard<Block, BE> {
 		hash: Block::Hash,
 		with_runtime: bool,
 		response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
-		operation_id: usize,
-		permit_operations: PermitOperations,
+		operation: RegisteredOperation,
 		backend: Arc<BE>,
 	) -> Result<Self, SubscriptionManagementError> {
 		backend
 			.pin_block(hash)
 			.map_err(|err| SubscriptionManagementError::Custom(err.to_string()))?;
 
-		Ok(Self {
-			hash,
-			with_runtime,
-			response_sender,
-			operation_id: operation_id.to_string(),
-			permit_operations,
-			backend,
-		})
+		Ok(Self { hash, with_runtime, response_sender, operation, backend })
 	}
 
 	/// The `with_runtime` flag of the subscription.
@@ -462,14 +473,14 @@ impl<Block: BlockT, BE: Backend<Block>> BlockGuard<Block, BE> {
 
 	/// The operation ID of this method.
 	pub fn operation_id(&self) -> String {
-		self.operation_id.clone()
+		self.operation.operation_id()
 	}
 
 	/// Returns the number of reserved elements for this permit.
 	///
 	/// This can be smaller than the number of items requested.
 	pub fn num_reserved(&self) -> usize {
-		self.permit_operations.num_reserved()
+		self.operation.num_reserved()
 	}
 }
 
@@ -540,9 +551,8 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 				with_runtime,
 				tx_stop: Some(tx_stop),
 				response_sender,
-				limits: LimitOperations::new(self.max_ongoing_operations),
-				next_operation_id: 0,
 				blocks: Default::default(),
+				operations: Operations::new(self.max_ongoing_operations),
 			};
 			entry.insert(state);
 
@@ -726,18 +736,16 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 			return Err(SubscriptionManagementError::BlockHashAbsent)
 		}
 
-		let Some(permit_operations) = sub.reserve_at_most(to_reserve) else {
+		let Some(operation) = sub.register_operation(to_reserve) else {
 			// Error when the server cannot execute at least one operation.
 			return Err(SubscriptionManagementError::ExceededLimits)
 		};
 
-		let operation_id = sub.next_operation_id();
 		BlockGuard::new(
 			hash,
 			sub.with_runtime,
 			sub.response_sender.clone(),
-			operation_id,
-			permit_operations,
+			operation,
 			self.backend.clone(),
 		)
 	}
