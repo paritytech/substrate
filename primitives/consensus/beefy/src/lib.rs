@@ -351,6 +351,7 @@ where
 /// finalized by GRANDPA.
 pub fn check_fork_equivocation_proof<Number, Id, MsgHash, Header>(
 	proof: &ForkEquivocationProof<Number, Id, <Id as RuntimeAppPublic>::Signature, Header>,
+	expected_header_hash: &Header::Hash,
 ) -> bool
 where
 	Id: BeefyAuthorityId<MsgHash> + PartialEq,
@@ -359,6 +360,10 @@ where
 	Header: sp_api::HeaderT,
 {
 	let ForkEquivocationProof { commitment, signatories, correct_header } = proof;
+
+	if correct_header.hash() != *expected_header_hash {
+		return false
+	}
 
 	let expected_mmr_root_digest = mmr::find_mmr_root_digest::<Header>(correct_header);
 	let expected_payload = expected_mmr_root_digest.map(|mmr_root| {

@@ -105,8 +105,14 @@ where
 		let validator_set = self.active_validator_set_at(&proof.correct_header)?;
 		let set_id = validator_set.id();
 
+		let expected_header_hash = self
+			.backend
+			.blockchain()
+			.expect_block_hash_from_id(&BlockId::Number(proof.commitment.block_number))
+			.map_err(|e| Error::Backend(e.to_string()))?;
+
 		if proof.commitment.validator_set_id != set_id ||
-			!check_fork_equivocation_proof::<NumberFor<B>, AuthorityId, BeefySignatureHasher, B::Header>(&proof)
+			!check_fork_equivocation_proof::<NumberFor<B>, AuthorityId, BeefySignatureHasher, B::Header>(&proof, &expected_header_hash)
 		{
 			debug!(target: LOG_TARGET, "🥩 Skip report for bad invalid fork proof {:?}", proof);
 			return Ok(())
@@ -159,7 +165,6 @@ where
 		let number = vote.commitment.block_number;
 		let (correct_header, expected_payload) = self.expected_header_and_payload(number)?;
 		if vote.commitment.payload != expected_payload {
-			let validator_set = self.active_validator_set_at(&correct_header)?;
 			let proof = ForkEquivocationProof { commitment: vote.commitment, signatories: vec![(vote.id, vote.signature)], correct_header: correct_header.clone() };
 			self.report_fork_equivocation(proof)?;
 		}
