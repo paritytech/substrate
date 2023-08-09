@@ -21,7 +21,10 @@ use libp2p::{Multiaddr, PeerId};
 
 use sc_consensus::{ImportQueue, Link};
 use sc_network::{
-	config::{self, FullNetworkConfiguration, MultiaddrWithPeerId, ProtocolId, TransportConfig},
+	config::{
+		self, FullNetworkConfiguration, MultiaddrWithPeerId, ProtocolId, TransportConfig,
+		WebRTCConfig,
+	},
 	event::Event,
 	peer_store::PeerStore,
 	NetworkEventStream, NetworkNotification, NetworkPeers, NetworkService, NetworkStateInfo,
@@ -647,6 +650,7 @@ async fn ensure_listen_addresses_consistent_with_transport_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})
@@ -666,6 +670,7 @@ async fn ensure_listen_addresses_consistent_with_transport_not_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})
@@ -691,6 +696,7 @@ async fn ensure_boot_node_addresses_consistent_with_transport_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})
@@ -715,6 +721,7 @@ async fn ensure_boot_node_addresses_consistent_with_transport_not_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})
@@ -743,6 +750,7 @@ async fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})
@@ -770,6 +778,7 @@ async fn ensure_reserved_node_addresses_consistent_with_transport_not_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})
@@ -792,6 +801,7 @@ async fn ensure_public_addresses_consistent_with_transport_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})
@@ -813,6 +823,7 @@ async fn ensure_public_addresses_consistent_with_transport_not_memory() {
 				"test-node",
 				"test-client",
 				Default::default(),
+				WebRTCConfig::Ephemeral,
 				None,
 			)
 		})

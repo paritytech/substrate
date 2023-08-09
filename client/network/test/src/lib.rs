@@ -53,7 +53,7 @@ use sc_consensus::{
 use sc_network::{
 	config::{
 		FullNetworkConfiguration, MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig,
-		NonReservedPeerMode, ProtocolId, Role, SyncMode, TransportConfig,
+		NonReservedPeerMode, ProtocolId, Role, SyncMode, TransportConfig, WebRTCConfig,
 	},
 	peer_store::PeerStore,
 	request_responses::ProtocolConfig as RequestResponseConfig,
@@ -797,8 +797,13 @@ where
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
 
-		let mut network_config =
-			NetworkConfiguration::new("test-node", "test-client", Default::default(), None);
+		let mut network_config = NetworkConfiguration::new(
+			"test-node",
+			"test-client",
+			Default::default(),
+			WebRTCConfig::Ephemeral,
+			None,
+		);
 		network_config.sync_mode = config.sync_mode;
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];

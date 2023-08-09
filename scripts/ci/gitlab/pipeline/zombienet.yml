@@ -65,3 +65,11 @@ zombienet-0003-block-building-warp-sync:
     - /home/nonroot/zombie-net/scripts/ci/run-test-env-manager.sh
       --github-remote-dir="${GH_DIR}/0003-block-building-warp-sync"
       --test="test-block-building-warp-sync.zndsl"
+
+zombienet-0004-webrtc:
+  extends:
+    - .zombienet-common
+  script:
+    - /home/nonroot/zombie-net/scripts/ci/run-test-env-manager.sh
+      --github-remote-dir="${GH_DIR}/0004-webrtc"
+      --test="test-webrtc.zndsl"

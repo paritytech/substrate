@@ -31,6 +31,7 @@ pub use crate::{
 };
 
 pub use libp2p::{identity::Keypair, multiaddr, Multiaddr, PeerId};
+pub use libp2p_webrtc::tokio::certificate::Certificate as WebRTCCertificate;
 
 use crate::peer_store::PeerStoreHandle;
 use codec::Encode;
@@ -293,6 +294,72 @@ impl Default for NodeKeyConfig {
 	}
 }
 
+/// The configuration of a node's WebRTC certificate, describing how it is obtained.
+#[derive(Clone, Debug)]
+pub enum WebRTCConfig {
+	/// Certificate stored on disk.
+	///
+	/// A new certificate is randomly generated and written there if the file doesn't exist.
+	File(PathBuf),
+
+	/// A new certifiticate is randomly generated each time you start the node.
+	Ephemeral,
+
+	/// Raw certificate's ASCII PEM string.
+	Raw(String),
+}
+
+impl WebRTCConfig {
+	/// Evaluate a `WebRTCConfig` to obtain a [`WebRTCCertificate`]:
+	///
+	///  * If the certificate is configured as a file, it is read from that file, if it exists.
+	///    Otherwise a new certificate is generated and stored.
+	///  * If the certificate is configured as ephemeral, it is generated.
+	pub fn into_certificate(self) -> io::Result<WebRTCCertificate> {
+		use rand::thread_rng;
+		use std::os::unix::fs::OpenOptionsExt;
+
+		fn generate() -> io::Result<WebRTCCertificate> {
+			WebRTCCertificate::generate(&mut thread_rng())
+				.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+		}
+
+		use WebRTCConfig::*;
+		match self {
+			File(filepath) => {
+				let f = std::fs::read(&filepath).or_else(|e| {
+					if e.kind() == io::ErrorKind::NotFound {
+						<PathBuf as AsRef<Path>>::as_ref(&filepath)
+							.parent()
+							.map_or(Ok(()), fs::create_dir_all)?;
+
+						let cert = generate()?;
+						let bytes = cert.serialize_pem().into_bytes();
+
+						let mut new_file = fs::OpenOptions::new()
+							.write(true)
+							.create_new(true)
+							.mode(0o600)
+							.open(filepath)?;
+						new_file.write_all(&bytes)?;
+
+						Ok(bytes)
+					} else {
+						Err(e)
+					}
+				})?;
+				let pem = String::from_utf8(f)
+					.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+				WebRTCCertificate::from_pem(&pem)
+					.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+			},
+			Ephemeral => generate(),
+			Raw(pem) => WebRTCCertificate::from_pem(&pem)
+				.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string())),
+		}
+	}
+}
+
 /// The options for obtaining a Ed25519 secret key.
 pub type Ed25519Secret = Secret<ed25519::SecretKey>;
 
@@ -535,6 +602,9 @@ pub struct NetworkConfiguration {
 	/// The node key configuration, which determines the node's network identity keypair.
 	pub node_key: NodeKeyConfig,
 
+	/// The WebRTC configuration, which determines the node's WebRTC network identity.
+	pub webrtc: WebRTCConfig,
+
 	/// Configuration for the default set of nodes used for block syncing and transactions.
 	pub default_peers_set: SetConfig,
 
@@ -611,6 +681,7 @@ impl NetworkConfiguration {
 		node_name: SN,
 		client_version: SV,
 		node_key: NodeKeyConfig,
+		webrtc: WebRTCConfig,
 		net_config_path: Option<PathBuf>,
 	) -> Self {
 		let default_peers_set = SetConfig::default();
@@ -620,6 +691,7 @@ impl NetworkConfiguration {
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
 			node_key,
+			webrtc,
 			default_peers_set_num_full: default_peers_set.in_peers + default_peers_set.out_peers,
 			default_peers_set,
 			client_version: client_version.into(),
@@ -641,8 +713,13 @@ impl NetworkConfiguration {
 	/// Create new default configuration for localhost-only connection with random port (useful for
 	/// testing)
 	pub fn new_local() -> NetworkConfiguration {
-		let mut config =
-			NetworkConfiguration::new("test-node", "test-client", Default::default(), None);
+		let mut config = NetworkConfiguration::new(
+			"test-node",
+			"test-client",
+			Default::default(),
+			WebRTCConfig::Ephemeral,
+			None,
+		);
 
 		config.listen_addresses =
 			vec![iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
@@ -656,8 +733,13 @@ impl NetworkConfiguration {
 	/// Create new default configuration for localhost-only connection with random port (useful for
 	/// testing)
 	pub fn new_memory() -> NetworkConfiguration {
-		let mut config =
-			NetworkConfiguration::new("test-node", "test-client", Default::default(), None);
+		let mut config = NetworkConfiguration::new(
+			"test-node",
+			"test-client",
+			Default::default(),
+			WebRTCConfig::Ephemeral,
+			None,
+		);
 
 		config.listen_addresses =
 			vec![iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
@@ -783,5 +865,76 @@ mod tests {
 		let kp1 = NodeKeyConfig::Ed25519(Secret::New).into_keypair().unwrap();
 		let kp2 = NodeKeyConfig::Ed25519(Secret::New).into_keypair().unwrap();
 		assert!(secret_bytes(kp1) != secret_bytes(kp2));
+	}
+
+	#[test]
+	fn test_webrtc_certificate() {
+		// FILE
+		let tmp = tempdir_with_prefix("x");
+		std::fs::remove_dir(tmp.path()).unwrap(); // should be recreated
+		let file = tmp.path().join("x").to_path_buf();
+		let kp1 = WebRTCConfig::File(file.clone()).into_certificate().unwrap();
+		let kp2 = WebRTCConfig::File(file.clone()).into_certificate().unwrap();
+		assert!(file.is_file() && kp1 == kp2);
+
+		// RAW
+		let kp3 = WebRTCConfig::Raw(
+			r###"-----BEGIN EXPIRES-----
+APfhng8AAAA=
+-----END EXPIRES-----
+
+-----BEGIN PRIVATE_KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAHN+P9h0e5/x1BCI
+tjdkcOdtE11W75ofH/TPsF2YZFqhRANCAARgOEae+O4ipT4YRRXCHmcPCAIAy1Mb
+bc6Uma8Jh84l8tOpLXjou7yNCWikYJm5ivsp/Xk7QJihHRy7RZ8gRm3w
+-----END PRIVATE_KEY-----
+
+-----BEGIN CERTIFICATE-----
+MIIBWDCB/6ADAgECAggJoEeRUy4SuTAKBggqhkjOPQQDAjAhMR8wHQYDVQQDDBZy
+Y2dlbiBzZWxmIHNpZ25lZCBjZXJ0MCAXDTc1MDEwMTAwMDAwMFoYDzQwOTYwMTAx
+MDAwMDAwWjAhMR8wHQYDVQQDDBZyY2dlbiBzZWxmIHNpZ25lZCBjZXJ0MFkwEwYH
+KoZIzj0CAQYIKoZIzj0DAQcDQgAEYDhGnvjuIqU+GEUVwh5nDwgCAMtTG23OlJmv
+CYfOJfLTqS146Lu8jQlopGCZuYr7Kf15O0CYoR0cu0WfIEZt8KMfMB0wGwYDVR0R
+BBQwEoIQZ253OENrdzNUQldYd0hpeTAKBggqhkjOPQQDAgNIADBFAiEA6V9CVtrY
+wTRg0MLgEsoa1XbaFl19LHF1+ntC6qMMuhQCIHmPielTT43H+0PbhZ45rkp3BwH/
+gLpdut2sEugx/NhJ
+-----END CERTIFICATE-----
+"###
+			.to_string(),
+		)
+		.into_certificate()
+		.unwrap();
+		let kp4 = WebRTCConfig::Raw(
+			r###"-----BEGIN EXPIRES-----
+APfhng8AAAA=
+-----END EXPIRES-----
+
+-----BEGIN PRIVATE_KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAHN+P9h0e5/x1BCI
+tjdkcOdtE11W75ofH/TPsF2YZFqhRANCAARgOEae+O4ipT4YRRXCHmcPCAIAy1Mb
+bc6Uma8Jh84l8tOpLXjou7yNCWikYJm5ivsp/Xk7QJihHRy7RZ8gRm3w
+-----END PRIVATE_KEY-----
+
+-----BEGIN CERTIFICATE-----
+MIIBWDCB/6ADAgECAggJoEeRUy4SuTAKBggqhkjOPQQDAjAhMR8wHQYDVQQDDBZy
+Y2dlbiBzZWxmIHNpZ25lZCBjZXJ0MCAXDTc1MDEwMTAwMDAwMFoYDzQwOTYwMTAx
+MDAwMDAwWjAhMR8wHQYDVQQDDBZyY2dlbiBzZWxmIHNpZ25lZCBjZXJ0MFkwEwYH
+KoZIzj0CAQYIKoZIzj0DAQcDQgAEYDhGnvjuIqU+GEUVwh5nDwgCAMtTG23OlJmv
+CYfOJfLTqS146Lu8jQlopGCZuYr7Kf15O0CYoR0cu0WfIEZt8KMfMB0wGwYDVR0R
+BBQwEoIQZ253OENrdzNUQldYd0hpeTAKBggqhkjOPQQDAgNIADBFAiEA6V9CVtrY
+wTRg0MLgEsoa1XbaFl19LHF1+ntC6qMMuhQCIHmPielTT43H+0PbhZ45rkp3BwH/
+gLpdut2sEugx/NhJ
+-----END CERTIFICATE-----
+"###
+			.to_string(),
+		)
+		.into_certificate()
+		.unwrap();
+		assert!(kp3 == kp4);
+
+		// EPHEMERAL
+		let kp5 = WebRTCConfig::Ephemeral.into_certificate().unwrap();
+		let kp6 = WebRTCConfig::Ephemeral.into_certificate().unwrap();
+		assert!(kp5 != kp6);
 	}
 }

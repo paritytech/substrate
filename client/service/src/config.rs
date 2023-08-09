@@ -23,7 +23,7 @@ pub use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 pub use sc_network::{
 	config::{
 		MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig, NonDefaultSetConfig, ProtocolId,
-		Role, SetConfig, SyncMode, TransportConfig,
+		Role, SetConfig, SyncMode, TransportConfig, WebRTCConfig,
 	},
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,

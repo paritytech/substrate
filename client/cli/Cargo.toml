@@ -18,7 +18,7 @@ chrono = "0.4.10"
 clap = { version = "4.2.5", features = ["derive", "string"] }
 fdlimit = "0.2.1"
 futures = "0.3.21"
-libp2p-identity = { version = "0.2.0", features = ["peerid", "ed25519"]}
+libp2p-identity = { version = "0.2.0", features = ["peerid", "ed25519"] }
 log = "0.4.17"
 names = { version = "0.13.0", default-features = false }
 parity-scale-codec = "3.6.1"
@@ -29,7 +29,11 @@ serde = "1.0.163"
 serde_json = "1.0.85"
 thiserror = "1.0.30"
 tiny-bip39 = "1.0.0"
-tokio = { version = "1.22.0", features = ["signal", "rt-multi-thread", "parking_lot"] }
+tokio = { version = "1.22.0", features = [
+    "signal",
+    "rt-multi-thread",
+    "parking_lot",
+] }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../db" }
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
@@ -50,6 +54,7 @@ sp-version = { version = "22.0.0", path = "../../primitives/version" }
 tempfile = "3.1.0"
 futures-timer = "3.0.1"
 sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
+libp2p-webrtc = { version = "0.6.0-alpha", features = ["tokio", "pem"] }
 
 [features]
 default = ["rocksdb"]

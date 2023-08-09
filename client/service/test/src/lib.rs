@@ -23,7 +23,7 @@ use log::{debug, info};
 use parking_lot::Mutex;
 use sc_client_api::{Backend, CallExecutor};
 use sc_network::{
-	config::{MultiaddrWithPeerId, NetworkConfiguration, TransportConfig},
+	config::{MultiaddrWithPeerId, NetworkConfiguration, TransportConfig, WebRTCConfig},
 	multiaddr, NetworkBlock, NetworkPeers, NetworkStateInfo,
 };
 use sc_network_sync::SyncingService;
@@ -216,6 +216,7 @@ fn node_config<
 		format!("Node {}", index),
 		"network/test/0.1",
 		Default::default(),
+		WebRTCConfig::Ephemeral,
 		None,
 	);
 

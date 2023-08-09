@@ -22,11 +22,12 @@ use either::Either;
 use libp2p::{
 	core::{
 		muxing::StreamMuxerBox,
-		transport::{Boxed, OptionalTransport},
+		transport::{Boxed, OptionalTransport, OrTransport},
 		upgrade,
 	},
 	dns, identity, noise, tcp, websocket, PeerId, Transport, TransportExt,
 };
+use libp2p_webrtc::tokio::{Certificate as WebRTCCertificate, Transport as WebRTCTransport};
 use std::{sync::Arc, time::Duration};
 
 pub use libp2p::bandwidth::BandwidthSinks;
@@ -51,6 +52,7 @@ pub fn build_transport(
 	memory_only: bool,
 	yamux_window_size: Option<u32>,
 	yamux_maximum_buffer_size: usize,
+	webrtc_cert: WebRTCCertificate,
 ) -> (Boxed<(PeerId, StreamMuxerBox)>, Arc<BandwidthSinks>) {
 	// Build the base layer of the transport.
 	let transport = if !memory_only {
@@ -99,8 +101,22 @@ pub fn build_transport(
 		.upgrade(upgrade::Version::V1Lazy)
 		.authenticate(authentication_config)
 		.multiplex(multiplexing_config)
-		.timeout(Duration::from_secs(20))
-		.boxed();
+		.timeout(Duration::from_secs(20));
+
+	if !memory_only {
+		let webrtc_transport = WebRTCTransport::new(keypair, webrtc_cert);
+
+		let transport =
+			OrTransport::new(webrtc_transport, transport).map(
+				|either_output, _| match either_output {
+					futures::future::Either::Left((peer_id, muxer)) =>
+						(peer_id, StreamMuxerBox::new(muxer)),
+					futures::future::Either::Right((peer_id, muxer)) =>
+						(peer_id, StreamMuxerBox::new(muxer)),
+				},
+			);
+		return transport.with_bandwidth_logging()
+	}
 
 	transport.with_bandwidth_logging()
 }
