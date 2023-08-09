@@ -406,10 +406,16 @@ mod reward_pool {
 				});
 				assert_eq!(reward_imbalance(1), Surplus(0));
 
+				// what happens when ED is decreased
+				ExistentialDeposit::set(5);
+				assert_eq!(reward_imbalance(1), Surplus(1));
+
 				// 14 joins the pool.
 				Balances::make_free_balance_be(&14, 500);
 				assert_ok!(Pools::join(RuntimeOrigin::signed(14), 100, 1));
-				assert_eq!(reward_imbalance(1), Surplus(0));
+				assert_eq!(reward_imbalance(1), Surplus(1));
+
+
 			});
 	}
 }
