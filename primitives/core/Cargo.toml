@@ -64,7 +64,6 @@ bandersnatch_vrfs = { git = "https://github.com/w3f/ring-vrf", default-features 
 criterion = "0.4.0"
 serde_json = "1.0"
 sp-core-hashing-proc-macro = { version = "9.0.0", path = "./hashing/proc-macro" }
-hex-literal = "0.3.4"
 
 [[bench]]
 name = "bench"
