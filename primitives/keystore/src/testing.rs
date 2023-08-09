@@ -478,12 +478,9 @@ mod tests {
 		let key_pair =
 			bandersnatch::Pair::from_string(secret_uri, None).expect("Generates key pair");
 
-		let in1 = bandersnatch::vrf::VrfInput::new(b"in1", b"foo");
-		let in2 = bandersnatch::vrf::VrfInput::new(b"in2", b"bar");
-		let in3 = bandersnatch::vrf::VrfInput::new(b"in3", b"baz");
-
+		let in1 = bandersnatch::vrf::VrfInput::new("in", "foo");
 		let sign_data =
-			bandersnatch::vrf::VrfSignData::new_unchecked(b"Test", &[b"msg1"], [in1, in2, in3]);
+			bandersnatch::vrf::VrfSignData::new_unchecked(b"Test", Some("m1"), Some(in1));
 
 		let result = store.bandersnatch_vrf_sign(BANDERSNATCH, &key_pair.public(), &sign_data);
 		assert!(result.unwrap().is_none());
@@ -493,6 +490,44 @@ mod tests {
 			.expect("Inserts unknown key");
 
 		let result = store.bandersnatch_vrf_sign(BANDERSNATCH, &key_pair.public(), &sign_data);
+
+		assert!(result.unwrap().is_some());
+	}
+
+	#[test]
+	#[cfg(feature = "bandersnatch-experimental")]
+	fn bandersnatch_ring_vrf_sign() {
+		use sp_core::testing::BANDERSNATCH;
+
+		let store = MemoryKeystore::new();
+
+		let ring_ctx = bandersnatch::ring_vrf::RingContext::new_testing();
+
+		let mut pks: Vec<_> = (0..16)
+			.map(|i| bandersnatch::Pair::from_seed(&[i as u8; 32]).public())
+			.collect();
+
+		let prover_idx = 3;
+		let prover = ring_ctx.prover(&pks, prover_idx).unwrap();
+
+		let secret_uri = "//Alice";
+		let pair = bandersnatch::Pair::from_string(secret_uri, None).expect("Generates key pair");
+		pks[prover_idx] = pair.public();
+
+		let in1 = bandersnatch::vrf::VrfInput::new("in1", "foo");
+		let sign_data =
+			bandersnatch::vrf::VrfSignData::new_unchecked(b"Test", &["m1", "m2"], [in1]);
+
+		let result =
+			store.bandersnatch_ring_vrf_sign(BANDERSNATCH, &pair.public(), &sign_data, &prover);
+		assert!(result.unwrap().is_none());
+
+		store
+			.insert(BANDERSNATCH, secret_uri, pair.public().as_ref())
+			.expect("Inserts unknown key");
+
+		let result =
+			store.bandersnatch_ring_vrf_sign(BANDERSNATCH, &pair.public(), &sign_data, &prover);
 
 		assert!(result.unwrap().is_some());
 	}
