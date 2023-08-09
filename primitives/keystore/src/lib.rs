@@ -245,8 +245,9 @@ pub trait Keystore: Send + Sync {
 	/// Also takes a [`bandersnatch::ring_vrf::RingProver`] instance obtained from
 	/// a valid [`bandersnatch::ring_vrf::RingContext`].
 	///
-	/// The signature is valid if the signing key is part of the ring from which
-	/// the `RingProver` has been derived.
+	/// The ring signature is verifiable if the public key corresponding to the
+	/// signing [`Pair`] is part of the ring from which the [`RingProver`] has
+	/// been constructed. If not, the produced signature is just useless.
 	///
 	/// Returns `None` if the given `key_type` and `public` combination doesn't
 	/// exist in the keystore or an `Err` when something failed.

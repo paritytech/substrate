@@ -17,6 +17,8 @@
 
 //! VRFs backed by [Bandersnatch](https://neuromancer.sk/std/bls/Bandersnatch),
 //! an elliptic curve built over BLS12-381 scalar field.
+//!
+//! The primitive can operate both as a traditional VRF or as an anonymized ring VRF.
 
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
@@ -702,8 +704,9 @@ pub mod ring_vrf {
 	impl Pair {
 		/// Produce a ring-vrf signature.
 		///
-		/// The signature is valid if the signing [`Pair`] is part of the ring from which
-		/// the [`RingProver`] has been derived.
+		/// The ring signature is verifiable if the public key corresponding to the
+		/// signing [`Pair`] is part of the ring from which the [`RingProver`] has
+		/// been constructed. If not, the produced signature is just useless.
 		pub fn ring_vrf_sign(&self, data: &VrfSignData, prover: &RingProver) -> RingVrfSignature {
 			const _: () = assert!(MAX_VRF_IOS == 3, "`MAX_VRF_IOS` expected to be 3");
 			// Workaround to overcome backend signature generic over the number of IOs.
@@ -752,8 +755,8 @@ pub mod ring_vrf {
 	impl RingVrfSignature {
 		/// Verify a ring-vrf signature.
 		///
-		/// The signature is valid if has been produced by a member of the ring from which
-		/// the [`RingVerifier`] has been derived.
+		/// The signature is verifiable if it has been produced by a member of the ring
+		/// from which the [`RingVerifier`] has been constructed.
 		pub fn verify(&self, data: &VrfSignData, verifier: &RingVerifier) -> bool {
 			const _: () = assert!(MAX_VRF_IOS == 3, "`MAX_VRF_IOS` expected to be 3");
 			let preouts_len = self.outputs.len();
@@ -808,7 +811,7 @@ pub mod ring_vrf {
 mod tests {
 	use super::{ring_vrf::*, vrf::*, *};
 	use crate::crypto::{VrfPublic, VrfSecret, DEV_PHRASE};
-	const DEV_SEED: &[u8; SEED_SERIALIZED_LEN] = &[0; SEED_SERIALIZED_LEN];
+	const DEV_SEED: &[u8; SEED_SERIALIZED_LEN] = &[0xcb; SEED_SERIALIZED_LEN];
 
 	#[allow(unused)]
 	fn b2h(bytes: &[u8]) -> String {
@@ -969,6 +972,25 @@ mod tests {
 
 		let verifier = ring_ctx.verifier(&pks).unwrap();
 		assert!(signature.verify(&data, &verifier));
+	}
+
+	#[test]
+	fn ring_vrf_sign_verify_with_out_of_ring_key() {
+		let ring_ctx = RingContext::new_testing();
+
+		let pks: Vec<_> = (0..16).map(|i| Pair::from_seed(&[i as u8; 32]).public()).collect();
+		let pair = Pair::from_seed(DEV_SEED);
+
+		// Just pick one index to patch with the actual public key
+		let i1 = VrfInput::new(b"dom1", b"foo");
+		let data = VrfSignData::new_unchecked(b"mydata", Some(b"tdata"), Some(i1));
+
+		// pair.public != pks[0]
+		let prover = ring_ctx.prover(&pks, 0).unwrap();
+		let signature = pair.ring_vrf_sign(&data, &prover);
+
+		let verifier = ring_ctx.verifier(&pks).unwrap();
+		assert!(!signature.verify(&data, &verifier));
 	}
 
 	#[test]
