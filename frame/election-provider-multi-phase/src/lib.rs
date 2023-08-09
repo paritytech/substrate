@@ -1291,8 +1291,8 @@ pub mod pallet {
 		RoundSnapshot<
 			T::AccountId,
 			VoterOf<T>,
-			MaxElectingVotersOf<T::MinerConfig>,
-			MaxElectableTargetsOf<T::MinerConfig>,
+			T::MaxElectingVoters,
+			T::MaxElectableTargets,
 		>,
 	>;
 
