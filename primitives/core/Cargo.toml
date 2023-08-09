@@ -152,10 +152,10 @@ full_crypto = [
 
 # This feature adds BLS crypto primitives.
 # It should not be used in production since the implementation and interface may still
-# be subject to significant change.
+# be subject to significant changes.
 bls-experimental = ["w3f-bls"]
 
 # This feature adds Bandersnatch crypto primitives.
 # It should not be used in production since the implementation and interface may still
-# be subject to significant change.
+# be subject to significant changes.
 bandersnatch-experimental = ["bandersnatch_vrfs"]
