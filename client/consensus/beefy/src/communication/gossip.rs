@@ -237,7 +237,7 @@ pub(crate) struct GossipValidator<B: Block, F> {
 	next_rebroadcast: Mutex<Instant>,
 	known_peers: Arc<Mutex<KnownPeers<B>>>,
 	report_sender: TracingUnboundedSender<PeerReport>,
-	fisherman: F,
+	pub(crate) fisherman: F,
 }
 
 impl<B, F> GossipValidator<B, F>

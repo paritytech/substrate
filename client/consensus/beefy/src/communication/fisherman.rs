@@ -98,7 +98,7 @@ where
 			.ok_or_else(|| Error::Backend("could not get BEEFY validator set".into()))
 	}
 
-	fn report_fork_equivocation(
+	pub(crate) fn report_fork_equivocation(
 		&self,
 		proof: ForkEquivocationProof<NumberFor<B>, AuthorityId, Signature, B::Header>,
 	) -> Result<(), Error> {

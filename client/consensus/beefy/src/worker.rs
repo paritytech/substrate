@@ -579,7 +579,7 @@ where
 			},
 			VoteImportResult::Equivocation(proof) => {
 				metric_inc!(self, beefy_equivocation_votes);
-				self.report_equivocation(proof)?;
+				self.report_vote_equivocation(proof)?;
 			},
 			VoteImportResult::Invalid => metric_inc!(self, beefy_invalid_votes),
 			VoteImportResult::Stale => metric_inc!(self, beefy_stale_votes),
@@ -932,7 +932,7 @@ where
 	/// extrinsic to report the equivocation. In particular, the session membership
 	/// proof must be generated at the block at which the given set was active which
 	/// isn't necessarily the best block if there are pending authority set changes.
-	pub(crate) fn report_equivocation(
+	pub(crate) fn report_vote_equivocation(
 		&self,
 		proof: VoteEquivocationProof<NumberFor<B>, AuthorityId, Signature>,
 	) -> Result<(), Error> {
@@ -1061,7 +1061,7 @@ pub(crate) mod tests {
 	use sp_api::HeaderT;
 	use sp_blockchain::Backend as BlockchainBackendT;
 	use sp_consensus_beefy::{
-		generate_vote_equivocation_proof, known_payloads, known_payloads::MMR_ROOT_ID,
+		generate_vote_equivocation_proof, generate_fork_equivocation_proof_vote, known_payloads, known_payloads::MMR_ROOT_ID,
 		mmr::MmrRootProvider, Keyring, Payload, SignedCommitment,
 	};
 	use sp_runtime::traits::One;
@@ -1638,7 +1638,7 @@ pub(crate) mod tests {
 		);
 		{
 			// expect voter (Alice) to successfully report it
-			assert_eq!(worker.report_equivocation(good_proof.clone()), Ok(()));
+			assert_eq!(worker.report_vote_equivocation(good_proof.clone()), Ok(()));
 			// verify Alice reports Bob equivocation to runtime
 			let reported = api_alice.reported_vote_equivocations.as_ref().unwrap().lock();
 			assert_eq!(reported.len(), 1);
@@ -1650,7 +1650,7 @@ pub(crate) mod tests {
 		let mut bad_proof = good_proof.clone();
 		bad_proof.first.id = Keyring::Charlie.public();
 		// bad proofs are simply ignored
-		assert_eq!(worker.report_equivocation(bad_proof), Ok(()));
+		assert_eq!(worker.report_vote_equivocation(bad_proof), Ok(()));
 		// verify nothing reported to runtime
 		assert!(api_alice.reported_vote_equivocations.as_ref().unwrap().lock().is_empty());
 
@@ -1659,7 +1659,7 @@ pub(crate) mod tests {
 		old_proof.first.commitment.validator_set_id = 0;
 		old_proof.second.commitment.validator_set_id = 0;
 		// old proofs are simply ignored
-		assert_eq!(worker.report_equivocation(old_proof), Ok(()));
+		assert_eq!(worker.report_vote_equivocation(old_proof), Ok(()));
 		// verify nothing reported to runtime
 		assert!(api_alice.reported_vote_equivocations.as_ref().unwrap().lock().is_empty());
 
@@ -1669,8 +1669,41 @@ pub(crate) mod tests {
 			(block_num, payload2.clone(), set_id, &Keyring::Alice),
 		);
 		// equivocations done by 'self' are simply ignored (not reported)
-		assert_eq!(worker.report_equivocation(self_proof), Ok(()));
+		assert_eq!(worker.report_vote_equivocation(self_proof), Ok(()));
 		// verify nothing reported to runtime
 		assert!(api_alice.reported_vote_equivocations.as_ref().unwrap().lock().is_empty());
+	}
+
+	#[tokio::test]
+	async fn should_report_valid_fork_equivocations() {
+		let peers = [Keyring::Alice, Keyring::Bob];
+		let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
+		let mut api_alice = TestApi::with_validator_set(&validator_set);
+		api_alice.allow_equivocations();
+		let api_alice = Arc::new(api_alice);
+
+		// instantiate network with Alice and Bob running full voters.
+		let mut net = BeefyTestNet::new(2);
+
+		let session_len = 10;
+		let hashes = net.generate_blocks_and_sync(50, session_len, &validator_set, true).await;
+		let alice_worker = create_beefy_worker(net.peer(0), &peers[0], 1, validator_set.clone(), Some(api_alice));
+
+		let block_number = 1;
+		let header = net.peer(1).client().as_backend().blockchain().header(hashes[block_number as usize]).unwrap().unwrap();
+		let payload = Payload::from_single_entry(MMR_ROOT_ID, "amievil".encode());
+
+		let validator_set_id = 0;
+
+		let proof = generate_fork_equivocation_proof_vote((block_number as u64, payload, validator_set_id, &Keyring::Bob), header);
+		{
+			// expect fisher (Alice) to successfully report it
+			assert_eq!(alice_worker.gossip_validator.fisherman.report_fork_equivocation(proof.clone()), Ok(()));
+			// verify Alice reports Bob's equivocation to runtime
+			let reported = alice_worker.runtime.reported_fork_equivocations.as_ref().unwrap().lock();
+			assert_eq!(reported.len(), 1);
+			assert_eq!(*reported.get(0).unwrap(), proof);
+		}
+
 	}
 }
