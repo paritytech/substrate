@@ -79,6 +79,18 @@ pub trait Config {
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 
+	/// Upper bound on maximum electing voters.
+	///
+	/// As noted in the documentation of [`ElectionProviderBase::MaxElectingVoters`], this value
+	/// should always be more than `DataProvider::electing_voters`.
+	type MaxElectingVoters: Get<u32>;
+
+	/// Upper bound on electable targets.
+	///
+	/// As noted in the documentation of [`ElectionProviderBase::MaxElectableTargets`], this value
+	/// should always be more than `DataProvider::electable_targets`.
+	type MaxElectableTargets: Get<u32>;
+
 	/// Upper bound on maximum winners from electable targets.
 	///
 	/// As noted in the documentation of [`ElectionProviderBase::MaxWinners`], this value should
@@ -127,7 +139,8 @@ fn elect_with_input_bounds<T: Config>(
 	};
 
 	let ElectionResult { winners: _, assignments } =
-		T::Solver::solve(desired_targets as usize, targets, voters).map_err(Error::from)?;
+		T::Solver::solve(desired_targets as usize, targets.into_inner(), voters.into_inner())
+			.map_err(Error::from)?;
 
 	let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 
@@ -153,6 +166,8 @@ impl<T: Config> ElectionProviderBase for OnChainExecution<T> {
 	type AccountId = <T::System as frame_system::Config>::AccountId;
 	type BlockNumber = frame_system::pallet_prelude::BlockNumberFor<T::System>;
 	type Error = Error;
+	type MaxElectingVoters = T::MaxElectingVoters;
+	type MaxElectableTargets = T::MaxElectableTargets;
 	type MaxWinners = T::MaxWinners;
 	type DataProvider = T::DataProvider;
 }
@@ -186,7 +201,7 @@ impl<T: Config> ElectionProvider for OnChainExecution<T> {
 mod tests {
 	use super::*;
 	use crate::{ElectionProvider, PhragMMS, SequentialPhragmen};
-	use frame_support::{assert_noop, parameter_types, traits::ConstU32};
+	use frame_support::{assert_noop, parameter_types, traits::ConstU32, BoundedVec};
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
 	type AccountId = u64;
@@ -236,6 +251,8 @@ mod tests {
 	parameter_types! {
 		pub static MaxWinners: u32 = 10;
 		pub static DesiredTargets: u32 = 2;
+		pub static MaxElectableTargets: u32 = 400;
+		pub static MaxElectingVoters: u32 = 600;
 	}
 
 	impl Config for PhragmenParams {
@@ -243,6 +260,8 @@ mod tests {
 		type Solver = SequentialPhragmen<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
+		type MaxElectingVoters = MaxElectingVoters;
+		type MaxElectableTargets = MaxElectableTargets;
 		type MaxWinners = MaxWinners;
 		type VotersBound = ConstU32<600>;
 		type TargetsBound = ConstU32<400>;
@@ -253,6 +272,8 @@ mod tests {
 		type Solver = PhragMMS<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
+		type MaxElectingVoters = MaxElectingVoters;
+		type MaxElectableTargets = MaxElectableTargets;
 		type MaxWinners = MaxWinners;
 		type VotersBound = ConstU32<600>;
 		type TargetsBound = ConstU32<400>;
@@ -269,16 +290,22 @@ mod tests {
 			type AccountId = AccountId;
 			type BlockNumber = BlockNumber;
 			type MaxVotesPerVoter = ConstU32<2>;
-			fn electing_voters(_: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
-				Ok(vec![
+			type MaxElectableTargets = MaxElectableTargets;
+			type MaxElectingVoters = MaxElectingVoters;
+			fn electing_voters(
+				_: Option<usize>,
+			) -> data_provider::Result<BoundedVec<VoterOf<Self>, Self::MaxElectingVoters>> {
+				Ok(bounded_vec![
 					(1, 10, bounded_vec![10, 20]),
 					(2, 20, bounded_vec![30, 20]),
 					(3, 30, bounded_vec![10, 30]),
 				])
 			}
 
-			fn electable_targets(_: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
-				Ok(vec![10, 20, 30])
+			fn electable_targets(
+				_: Option<usize>,
+			) -> data_provider::Result<BoundedVec<AccountId, MaxElectableTargets>> {
+				Ok(bounded_vec![10, 20, 30])
 			}
 
 			fn desired_targets() -> data_provider::Result<u32> {

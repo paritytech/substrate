@@ -167,6 +167,7 @@ impl<T: Config> Pallet<T> {
 		let RoundSnapshot { voters, targets } =
 			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
 		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
+
 		let (solution, score, size) = Miner::<T::MinerConfig>::mine_solution_with_snapshot::<
 			T::Solver,
 		>(voters, targets, desired_targets)?;
@@ -380,6 +381,11 @@ pub trait MinerConfig {
 		+ Ord
 		+ NposSolution
 		+ TypeInfo;
+
+	/// Maximum number of electing voters in the snaphots.
+	type MaxElectingVoters: Get<u32>;
+	/// Maximum number of elecatble targets in the snapshots.
+	type MaxElectableTargets: Get<u32>;
 	/// Maximum number of votes per voter in the snapshots.
 	type MaxVotesPerVoter;
 	/// Maximum length of the solution that the miner is allowed to generate.
@@ -405,26 +411,33 @@ pub struct Miner<T: MinerConfig>(sp_std::marker::PhantomData<T>);
 impl<T: MinerConfig> Miner<T> {
 	/// Same as [`Pallet::mine_solution`], but the input snapshot data must be given.
 	pub fn mine_solution_with_snapshot<S>(
-		voters: Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxVotesPerVoter>)>,
-		targets: Vec<T::AccountId>,
+		voters: BoundedVec<
+			(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxVotesPerVoter>),
+			T::MaxElectingVoters,
+		>,
+		targets: BoundedVec<T::AccountId, T::MaxElectableTargets>,
 		desired_targets: u32,
 	) -> Result<(SolutionOf<T>, ElectionScore, SolutionOrSnapshotSize), MinerError>
 	where
 		S: NposSolver<AccountId = T::AccountId>,
 	{
-		S::solve(desired_targets as usize, targets.clone(), voters.clone())
-			.map_err(|e| {
-				log_no_system!(error, "solver error: {:?}", e);
-				MinerError::Solver
-			})
-			.and_then(|e| {
-				Self::prepare_election_result_with_snapshot::<S::Accuracy>(
-					e,
-					voters,
-					targets,
-					desired_targets,
-				)
-			})
+		S::solve(
+			desired_targets as usize,
+			targets.clone().into_inner(),
+			voters.clone().into_inner(),
+		)
+		.map_err(|e| {
+			log_no_system!(error, "solver error: {:?}", e);
+			MinerError::Solver
+		})
+		.and_then(|e| {
+			Self::prepare_election_result_with_snapshot::<S::Accuracy>(
+				e,
+				voters,
+				targets,
+				desired_targets,
+			)
+		})
 	}
 
 	/// Convert a raw solution from [`sp_npos_elections::ElectionResult`] to [`RawSolution`], which
@@ -433,8 +446,11 @@ impl<T: MinerConfig> Miner<T> {
 	/// Will always reduce the solution as well.
 	pub fn prepare_election_result_with_snapshot<Accuracy: PerThing128>(
 		election_result: ElectionResult<T::AccountId, Accuracy>,
-		voters: Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxVotesPerVoter>)>,
-		targets: Vec<T::AccountId>,
+		voters: BoundedVec<
+			(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxVotesPerVoter>),
+			T::MaxElectingVoters,
+		>,
+		targets: BoundedVec<T::AccountId, T::MaxElectableTargets>,
 		desired_targets: u32,
 	) -> Result<(SolutionOf<T>, ElectionScore, SolutionOrSnapshotSize), MinerError> {
 		// now make some helper closures.
@@ -702,7 +718,12 @@ impl<T: MinerConfig> Miner<T> {
 		raw_solution: RawSolution<SolutionOf<T>>,
 		compute: ElectionCompute,
 		desired_targets: u32,
-		snapshot: RoundSnapshot<T::AccountId, MinerVoterOf<T>>,
+		snapshot: RoundSnapshot<
+			T::AccountId,
+			MinerVoterOf<T>,
+			T::MaxElectingVoters,
+			T::MaxElectableTargets,
+		>,
 		current_round: u32,
 		minimum_untrusted_score: Option<ElectionScore>,
 	) -> Result<ReadySolution<T::AccountId, T::MaxWinners>, FeasibilityError> {

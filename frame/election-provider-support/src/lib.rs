@@ -81,7 +81,7 @@
 //! ```rust
 //! # use frame_election_provider_support::{*, data_provider};
 //! # use sp_npos_elections::{Support, Assignment};
-//! # use frame_support::traits::ConstU32;
+//! # use frame_support::{BoundedVec, traits::ConstU32};
 //! # use frame_support::bounded_vec;
 //!
 //! type AccountId = u64;
@@ -105,17 +105,19 @@
 //!         type AccountId = AccountId;
 //!         type BlockNumber = BlockNumber;
 //!         type MaxVotesPerVoter = ConstU32<1>;
+//!         type MaxElectableTargets = ConstU32<400>;
+//!         type MaxElectingVoters = ConstU32<400>;
 //!
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
 //!         }
 //!         fn electing_voters(maybe_max_len: Option<usize>)
-//!           -> data_provider::Result<Vec<VoterOf<Self>>>
+//!           -> data_provider::Result<BoundedVec<VoterOf<Self>, Self::MaxElectingVoters>>
 //!         {
 //!             Ok(Default::default())
 //!         }
-//!         fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
-//!             Ok(vec![10, 20, 30])
+//!         fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<BoundedVec<AccountId, Self::MaxElectingVoters>> {
+//!             Ok(bounded_vec![10, 20, 30])
 //!         }
 //!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
 //!             0
@@ -138,6 +140,8 @@
 //!         type BlockNumber = BlockNumber;
 //!         type Error = &'static str;
 //!         type DataProvider = T::DataProvider;
+//!         type MaxElectingVoters = ConstU32<{ u32::MAX }>;
+//!         type MaxElectableTargets = ConstU32<{ u32::MAX }>;
 //!         type MaxWinners = ConstU32<{ u32::MAX }>;
 //!
 //!     }
@@ -280,6 +284,12 @@ pub trait ElectionDataProvider {
 	/// The block number type.
 	type BlockNumber;
 
+	/// Maximum number of targets that this data provider is providing.
+	type MaxElectableTargets: Get<u32>;
+
+	/// Maximum number of voters that this data provider is providing.
+	type MaxElectingVoters: Get<u32>;
+
 	/// Maximum number of votes per voter that this data provider is providing.
 	type MaxVotesPerVoter: Get<u32>;
 
@@ -293,7 +303,7 @@ pub trait ElectionDataProvider {
 	/// appropriate weight at the end of execution with the system pallet directly.
 	fn electable_targets(
 		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<Self::AccountId>>;
+	) -> data_provider::Result<BoundedVec<Self::AccountId, Self::MaxElectableTargets>>;
 
 	/// All the voters that participate in the election, thus "electing".
 	///
@@ -304,7 +314,9 @@ pub trait ElectionDataProvider {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>>;
+	fn electing_voters(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<BoundedVec<VoterOf<Self>, Self::MaxElectingVoters>>;
 
 	/// The number of targets to elect.
 	///
@@ -371,6 +383,26 @@ pub trait ElectionProviderBase {
 	/// The error type that is returned by the provider.
 	type Error: Debug;
 
+	/// The upper bound on electing voters that can be returned.
+	///
+	/// # WARNING
+	///
+	/// when communicating with the data provider, one must ensure that
+	/// `DataProvider::electing_voters` returns a value less than this bound. An
+	/// implementation can chose to either return an error and/or sort and
+	/// truncate the output to meet this bound.
+	type MaxElectingVoters: Get<u32>;
+
+	/// The upper bound on the electable targets that can be returned.
+	///
+	/// # WARNING
+	///
+	/// when communicating with the data provider, one must ensure that
+	/// `DataProvider::electable_targets` returns a value less than this bound. An
+	/// implementation can chose to either return an error and/or sort and
+	/// truncate the output to meet this bound.
+	type MaxElectableTargets: Get<u32>;
+
 	/// The upper bound on election winners that can be returned.
 	///
 	/// # WARNING
@@ -433,23 +465,45 @@ pub trait InstantElectionProvider: ElectionProviderBase {
 /// An election provider that does nothing whatsoever.
 pub struct NoElection<X>(sp_std::marker::PhantomData<X>);
 
-impl<AccountId, BlockNumber, DataProvider, MaxWinners> ElectionProviderBase
-	for NoElection<(AccountId, BlockNumber, DataProvider, MaxWinners)>
+impl<AccountId, BlockNumber, DataProvider, MaxElectingVoters, MaxElectableTargets, MaxWinners>
+	ElectionProviderBase
+	for NoElection<(
+		AccountId,
+		BlockNumber,
+		DataProvider,
+		MaxElectingVoters,
+		MaxElectableTargets,
+		MaxWinners,
+	)>
 where
 	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+	MaxElectingVoters: Get<u32>,
+	MaxElectableTargets: Get<u32>,
 	MaxWinners: Get<u32>,
 {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
 	type Error = &'static str;
+	type MaxElectingVoters = MaxElectingVoters;
+	type MaxElectableTargets = MaxElectableTargets;
 	type MaxWinners = MaxWinners;
 	type DataProvider = DataProvider;
 }
 
-impl<AccountId, BlockNumber, DataProvider, MaxWinners> ElectionProvider
-	for NoElection<(AccountId, BlockNumber, DataProvider, MaxWinners)>
+impl<AccountId, BlockNumber, DataProvider, MaxElectingVoters, MaxElectableTargets, MaxWinners>
+	ElectionProvider
+	for NoElection<(
+		AccountId,
+		BlockNumber,
+		DataProvider,
+		MaxElectingVoters,
+		MaxElectableTargets,
+		MaxWinners,
+	)>
 where
 	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+	MaxElectingVoters: Get<u32>,
+	MaxElectableTargets: Get<u32>,
 	MaxWinners: Get<u32>,
 {
 	fn ongoing() -> bool {
@@ -461,10 +515,20 @@ where
 	}
 }
 
-impl<AccountId, BlockNumber, DataProvider, MaxWinners> InstantElectionProvider
-	for NoElection<(AccountId, BlockNumber, DataProvider, MaxWinners)>
+impl<AccountId, BlockNumber, DataProvider, MaxElectingVoters, MaxElectableTargets, MaxWinners>
+	InstantElectionProvider
+	for NoElection<(
+		AccountId,
+		BlockNumber,
+		DataProvider,
+		MaxElectingVoters,
+		MaxElectableTargets,
+		MaxWinners,
+	)>
 where
 	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+	MaxElectingVoters: Get<u32>,
+	MaxElectableTargets: Get<u32>,
 	MaxWinners: Get<u32>,
 {
 	fn instant_elect(

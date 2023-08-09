@@ -148,8 +148,13 @@ pub fn trim_helpers() -> TrimHelpers {
 
 	let desired_targets = MultiPhase::desired_targets().unwrap();
 
-	let ElectionResult::<_, SolutionAccuracyOf<Runtime>> { mut assignments, .. } =
-		seq_phragmen(desired_targets as usize, targets.clone(), voters.clone(), None).unwrap();
+	let ElectionResult::<_, SolutionAccuracyOf<Runtime>> { mut assignments, .. } = seq_phragmen(
+		desired_targets as usize,
+		targets.clone().into_inner(),
+		voters.clone().into_inner(),
+		None,
+	)
+	.unwrap();
 
 	// sort by decreasing order of stake
 	assignments.sort_by_key(|assignment| {
@@ -165,7 +170,12 @@ pub fn trim_helpers() -> TrimHelpers {
 		.collect::<Result<Vec<_>, _>>()
 		.expect("test assignments don't contain any voters with too many votes");
 
-	TrimHelpers { voters, assignments, encoded_size_of, voter_index: Box::new(voter_index) }
+	TrimHelpers {
+		voters: voters.to_vec(),
+		assignments,
+		encoded_size_of,
+		voter_index: Box::new(voter_index),
+	}
 }
 
 /// Spit out a verifiable raw solution.
@@ -176,7 +186,13 @@ pub fn raw_solution() -> RawSolution<SolutionOf<Runtime>> {
 	let desired_targets = MultiPhase::desired_targets().unwrap();
 
 	let ElectionResult::<_, SolutionAccuracyOf<Runtime>> { winners: _, assignments } =
-		seq_phragmen(desired_targets as usize, targets.clone(), voters.clone(), None).unwrap();
+		seq_phragmen(
+			desired_targets as usize,
+			targets.clone().into_inner(),
+			voters.clone().into_inner(),
+			None,
+		)
+		.unwrap();
 
 	// closures
 	let cache = helpers::generate_voter_cache::<Runtime>(&voters);
@@ -311,6 +327,8 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
 	type WeightInfo = ();
+	type MaxElectingVoters = MaxElectingVoters;
+	type MaxElectableTargets = MaxElectableTargets;
 	type MaxWinners = MaxWinners;
 	type VotersBound = ConstU32<{ u32::MAX }>;
 	type TargetsBound = ConstU32<{ u32::MAX }>;
@@ -322,6 +340,8 @@ impl ElectionProviderBase for MockFallback {
 	type AccountId = AccountId;
 	type Error = &'static str;
 	type DataProvider = StakingMock;
+	type MaxElectingVoters = MaxElectingVoters;
+	type MaxElectableTargets = MaxElectableTargets;
 	type MaxWinners = MaxWinners;
 }
 
@@ -360,6 +380,8 @@ impl MinerConfig for Runtime {
 	type AccountId = AccountId;
 	type MaxLength = MinerMaxLength;
 	type MaxWeight = MinerMaxWeight;
+	type MaxElectingVoters = MaxElectingVoters;
+	type MaxElectableTargets = MaxElectableTargets;
 	type MaxVotesPerVoter = <StakingMock as ElectionDataProvider>::MaxVotesPerVoter;
 	type MaxWinners = MaxWinners;
 	type Solution = TestNposSolution;
@@ -435,8 +457,12 @@ impl ElectionDataProvider for StakingMock {
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type MaxVotesPerVoter = MaxNominations;
+	type MaxElectingVoters = MaxElectingVoters;
+	type MaxElectableTargets = MaxElectableTargets;
 
-	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+	fn electable_targets(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<BoundedVec<AccountId, Self::MaxElectableTargets>> {
 		let targets = Targets::get();
 
 		if !DataProviderAllowBadData::get() &&
@@ -445,20 +471,15 @@ impl ElectionDataProvider for StakingMock {
 			return Err("Targets too big")
 		}
 
-		Ok(targets)
+		Ok(BoundedVec::truncate_from(targets))
 	}
 
 	fn electing_voters(
-		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<VoterOf<Runtime>>> {
-		let mut voters = Voters::get();
-		if !DataProviderAllowBadData::get() {
-			if let Some(max_len) = maybe_max_len {
-				voters.truncate(max_len)
-			}
-		}
+		_maybe_max_len: Option<usize>,
+	) -> data_provider::Result<BoundedVec<VoterOf<Runtime>, Self::MaxElectingVoters>> {
+		let voters = Voters::get();
 
-		Ok(voters)
+		Ok(BoundedVec::truncate_from(voters))
 	}
 
 	fn desired_targets() -> data_provider::Result<u32> {

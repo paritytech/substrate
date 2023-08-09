@@ -229,7 +229,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
 	BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ElectionProviderBase,
 	InstantElectionProvider, NposSolution,
@@ -239,7 +239,7 @@ use frame_support::{
 	ensure,
 	traits::{Currency, DefensiveResult, Get, OnUnbalanced, ReservableCurrency},
 	weights::Weight,
-	DefaultNoBound, EqNoBound, PartialEqNoBound,
+	BoundedVec, DefaultNoBound, EqNoBound, PartialEqNoBound,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes, pallet_prelude::BlockNumberFor};
 use scale_info::TypeInfo;
@@ -294,6 +294,10 @@ pub type SolutionAccuracyOf<T> =
 	<SolutionOf<<T as crate::Config>::MinerConfig> as NposSolution>::Accuracy;
 /// The fallback election type.
 pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProviderBase>::Error;
+/// The maximum electable targets, as seen by the miner config.
+pub type MaxElectableTargetsOf<T> = <T as MinerConfig>::MaxElectableTargets;
+/// The maximum electing voters, as seen by the miner config.
+pub type MaxElectingVotersOf<T> = <T as MinerConfig>::MaxElectingVoters;
 
 /// Configuration for the benchmarks of the pallet.
 pub trait BenchmarkingConfig {
@@ -314,7 +318,7 @@ pub trait BenchmarkingConfig {
 }
 
 /// Current phase of the pallet.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
 pub enum Phase<Bn> {
 	/// Nothing, the election is not happening.
 	Off,
@@ -453,13 +457,14 @@ where
 /// [`ElectionDataProvider`] and are kept around until the round is finished.
 ///
 /// These are stored together because they are often accessed together.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
-#[scale_info(skip_type_params(T))]
-pub struct RoundSnapshot<AccountId, DataProvider> {
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, MaxEncodedLen, TypeInfo)]
+#[codec(mel_bound(skip_type_params(V, T)))]
+#[scale_info(skip_type_params(V, T))]
+pub struct RoundSnapshot<AccountId, DataProvider, V: Get<u32>, T: Get<u32>> {
 	/// All of the voters.
-	pub voters: Vec<DataProvider>,
+	pub voters: BoundedVec<DataProvider, V>,
 	/// All of the targets.
-	pub targets: Vec<AccountId>,
+	pub targets: BoundedVec<AccountId, T>,
 }
 
 /// Encodes the length of a solution or a snapshot.
@@ -467,7 +472,7 @@ pub struct RoundSnapshot<AccountId, DataProvider> {
 /// This is stored automatically on-chain, and it contains the **size of the entire snapshot**.
 /// This is also used in dispatchables as weight witness data and should **only contain the size of
 /// the presented solution**, not the entire snapshot.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, Default, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, Default, TypeInfo, MaxEncodedLen)]
 pub struct SolutionOrSnapshotSize {
 	/// The length of voters.
 	#[codec(compact)]
@@ -619,6 +624,8 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			MaxVotesPerVoter = <Self::DataProvider as ElectionDataProvider>::MaxVotesPerVoter,
 			MaxWinners = Self::MaxWinners,
+			MaxElectingVoters = Self::MaxElectingVoters,
+			MaxElectableTargets = Self::MaxElectableTargets,
 		>;
 
 		/// Maximum number of signed submissions that can be queued.
@@ -663,11 +670,11 @@ pub mod pallet {
 		/// are only over a single block, but once multi-block elections are introduced they will
 		/// take place over multiple blocks.
 		#[pallet::constant]
-		type MaxElectingVoters: Get<SolutionVoterIndexOf<Self::MinerConfig>>;
+		type MaxElectingVoters: Get<SolutionVoterIndexOf<Self::MinerConfig>> + Get<u32>;
 
 		/// The maximum number of electable targets to put in the snapshot.
 		#[pallet::constant]
-		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self::MinerConfig>>;
+		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self::MinerConfig>> + Get<u32>;
 
 		/// The maximum number of winners that can be elected by this `ElectionProvider`
 		/// implementation.
@@ -686,6 +693,8 @@ pub mod pallet {
 		type DataProvider: ElectionDataProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = BlockNumberFor<Self>,
+			MaxElectingVoters = Self::MaxElectingVoters,
+			MaxElectableTargets = Self::MaxElectableTargets,
 		>;
 
 		/// Configuration for the fallback.
@@ -1267,6 +1276,7 @@ pub mod pallet {
 	///
 	/// Always sorted by score.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn queued_solution)]
 	pub type QueuedSolution<T: Config> =
 		StorageValue<_, ReadySolution<T::AccountId, T::MaxWinners>>;
@@ -1276,7 +1286,10 @@ pub mod pallet {
 	/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn snapshot)]
-	pub type Snapshot<T: Config> = StorageValue<_, RoundSnapshot<T::AccountId, VoterOf<T>>>;
+	pub type Snapshot<T: Config> = StorageValue<
+		_,
+		RoundSnapshot<T::AccountId, VoterOf<T>, T::MaxElectingVoters, T::MaxElectableTargets>,
+	>;
 
 	/// Desired number of targets to elect for this round.
 	///
@@ -1326,6 +1339,7 @@ pub mod pallet {
 	/// Twox note: the key of the map is an auto-incrementing index which users cannot inspect or
 	/// affect; we shouldn't need a cryptographically secure hasher.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub type SignedSubmissionsMap<T: Config> =
 		StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, OptionQuery>;
 
@@ -1345,7 +1359,6 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 	#[pallet::pallet]
-	#[pallet::without_storage_info]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 }
@@ -1393,8 +1406,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_internal(
-		targets: Vec<T::AccountId>,
-		voters: Vec<VoterOf<T>>,
+		targets: BoundedVec<T::AccountId, T::MaxElectableTargets>,
+		voters: BoundedVec<VoterOf<T>, T::MaxElectingVoters>,
 		desired_targets: u32,
 	) {
 		let metadata =
@@ -1407,7 +1420,15 @@ impl<T: Config> Pallet<T> {
 		// instead of using storage APIs, we do a manual encoding into a fixed-size buffer.
 		// `encoded_size` encodes it without storing it anywhere, this should not cause any
 		// allocation.
-		let snapshot = RoundSnapshot::<T::AccountId, VoterOf<T>> { voters, targets };
+		let snapshot = RoundSnapshot::<
+			T::AccountId,
+			VoterOf<T>,
+			T::MaxElectingVoters,
+			T::MaxElectableTargets,
+		> {
+			voters,
+			targets,
+		};
 		let size = snapshot.encoded_size();
 		log!(debug, "snapshot pre-calculated size {:?}", size);
 		let mut buffer = Vec::with_capacity(size);
@@ -1424,10 +1445,16 @@ impl<T: Config> Pallet<T> {
 	/// Parts of [`create_snapshot`] that happen outside of this pallet.
 	///
 	/// Extracted for easier weight calculation.
-	fn create_snapshot_external(
-	) -> Result<(Vec<T::AccountId>, Vec<VoterOf<T>>, u32), ElectionError<T>> {
-		let target_limit = T::MaxElectableTargets::get().saturated_into::<usize>();
-		let voter_limit = T::MaxElectingVoters::get().saturated_into::<usize>();
+	fn create_snapshot_external() -> Result<
+		(
+			BoundedVec<T::AccountId, T::MaxElectableTargets>,
+			BoundedVec<VoterOf<T>, T::MaxElectingVoters>,
+			u32,
+		),
+		ElectionError<T>,
+	> {
+		let target_limit = <T::MaxElectableTargets as Get<u32>>::get().saturated_into::<usize>();
+		let voter_limit = <T::MaxElectingVoters as Get<u32>>::get().saturated_into::<usize>();
 
 		let targets = T::DataProvider::electable_targets(Some(target_limit))
 			.map_err(ElectionError::DataProvider)?;
@@ -1678,6 +1705,8 @@ impl<T: Config> ElectionProviderBase for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
 	type Error = ElectionError<T>;
+	type MaxElectingVoters = T::MaxElectingVoters;
+	type MaxElectableTargets = T::MaxElectableTargets;
 	type MaxWinners = T::MaxWinners;
 	type DataProvider = T::DataProvider;
 }

@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ScoreProvider,
-	SortedListProvider, VoteWeight, VoterOf,
+	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ElectionProviderBase,
+	ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	defensive,
@@ -56,6 +56,11 @@ use super::{pallet::*, STAKING_ID};
 use frame_support::ensure;
 #[cfg(any(test, feature = "try-runtime"))]
 use sp_runtime::TryRuntimeError;
+
+/// Bounds for electing voters defined by the election provider.
+type MaxElectingVotersOf<E> = <E as ElectionProviderBase>::MaxElectingVoters;
+/// Bounds for electable targets defined by the election provider.
+type MaxElectabletargetsOf<E> = <E as ElectionProviderBase>::MaxElectableTargets;
 
 /// The maximum number of iterations that we do whilst iterating over `T::VoterList` in
 /// `get_npos_voters`.
@@ -761,13 +766,19 @@ impl<T: Config> Pallet<T> {
 	/// nominators.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
+	pub fn get_npos_voters(
+		maybe_max_len: Option<usize>,
+	) -> BoundedVec<VoterOf<Self>, MaxElectingVotersOf<T::ElectionProvider>> {
 		let max_allowed_len = {
 			let all_voter_count = T::VoterList::count() as usize;
 			maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count)
 		};
 
-		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len);
+		let mut all_voters =
+			BoundedVec::<_, MaxElectingVotersOf<T::ElectionProvider>>::with_max_capacity();
+
+		debug_assert!(all_voters.capacity() > max_allowed_len,
+            "voter soft bounds are larger than hard bounds from bounded vec, result may be truncated to hard bounds.");
 
 		// cache a few things.
 		let weight_of = Self::weight_of_fn();
@@ -798,7 +809,10 @@ impl<T: Config> Pallet<T> {
 
 			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
 				if !targets.is_empty() {
-					all_voters.push((voter.clone(), voter_weight, targets));
+					if all_voters.try_push((voter.clone(), voter_weight, targets)).is_err() {
+						// bounds saturated, break loop.
+						break
+					}
 					nominators_taken.saturating_inc();
 				} else {
 					// Technically should never happen, but not much we can do about it.
@@ -814,7 +828,10 @@ impl<T: Config> Pallet<T> {
 						.try_into()
 						.expect("`MaxVotesPerVoter` must be greater than or equal to 1"),
 				);
-				all_voters.push(self_vote);
+				if all_voters.try_push(self_vote).is_err() {
+					// bounds saturated, break loop.
+					break
+				}
 				validators_taken.saturating_inc();
 			} else {
 				// this can only happen if: 1. there a bug in the bags-list (or whatever is the
@@ -829,9 +846,6 @@ impl<T: Config> Pallet<T> {
 				);
 			}
 		}
-
-		// all_voters should have not re-allocated.
-		debug_assert!(all_voters.capacity() == max_allowed_len);
 
 		Self::register_weight(T::WeightInfo::get_npos_voters(validators_taken, nominators_taken));
 
@@ -854,10 +868,15 @@ impl<T: Config> Pallet<T> {
 	/// Get the targets for an upcoming npos election.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_targets(maybe_max_len: Option<usize>) -> Vec<T::AccountId> {
+	pub fn get_npos_targets(
+		maybe_max_len: Option<usize>,
+	) -> BoundedVec<T::AccountId, MaxElectabletargetsOf<T::ElectionProvider>> {
 		let max_allowed_len = maybe_max_len.unwrap_or_else(|| T::TargetList::count() as usize);
-		let mut all_targets = Vec::<T::AccountId>::with_capacity(max_allowed_len);
+		let mut all_targets = BoundedVec::<T::AccountId, MaxElectabletargetsOf<T::ElectionProvider>>::with_max_capacity();
 		let mut targets_seen = 0;
+
+		debug_assert!(all_targets.capacity() > max_allowed_len,
+            "target soft bounds are larger than hard bounds from bounded vec, result may be truncated to hard bounds.");
 
 		let mut targets_iter = T::TargetList::iter();
 		while all_targets.len() < max_allowed_len &&
@@ -872,7 +891,10 @@ impl<T: Config> Pallet<T> {
 			};
 
 			if Validators::<T>::contains_key(&target) {
-				all_targets.push(target);
+				if all_targets.try_push(target).is_err() {
+					// bounds saturated, break loop.
+					break
+				}
 			}
 		}
 
@@ -1003,13 +1025,17 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
 	type MaxVotesPerVoter = T::MaxNominations;
+	type MaxElectingVoters = <T::ElectionProvider as ElectionProviderBase>::MaxElectingVoters;
+	type MaxElectableTargets = <T::ElectionProvider as ElectionProviderBase>::MaxElectableTargets;
 
 	fn desired_targets() -> data_provider::Result<u32> {
 		Self::register_weight(T::DbWeight::get().reads(1));
 		Ok(Self::validator_count())
 	}
 
-	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+	fn electing_voters(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<BoundedVec<VoterOf<Self>, Self::MaxElectingVoters>> {
 		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
 		let voters = Self::get_npos_voters(maybe_max_len);
 		debug_assert!(maybe_max_len.map_or(true, |max| voters.len() <= max));
@@ -1017,7 +1043,9 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		Ok(voters)
 	}
 
-	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
+	fn electable_targets(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<BoundedVec<T::AccountId, Self::MaxElectableTargets>> {
 		let target_count = T::TargetList::count();
 
 		// We can't handle this case yet -- return an error.
