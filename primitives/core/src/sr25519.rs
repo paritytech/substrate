@@ -504,7 +504,7 @@ impl TraitPair for Pair {
 		self.0.sign(context.bytes(message)).into()
 	}
 
-	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
+	fn verify<M: AsRef<[u8]>>(sig: &Signature, message: M, pubkey: &Public) -> bool {
 		let Ok(signature) = schnorrkel::Signature::from_bytes(sig.as_ref()) else { return false };
 		let Ok(public) = PublicKey::from_bytes(pubkey.as_ref()) else { return false };
 		public.verify_simple(SIGNING_CTX, message.as_ref(), &signature).is_ok()

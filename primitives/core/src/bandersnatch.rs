@@ -57,7 +57,8 @@ const RING_PROOF_SERIALIZED_LEN: usize = 592;
 
 // Max size of serialized ring-vrf context params.
 //
-// This size is dependent on the ring size.
+// This size is dependent on the ring domain size and the actual value
+// is equal to the SCALE encoded size of the `KZG` backend.
 //
 // Some values:
 //  ring_size → ~serialized_size
@@ -288,7 +289,7 @@ impl TraitPair for Pair {
 	/// Verify a signature on a message.
 	///
 	/// Returns `true` if the signature is good.
-	fn verify<M: AsRef<[u8]>>(signature: &Self::Signature, data: M, public: &Self::Public) -> bool {
+	fn verify<M: AsRef<[u8]>>(signature: &Signature, data: M, public: &Public) -> bool {
 		let data = vrf::VrfSignData::new_unchecked(SIGNING_CTX, &[data.as_ref()], None);
 		let signature =
 			vrf::VrfSignature { signature: *signature, vrf_outputs: vrf::VrfIosVec::default() };
@@ -1005,7 +1006,6 @@ mod tests {
 		let ctx1 = RingContext::new_testing();
 		let enc1 = ctx1.encode();
 
-		println!("SIZE: {}", enc1.len());
 		assert_eq!(enc1.len(), RingContext::max_encoded_len());
 
 		let ctx2 = RingContext::decode(&mut enc1.as_slice()).unwrap();
