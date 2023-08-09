@@ -113,7 +113,7 @@ impl BlockStateMachine {
 struct OngoingOperations {
 	/// Maximum number of operations that can be reserved.
 	max_operations: usize,
-	/// The number of operations.
+	/// The number of ongoing operations for this subscription.
 	ongoing: Arc<Mutex<usize>>,
 }
 
@@ -157,6 +157,7 @@ impl OngoingOperations {
 struct PermitOperations {
 	/// The number of operations permitted (reserved).
 	num_ops: usize,
+	/// The number of ongoing operations for this subscription.
 	ongoing: Arc<Mutex<usize>>,
 }
 
