@@ -82,6 +82,7 @@ sc-service = { version = "0.10.0-dev", default-features = false, path = "../../.
 sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sc-authority-discovery = { version = "0.10.0-dev", path = "../../../client/authority-discovery" }
+sc-mixnet = { version = "0.1.0-dev", path = "../../../client/mixnet" }
 sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../../../client/sysinfo" }
 sc-storage-monitor = { version = "0.1.0", path = "../../../client/storage-monitor" }
@@ -94,6 +95,7 @@ pallet-assets = { version = "4.0.0-dev", path = "../../../frame/assets/" }
 pallet-asset-conversion-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-conversion-tx-payment" }
 pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment" }
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
+pallet-mixnet = { version = "0.1.0-dev", path = "../../../frame/mixnet" }
 
 # node-specific dependencies
 kitchensink-runtime = { version = "3.0.0-dev", path = "../runtime" }

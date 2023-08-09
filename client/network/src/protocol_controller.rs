@@ -493,8 +493,8 @@ impl ProtocolController {
 		}
 	}
 
-	/// Remove the peer from the set of reserved peers. The peer is moved to the set of regular
-	/// nodes.
+	/// Remove the peer from the set of reserved peers. The peer is either moved to the set of
+	/// regular nodes or disconnected.
 	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
 		let state = match self.reserved_nodes.remove(&peer_id) {
 			Some(state) => state,
@@ -508,7 +508,14 @@ impl ProtocolController {
 		};
 
 		if let PeerState::Connected(direction) = state {
-			if self.reserved_only {
+			// Disconnect if we're at (or over) the regular node limit
+			let disconnect = self.reserved_only ||
+				match direction {
+					Direction::Inbound => self.num_in >= self.max_in,
+					Direction::Outbound => self.num_out >= self.max_out,
+				};
+
+			if disconnect {
 				// Disconnect the node.
 				trace!(
 					target: LOG_TARGET,

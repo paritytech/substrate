@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) Parity Technologies (UK) Ltd.
+// Copyright (C) 2022-2023 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,23 +16,29 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Substrate RPC interfaces.
-//!
-//! A collection of RPC methods and subscriptions supported by all substrate clients.
+//! Substrate mixnet service. This implements the [Substrate Mix Network
+//! Specification](https://paritytech.github.io/mixnet-spec/).
 
 #![warn(missing_docs)]
+#![forbid(unsafe_code)]
 
+mod api;
+mod config;
 mod error;
-mod policy;
+mod extrinsic_queue;
+mod maybe_inf_delay;
+mod packet_dispatcher;
+mod peer_id;
+mod protocol;
+mod request;
+mod run;
+mod sync_with_runtime;
 
-pub use policy::DenyUnsafe;
-
-pub mod author;
-pub mod chain;
-pub mod child_state;
-pub mod dev;
-pub mod mixnet;
-pub mod offchain;
-pub mod state;
-pub mod statement;
-pub mod system;
+pub use self::{
+	api::{Api, ApiBackend},
+	config::{Config, CoreConfig, SubstrateConfig},
+	error::{Error, RemoteErr},
+	protocol::{peers_set_config, protocol_name},
+	run::run,
+};
+pub use mixnet::core::{PostErr, TopologyErr};

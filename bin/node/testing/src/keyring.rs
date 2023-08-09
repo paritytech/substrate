@@ -64,6 +64,7 @@ pub fn to_session_keys(
 		babe: sr25519_keyring.to_owned().public().into(),
 		im_online: sr25519_keyring.to_owned().public().into(),
 		authority_discovery: sr25519_keyring.to_owned().public().into(),
+		mixnet: sr25519_keyring.to_owned().public().into(),
 	}
 }
 
