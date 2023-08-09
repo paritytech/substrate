@@ -477,6 +477,7 @@ pub mod vrf {
 	#[cfg(feature = "full_crypto")]
 	impl VrfSecret for Pair {
 		fn vrf_sign(&self, data: &Self::VrfSignData) -> Self::VrfSignature {
+			const _: () = assert!(MAX_VRF_IOS == 3, "`MAX_VRF_IOS` expected to be 3");
 			// Workaround to overcome backend signature generic over the number of IOs.
 			match data.vrf_inputs.len() {
 				0 => self.vrf_sign_gen::<0>(data),
@@ -502,6 +503,7 @@ pub mod vrf {
 
 	impl VrfPublic for Public {
 		fn vrf_verify(&self, data: &Self::VrfSignData, signature: &Self::VrfSignature) -> bool {
+			const _: () = assert!(MAX_VRF_IOS == 3, "`MAX_VRF_IOS` expected to be 3");
 			let preouts_len = signature.vrf_outputs.len();
 			if preouts_len != data.vrf_inputs.len() {
 				return false
@@ -703,6 +705,7 @@ pub mod ring_vrf {
 		/// The signature is valid if the signing [`Pair`] is part of the ring from which
 		/// the [`RingProver`] has been derived.
 		pub fn ring_vrf_sign(&self, data: &VrfSignData, prover: &RingProver) -> RingVrfSignature {
+			const _: () = assert!(MAX_VRF_IOS == 3, "`MAX_VRF_IOS` expected to be 3");
 			// Workaround to overcome backend signature generic over the number of IOs.
 			match data.vrf_inputs.len() {
 				0 => self.ring_vrf_sign_gen::<0>(data, prover),
@@ -752,6 +755,7 @@ pub mod ring_vrf {
 		/// The signature is valid if has been produced by a member of the ring from which
 		/// the [`RingVerifier`] has been derived.
 		pub fn verify(&self, data: &VrfSignData, verifier: &RingVerifier) -> bool {
+			const _: () = assert!(MAX_VRF_IOS == 3, "`MAX_VRF_IOS` expected to be 3");
 			let preouts_len = self.outputs.len();
 			if preouts_len != data.vrf_inputs.len() {
 				return false
