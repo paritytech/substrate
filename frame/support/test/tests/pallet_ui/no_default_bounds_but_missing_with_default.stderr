@@ -2,4 +2,4 @@ error: `#[pallet:no_default_bounds]` can only be used if `#[pallet::config(with_
  --> tests/pallet_ui/no_default_bounds_but_missing_with_default.rs:9:4
   |
 9 |         #[pallet::no_default_bounds]
-  |          ^^^^^^^^^^^^^^^^^^^
+  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
