@@ -58,7 +58,7 @@ sp-runtime-interface = { version = "17.0.0", default-features = false, path = ".
 # bls crypto
 w3f-bls = { version = "0.1.3", default-features = false, optional = true}
 # bandersnatch crypto
-bandersnatch_vrfs = { git = "https://github.com/w3f/ring-vrf", default-features = false, optional = true }
+bandersnatch_vrfs = { git = "https://github.com/w3f/ring-vrf", rev = "c86ebd4", default-features = false, optional = true }
 
 [dev-dependencies]
 criterion = "0.4.0"
