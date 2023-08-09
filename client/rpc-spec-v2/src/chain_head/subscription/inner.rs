@@ -22,7 +22,7 @@ use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{hash_map::Entry, HashMap},
-	sync::Arc,
+	sync::{atomic::AtomicBool, Arc},
 	time::{Duration, Instant},
 };
 
@@ -160,6 +160,101 @@ impl PermitOperations {
 	/// This can be smaller than the number of items requested via [`LimitOperations::reserve()`].
 	fn num_reserved(&self) -> usize {
 		self.num_ops
+	}
+}
+
+/// The state of one operation.
+#[derive(Clone)]
+struct OperationState {
+	/// True if the `chainHead` generated `waitingForContinue` event.
+	requested_continue: Arc<AtomicBool>,
+	/// Send notifications when the user calls `chainHead_continue` method.
+	send_continue: async_channel::Sender<()>,
+}
+
+impl OperationState {
+	/// Returns true if `chainHead_continue` is called after the
+	/// `waitingForContinue` event was emitted for the associated
+	/// operation ID.
+	pub fn submit_continue(&self) -> bool {
+		// `waitingForContinue` not generated.
+		if !self.requested_continue.load(std::sync::atomic::Ordering::Acquire) {
+			return false
+		}
+
+		// Has enough capacity for 1 message.
+		self.send_continue.try_send(()).is_ok()
+	}
+}
+
+struct RegisteredOperation {
+	/// True if the `chainHead` generated `waitingForContinue` event.
+	requested_continue: Arc<AtomicBool>,
+	/// Receive notifications when the user calls `chainHead_continue` method.
+	recv_continue: async_channel::Receiver<()>,
+	/// The operation ID of the request.
+	operation_id: String,
+	/// Track the operations ID of this subscription.
+	operations: Arc<Mutex<HashMap<String, OperationState>>>,
+}
+
+impl RegisteredOperation {
+	/// Wait until the user calls `chainHead_continue`.
+	pub async fn wait_for_continue(&self) {
+		self.requested_continue.store(true, std::sync::atomic::Ordering::Release);
+		let _ = self.recv_continue.recv().await;
+	}
+
+	/// Get the operation ID.
+	pub fn operation_id(&self) -> String {
+		self.operation_id.clone()
+	}
+}
+
+impl Drop for RegisteredOperation {
+	fn drop(&mut self) {
+		let mut operations = self.operations.lock();
+		operations.remove(&self.operation_id);
+	}
+}
+
+/// The ongoing operations of a subscription.
+struct Operations {
+	/// The next operation ID to be generated.
+	next_operation_id: usize,
+	/// Track the operations ID of this subscription.
+	operations: Arc<Mutex<HashMap<String, OperationState>>>,
+}
+
+impl Operations {
+	/// Register a new operation.
+	pub fn register_operation(&mut self) -> RegisteredOperation {
+		let operation_id = self.next_operation_id();
+
+		// At most one message can be sent.
+		let (send_continue, recv_continue) = async_channel::bounded(1);
+		let requested_continue = Arc::new(AtomicBool::new(false));
+
+		let state =
+			OperationState { requested_continue: requested_continue.clone(), send_continue };
+
+		// Cloned operations for removing the current ID on drop.
+		let operations = self.operations.clone();
+		operations.lock().insert(operation_id.clone(), state);
+
+		RegisteredOperation { requested_continue, operation_id, recv_continue, operations }
+	}
+
+	/// Get the operation ID.
+	pub fn get_operation(&mut self, id: &str) -> Option<OperationState> {
+		self.operations.lock().get(id).map(|state| state.clone())
+	}
+
+	/// Generate the next operation ID for this subscription.
+	fn next_operation_id(&mut self) -> String {
+		let op_id = self.next_operation_id;
+		self.next_operation_id += 1;
+		op_id.to_string()
 	}
 }
 
