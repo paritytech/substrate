@@ -95,7 +95,6 @@ use sp_keystore::KeystoreExt;
 #[cfg(feature = "bandersnatch-experimental")]
 use sp_core::bandersnatch;
 use sp_core::{
-	bandersnatch,
 	crypto::KeyTypeId,
 	ecdsa, ed25519,
 	offchain::{

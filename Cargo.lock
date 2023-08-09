@@ -508,6 +508,12 @@ dependencies = [
 
 [[package]]
 name = "array-bytes"
+version = "4.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f52f63c5c1316a16a4b35eaac8b76a98248961a533f061684cb2a7cb0eafb6c6"
+
+[[package]]
+name = "array-bytes"
 version = "6.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9b1c5a481ec30a5abd8dfbd94ab5cf1bb4e9a66be7f1b3b322f2f1170c200fd"
@@ -753,7 +759,7 @@ dependencies = [
 name = "binary-merkle-tree"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "env_logger 0.9.3",
  "hash-db",
  "log",
@@ -2395,7 +2401,7 @@ checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
 name = "frame-benchmarking"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "frame-support",
  "frame-support-procedural",
  "frame-system",
@@ -2423,7 +2429,7 @@ name = "frame-benchmarking-cli"
 version = "4.0.0-dev"
 dependencies = [
  "Inflector",
- "array-bytes",
+ "array-bytes 6.1.0",
  "chrono",
  "clap 4.3.2",
  "comfy-table",
@@ -2534,7 +2540,7 @@ dependencies = [
 name = "frame-executive"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "frame-support",
  "frame-system",
  "frame-try-runtime",
@@ -2591,7 +2597,7 @@ name = "frame-support"
 version = "4.0.0-dev"
 dependencies = [
  "aquamarine",
- "array-bytes",
+ "array-bytes 6.1.0",
  "assert_matches",
  "bitflags",
  "environmental",
@@ -5101,7 +5107,7 @@ dependencies = [
 name = "node-bench"
 version = "0.9.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "clap 4.3.2",
  "derive_more",
  "fs_extra",
@@ -5137,7 +5143,7 @@ dependencies = [
 name = "node-cli"
 version = "3.0.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "assert_cmd",
  "clap 4.3.2",
  "clap_complete",
@@ -5322,6 +5328,82 @@ dependencies = [
  "clap 4.3.2",
  "generate-bags",
  "kitchensink-runtime",
+]
+
+[[package]]
+name = "node-sassafras"
+version = "0.3.3-dev"
+dependencies = [
+ "clap 4.3.2",
+ "frame-benchmarking",
+ "frame-benchmarking-cli",
+ "frame-system",
+ "jsonrpsee",
+ "node-sassafras-runtime",
+ "pallet-transaction-payment",
+ "pallet-transaction-payment-rpc",
+ "sc-basic-authorship",
+ "sc-cli",
+ "sc-client-api",
+ "sc-consensus",
+ "sc-consensus-grandpa",
+ "sc-consensus-sassafras",
+ "sc-executor",
+ "sc-keystore",
+ "sc-network",
+ "sc-rpc",
+ "sc-rpc-api",
+ "sc-service",
+ "sc-telemetry",
+ "sc-transaction-pool",
+ "sc-transaction-pool-api",
+ "sp-api",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-grandpa",
+ "sp-consensus-sassafras",
+ "sp-core",
+ "sp-inherents",
+ "sp-keyring",
+ "sp-runtime",
+ "sp-timestamp",
+ "substrate-build-script-utils",
+ "substrate-frame-rpc-system",
+]
+
+[[package]]
+name = "node-sassafras-runtime"
+version = "0.3.3-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-executive",
+ "frame-support",
+ "frame-system",
+ "frame-system-benchmarking",
+ "frame-system-rpc-runtime-api",
+ "pallet-balances",
+ "pallet-grandpa",
+ "pallet-sassafras",
+ "pallet-session",
+ "pallet-sudo",
+ "pallet-timestamp",
+ "pallet-transaction-payment",
+ "pallet-transaction-payment-rpc-runtime-api",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-api",
+ "sp-block-builder",
+ "sp-consensus-sassafras",
+ "sp-core",
+ "sp-inherents",
+ "sp-offchain",
+ "sp-runtime",
+ "sp-session",
+ "sp-std",
+ "sp-transaction-pool",
+ "sp-version",
+ "substrate-wasm-builder",
 ]
 
 [[package]]
@@ -5665,7 +5747,7 @@ dependencies = [
 name = "pallet-alliance"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -5962,7 +6044,7 @@ dependencies = [
 name = "pallet-beefy-mmr"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "binary-merkle-tree",
  "frame-support",
  "frame-system",
@@ -6039,7 +6121,7 @@ dependencies = [
 name = "pallet-contracts"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "assert_matches",
  "bitflags",
  "env_logger 0.9.3",
@@ -6544,7 +6626,7 @@ dependencies = [
 name = "pallet-mmr"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "env_logger 0.9.3",
  "frame-benchmarking",
  "frame-support",
@@ -6992,6 +7074,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-sassafras"
+version = "0.3.3-dev"
+dependencies = [
+ "array-bytes 4.2.0",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-session",
+ "pallet-timestamp",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-consensus-sassafras",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-scheduler"
 version = "4.0.0-dev"
 dependencies = [
@@ -7302,7 +7404,7 @@ dependencies = [
 name = "pallet-transaction-storage"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -8683,7 +8785,7 @@ dependencies = [
 name = "sc-cli"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "chrono",
  "clap 4.3.2",
  "fdlimit",
@@ -8752,7 +8854,7 @@ dependencies = [
 name = "sc-client-db"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "criterion",
  "hash-db",
  "kitchensink-runtime",
@@ -8920,7 +9022,7 @@ dependencies = [
 name = "sc-consensus-beefy"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "async-channel",
  "async-trait",
  "fnv",
@@ -8996,7 +9098,7 @@ name = "sc-consensus-grandpa"
 version = "0.10.0-dev"
 dependencies = [
  "ahash 0.8.3",
- "array-bytes",
+ "array-bytes 6.1.0",
  "assert_matches",
  "async-trait",
  "dyn-clone",
@@ -9125,6 +9227,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-consensus-sassafras"
+version = "0.3.3-dev"
+dependencies = [
+ "async-trait",
+ "fork-tree",
+ "futures",
+ "log",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "sc-block-builder",
+ "sc-client-api",
+ "sc-consensus",
+ "sc-consensus-epochs",
+ "sc-consensus-slots",
+ "sc-keystore",
+ "sc-network-test",
+ "sc-telemetry",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-sassafras",
+ "sp-consensus-slots",
+ "sp-core",
+ "sp-inherents",
+ "sp-keyring",
+ "sp-keystore",
+ "sp-runtime",
+ "sp-timestamp",
+ "substrate-prometheus-endpoint",
+ "substrate-test-runtime-client",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "sc-consensus-slots"
 version = "0.10.0-dev"
 dependencies = [
@@ -9151,7 +9290,7 @@ dependencies = [
 name = "sc-executor"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "assert_matches",
  "criterion",
  "env_logger 0.9.3",
@@ -9238,7 +9377,7 @@ dependencies = [
 name = "sc-keystore"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "parking_lot 0.12.1",
  "serde_json",
  "sp-application-crypto",
@@ -9252,7 +9391,7 @@ dependencies = [
 name = "sc-network"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "assert_matches",
  "async-channel",
  "async-trait",
@@ -9370,7 +9509,7 @@ dependencies = [
 name = "sc-network-light"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "async-channel",
  "futures",
  "libp2p-identity",
@@ -9390,7 +9529,7 @@ dependencies = [
 name = "sc-network-statement"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "async-channel",
  "futures",
  "libp2p",
@@ -9407,7 +9546,7 @@ dependencies = [
 name = "sc-network-sync"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "async-channel",
  "async-trait",
  "fork-tree",
@@ -9476,7 +9615,7 @@ dependencies = [
 name = "sc-network-transactions"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "futures",
  "libp2p",
  "log",
@@ -9493,7 +9632,7 @@ dependencies = [
 name = "sc-offchain"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "bytes",
  "fnv",
  "futures",
@@ -9613,7 +9752,7 @@ dependencies = [
 name = "sc-rpc-spec-v2"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "assert_matches",
  "futures",
  "futures-util",
@@ -9726,7 +9865,7 @@ dependencies = [
 name = "sc-service-test"
 version = "2.0.0"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "async-channel",
  "fdlimit",
  "futures",
@@ -9899,7 +10038,7 @@ dependencies = [
 name = "sc-transaction-pool"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "assert_matches",
  "async-trait",
  "criterion",
@@ -10692,7 +10831,7 @@ dependencies = [
 name = "sp-consensus-beefy"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "lazy_static",
  "parity-scale-codec",
  "scale-info",
@@ -10737,6 +10876,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-consensus-sassafras"
+version = "0.3.3-dev"
+dependencies = [
+ "async-trait",
+ "merlin 2.0.1",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-consensus-slots",
+ "sp-core",
+ "sp-inherents",
+ "sp-keystore",
+ "sp-runtime",
+ "sp-std",
+ "sp-timestamp",
+]
+
+[[package]]
 name = "sp-consensus-slots"
 version = "0.10.0-dev"
 dependencies = [
@@ -10751,7 +10910,7 @@ dependencies = [
 name = "sp-core"
 version = "21.0.0"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "arrayvec 0.7.4",
  "bandersnatch_vrfs",
  "bitflags",
@@ -10965,7 +11124,7 @@ dependencies = [
 name = "sp-mmr-primitives"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "ckb-merkle-mountain-range",
  "log",
  "parity-scale-codec",
@@ -11163,7 +11322,7 @@ dependencies = [
 name = "sp-state-machine"
 version = "0.28.0"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "assert_matches",
  "hash-db",
  "log",
@@ -11285,7 +11444,7 @@ name = "sp-trie"
 version = "22.0.0"
 dependencies = [
  "ahash 0.8.3",
- "array-bytes",
+ "array-bytes 6.1.0",
  "criterion",
  "hash-db",
  "hashbrown 0.13.2",
@@ -11649,7 +11808,7 @@ dependencies = [
 name = "substrate-test-client"
 version = "2.0.1"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "async-trait",
  "futures",
  "parity-scale-codec",
@@ -11674,7 +11833,7 @@ dependencies = [
 name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "frame-executive",
  "frame-support",
  "frame-system",
@@ -11684,6 +11843,7 @@ dependencies = [
  "log",
  "pallet-babe",
  "pallet-balances",
+ "pallet-sassafras",
  "pallet-timestamp",
  "parity-scale-codec",
  "sc-block-builder",
@@ -11700,6 +11860,7 @@ dependencies = [
  "sp-consensus-aura",
  "sp-consensus-babe",
  "sp-consensus-grandpa",
+ "sp-consensus-sassafras",
  "sp-core",
  "sp-externalities",
  "sp-genesis-builder",

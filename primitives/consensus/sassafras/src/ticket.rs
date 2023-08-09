@@ -68,18 +68,26 @@ pub struct TicketClaim {
 	pub erased_signature: [u8; 64],
 }
 
+fn vrf_input_from_data(
+	domain: &[u8],
+	data: impl IntoIterator<Item = impl AsRef<[u8]>>,
+) -> VrfInput {
+	let raw = data.into_iter().fold(Vec::new(), |mut v, e| {
+		let bytes = e.as_ref();
+		v.extend_from_slice(bytes);
+		v.extend_from_slice(&bytes.len().to_le_bytes());
+		v
+	});
+	VrfInput::new(domain, raw)
+}
+
 /// VRF input to claim slot ownership during block production.
 ///
 /// Input randomness is current epoch randomness.
 pub fn slot_claim_vrf_input(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfInput {
-	VrfInput::new(
-		&SASSAFRAS_ENGINE_ID,
-		&[
-			(b"type", b"slot-claim"),
-			(b"randomness", randomness),
-			(b"slot", &slot.to_le_bytes()),
-			(b"epoch", &epoch.to_le_bytes()),
-		],
+	vrf_input_from_data(
+		b"sassafras-claim-v1.0",
+		[randomness.as_slice(), &slot.to_le_bytes(), &epoch.to_le_bytes()],
 	)
 }
 
@@ -88,34 +96,27 @@ pub fn slot_claim_vrf_input(randomness: &Randomness, slot: Slot, epoch: u64) -> 
 /// Input randomness is current epoch randomness.
 pub fn slot_claim_sign_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfSignData {
 	let vrf_input = slot_claim_vrf_input(randomness, slot, epoch);
-
-	VrfSignData::from_iter(&SASSAFRAS_ENGINE_ID, &[b"slot-claim-transcript"], [vrf_input])
-		.expect("can't fail; qed")
+	VrfSignData::new_unchecked(&SASSAFRAS_ENGINE_ID, Some("slot-claim-transcript"), Some(vrf_input))
 }
 
 /// VRF input to generate the ticket id.
 ///
 /// Input randomness is current epoch randomness.
 pub fn ticket_id_vrf_input(randomness: &Randomness, attempt: u32, epoch: u64) -> VrfInput {
-	VrfInput::new(
-		&SASSAFRAS_ENGINE_ID,
-		&[
-			(b"type", b"ticket-id"),
-			(b"randomness", randomness),
-			(b"attempt", &attempt.to_le_bytes()),
-			(b"epoch", &epoch.to_le_bytes()),
-		],
+	vrf_input_from_data(
+		b"sassafras-ticket-v1.0",
+		[randomness.as_slice(), &attempt.to_le_bytes(), &epoch.to_le_bytes()],
 	)
 }
 
 /// Data to be signed via ring-vrf.
+/// TODO davxy: ticket_body is not a vrf input???
 pub fn ticket_body_sign_data(ticket_body: &TicketBody) -> VrfSignData {
-	VrfSignData::from_iter(
+	VrfSignData::new_unchecked(
 		&SASSAFRAS_ENGINE_ID,
 		&[b"ticket-body-transcript", ticket_body.encode().as_slice()],
 		[],
 	)
-	.expect("can't fail; qed")
 }
 
 /// Get ticket-id for a given vrf input and output.
