@@ -273,7 +273,7 @@ pub(crate) struct TestApi {
 	pub reported_vote_equivocations:
 		Option<Arc<Mutex<Vec<VoteEquivocationProof<NumberFor<Block>, AuthorityId, Signature>>>>>,
 	pub reported_fork_equivocations:
-		Option<Arc<Mutex<Vec<VoteEquivocationProof<NumberFor<Block>, AuthorityId, Signature>>>>>,
+		Option<Arc<Mutex<Vec<ForkEquivocationProof<NumberFor<Block>, AuthorityId, Signature, Header>>>>>,
 }
 
 impl TestApi {
@@ -303,6 +303,7 @@ impl TestApi {
 
 	pub fn allow_equivocations(&mut self) {
 		self.reported_vote_equivocations = Some(Arc::new(Mutex::new(vec![])));
+		self.reported_fork_equivocations = Some(Arc::new(Mutex::new(vec![])));
 	}
 }
 
@@ -333,6 +334,18 @@ sp_api::mock_impl_runtime_apis! {
 			_dummy: OpaqueKeyOwnershipProof,
 		) -> Option<()> {
 			if let Some(equivocations_buf) = self.inner.reported_vote_equivocations.as_ref() {
+				equivocations_buf.lock().push(proof);
+				None
+			} else {
+				panic!("Equivocations not expected, but following proof was reported: {:?}", proof);
+			}
+		}
+
+		fn submit_report_fork_equivocation_unsigned_extrinsic(
+			proof: ForkEquivocationProof<NumberFor<Block>, AuthorityId, Signature, Header>,
+			_dummy: Vec<OpaqueKeyOwnershipProof>,
+		) -> Option<()> {
+			if let Some(equivocations_buf) = self.inner.reported_fork_equivocations.as_ref() {
 				equivocations_buf.lock().push(proof);
 				None
 			} else {
