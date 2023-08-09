@@ -399,7 +399,7 @@ mod reward_pool {
 					ed_diff
 				);
 
-				// Fixing the reward counter by decreasing it to the factor of increase in ED.
+				// Fixing the `last_recorded_total_payouts`.
 				RewardPools::<Runtime>::mutate(1, |reward_pool| {
 					reward_pool.as_mut().unwrap().last_recorded_total_payouts +=
 						ed_diff
