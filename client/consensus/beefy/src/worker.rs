@@ -1157,9 +1157,11 @@ pub(crate) mod tests {
 			known_peers,
 			None,
 		);
-		// Push 1 block - will start first session.
-		let hashes = peer.push_blocks(1, false);
-		backend.finalize_block(hashes[0], None).unwrap();
+		// If chain's still at genesis, push 1 block to start first session.
+		if backend.blockchain().info().best_hash == backend.blockchain().info().genesis_hash {
+			let hashes = peer.push_blocks(1, false);
+			backend.finalize_block(hashes[0], None).unwrap();
+		}
 		let first_header = backend
 			.blockchain()
 			.expect_header(backend.blockchain().info().best_hash)
