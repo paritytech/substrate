@@ -93,8 +93,16 @@ disable_allocator = []
 #          runtime without first upgrading your host client!
 improved_panic_error_reporting = []
 
-# This feature adds BLS crypto primitives. It should not be used in production since
-# the BLS implementation and interface may still be subject to significant change.
+# This feature adds BLS crypto primitives.
+# It should not be used in production since the implementation and interface may still
+# be subject to significant changes.
 bls-experimental = [
 	 "sp-keystore/bls-experimental",
+]
+
+# This feature adds Bandersnatch crypto primitives.
+# It should not be used in production since the implementation and interface may still
+# be subject to significant changes.
+bandersnatch-experimental = [
+	"sp-keystore/bandersnatch-experimental",
 ]
