@@ -233,6 +233,8 @@ parameter_types! {
 	pub static MaxUnlockingChunks: u32 = 32;
 	pub static RewardOnUnbalanceWasCalled: bool = false;
 	pub static MaxWinners: u32 = 100;
+	pub static MaxElectingVoters: u32 = u32::max_value();
+	pub static MaxElectableTargets: u32 = u32::max_value();
 }
 
 type VoterBagsListInstance = pallet_bags_list::Instance1;
@@ -252,6 +254,8 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = MaxWinners;
+	type MaxElectingVoters = MaxElectingVoters;
+	type MaxElectableTargets = MaxElectableTargets;
 	type VotersBound = ConstU32<{ u32::MAX }>;
 	type TargetsBound = ConstU32<{ u32::MAX }>;
 }
