@@ -18,8 +18,8 @@
 use super::*;
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use scale_info::TypeInfo;
 use frame_support::traits::fungibles::Credit;
+use scale_info::TypeInfo;
 use sp_std::{cmp::Ordering, marker::PhantomData};
 
 pub(super) type PoolIdOf<T> = (<T as Config>::MultiAssetId, <T as Config>::MultiAssetId);
@@ -80,6 +80,12 @@ where
 	}
 }
 
+/// Representation of the final credit imbalance after a swap.
+pub struct SwapCredits<AccountId, Balance>(
+	Credit<AccountId, Balance>, // In asset
+	Credit<AccountId, Balance>, // Out asset
+);
+
 /// Trait for providing methods to swap between the various asset classes.
 pub trait Swap<AccountId, Balance, MultiAssetId> {
 	/// Swap exactly `amount_in` of asset `path[0]` for asset `path[1]`.
@@ -99,11 +105,30 @@ pub trait Swap<AccountId, Balance, MultiAssetId> {
 		keep_alive: bool,
 	) -> Result<Balance, DispatchError>;
 
-	fn swap_exact_tokens_for_tokens_credit(
+	/// Swap `amount_in_max` of asset `path[0]` for asset `path[1]` declared in `amount_out`.
+	/// It will return an error if acquiring `amount_out` would be too costly.
+	///
+	/// Thus it is on the RPC side to ensure that `amount_in_max` is enough to acquire `amount_out`.
+	///
+	/// This method implies that the amount_in is an imbalance of the `path[0]` asset.
+	///
+	/// Uses the `amount_in_max` imbalance to offset into the pool account.
+	///
+	/// If successful, returns the amount of `path[1]` acquired for the `amount_in_max`
+	/// along with the `amount_in_max` as an imbalance.
+	/// They could be credited somewhere as the type implies, but can also be dropped.
+	///
+	/// Note: This method effectively prevents overswapping, so that the
+	/// returned Credit.0 can then be directly refunded in the initial asset
+	/// without swapping back from the `path[1]` asset, saving us a bit of gas.
+	///
+	/// `amount_in_max` is not optional due to the fact that it is a balance to be offset
+	/// (credited to the pool), and not an amount to be acquired from a sender.
+	fn swap_tokens_for_exact_tokens_credit(
 		path: Vec<MultiAssetId>,
-		amount_in: Credit<AccountId, Balance>,
-		amount_out_min: Option<Balance>,
-	) -> Result<Credit<AccountId, Balance>, DispatchError>;
+		amount_in_max: Balance, // Is there a benefit of changing this to Credit?
+		amount_out: Balance,
+	) -> Result<SwapCredits<AccountId, Balance>, DispatchError>;
 
 	/// Take the `path[0]` asset and swap some amount for `amount_out` of the `path[1]`. If an
 	/// `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
