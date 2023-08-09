@@ -56,7 +56,7 @@ use sp_consensus_beefy::{
 	ecdsa_crypto::{AuthorityId, Signature},
 	known_payloads,
 	mmr::{find_mmr_root_digest, MmrRootProvider},
-	BeefyApi, Commitment, ConsensusLog, VoteEquivocationProof, Keyring as BeefyKeyring, MmrRootHash,
+	BeefyApi, Commitment, ConsensusLog, ForkEquivocationProof, VoteEquivocationProof, Keyring as BeefyKeyring, MmrRootHash,
 	OpaqueKeyOwnershipProof, Payload, SignedCommitment, ValidatorSet, ValidatorSetId,
 	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
@@ -1318,9 +1318,9 @@ async fn beefy_reports_vote_equivocations() {
 	}
 
 	// Verify expected equivocation
-	let alice_reported_equivocations = api_alice.reported_vote_equivocations.as_ref().unwrap().lock();
-	assert_eq!(alice_reported_equivocations.len(), 1);
-	let equivocation_proof = alice_reported_equivocations.get(0).unwrap();
+	let alice_reported_vote_equivocations = api_alice.reported_vote_equivocations.as_ref().unwrap().lock();
+	assert_eq!(alice_reported_vote_equivocations.len(), 1);
+	let equivocation_proof = alice_reported_vote_equivocations.get(0).unwrap();
 	assert_eq!(equivocation_proof.first.id, BeefyKeyring::Bob.public());
 	assert_eq!(equivocation_proof.first.commitment.block_number, 1);
 

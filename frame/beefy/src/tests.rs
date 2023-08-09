@@ -19,7 +19,7 @@ use std::vec;
 
 use codec::Encode;
 use sp_consensus_beefy::{
-	check_vote_equivocation_proof, generate_equivocation_proof, known_payloads::MMR_ROOT_ID,
+	check_vote_equivocation_proof, generate_vote_equivocation_proof, known_payloads::MMR_ROOT_ID,
 	Keyring as BeefyKeyring, Payload, ValidatorSet, KEY_TYPE as BEEFY_KEY_TYPE,
 };
 
@@ -212,7 +212,7 @@ fn should_sign_and_verify() {
 
 	// generate an equivocation proof, with two votes in the same round for
 	// same payload signed by the same key
-	let equivocation_proof = generate_equivocation_proof(
+	let equivocation_proof = generate_vote_equivocation_proof(
 		(1, payload1.clone(), set_id, &BeefyKeyring::Bob),
 		(1, payload1.clone(), set_id, &BeefyKeyring::Bob),
 	);
@@ -221,7 +221,7 @@ fn should_sign_and_verify() {
 
 	// generate an equivocation proof, with two votes in different rounds for
 	// different payloads signed by the same key
-	let equivocation_proof = generate_equivocation_proof(
+	let equivocation_proof = generate_vote_equivocation_proof(
 		(1, payload1.clone(), set_id, &BeefyKeyring::Bob),
 		(2, payload2.clone(), set_id, &BeefyKeyring::Bob),
 	);
@@ -229,7 +229,7 @@ fn should_sign_and_verify() {
 	assert!(!check_vote_equivocation_proof::<_, _, Keccak256>(&equivocation_proof));
 
 	// generate an equivocation proof, with two votes by different authorities
-	let equivocation_proof = generate_equivocation_proof(
+	let equivocation_proof = generate_vote_equivocation_proof(
 		(1, payload1.clone(), set_id, &BeefyKeyring::Alice),
 		(1, payload2.clone(), set_id, &BeefyKeyring::Bob),
 	);
@@ -237,7 +237,7 @@ fn should_sign_and_verify() {
 	assert!(!check_vote_equivocation_proof::<_, _, Keccak256>(&equivocation_proof));
 
 	// generate an equivocation proof, with two votes in different set ids
-	let equivocation_proof = generate_equivocation_proof(
+	let equivocation_proof = generate_vote_equivocation_proof(
 		(1, payload1.clone(), set_id, &BeefyKeyring::Bob),
 		(1, payload2.clone(), set_id + 1, &BeefyKeyring::Bob),
 	);
@@ -247,7 +247,7 @@ fn should_sign_and_verify() {
 	// generate an equivocation proof, with two votes in the same round for
 	// different payloads signed by the same key
 	let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
-	let equivocation_proof = generate_equivocation_proof(
+	let equivocation_proof = generate_vote_equivocation_proof(
 		(1, payload1, set_id, &BeefyKeyring::Bob),
 		(1, payload2, set_id, &BeefyKeyring::Bob),
 	);
@@ -291,7 +291,7 @@ fn report_equivocation_current_set_works() {
 		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
 		// generate an equivocation proof, with two votes in the same round for
 		// different payloads signed by the same key
-		let equivocation_proof = generate_equivocation_proof(
+		let equivocation_proof = generate_vote_equivocation_proof(
 			(block_num, payload1, set_id, &equivocation_keyring),
 			(block_num, payload2, set_id, &equivocation_keyring),
 		);
@@ -377,7 +377,7 @@ fn report_equivocation_old_set_works() {
 		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
 		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
 		// generate an equivocation proof for the old set,
-		let equivocation_proof = generate_equivocation_proof(
+		let equivocation_proof = generate_vote_equivocation_proof(
 			(block_num, payload1, old_set_id, &equivocation_keyring),
 			(block_num, payload2, old_set_id, &equivocation_keyring),
 		);
@@ -439,7 +439,7 @@ fn report_equivocation_invalid_set_id() {
 		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
 		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
 		// generate an equivocation for a future set
-		let equivocation_proof = generate_equivocation_proof(
+		let equivocation_proof = generate_vote_equivocation_proof(
 			(block_num, payload1, set_id + 1, &equivocation_keyring),
 			(block_num, payload2, set_id + 1, &equivocation_keyring),
 		);
@@ -481,7 +481,7 @@ fn report_equivocation_invalid_session() {
 		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
 		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
 		// generate an equivocation proof at following era set id = 2
-		let equivocation_proof = generate_equivocation_proof(
+		let equivocation_proof = generate_vote_equivocation_proof(
 			(block_num, payload1, set_id, &equivocation_keyring),
 			(block_num, payload2, set_id, &equivocation_keyring),
 		);
@@ -525,7 +525,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
 		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
 		// generate an equivocation proof for the authority at index 0
-		let equivocation_proof = generate_equivocation_proof(
+		let equivocation_proof = generate_vote_equivocation_proof(
 			(block_num, payload1, set_id + 1, &equivocation_keyring),
 			(block_num, payload2, set_id + 1, &equivocation_keyring),
 		);
@@ -584,31 +584,31 @@ fn report_equivocation_invalid_equivocation_proof() {
 
 		// both votes target the same block number and payload,
 		// there is no equivocation.
-		assert_invalid_equivocation_proof(generate_equivocation_proof(
+		assert_invalid_equivocation_proof(generate_vote_equivocation_proof(
 			(block_num, payload1.clone(), set_id, &equivocation_keyring),
 			(block_num, payload1.clone(), set_id, &equivocation_keyring),
 		));
 
 		// votes targeting different rounds, there is no equivocation.
-		assert_invalid_equivocation_proof(generate_equivocation_proof(
+		assert_invalid_equivocation_proof(generate_vote_equivocation_proof(
 			(block_num, payload1.clone(), set_id, &equivocation_keyring),
 			(block_num + 1, payload2.clone(), set_id, &equivocation_keyring),
 		));
 
 		// votes signed with different authority keys
-		assert_invalid_equivocation_proof(generate_equivocation_proof(
+		assert_invalid_equivocation_proof(generate_vote_equivocation_proof(
 			(block_num, payload1.clone(), set_id, &equivocation_keyring),
 			(block_num, payload1.clone(), set_id, &BeefyKeyring::Charlie),
 		));
 
 		// votes signed with a key that isn't part of the authority set
-		assert_invalid_equivocation_proof(generate_equivocation_proof(
+		assert_invalid_equivocation_proof(generate_vote_equivocation_proof(
 			(block_num, payload1.clone(), set_id, &equivocation_keyring),
 			(block_num, payload1.clone(), set_id, &BeefyKeyring::Dave),
 		));
 
 		// votes targeting different set ids
-		assert_invalid_equivocation_proof(generate_equivocation_proof(
+		assert_invalid_equivocation_proof(generate_vote_equivocation_proof(
 			(block_num, payload1, set_id, &equivocation_keyring),
 			(block_num, payload2, set_id + 1, &equivocation_keyring),
 		));
@@ -639,7 +639,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 
 		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
 		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
-		let equivocation_proof = generate_equivocation_proof(
+		let equivocation_proof = generate_vote_equivocation_proof(
 			(block_num, payload1, set_id, &equivocation_keyring),
 			(block_num, payload2, set_id, &equivocation_keyring),
 		);
@@ -743,7 +743,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		// generate equivocation proof
 		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
 		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
-		let equivocation_proof = generate_equivocation_proof(
+		let equivocation_proof = generate_vote_equivocation_proof(
 			(block_num, payload1, set_id, &equivocation_keyring),
 			(block_num, payload2, set_id, &equivocation_keyring),
 		);
