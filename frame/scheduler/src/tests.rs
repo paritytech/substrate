@@ -30,6 +30,7 @@ use sp_runtime::traits::Hash;
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]
+#[docify::export]
 fn basic_scheduling_works() {
 	new_test_ext().execute_with(|| {
 		let call =
@@ -52,6 +53,7 @@ fn basic_scheduling_works() {
 }
 
 #[test]
+#[docify::export]
 fn scheduling_with_preimages_works() {
 	new_test_ext().execute_with(|| {
 		let call =
