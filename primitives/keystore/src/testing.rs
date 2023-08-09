@@ -478,21 +478,12 @@ mod tests {
 		let key_pair =
 			bandersnatch::Pair::from_string(secret_uri, None).expect("Generates key pair");
 
-		let in1 = bandersnatch::vrf::VrfInput::new(
-			b"input1",
-			&[(b"dom1", b"foo"), (b"dom2", b"bar"), (b"dom3", b"baz")],
-		);
-		let in2 = bandersnatch::vrf::VrfInput::new(
-			b"input2",
-			&[(b"dom1", b"foo"), (b"dom2", b"bar"), (b"dom3", b"baz")],
-		);
-		let in3 = bandersnatch::vrf::VrfInput::new(
-			b"input3",
-			&[(b"dom1", b"foo"), (b"dom2", b"bar"), (b"dom3", b"baz")],
-		);
+		let in1 = bandersnatch::vrf::VrfInput::new(b"in1", b"foo");
+		let in2 = bandersnatch::vrf::VrfInput::new(b"in2", b"bar");
+		let in3 = bandersnatch::vrf::VrfInput::new(b"in3", b"baz");
+
 		let sign_data =
-			bandersnatch::vrf::VrfSignData::from_iter(b"Test", &[b"msg1"], [in1, in2, in3])
-				.unwrap();
+			bandersnatch::vrf::VrfSignData::new_unchecked(b"Test", &[b"msg1"], [in1, in2, in3]);
 
 		let result = store.bandersnatch_vrf_sign(BANDERSNATCH, &key_pair.public(), &sign_data);
 		assert!(result.unwrap().is_none());
