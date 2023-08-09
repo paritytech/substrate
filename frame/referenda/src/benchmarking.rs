@@ -172,7 +172,9 @@ fn skip_timeout_period<T: Config<I>, I: 'static>(index: ReferendumIndex) {
 	frame_system::Pallet::<T>::set_block_number(timeout_period_over);
 }
 
-fn alarm_time<T: Config<I>, I: 'static>(index: ReferendumIndex) -> T::BlockNumber {
+fn alarm_time<T: Config<I>, I: 'static>(
+	index: ReferendumIndex,
+) -> frame_system::pallet_prelude::BlockNumberFor<T> {
 	let status = Referenda::<T, I>::ensure_ongoing(index).unwrap();
 	status.alarm.unwrap().0
 }
@@ -657,7 +659,7 @@ benchmarks_instance_pallet! {
 
 	impl_benchmark_test_suite!(
 		Referenda,
-		crate::mock::new_test_ext(),
+		crate::mock::ExtBuilder::default().build(),
 		crate::mock::Test
 	);
 }

@@ -24,6 +24,7 @@ pub mod sr25519;
 pub mod ed25519;
 
 /// Test account crypto for bandersnatch.
+#[cfg(feature = "bandersnatch-experimental")]
 pub mod bandersnatch;
 
 /// Convenience export: Sr25519's Keyring is exposed as `AccountKeyring`,
@@ -31,6 +32,7 @@ pub mod bandersnatch;
 /// by authorities).
 pub use sr25519::Keyring as AccountKeyring;
 
+#[cfg(feature = "bandersnatch-experimental")]
 pub use bandersnatch::Keyring as BandersnatchKeyring;
 pub use ed25519::Keyring as Ed25519Keyring;
 pub use sr25519::Keyring as Sr25519Keyring;

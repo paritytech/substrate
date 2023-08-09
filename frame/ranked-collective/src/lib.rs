@@ -391,7 +391,7 @@ pub mod pallet {
 		type DemoteOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Rank>;
 
 		/// The polling system used for our voting.
-		type Polls: Polling<TallyOf<Self, I>, Votes = Votes, Moment = Self::BlockNumber>;
+		type Polls: Polling<TallyOf<Self, I>, Votes = Votes, Moment = BlockNumberFor<Self>>;
 
 		/// Convert the tally class into the minimum rank required to vote on the poll. If
 		/// `Polls::Class` is the same type as `Rank`, then `Identity` can be used here to mean

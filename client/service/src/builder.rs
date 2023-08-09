@@ -43,6 +43,7 @@ use sc_executor::{
 use sc_keystore::LocalKeystore;
 use sc_network::{
 	config::{FullNetworkConfiguration, SyncMode},
+	peer_store::PeerStore,
 	NetworkService, NetworkStateInfo, NetworkStatusProvider,
 };
 use sc_network_bitswap::BitswapRequestHandler;
@@ -187,9 +188,7 @@ where
 
 	let client = {
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
-			config.execution_strategies.clone(),
-			Some(keystore_container.keystore()),
-			sc_offchain::OffchainDb::factory_from_backend(&*backend),
+			None,
 			Arc::new(executor.clone()),
 		);
 
@@ -226,7 +225,7 @@ where
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 				no_genesis: matches!(
 					config.network.sync_mode,
-					SyncMode::Fast { .. } | SyncMode::Warp { .. }
+					SyncMode::LightState { .. } | SyncMode::Warp { .. }
 				),
 				wasm_runtime_substitutes,
 			},
@@ -322,19 +321,14 @@ where
 
 /// Shared network instance implementing a set of mandatory traits.
 pub trait SpawnTaskNetwork<Block: BlockT>:
-	sc_offchain::NetworkProvider + NetworkStateInfo + NetworkStatusProvider + Send + Sync + 'static
+	NetworkStateInfo + NetworkStatusProvider + Send + Sync + 'static
 {
 }
 
 impl<T, Block> SpawnTaskNetwork<Block> for T
 where
 	Block: BlockT,
-	T: sc_offchain::NetworkProvider
-		+ NetworkStateInfo
-		+ NetworkStatusProvider
-		+ Send
-		+ Sync
-		+ 'static,
+	T: NetworkStateInfo + NetworkStatusProvider + Send + Sync + 'static,
 {
 }
 
@@ -368,38 +362,6 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub telemetry: Option<&'a mut Telemetry>,
 }
 
-/// Build a shared offchain workers instance.
-pub fn build_offchain_workers<TBl, TCl>(
-	config: &Configuration,
-	spawn_handle: SpawnTaskHandle,
-	client: Arc<TCl>,
-	network: Arc<dyn sc_offchain::NetworkProvider + Send + Sync>,
-) -> Option<Arc<sc_offchain::OffchainWorkers<TCl, TBl>>>
-where
-	TBl: BlockT,
-	TCl: Send + Sync + ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + 'static,
-	<TCl as ProvideRuntimeApi<TBl>>::Api: sc_offchain::OffchainWorkerApi<TBl>,
-{
-	let offchain_workers = Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone())));
-
-	// Inform the offchain worker about new imported blocks
-	if let Some(offchain) = offchain_workers.clone() {
-		spawn_handle.spawn(
-			"offchain-notifications",
-			Some("offchain-worker"),
-			sc_offchain::notification_future(
-				config.role.is_authority(),
-				client,
-				offchain,
-				Clone::clone(&spawn_handle),
-				network,
-			),
-		);
-	}
-
-	offchain_workers
-}
-
 /// Spawn the tasks that are required to run a node.
 pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
@@ -420,7 +382,6 @@ where
 		+ Send
 		+ 'static,
 	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_api::Metadata<TBl>
-		+ sc_offchain::OffchainWorkerApi<TBl>
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl>
 		+ sp_session::SessionKeys<TBl>
 		+ sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
@@ -451,6 +412,7 @@ where
 		client.clone(),
 		chain_info.best_hash,
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
+		keystore.clone(),
 	)
 	.map_err(|e| Error::Application(Box::new(e)))?;
 
@@ -794,7 +756,8 @@ where
 
 	if client.requires_full_sync() {
 		match config.network.sync_mode {
-			SyncMode::Fast { .. } => return Err("Fast sync doesn't work for archive nodes".into()),
+			SyncMode::LightState { .. } =>
+				return Err("Fast sync doesn't work for archive nodes".into()),
 			SyncMode::Warp => return Err("Warp sync doesn't work for archive nodes".into()),
 			SyncMode::Full => {},
 		}
@@ -823,12 +786,14 @@ where
 	};
 
 	let (state_request_protocol_config, state_request_protocol_name) = {
+		let num_peer_hint = net_config.network_config.default_peers_set_num_full as usize +
+			net_config.network_config.default_peers_set.reserved_nodes.len();
 		// Allow both outgoing and incoming requests.
 		let (handler, protocol_config) = StateRequestHandler::new(
 			&protocol_id,
 			config.chain_spec.fork_id(),
 			client.clone(),
-			net_config.network_config.default_peers_set_num_full as usize,
+			num_peer_hint,
 		);
 		let config_name = protocol_config.name.clone();
 
@@ -896,6 +861,18 @@ where
 	);
 	net_config.add_notification_protocol(transactions_handler_proto.set_config());
 
+	// Create `PeerStore` and initialize it with bootnode peer ids.
+	let peer_store = PeerStore::new(
+		net_config
+			.network_config
+			.boot_nodes
+			.iter()
+			.map(|bootnode| bootnode.peer_id)
+			.collect(),
+	);
+	let peer_store_handle = peer_store.handle();
+	spawn_handle.spawn("peer-store", Some("networking"), peer_store.run());
+
 	let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
 	let (engine, sync_service, block_announce_config) = SyncingEngine::new(
@@ -927,6 +904,7 @@ where
 			})
 		},
 		network_config: net_config,
+		peer_store: peer_store_handle,
 		genesis_hash,
 		protocol_id: protocol_id.clone(),
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
