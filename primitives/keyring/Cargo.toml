@@ -21,6 +21,6 @@ sp-runtime = { version = "24.0.0", path = "../runtime" }
 
 [features]
 # This feature adds Bandersnatch crypto primitives.
-# It shoud not be used in production since the implementation and interface may still
-# be subject to significant change.
+# It should not be used in production since the implementation and interface may still
+# be subject to significant changes.
 bandersnatch-experimental = ["sp-core/bandersnatch-experimental"]
