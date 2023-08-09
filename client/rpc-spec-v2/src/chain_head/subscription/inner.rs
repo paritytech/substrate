@@ -108,19 +108,19 @@ impl BlockStateMachine {
 	}
 }
 
-/// Ongoing number of operations shared across methods.
+/// Limit the number of ongoing operations across methods.
 #[derive(Clone)]
-struct OngoingOperations {
-	/// Maximum number of operations that can be reserved.
+struct LimitOperations {
+	/// Maximum number of operations that can be executed at the same time.
 	max_operations: usize,
 	/// The number of ongoing operations for this subscription.
 	ongoing: Arc<Mutex<usize>>,
 }
 
-impl OngoingOperations {
-	/// Constructs a new [`OngoingOperations`].
+impl LimitOperations {
+	/// Constructs a new [`LimitOperations`].
 	fn new(max_operations: usize) -> Self {
-		OngoingOperations { max_operations, ongoing: Default::default() }
+		LimitOperations { max_operations, ongoing: Default::default() }
 	}
 
 	/// Reserves capacity to execute at least one operation and at most the requested items.
@@ -150,10 +150,10 @@ impl OngoingOperations {
 
 /// Permits a number of operations to be executed.
 ///
-/// [`PermitOperations`] are returned by [`OngoingOperations::reserve()`] and are used
+/// [`PermitOperations`] are returned by [`LimitOperations::reserve()`] and are used
 /// to guarantee the RPC server can execute the number of operations.
 ///
-/// The number of reserved items are given back to the [`OngoingOperations`] on drop.
+/// The number of reserved items are given back to the [`LimitOperations`] on drop.
 struct PermitOperations {
 	/// The number of operations permitted (reserved).
 	num_ops: usize,
@@ -164,7 +164,7 @@ struct PermitOperations {
 impl PermitOperations {
 	/// Returns the number of reserved elements for this permit.
 	///
-	/// This can be smaller than the number of items requested via [`OngoingOperations::reserve()`].
+	/// This can be smaller than the number of items requested via [`LimitOperations::reserve()`].
 	fn num_reserved(&self) -> usize {
 		self.num_ops
 	}
@@ -194,8 +194,8 @@ struct SubscriptionState<Block: BlockT> {
 	///
 	/// This object is cloned between methods.
 	response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
-	/// The number of ongoing operations.
-	ongoing_operations: OngoingOperations,
+	/// Limit the number of ongoing operations.
+	limits: LimitOperations,
 	/// The next operation ID.
 	next_operation_id: usize,
 	/// Track the block hashes available for this subscription.
@@ -321,7 +321,7 @@ impl<Block: BlockT> SubscriptionState<Block> {
 	///
 	/// For more details see [`PermitOperations`].
 	fn reserve(&self, to_reserve: usize) -> Option<PermitOperations> {
-		self.ongoing_operations.reserve(to_reserve)
+		self.limits.reserve(to_reserve)
 	}
 }
 
@@ -459,7 +459,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 				with_runtime,
 				tx_stop: Some(tx_stop),
 				response_sender,
-				ongoing_operations: OngoingOperations::new(self.max_ongoing_operations),
+				limits: LimitOperations::new(self.max_ongoing_operations),
 				next_operation_id: 0,
 				blocks: Default::default(),
 			};
@@ -772,7 +772,7 @@ mod tests {
 			tx_stop: None,
 			response_sender,
 			next_operation_id: 0,
-			ongoing_operations: OngoingOperations::new(MAX_OPERATIONS_PER_SUB),
+			limits: LimitOperations::new(MAX_OPERATIONS_PER_SUB),
 			blocks: Default::default(),
 		};
 
@@ -802,7 +802,7 @@ mod tests {
 			tx_stop: None,
 			response_sender,
 			next_operation_id: 0,
-			ongoing_operations: OngoingOperations::new(MAX_OPERATIONS_PER_SUB),
+			limits: LimitOperations::new(MAX_OPERATIONS_PER_SUB),
 			blocks: Default::default(),
 		};
 
@@ -1116,7 +1116,7 @@ mod tests {
 	#[test]
 	fn ongoing_operations() {
 		// The object can hold at most 2 operations.
-		let ops = OngoingOperations::new(2);
+		let ops = LimitOperations::new(2);
 
 		// One operation is reserved.
 		let permit_one = ops.reserve(1).unwrap();
