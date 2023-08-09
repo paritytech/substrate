@@ -1874,44 +1874,18 @@ checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "docify"
-version = "0.1.16"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af1b04e6ef3d21119d3eb7b032bca17f99fe041e9c072f30f32cc0e1a2b1f3c4"
+checksum = "029de870d175d11969524d91a3fb2cbf6d488b853bff99d41cf65e533ac7d9d2"
 dependencies = [
- "docify_macros 0.1.16",
-]
-
-[[package]]
-name = "docify"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6491709f76fb7ceb951244daf624d480198b427556084391d6e3c33d3ae74b9"
-dependencies = [
- "docify_macros 0.2.0",
+ "docify_macros",
 ]
 
 [[package]]
 name = "docify_macros"
-version = "0.1.16"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b5610df7f2acf89a1bb5d1a66ae56b1c7fcdcfe3948856fb3ace3f644d70eb7"
-dependencies = [
- "common-path",
- "derive-syn-parse",
- "lazy_static",
- "proc-macro2",
- "quote",
- "regex",
- "syn 2.0.18",
- "termcolor",
- "walkdir",
-]
-
-[[package]]
-name = "docify_macros"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffc5338a9f72ce29a81377d9039798fcc926fb471b2004666caf48e446dffbbf"
+checksum = "cac43324656a1b05eb0186deb51f27d2d891c704c37f34de281ef6297ba193e5"
 dependencies = [
  "common-path",
  "derive-syn-parse",
@@ -1921,6 +1895,7 @@ dependencies = [
  "regex",
  "syn 2.0.18",
  "termcolor",
+ "toml 0.7.4",
  "walkdir",
 ]
 
@@ -3108,12 +3083,6 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
-
-[[package]]
-name = "hex-literal"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ebdb29d2ea9ed0083cd8cece49bbd968021bd99b0849edb4a9a7ee0fdf6a4e0"
 
 [[package]]
 name = "hkdf"
@@ -6274,7 +6243,7 @@ dependencies = [
 name = "pallet-fast-unstake"
 version = "4.0.0-dev"
 dependencies = [
- "docify 0.2.0",
+ "docify",
  "frame-benchmarking",
  "frame-election-provider-support",
  "frame-support",
@@ -6738,7 +6707,7 @@ dependencies = [
 name = "pallet-paged-list"
 version = "0.1.0"
 dependencies = [
- "docify 0.1.16",
+ "docify",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -7003,7 +6972,6 @@ dependencies = [
  "frame-support",
  "frame-support-test",
  "frame-system",
- "hex-literal",
  "log",
  "pallet-balances",
  "parity-scale-codec",
@@ -10614,11 +10582,11 @@ dependencies = [
  "sp-application-crypto",
  "sp-core",
  "sp-io",
- "sp-keystore",
  "sp-mmr-primitives",
  "sp-runtime",
  "sp-std",
  "strum",
+ "w3f-bls",
 ]
 
 [[package]]
@@ -10675,7 +10643,6 @@ dependencies = [
  "futures",
  "hash-db",
  "hash256-std-hasher",
- "hex-literal",
  "impl-serde",
  "lazy_static",
  "libsecp256k1",
@@ -11453,8 +11420,11 @@ dependencies = [
  "assert_cmd",
  "futures",
  "nix 0.26.2",
+ "node-cli",
  "node-primitives",
  "regex",
+ "sc-cli",
+ "sc-service",
  "sp-rpc",
  "substrate-rpc-client",
  "tokio",

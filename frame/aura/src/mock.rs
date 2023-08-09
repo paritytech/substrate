@@ -30,6 +30,8 @@ use sp_runtime::{testing::UintAuthorityId, traits::IdentityLookup, BuildStorage}
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
+const SLOT_DURATION: u64 = 2;
+
 frame_support::construct_runtime!(
 	pub enum Test
 	{
@@ -68,7 +70,7 @@ impl frame_system::Config for Test {
 impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = Aura;
-	type MinimumPeriod = ConstU64<1>;
+	type MinimumPeriod = ConstU64<{ SLOT_DURATION / 2 }>;
 	type WeightInfo = ();
 }
 
@@ -100,6 +102,9 @@ impl pallet_aura::Config for Test {
 	type DisabledValidators = MockDisabledValidators;
 	type MaxAuthorities = ConstU32<10>;
 	type AllowMultipleBlocksPerSlot = AllowMultipleBlocksPerSlot;
+
+	#[cfg(feature = "experimental")]
+	type SlotDuration = ConstU64<SLOT_DURATION>;
 }
 
 fn build_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {

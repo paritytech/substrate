@@ -16,20 +16,22 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! Fuzz test emulates network events and peer connection handling by `ProtocolController`
+//! and `PeerStore` to discover possible inconsistencies in peer management.
+
 use futures::prelude::*;
-use libp2p_identity::PeerId;
+use libp2p::PeerId;
 use rand::{
 	distributions::{Distribution, Uniform, WeightedIndex},
 	seq::IteratorRandom,
 };
-use sc_peerset::{
-	DropReason, IncomingIndex, Message, Peerset, PeersetConfig, ReputationChange, SetConfig, SetId,
+use sc_network::{
+	peer_store::{PeerStore, PeerStoreProvider},
+	protocol_controller::{IncomingIndex, Message, ProtoSetConfig, ProtocolController, SetId},
+	ReputationChange,
 };
-use std::{
-	collections::{HashMap, HashSet},
-	pin::Pin,
-	task::Poll,
-};
+use sc_utils::mpsc::tracing_unbounded;
+use std::collections::{HashMap, HashSet};
 
 /// Peer events as observed by `Notifications` / fuzz test.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -83,16 +85,16 @@ fn discard_incoming_index(state: State) -> BareState {
 	}
 }
 
-#[test]
-fn run() {
+#[tokio::test]
+async fn run() {
 	sp_tracing::try_init_simple();
 
 	for _ in 0..50 {
-		test_once();
+		test_once().await;
 	}
 }
 
-fn test_once() {
+async fn test_once() {
 	// Allowed events that can be received in a specific state.
 	let allowed_events: HashMap<BareState, HashSet<Event>> = [
 		(
@@ -129,15 +131,23 @@ fn test_once() {
 	// Nodes that we have reserved. Always a subset of `known_nodes`.
 	let mut reserved_nodes = HashSet::<PeerId>::new();
 
-	let (mut peerset, peerset_handle) = Peerset::from_config(PeersetConfig {
-		sets: vec![SetConfig {
-			bootnodes: (0..Uniform::new_inclusive(0, 4).sample(&mut rng))
-				.map(|_| {
-					let id = PeerId::random();
-					known_nodes.insert(id, State::Disconnected);
-					id
-				})
-				.collect(),
+	// Bootnodes for `PeerStore` initialization.
+	let bootnodes = (0..Uniform::new_inclusive(0, 4).sample(&mut rng))
+		.map(|_| {
+			let id = PeerId::random();
+			known_nodes.insert(id, State::Disconnected);
+			id
+		})
+		.collect();
+
+	let peer_store = PeerStore::new(bootnodes);
+	let mut peer_store_handle = peer_store.handle();
+
+	let (to_notifications, mut from_controller) =
+		tracing_unbounded("test_to_notifications", 10_000);
+	let (protocol_handle, protocol_controller) = ProtocolController::new(
+		SetId::from(0),
+		ProtoSetConfig {
 			reserved_nodes: {
 				(0..Uniform::new_inclusive(0, 2).sample(&mut rng))
 					.map(|_| {
@@ -151,22 +161,28 @@ fn test_once() {
 			in_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
 			out_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
 			reserved_only: Uniform::new_inclusive(0, 10).sample(&mut rng) == 0,
-		}],
-	});
+		},
+		to_notifications,
+		Box::new(peer_store_handle.clone()),
+	);
 
-	let new_id = PeerId::random();
-	known_nodes.insert(new_id, State::Disconnected);
-	peerset_handle.add_known_peer(new_id);
+	tokio::spawn(peer_store.run());
+	tokio::spawn(protocol_controller.run());
 
-	futures::executor::block_on(futures::future::poll_fn(move |cx| {
-		// List of nodes the user of `peerset` assumes it's connected to. Always a subset of
-		// `known_nodes`.
-		let mut connected_nodes = HashSet::<PeerId>::new();
-		// List of nodes the user of `peerset` called `incoming` with and that haven't been
-		// accepted or rejected yet.
-		let mut incoming_nodes = HashMap::<IncomingIndex, PeerId>::new();
-		// Next id for incoming connections.
-		let mut next_incoming_id = IncomingIndex(0);
+	// List of nodes the user of `peerset` assumes it's connected to. Always a subset of
+	// `known_nodes`.
+	let mut connected_nodes = HashSet::<PeerId>::new();
+	// List of nodes the user of `peerset` called `incoming` with and that haven't been
+	// accepted or rejected yet.
+	let mut incoming_nodes = HashMap::<IncomingIndex, PeerId>::new();
+	// Next id for incoming connections.
+	let mut next_incoming_id = IncomingIndex(0);
+
+	// The loop below is effectively synchronous, so for `PeerStore` & `ProtocolController`
+	// runners, spawned above, to advance, we use `spawn_blocking`.
+	let _ = tokio::task::spawn_blocking(move || {
+		// PRNG to use in `spawn_blocking` context.
+		let mut rng = rand::thread_rng();
 
 		// Perform a certain number of actions while checking that the state is consistent. If we
 		// reach the end of the loop, the run has succeeded.
@@ -175,17 +191,18 @@ fn test_once() {
 		for _ in 0..2500 {
 			// Peer we are working with.
 			let mut current_peer = None;
-			// Current event for event bigrams validation.
+			// Current event for state transition validation.
 			let mut current_event = None;
 			// Last peer state for allowed event validation.
 			let mut last_state = None;
 
 			// Each of these weights corresponds to an action that we may perform.
 			let action_weights = [150, 90, 90, 30, 30, 1, 1, 4, 4];
+
 			match WeightedIndex::new(&action_weights).unwrap().sample(&mut rng) {
-				// If we generate 0, poll the peerset.
-				0 => match Stream::poll_next(Pin::new(&mut peerset), cx) {
-					Poll::Ready(Some(Message::Connect { peer_id, .. })) => {
+				// If we generate 0, try to grab the next message from `ProtocolController`.
+				0 => match from_controller.next().now_or_never() {
+					Some(Some(Message::Connect { peer_id, .. })) => {
 						log::info!("PSM: connecting to peer {}", peer_id);
 
 						let state = known_nodes.get_mut(&peer_id).unwrap();
@@ -210,7 +227,7 @@ fn test_once() {
 						current_peer = Some(peer_id);
 						current_event = Some(Event::PsmConnect);
 					},
-					Poll::Ready(Some(Message::Drop { peer_id, .. })) => {
+					Some(Some(Message::Drop { peer_id, .. })) => {
 						log::info!("PSM: dropping peer {}", peer_id);
 
 						let state = known_nodes.get_mut(&peer_id).unwrap();
@@ -232,7 +249,7 @@ fn test_once() {
 						current_peer = Some(peer_id);
 						current_event = Some(Event::PsmDrop);
 					},
-					Poll::Ready(Some(Message::Accept(n))) => {
+					Some(Some(Message::Accept(n))) => {
 						log::info!("PSM: accepting index {}", n.0);
 
 						let peer_id = incoming_nodes.remove(&n).unwrap();
@@ -263,7 +280,7 @@ fn test_once() {
 						current_peer = Some(peer_id);
 						current_event = Some(Event::PsmAccept);
 					},
-					Poll::Ready(Some(Message::Reject(n))) => {
+					Some(Some(Message::Reject(n))) => {
 						log::info!("PSM: rejecting index {}", n.0);
 
 						let peer_id = incoming_nodes.remove(&n).unwrap();
@@ -294,22 +311,22 @@ fn test_once() {
 						current_peer = Some(peer_id);
 						current_event = Some(Event::PsmReject);
 					},
-					Poll::Ready(None) => panic!(),
-					Poll::Pending => {},
+					Some(None) => panic!(),
+					None => {},
 				},
 
 				// If we generate 1, discover a new node.
 				1 => {
 					let new_id = PeerId::random();
 					known_nodes.insert(new_id, State::Disconnected);
-					peerset_handle.add_known_peer(new_id);
+					peer_store_handle.add_known_peer(new_id);
 				},
 
 				// If we generate 2, adjust a random reputation.
 				2 =>
 					if let Some(id) = known_nodes.keys().choose(&mut rng) {
 						let val = Uniform::new_inclusive(i32::MIN, i32::MAX).sample(&mut rng);
-						peerset_handle.report_peer(*id, ReputationChange::new(val, ""));
+						peer_store_handle.report_peer(*id, ReputationChange::new(val, ""));
 					},
 
 				// If we generate 3, disconnect from a random node.
@@ -322,7 +339,7 @@ fn test_once() {
 						last_state = Some(*state);
 						*state = State::Disconnected;
 
-						peerset.dropped(SetId::from(0), id, DropReason::Unknown);
+						protocol_handle.dropped(id);
 
 						current_peer = Some(id);
 						current_event = Some(Event::Disconnected);
@@ -340,7 +357,7 @@ fn test_once() {
 						.cloned()
 					{
 						log::info!("Incoming connection from {}, index {}", id, next_incoming_id.0);
-						peerset.incoming(SetId::from(0), id, next_incoming_id);
+						protocol_handle.incoming_connection(id, next_incoming_id);
 						incoming_nodes.insert(next_incoming_id, id);
 
 						let state = known_nodes.get_mut(&id).unwrap();
@@ -357,11 +374,11 @@ fn test_once() {
 				// 5 and 6 are the reserved-only mode.
 				5 => {
 					log::info!("Set reserved only");
-					peerset_handle.set_reserved_only(SetId::from(0), true);
+					protocol_handle.set_reserved_only(true);
 				},
 				6 => {
 					log::info!("Unset reserved only");
-					peerset_handle.set_reserved_only(SetId::from(0), false);
+					protocol_handle.set_reserved_only(false);
 				},
 
 				// 7 and 8 are about switching a random node in or out of reserved mode.
@@ -370,7 +387,7 @@ fn test_once() {
 						known_nodes.keys().filter(|n| !reserved_nodes.contains(*n)).choose(&mut rng)
 					{
 						log::info!("Add reserved: {}", id);
-						peerset_handle.add_reserved_peer(SetId::from(0), *id);
+						protocol_handle.add_reserved_peer(*id);
 						reserved_nodes.insert(*id);
 					}
 				},
@@ -378,13 +395,13 @@ fn test_once() {
 					if let Some(id) = reserved_nodes.iter().choose(&mut rng).cloned() {
 						log::info!("Remove reserved: {}", id);
 						reserved_nodes.remove(&id);
-						peerset_handle.remove_reserved_peer(SetId::from(0), id);
+						protocol_handle.remove_reserved_peer(id);
 					},
 
 				_ => unreachable!(),
 			}
 
-			// Validate event bigrams and state transitions.
+			// Validate state transitions.
 			if let Some(peer_id) = current_peer {
 				let event = current_event.unwrap();
 				let last_state = discard_incoming_index(last_state.unwrap());
@@ -396,7 +413,6 @@ fn test_once() {
 				}
 			}
 		}
-
-		Poll::Ready(())
-	}));
+	})
+	.await;
 }

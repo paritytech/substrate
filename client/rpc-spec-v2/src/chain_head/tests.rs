@@ -1123,6 +1123,86 @@ async fn unique_operation_ids() {
 }
 
 #[tokio::test]
+async fn separate_operation_ids_for_subscriptions() {
+	let builder = TestClientBuilder::new();
+	let backend = builder.backend();
+	let mut client = Arc::new(builder.build());
+
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		Arc::new(TaskExecutor::default()),
+		CHAIN_GENESIS,
+		ChainHeadConfig {
+			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: MAX_OPERATIONS,
+		},
+	)
+	.into_rpc();
+
+	// Create two separate subscriptions.
+	let mut sub_first = api.subscribe("chainHead_unstable_follow", [true]).await.unwrap();
+	let sub_id_first = sub_first.subscription_id();
+	let sub_id_first = serde_json::to_string(&sub_id_first).unwrap();
+
+	let mut sub_second = api.subscribe("chainHead_unstable_follow", [true]).await.unwrap();
+	let sub_id_second = sub_second.subscription_id();
+	let sub_id_second = serde_json::to_string(&sub_id_second).unwrap();
+
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+	let block_hash = format!("{:?}", block.header.hash());
+
+	// Ensure the imported block is propagated and pinned.
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub_first).await,
+		FollowEvent::Initialized(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub_first).await,
+		FollowEvent::NewBlock(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub_first).await,
+		FollowEvent::BestBlockChanged(_)
+	);
+
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub_second).await,
+		FollowEvent::Initialized(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub_second).await,
+		FollowEvent::NewBlock(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub_second).await,
+		FollowEvent::BestBlockChanged(_)
+	);
+
+	// Each `chainHead_follow` subscription receives a separate operation ID.
+	let response: MethodResponse =
+		api.call("chainHead_unstable_body", [&sub_id_first, &block_hash]).await.unwrap();
+	let operation_id: String = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+	assert_eq!(operation_id, "0");
+
+	let response: MethodResponse = api
+		.call("chainHead_unstable_body", [&sub_id_second, &block_hash])
+		.await
+		.unwrap();
+	let operation_id_second: String = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+	// The second subscription does not increment the operation ID of the first one.
+	assert_eq!(operation_id_second, "0");
+}
+
+#[tokio::test]
 async fn follow_generates_initial_blocks() {
 	let builder = TestClientBuilder::new();
 	let backend = builder.backend();

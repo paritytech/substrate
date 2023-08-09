@@ -37,14 +37,14 @@ use crate::{
 	gas::{GasMeter, Token},
 	wasm::prepare::LoadedModule,
 	weights::WeightInfo,
-	AccountIdOf, BadOrigin, BalanceOf, CodeHash, CodeInfoOf, CodeVec, Config, Error, Event, Pallet,
-	PristineCode, Schedule, Weight, LOG_TARGET,
+	AccountIdOf, BadOrigin, BalanceOf, CodeHash, CodeInfoOf, CodeVec, Config, Error, Event,
+	HoldReason, Pallet, PristineCode, Schedule, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
-	traits::ReservableCurrency,
+	traits::{fungible::MutateHold, tokens::Precision::BestEffort},
 };
 use sp_core::Get;
 use sp_runtime::RuntimeDebug;
@@ -237,12 +237,24 @@ impl<T: Config> WasmBlob<T> {
 				// the `owner` is always the origin of the current transaction.
 				None => {
 					let deposit = self.code_info.deposit;
-					T::Currency::reserve(&self.code_info.owner, deposit)
-						.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
+					T::Currency::hold(
+						&HoldReason::CodeUploadDepositReserve.into(),
+						&self.code_info.owner,
+						deposit,
+					)
+					.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
+
 					self.code_info.refcount = 0;
 					<PristineCode<T>>::insert(code_hash, &self.code);
 					*stored_code_info = Some(self.code_info.clone());
-					<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeStored { code_hash });
+					<Pallet<T>>::deposit_event(
+						vec![code_hash],
+						Event::CodeStored {
+							code_hash,
+							deposit_held: deposit,
+							uploader: self.code_info.owner.clone(),
+						},
+					);
 					Ok(deposit)
 				},
 			}
@@ -255,10 +267,21 @@ impl<T: Config> WasmBlob<T> {
 			if let Some(code_info) = existing {
 				ensure!(code_info.refcount == 0, <Error<T>>::CodeInUse);
 				ensure!(&code_info.owner == origin, BadOrigin);
-				T::Currency::unreserve(&code_info.owner, code_info.deposit);
+				let _ = T::Currency::release(
+					&HoldReason::CodeUploadDepositReserve.into(),
+					&code_info.owner,
+					code_info.deposit,
+					BestEffort,
+				);
+				let deposit_released = code_info.deposit;
+				let remover = code_info.owner.clone();
+
 				*existing = None;
 				<PristineCode<T>>::remove(&code_hash);
-				<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeRemoved { code_hash });
+				<Pallet<T>>::deposit_event(
+					vec![code_hash],
+					Event::CodeRemoved { code_hash, deposit_released, remover },
+				);
 				Ok(())
 			} else {
 				Err(<Error<T>>::CodeNotFound.into())

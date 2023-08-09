@@ -633,12 +633,6 @@ impl PalletCmd {
 					println!("{}", comment);
 				}
 				println!();
-
-				println!("-- Proof Sizes --\n");
-				for result in batch.db_results.iter() {
-					println!("{} bytes", result.proof_size);
-				}
-				println!();
 			}
 
 			// Conduct analysis.

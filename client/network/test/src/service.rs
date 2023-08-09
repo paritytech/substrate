@@ -23,6 +23,7 @@ use sc_consensus::{ImportQueue, Link};
 use sc_network::{
 	config::{self, FullNetworkConfiguration, MultiaddrWithPeerId, ProtocolId, TransportConfig},
 	event::Event,
+	peer_store::PeerStore,
 	NetworkEventStream, NetworkNotification, NetworkPeers, NetworkService, NetworkStateInfo,
 	NetworkWorker,
 };
@@ -220,6 +221,12 @@ impl TestNetworkBuilder {
 			full_net_config.add_request_response_protocol(config);
 		}
 
+		let peer_store = PeerStore::new(
+			network_config.boot_nodes.iter().map(|bootnode| bootnode.peer_id).collect(),
+		);
+		let peer_store_handle = peer_store.handle();
+		tokio::spawn(peer_store.run().boxed());
+
 		let genesis_hash =
 			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
 		let worker = NetworkWorker::<
@@ -233,6 +240,7 @@ impl TestNetworkBuilder {
 			}),
 			genesis_hash,
 			network_config: full_net_config,
+			peer_store: peer_store_handle,
 			protocol_id,
 			fork_id,
 			metrics_registry: None,
