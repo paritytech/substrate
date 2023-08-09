@@ -21,12 +21,13 @@
 use codec::FullCodec;
 use scale_info::TypeInfo;
 use sp_runtime::DispatchError;
-use sp_std::iter::Iterator;
+use sp_std::{fmt::Debug, iter::Iterator};
+use sp_weights::Weight;
 
 /// A general-purpose trait which defines a type of service work (i.e., work to performed by an
 /// off-chain worker) including methods for enumerating, validating, indexing, and running
 /// tasks of this type.
-pub trait Task: Sized + FullCodec + TypeInfo {
+pub trait Task: Sized + FullCodec + TypeInfo + Clone + Debug + PartialEq + Eq {
 	type Enumeration: Iterator<Item = Self>;
 
 	/// A unique value representing this `Task`. Analogous to `call_index`, but for tasks.
@@ -40,4 +41,7 @@ pub trait Task: Sized + FullCodec + TypeInfo {
 
 	/// Performs the work for this particular `Task` variant.
 	fn run(&self) -> Result<(), DispatchError>;
+
+	/// Returns the weight of executing this `Task`.
+	fn weight(&self) -> Weight;
 }

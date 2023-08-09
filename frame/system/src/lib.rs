@@ -86,7 +86,7 @@ use sp_version::RuntimeVersion;
 
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 #[cfg(feature = "std")]
-use frame_support::traits::BuildGenesisConfig;
+use frame_support::traits::{BuildGenesisConfig, Task};
 use frame_support::{
 	dispatch::{
 		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
@@ -272,6 +272,9 @@ pub mod pallet {
 			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
 			+ Debug
 			+ From<Call<Self>>;
+
+		#[pallet::no_default]
+		type RuntimeTask: Task;
 
 		/// This stores the number of previous transactions associated with a sender account.
 		type Nonce: Parameter
@@ -501,12 +504,12 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		// #[pallet::call_index(8)]
-		// #[pallet::weight(0)]
-		// pub fn do_task(origin: OriginFor<T>, task: Task) -> DispatchResultWithPostInfo {
-		// 	let who = ensure_signed(origin)?;
-		// 	Ok(().into())
-		// }
+		#[pallet::call_index(8)]
+		#[pallet::weight(task.weight())]
+		pub fn do_task(origin: OriginFor<T>, task: T::RuntimeTask) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			Ok(().into())
+		}
 	}
 
 	/// Event for the System pallet.

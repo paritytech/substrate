@@ -112,6 +112,10 @@ pub mod pallet {
 				Task::__Ignore(_, _) => unreachable!(),
 			}
 		}
+
+		fn weight(&self) -> Weight {
+			Weight::default()
+		}
 	}
 
 	#[pallet::config]
