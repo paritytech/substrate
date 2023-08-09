@@ -19,7 +19,7 @@
 #![allow(non_snake_case)]
 
 //! API trait of the chain head.
-use crate::chain_head::event::{ChainHeadEvent, FollowEvent, StorageQuery};
+use crate::chain_head::event::{FollowEvent, MethodResponse, StorageQuery};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
 #[rpc(client, server)]
@@ -47,12 +47,12 @@ pub trait ChainHeadApi<Hash> {
 	/// # Unstable
 	///
 	/// This method is unstable and subject to change in the future.
-	#[subscription(
-		name = "chainHead_unstable_body",
-		unsubscribe = "chainHead_unstable_stopBody",
-		item = ChainHeadEvent<String>,
-	)]
-	fn chain_head_unstable_body(&self, follow_subscription: String, hash: Hash);
+	#[method(name = "chainHead_unstable_body", blocking)]
+	fn chain_head_unstable_body(
+		&self,
+		follow_subscription: String,
+		hash: Hash,
+	) -> RpcResult<MethodResponse>;
 
 	/// Retrieves the header of a pinned block.
 	///
@@ -86,36 +86,28 @@ pub trait ChainHeadApi<Hash> {
 	/// # Unstable
 	///
 	/// This method is unstable and subject to change in the future.
-	#[subscription(
-		name = "chainHead_unstable_storage",
-		unsubscribe = "chainHead_unstable_stopStorage",
-		item = ChainHeadEvent<String>,
-	)]
+	#[method(name = "chainHead_unstable_storage", blocking)]
 	fn chain_head_unstable_storage(
 		&self,
 		follow_subscription: String,
 		hash: Hash,
 		items: Vec<StorageQuery<String>>,
 		child_trie: Option<String>,
-	);
+	) -> RpcResult<MethodResponse>;
 
 	/// Call into the Runtime API at a specified block's state.
 	///
 	/// # Unstable
 	///
 	/// This method is unstable and subject to change in the future.
-	#[subscription(
-		name = "chainHead_unstable_call",
-		unsubscribe = "chainHead_unstable_stopCall",
-		item = ChainHeadEvent<String>,
-	)]
+	#[method(name = "chainHead_unstable_call", blocking)]
 	fn chain_head_unstable_call(
 		&self,
 		follow_subscription: String,
 		hash: Hash,
 		function: String,
 		call_parameters: String,
-	);
+	) -> RpcResult<MethodResponse>;
 
 	/// Unpin a block reported by the `follow` method.
 	///

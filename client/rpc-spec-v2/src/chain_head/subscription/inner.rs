@@ -18,6 +18,7 @@
 
 use futures::channel::oneshot;
 use sc_client_api::Backend;
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{hash_map::Entry, HashMap},
@@ -25,7 +26,10 @@ use std::{
 	time::{Duration, Instant},
 };
 
-use crate::chain_head::subscription::SubscriptionManagementError;
+use crate::chain_head::{subscription::SubscriptionManagementError, FollowEvent};
+
+/// The queue size after which the `sc_utils::mpsc::tracing_unbounded` would produce warnings.
+const QUEUE_SIZE_WARNING: usize = 512;
 
 /// The state machine of a block of a single subscription ID.
 ///
@@ -116,6 +120,12 @@ struct SubscriptionState<Block: BlockT> {
 	with_runtime: bool,
 	/// Signals the "Stop" event.
 	tx_stop: Option<oneshot::Sender<()>>,
+	/// The sender of message responses to the `chainHead_follow` events.
+	///
+	/// This object is cloned between methods.
+	response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
+	/// The next operation ID.
+	next_operation_id: usize,
 	/// Track the block hashes available for this subscription.
 	///
 	/// This implementation assumes:
@@ -227,6 +237,13 @@ impl<Block: BlockT> SubscriptionState<Block> {
 		}
 		timestamp
 	}
+
+	/// Generate the next operation ID for this subscription.
+	fn next_operation_id(&mut self) -> usize {
+		let op_id = self.next_operation_id;
+		self.next_operation_id = self.next_operation_id.wrapping_add(1);
+		op_id
+	}
 }
 
 /// Keeps a specific block pinned while the handle is alive.
@@ -235,6 +252,8 @@ impl<Block: BlockT> SubscriptionState<Block> {
 pub struct BlockGuard<Block: BlockT, BE: Backend<Block>> {
 	hash: Block::Hash,
 	with_runtime: bool,
+	response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
+	operation_id: String,
 	backend: Arc<BE>,
 }
 
@@ -251,18 +270,36 @@ impl<Block: BlockT, BE: Backend<Block>> BlockGuard<Block, BE> {
 	fn new(
 		hash: Block::Hash,
 		with_runtime: bool,
+		response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
+		operation_id: usize,
 		backend: Arc<BE>,
 	) -> Result<Self, SubscriptionManagementError> {
 		backend
 			.pin_block(hash)
 			.map_err(|err| SubscriptionManagementError::Custom(err.to_string()))?;
 
-		Ok(Self { hash, with_runtime, backend })
+		Ok(Self {
+			hash,
+			with_runtime,
+			response_sender,
+			operation_id: operation_id.to_string(),
+			backend,
+		})
 	}
 
 	/// The `with_runtime` flag of the subscription.
 	pub fn has_runtime(&self) -> bool {
 		self.with_runtime
+	}
+
+	/// Send message responses from the `chainHead` methods to `chainHead_follow`.
+	pub fn response_sender(&self) -> TracingUnboundedSender<FollowEvent<Block::Hash>> {
+		self.response_sender.clone()
+	}
+
+	/// The operation ID of this method.
+	pub fn operation_id(&self) -> String {
+		self.operation_id.clone()
 	}
 }
 
@@ -270,6 +307,15 @@ impl<Block: BlockT, BE: Backend<Block>> Drop for BlockGuard<Block, BE> {
 	fn drop(&mut self) {
 		self.backend.unpin_block(self.hash);
 	}
+}
+
+/// The data propagated back to the `chainHead_follow` method after
+/// the subscription is successfully inserted.
+pub struct InsertedSubscriptionData<Block: BlockT> {
+	/// Signal that the subscription must stop.
+	pub rx_stop: oneshot::Receiver<()>,
+	/// Receive message responses from the `chainHead` methods.
+	pub response_receiver: TracingUnboundedReceiver<FollowEvent<Block::Hash>>,
 }
 
 pub struct SubscriptionsInner<Block: BlockT, BE: Backend<Block>> {
@@ -311,16 +357,21 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 		&mut self,
 		sub_id: String,
 		with_runtime: bool,
-	) -> Option<oneshot::Receiver<()>> {
+	) -> Option<InsertedSubscriptionData<Block>> {
 		if let Entry::Vacant(entry) = self.subs.entry(sub_id) {
 			let (tx_stop, rx_stop) = oneshot::channel();
+			let (response_sender, response_receiver) =
+				tracing_unbounded("chain-head-method-responses", QUEUE_SIZE_WARNING);
 			let state = SubscriptionState::<Block> {
 				with_runtime,
 				tx_stop: Some(tx_stop),
+				response_sender,
+				next_operation_id: 0,
 				blocks: Default::default(),
 			};
 			entry.insert(state);
-			Some(rx_stop)
+
+			Some(InsertedSubscriptionData { rx_stop, response_receiver })
 		} else {
 			None
 		}
@@ -491,7 +542,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 		sub_id: &str,
 		hash: Block::Hash,
 	) -> Result<BlockGuard<Block, BE>, SubscriptionManagementError> {
-		let Some(sub) = self.subs.get(sub_id) else {
+		let Some(sub) = self.subs.get_mut(sub_id) else {
 			return Err(SubscriptionManagementError::SubscriptionAbsent)
 		};
 
@@ -499,7 +550,14 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 			return Err(SubscriptionManagementError::BlockHashAbsent)
 		}
 
-		BlockGuard::new(hash, sub.with_runtime, self.backend.clone())
+		let operation_id = sub.next_operation_id();
+		BlockGuard::new(
+			hash,
+			sub.with_runtime,
+			sub.response_sender.clone(),
+			operation_id,
+			self.backend.clone(),
+		)
 	}
 }
 
@@ -604,9 +662,13 @@ mod tests {
 
 	#[test]
 	fn sub_state_register_twice() {
+		let (response_sender, _response_receiver) =
+			tracing_unbounded("test-chain-head-method-responses", QUEUE_SIZE_WARNING);
 		let mut sub_state = SubscriptionState::<Block> {
 			with_runtime: false,
 			tx_stop: None,
+			response_sender,
+			next_operation_id: 0,
 			blocks: Default::default(),
 		};
 
@@ -629,9 +691,13 @@ mod tests {
 
 	#[test]
 	fn sub_state_register_unregister() {
+		let (response_sender, _response_receiver) =
+			tracing_unbounded("test-chain-head-method-responses", QUEUE_SIZE_WARNING);
 		let mut sub_state = SubscriptionState::<Block> {
 			with_runtime: false,
 			tx_stop: None,
+			response_sender,
+			next_operation_id: 0,
 			blocks: Default::default(),
 		};
 
@@ -921,17 +987,17 @@ mod tests {
 
 		let id = "abc".to_string();
 
-		let mut rx_stop = subs.insert_subscription(id.clone(), true).unwrap();
+		let mut sub_data = subs.insert_subscription(id.clone(), true).unwrap();
 
 		// Check the stop signal was not received.
-		let res = rx_stop.try_recv().unwrap();
+		let res = sub_data.rx_stop.try_recv().unwrap();
 		assert!(res.is_none());
 
 		let sub = subs.subs.get_mut(&id).unwrap();
 		sub.stop();
 
 		// Check the signal was received.
-		let res = rx_stop.try_recv().unwrap();
+		let res = sub_data.rx_stop.try_recv().unwrap();
 		assert!(res.is_some());
 	}
 }
