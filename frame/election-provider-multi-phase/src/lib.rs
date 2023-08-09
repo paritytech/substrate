@@ -1288,12 +1288,7 @@ pub mod pallet {
 	#[pallet::getter(fn snapshot)]
 	pub type Snapshot<T: Config> = StorageValue<
 		_,
-		RoundSnapshot<
-			T::AccountId,
-			VoterOf<T>,
-			T::MaxElectingVoters,
-			T::MaxElectableTargets,
-		>,
+		RoundSnapshot<T::AccountId, VoterOf<T>, T::MaxElectingVoters, T::MaxElectableTargets>,
 	>;
 
 	/// Desired number of targets to elect for this round.
