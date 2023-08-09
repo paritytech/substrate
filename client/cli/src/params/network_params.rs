@@ -149,6 +149,11 @@ pub struct NetworkParams {
 	/// and observe block requests timing out.
 	#[arg(long, value_name = "COUNT", default_value_t = 64)]
 	pub max_blocks_per_request: u32,
+
+	/// Maximum receive window size for libp2p connections. If this is not specified
+	/// the default value is used that is 256KiB.
+	#[arg(long, value_name = "BYTES")]
+	pub yamux_window_size: Option<u32>,
 }
 
 impl NetworkParams {
@@ -241,7 +246,7 @@ impl NetworkParams {
 			allow_non_globals_in_dht,
 			kademlia_disjoint_query_paths: self.kademlia_disjoint_query_paths,
 			kademlia_replication_factor: self.kademlia_replication_factor,
-			yamux_window_size: None,
+			yamux_window_size: self.yamux_window_size,
 			ipfs_server: self.ipfs_server,
 			sync_mode: self.sync.into(),
 		}
