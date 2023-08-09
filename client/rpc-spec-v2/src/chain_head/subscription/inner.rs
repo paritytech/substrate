@@ -130,7 +130,7 @@ impl LimitOperations {
 	///
 	/// Returns nothing if there's no space available, else returns a permit
 	/// that guarantees that at least one operation can be executed.
-	fn reserve(&self, to_reserve: usize) -> Option<PermitOperations> {
+	fn reserve_at_most(&self, to_reserve: usize) -> Option<PermitOperations> {
 		let mut ongoing = self.ongoing.lock();
 
 		// The maximum capacity.
@@ -320,8 +320,8 @@ impl<Block: BlockT> SubscriptionState<Block> {
 	/// Reserves capacity to execute at least one operation and at most the requested items.
 	///
 	/// For more details see [`PermitOperations`].
-	fn reserve(&self, to_reserve: usize) -> Option<PermitOperations> {
-		self.limits.reserve(to_reserve)
+	fn reserve_at_most(&self, to_reserve: usize) -> Option<PermitOperations> {
+		self.limits.reserve_at_most(to_reserve)
 	}
 }
 
@@ -645,7 +645,8 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 			return Err(SubscriptionManagementError::BlockHashAbsent)
 		}
 
-		let Some(permit_operations) = sub.reserve(to_reserve) else {
+		let Some(permit_operations) = sub.reserve_at_most(to_reserve) else {
+			// Error when the server cannot execute at least one operation.
 			return Err(SubscriptionManagementError::ExceededLimits)
 		};
 
@@ -1119,23 +1120,23 @@ mod tests {
 		let ops = LimitOperations::new(2);
 
 		// One operation is reserved.
-		let permit_one = ops.reserve(1).unwrap();
+		let permit_one = ops.reserve_at_most(1).unwrap();
 		assert_eq!(permit_one.num_reserved(), 1);
 
 		// Request 2 operations, however there is capacity only for one.
-		let permit_two = ops.reserve(2).unwrap();
+		let permit_two = ops.reserve_at_most(2).unwrap();
 		// Number of reserved permits is smaller than provided.
 		assert_eq!(permit_two.num_reserved(), 1);
 
 		// Try to reserve operations when there's no space.
-		let permit = ops.reserve(1);
+		let permit = ops.reserve_at_most(1);
 		assert!(permit.is_none());
 
 		// Release capacity.
 		drop(permit_two);
 
 		// Can reserve again
-		let permit_three = ops.reserve(1).unwrap();
+		let permit_three = ops.reserve_at_most(1).unwrap();
 		assert_eq!(permit_three.num_reserved(), 1);
 	}
 }
