@@ -16,8 +16,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 serde = { version = "1.0.163", default-features = false, features = ["alloc", "derive"] }
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-frame-metadata = { version = "15.1.0", default-features = false, features = ["v14", "v15-unstable"] }
-sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
+frame-metadata = { version = "16.0.0", default-features = false, features = ["current"] }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api", features = [ "frame-metadata" ] }
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
@@ -29,30 +29,33 @@ sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-weights = { version = "20.0.0", default-features = false, path = "../../primitives/weights" }
 sp-debug-derive = { default-features = false, path = "../../primitives/debug-derive" }
 tt-call = "1.0.8"
-macro_magic = "0.4.1"
+macro_magic = "0.4.2"
 frame-support-procedural = { version = "4.0.0-dev", default-features = false, path = "./procedural" }
 paste = "1.0"
 sp-state-machine = { version = "0.28.0", default-features = false, optional = true, path = "../../primitives/state-machine" }
 bitflags = "1.3"
 impl-trait-for-tuples = "0.2.2"
-smallvec = "1.8.0"
+smallvec = "1.11.0"
 log = { version = "0.4.17", default-features = false }
 sp-core-hashing-proc-macro = { version = "9.0.0", path = "../../primitives/core/hashing/proc-macro" }
-secp256k1 = { version = "0.24.0", default-features = false }
+k256 = { version = "0.13.1", default-features = false, features = ["ecdsa"] }
 environmental = { version = "1.1.4", default-features = false }
+sp-genesis-builder = { version = "0.1.0", default-features=false, path = "../../primitives/genesis-builder" }
+serde_json = { version = "1.0.85", default-features = false, features = ["alloc"] }
+
+aquamarine = { version = "0.3.2" }
 
 [dev-dependencies]
-serde_json = "1.0.85"
 assert_matches = "1.3.0"
 pretty_assertions = "1.2.1"
 frame-system = { version = "4.0.0-dev", path = "../system" }
-array-bytes = "4.1"
+array-bytes = "6.1"
 
 [features]
 default = ["std"]
 std = [
 	"sp-core/std",
-	"secp256k1/std",
+	"k256/std",
 	"serde/std",
 	"sp-api/std",
 	"sp-io/std",
@@ -70,6 +73,9 @@ std = [
 	"frame-support-procedural/std",
 	"log/std",
 	"environmental/std",
+	"sp-genesis-builder/std",
+	"frame-system/std",
+	"sp-debug-derive/std"
 ]
 runtime-benchmarks = [
 	"frame-system/runtime-benchmarks",
@@ -77,8 +83,11 @@ runtime-benchmarks = [
 	"sp-staking/runtime-benchmarks"
 ]
 try-runtime = [
-	"sp-debug-derive/force-debug"
+	"sp-debug-derive/force-debug",
+	"frame-system/try-runtime",
+	"sp-runtime/try-runtime"
 ]
+experimental = []
 # By default some types have documentation, `no-metadata-docs` allows to reduce the documentation
 # in the metadata.
 no-metadata-docs = ["frame-support-procedural/no-metadata-docs", "sp-api/no-metadata-docs"]

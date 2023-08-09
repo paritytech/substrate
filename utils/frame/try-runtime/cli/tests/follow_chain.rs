@@ -35,7 +35,7 @@ async fn follow_chain_works() {
 
 	common::run_with_timeout(Duration::from_secs(60), async move {
 		fn start_follow(ws_url: &str) -> Child {
-			Command::new(cargo_bin("substrate"))
+			Command::new(cargo_bin("substrate-node"))
 				.stdout(process::Stdio::piped())
 				.stderr(process::Stdio::piped())
 				.args(&["try-runtime", "--runtime=existing"])

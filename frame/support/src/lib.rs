@@ -67,17 +67,13 @@ pub use tt_call::*;
 
 #[macro_use]
 pub mod dispatch;
-mod hash;
-pub mod storage;
-#[macro_use]
-pub mod event;
-pub mod inherent;
-#[macro_use]
-pub mod error;
 pub mod crypto;
 pub mod dispatch_context;
+mod hash;
+pub mod inherent;
 pub mod instances;
 pub mod migrations;
+pub mod storage;
 pub mod traits;
 pub mod weights;
 #[doc(hidden)]
@@ -531,8 +527,7 @@ pub fn debug(data: &impl sp_std::fmt::Debug) {
 
 #[doc(inline)]
 pub use frame_support_procedural::{
-	construct_runtime, decl_storage, match_and_insert, transactional, PalletError,
-	RuntimeDebugNoBound,
+	construct_runtime, match_and_insert, transactional, PalletError, RuntimeDebugNoBound,
 };
 
 #[doc(hidden)]
@@ -834,7 +829,7 @@ pub mod tests {
 	use sp_runtime::{generic, traits::BlakeTwo256, BuildStorage};
 	use sp_std::result;
 
-	pub use self::frame_system::{Config, Pallet};
+	pub use self::frame_system::{pallet_prelude::*, Config, Pallet};
 
 	#[pallet]
 	pub mod frame_system {
@@ -849,7 +844,7 @@ pub mod tests {
 		#[pallet::config]
 		#[pallet::disable_frame_system_supertrait_check]
 		pub trait Config: 'static {
-			type BlockNumber: Parameter + Default + MaxEncodedLen;
+			type Block: Parameter + sp_runtime::traits::Block;
 			type AccountId;
 			type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;
 			type RuntimeOrigin;
@@ -879,12 +874,12 @@ pub mod tests {
 		#[pallet::storage]
 		#[pallet::getter(fn generic_data)]
 		pub type GenericData<T: Config> =
-			StorageMap<_, Identity, T::BlockNumber, T::BlockNumber, ValueQuery>;
+			StorageMap<_, Identity, BlockNumberFor<T>, BlockNumberFor<T>, ValueQuery>;
 
 		#[pallet::storage]
 		#[pallet::getter(fn generic_data2)]
 		pub type GenericData2<T: Config> =
-			StorageMap<_, Blake2_128Concat, T::BlockNumber, T::BlockNumber, OptionQuery>;
+			StorageMap<_, Blake2_128Concat, BlockNumberFor<T>, BlockNumberFor<T>, OptionQuery>;
 
 		#[pallet::storage]
 		pub type DataDM<T> =
@@ -894,10 +889,10 @@ pub mod tests {
 		pub type GenericDataDM<T: Config> = StorageDoubleMap<
 			_,
 			Blake2_128Concat,
-			T::BlockNumber,
+			BlockNumberFor<T>,
 			Identity,
-			T::BlockNumber,
-			T::BlockNumber,
+			BlockNumberFor<T>,
+			BlockNumberFor<T>,
 			ValueQuery,
 		>;
 
@@ -905,10 +900,10 @@ pub mod tests {
 		pub type GenericData2DM<T: Config> = StorageDoubleMap<
 			_,
 			Blake2_128Concat,
-			T::BlockNumber,
+			BlockNumberFor<T>,
 			Twox64Concat,
-			T::BlockNumber,
-			T::BlockNumber,
+			BlockNumberFor<T>,
+			BlockNumberFor<T>,
 			OptionQuery,
 		>;
 
@@ -919,25 +914,31 @@ pub mod tests {
 			Blake2_128Concat,
 			u32,
 			Blake2_128Concat,
-			T::BlockNumber,
+			BlockNumberFor<T>,
 			Vec<u32>,
 			ValueQuery,
 		>;
 
 		#[pallet::genesis_config]
-		pub struct GenesisConfig {
+		pub struct GenesisConfig<T: Config> {
 			pub data: Vec<(u32, u64)>,
 			pub test_config: Vec<(u32, u32, u64)>,
+			#[serde(skip)]
+			pub _config: sp_std::marker::PhantomData<T>,
 		}
 
-		impl Default for GenesisConfig {
+		impl<T: Config> Default for GenesisConfig<T> {
 			fn default() -> Self {
-				Self { data: vec![(15u32, 42u64)], test_config: vec![(15u32, 16u32, 42u64)] }
+				Self {
+					_config: Default::default(),
+					data: vec![(15u32, 42u64)],
+					test_config: vec![(15u32, 16u32, 42u64)],
+				}
 			}
 		}
 
 		#[pallet::genesis_build]
-		impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 			fn build(&self) {
 				for (k, v) in &self.data {
 					<Data<T>>::insert(k, v);
@@ -950,6 +951,11 @@ pub mod tests {
 
 		pub mod pallet_prelude {
 			pub type OriginFor<T> = <T as super::Config>::RuntimeOrigin;
+
+			pub type HeaderFor<T> =
+				<<T as super::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
+
+			pub type BlockNumberFor<T> = <HeaderFor<T> as sp_runtime::traits::Header>::Number;
 		}
 	}
 
@@ -961,17 +967,13 @@ pub mod tests {
 
 	crate::construct_runtime!(
 		pub enum Runtime
-		where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
 			System: self::frame_system,
 		}
 	);
 
 	impl Config for Runtime {
-		type BlockNumber = BlockNumber;
+		type Block = Block;
 		type AccountId = AccountId;
 		type BaseCallFilter = crate::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
@@ -999,12 +1001,8 @@ pub mod tests {
 	fn storage_alias_works() {
 		new_test_ext().execute_with(|| {
 			#[crate::storage_alias]
-			type GenericData2<T> = StorageMap<
-				System,
-				Blake2_128Concat,
-				<T as Config>::BlockNumber,
-				<T as Config>::BlockNumber,
-			>;
+			type GenericData2<T> =
+				StorageMap<System, Blake2_128Concat, BlockNumberFor<T>, BlockNumberFor<T>>;
 
 			assert_eq!(Pallet::<Runtime>::generic_data2(5), None);
 			GenericData2::<Runtime>::insert(5, 5);
@@ -1012,12 +1010,8 @@ pub mod tests {
 
 			/// Some random docs that ensure that docs are accepted
 			#[crate::storage_alias]
-			pub type GenericData<T> = StorageMap<
-				Test2,
-				Blake2_128Concat,
-				<T as Config>::BlockNumber,
-				<T as Config>::BlockNumber,
-			>;
+			pub type GenericData<T> =
+				StorageMap<Test2, Blake2_128Concat, BlockNumberFor<T>, BlockNumberFor<T>>;
 		});
 	}
 
@@ -1521,6 +1515,12 @@ pub mod tests {
 	}
 }
 
+/// Private module re-exporting items used by frame support macros.
+#[doc(hidden)]
+pub mod _private {
+	pub use sp_inherents;
+}
+
 /// Prelude to be used for pallet testing, for ease of use.
 #[cfg(feature = "std")]
 pub mod testing_prelude {
@@ -1545,12 +1545,13 @@ pub mod pallet_prelude {
 		storage::{
 			bounded_vec::BoundedVec,
 			types::{
-				CountedStorageMap, Key as NMapKey, OptionQuery, ResultQuery, StorageDoubleMap,
-				StorageMap, StorageNMap, StorageValue, ValueQuery,
+				CountedStorageMap, CountedStorageNMap, Key as NMapKey, OptionQuery, ResultQuery,
+				StorageDoubleMap, StorageMap, StorageNMap, StorageValue, ValueQuery,
 			},
+			StorageList,
 		},
 		traits::{
-			ConstU32, EnsureOrigin, GenesisBuild, Get, GetDefault, GetStorageVersion, Hooks,
+			BuildGenesisConfig, ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks,
 			IsType, PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,
@@ -1659,9 +1660,14 @@ pub mod pallet_prelude {
 ///   default, dev mode pallets will assume a weight of zero (`0`) if a weight is not
 ///   specified. This is equivalent to specifying `#[weight(0)]` on all calls that do not
 ///   specify a weight.
+/// * Call indices no longer need to be specified on every `#[pallet::call]` declaration. By
+///   default, dev mode pallets will assume a call index based on the order of the call.
 /// * All storages are marked as unbounded, meaning you do not need to implement
 ///   `MaxEncodedLen` on storage types. This is equivalent to specifying `#[pallet::unbounded]`
 ///   on all storage type definitions.
+/// * Storage hashers no longer need to be specified and can be replaced by `_`. In dev mode,
+///   these will be replaced by `Blake2_128Concat`. In case of explicit key-binding, `Hasher`
+///   can simply be ignored when in `dev_mode`.
 ///
 /// Note that the `dev_mode` argument can only be supplied to the `#[pallet]` or
 /// `#[frame_support::pallet]` attribute macro that encloses your pallet module. This argument
@@ -2225,7 +2231,7 @@ pub mod pallet_prelude {
 /// for the pallet.
 ///
 /// Item is defined as either an enum or a struct. It needs to be public and implement the
-/// trait [`GenesisBuild`](`traits::GenesisBuild`) with
+/// trait [`BuildGenesisConfig`](`traits::BuildGenesisConfig`) with
 /// [`#[pallet::genesis_build]`](#genesis-build-palletgenesis_build-optional). The type
 /// generics are constrained to be either none, or `T` or `T: Config`.
 ///
@@ -2507,14 +2513,15 @@ pub mod pallet_prelude {
 /// 	//
 /// 	// Type must implement the `Default` trait.
 /// 	#[pallet::genesis_config]
-/// 	#[derive(Default)]
-/// 	pub struct GenesisConfig {
+/// 	#[derive(frame_support::DefaultNoBound)]
+/// 	pub struct GenesisConfig<T: Config> {
+/// 	    _config: sp_std::marker::PhantomData<T>,
 /// 		_myfield: u32,
 /// 	}
 ///
 /// 	// Declare genesis builder. (This is need only if GenesisConfig is declared)
 /// 	#[pallet::genesis_build]
-/// 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+/// 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 /// 		fn build(&self) {}
 /// 	}
 ///
@@ -2644,13 +2651,14 @@ pub mod pallet_prelude {
 /// 		StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 ///
 /// 	#[pallet::genesis_config]
-/// 	#[derive(Default)]
-/// 	pub struct GenesisConfig {
+/// 	#[derive(frame_support::DefaultNoBound)]
+/// 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+/// 		 _config: sp_std::marker::PhantomData<(T,I)>,
 /// 		_myfield: u32,
 /// 	}
 ///
 /// 	#[pallet::genesis_build]
-/// 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
+/// 	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 /// 		fn build(&self) {}
 /// 	}
 ///
@@ -2708,13 +2716,13 @@ pub mod pallet_prelude {
 ///     - query the metadata using the `state_getMetadata` RPC and curl, or use `subsee -p
 ///       <PALLET_NAME> > meta.json`
 /// 2. Generate the template upgrade for the pallet provided by `decl_storage` with the
-///     environment variable `PRINT_PALLET_UPGRADE`: `PRINT_PALLET_UPGRADE=1 cargo check -p
-///     my_pallet`. This template can be used as it contains all information for storages,
-///     genesis config and genesis build.
+///    environment variable `PRINT_PALLET_UPGRADE`: `PRINT_PALLET_UPGRADE=1 cargo check -p
+///    my_pallet`. This template can be used as it contains all information for storages,
+///    genesis config and genesis build.
 /// 3. Reorganize the pallet to have the trait `Config`, `decl_*` macros,
-///     [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`),
-///     [`ProvideInherent`](`pallet_prelude::ProvideInherent`), and Origin` all together in one
-///     file. Suggested order:
+///    [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`),
+///    [`ProvideInherent`](`pallet_prelude::ProvideInherent`), and Origin` all together in one
+///    file. Suggested order:
 ///     * `Config`,
 ///     * `decl_module`,
 ///     * `decl_event`,
@@ -2774,8 +2782,8 @@ pub mod pallet_prelude {
 /// 8. **migrate error**: rewrite it with attribute
 ///    [`#[pallet::error]`](#error-palleterror-optional).
 /// 9. **migrate storage**: `decl_storage` provide an upgrade template (see 3.). All storages,
-///     genesis config, genesis build and default implementation of genesis config can be
-///     taken from it directly.
+///    genesis config, genesis build and default implementation of genesis config can be taken
+///    from it directly.
 ///
 ///     Otherwise here is the manual process:
 ///
@@ -2896,10 +2904,16 @@ pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		call_index, compact, composite_enum, config, constant,
 		disable_frame_system_supertrait_check, error, event, extra_constants, generate_deposit,
-		generate_store, genesis_build, genesis_config, getter, hooks, inherent, no_default, origin,
-		storage, storage_prefix, storage_version, type_value, unbounded, validate_unsigned, weight,
-		whitelist_storage,
+		generate_store, genesis_build, genesis_config, getter, hooks, import_section, inherent,
+		no_default, origin, pallet_section, storage, storage_prefix, storage_version, type_value,
+		unbounded, validate_unsigned, weight, whitelist_storage,
 	};
+}
+
+#[deprecated(note = "Will be removed after July 2023; Use `sp_runtime::traits` directly instead.")]
+pub mod error {
+	#[doc(hidden)]
+	pub use sp_runtime::traits::{BadOrigin, LookupError};
 }
 
 #[doc(inline)]
@@ -2907,3 +2921,6 @@ pub use frame_support_procedural::register_default_impl;
 
 // Generate a macro that will enable/disable code based on `std` feature being active.
 sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);
+
+// Helper for implementing GenesisBuilder runtime API
+pub mod genesis_builder_helper;

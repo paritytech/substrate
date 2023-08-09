@@ -23,12 +23,10 @@ use frame_benchmarking::{
 };
 use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
-use sc_cli::{
-	execution_method_from_cli, CliConfiguration, ExecutionStrategy, Result, SharedParams,
-};
+use sc_cli::{execution_method_from_cli, CliConfiguration, Result, SharedParams};
 use sc_client_db::BenchmarkingState;
-use sc_executor::{NativeElseWasmExecutor, WasmExecutor};
-use sc_service::{Configuration, NativeExecutionDispatch};
+use sc_executor::WasmExecutor;
+use sc_service::Configuration;
 use serde::Serialize;
 use sp_core::{
 	offchain::{
@@ -143,12 +141,22 @@ not created by a node that was compiled with the flag";
 
 impl PalletCmd {
 	/// Runs the command and benchmarks the chain.
-	pub fn run<BB, ExecDispatch>(&self, config: Configuration) -> Result<()>
+	pub fn run<BB, ExtraHostFunctions>(&self, config: Configuration) -> Result<()>
 	where
 		BB: BlockT + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		ExecDispatch: NativeExecutionDispatch + 'static,
+		ExtraHostFunctions: sp_wasm_interface::HostFunctions,
 	{
+		let _d = self.execution.as_ref().map(|exec| {
+			// We print the warning at the end, since there is often A LOT of output.
+			sp_core::defer::DeferGuard::new(move || {
+				log::warn!(
+					target: LOG_TARGET,
+					"⚠️  Argument `--execution` is deprecated. Its value of `{exec}` has on effect.",
+				)
+			})
+		});
+
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
 				return Err("Output file or path is invalid!".into())
@@ -182,7 +190,6 @@ impl PalletCmd {
 		}
 
 		let spec = config.chain_spec;
-		let strategy = self.execution.unwrap_or(ExecutionStrategy::Native);
 		let pallet = self.pallet.clone().unwrap_or_default();
 		let pallet = pallet.as_bytes();
 		let extrinsic = self.extrinsic.clone().unwrap_or_default();
@@ -212,13 +219,15 @@ impl PalletCmd {
 		let method =
 			execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy);
 
-		let executor = NativeElseWasmExecutor::<ExecDispatch>::new_with_wasm_executor(
-			WasmExecutor::builder()
-				.with_execution_method(method)
-				.with_max_runtime_instances(2)
-				.with_runtime_cache_size(2)
-				.build(),
-		);
+		let executor = WasmExecutor::<(
+			sp_io::SubstrateHostFunctions,
+			frame_benchmarking::benchmarking::HostFunctions,
+			ExtraHostFunctions,
+		)>::builder()
+		.with_execution_method(method)
+		.with_max_runtime_instances(2)
+		.with_runtime_cache_size(2)
+		.build();
 
 		let extensions = || -> Extensions {
 			let mut extensions = Extensions::default();
@@ -241,11 +250,11 @@ impl PalletCmd {
 			&executor,
 			"Benchmark_benchmark_metadata",
 			&(self.extra).encode(),
-			extensions(),
+			&mut extensions(),
 			&sp_state_machine::backend::BackendRuntimeCode::new(state).runtime_code()?,
 			CallContext::Offchain,
 		)
-		.execute(strategy.into())
+		.execute()
 		.map_err(|e| format!("{}: {}", ERROR_METADATA_NOT_FOUND, e))?;
 
 		let (list, storage_info) =
@@ -377,12 +386,12 @@ impl PalletCmd {
 							1,    // no need to do internal repeats
 						)
 							.encode(),
-						extensions(),
+						&mut extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						CallContext::Offchain,
 					)
-					.execute(strategy.into())
+					.execute()
 					.map_err(|e| {
 						format!("Error executing and verifying runtime benchmark: {}", e)
 					})?;
@@ -417,12 +426,12 @@ impl PalletCmd {
 							self.repeat,
 						)
 							.encode(),
-						extensions(),
+						&mut extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						CallContext::Offchain,
 					)
-					.execute(strategy.into())
+					.execute()
 					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;
 
 					let batch =
@@ -449,12 +458,12 @@ impl PalletCmd {
 							self.repeat,
 						)
 							.encode(),
-						extensions(),
+						&mut extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						CallContext::Offchain,
 					)
-					.execute(strategy.into())
+					.execute()
 					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;
 
 					let batch =
@@ -622,12 +631,6 @@ impl PalletCmd {
 				println!("Raw Storage Info\n========");
 				for comment in comments {
 					println!("{}", comment);
-				}
-				println!();
-
-				println!("-- Proof Sizes --\n");
-				for result in batch.db_results.iter() {
-					println!("{} bytes", result.proof_size);
 				}
 				println!();
 			}

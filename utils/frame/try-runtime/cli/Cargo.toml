@@ -15,7 +15,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities", package = "frame-remote-externalities" }
 sc-cli = { version = "0.10.0-dev", path = "../../../../client/cli" }
 sc-executor = { version = "0.10.0-dev", path = "../../../../client/executor" }
-sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../../client/service" }
 sp-consensus-aura = { path = "../../../../primitives/consensus/aura" }
 sp-consensus-babe = { path = "../../../../primitives/consensus/babe" }
 sp-core = { version = "21.0.0", path = "../../../../primitives/core" }
@@ -53,4 +52,9 @@ tempfile = "3.1.0"
 tokio = "1.27.0"
 
 [features]
-try-runtime = ["sp-debug-derive/force-debug", "frame-try-runtime/try-runtime"]
+try-runtime = [
+	"sp-debug-derive/force-debug",
+	"frame-try-runtime/try-runtime",
+	"sp-runtime/try-runtime",
+	"substrate-cli-test-utils/try-runtime"
+]
