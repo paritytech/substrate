@@ -777,6 +777,9 @@ impl<T: Config> Pallet<T> {
 		let mut all_voters =
 			BoundedVec::<_, MaxElectingVotersOf<T::ElectionProvider>>::with_max_capacity();
 
+		debug_assert!(all_voters.capacity() > max_allowed_len,
+            "voter soft bounds are larger than hard bounds from bounded vec, result may be truncated to hard bounds.");
+
 		// cache a few things.
 		let weight_of = Self::weight_of_fn();
 
@@ -871,6 +874,9 @@ impl<T: Config> Pallet<T> {
 		let max_allowed_len = maybe_max_len.unwrap_or_else(|| T::TargetList::count() as usize);
 		let mut all_targets = BoundedVec::<T::AccountId, MaxElectabletargetsOf<T::ElectionProvider>>::with_max_capacity();
 		let mut targets_seen = 0;
+
+		debug_assert!(all_targets.capacity() > max_allowed_len,
+            "target soft bounds are larger than hard bounds from bounded vec, result may be truncated to hard bounds.");
 
 		let mut targets_iter = T::TargetList::iter();
 		while all_targets.len() < max_allowed_len &&
