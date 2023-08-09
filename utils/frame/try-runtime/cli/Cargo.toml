@@ -55,5 +55,6 @@ tokio = "1.27.0"
 try-runtime = [
 	"sp-debug-derive/force-debug",
 	"frame-try-runtime/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
+	"substrate-cli-test-utils/try-runtime"
 ]

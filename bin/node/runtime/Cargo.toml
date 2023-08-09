@@ -373,3 +373,4 @@ try-runtime = [
 	"frame-election-provider-support/try-runtime",
 	"sp-runtime/try-runtime"
 ]
+unsafe-debug = ["pallet-contracts/unsafe-debug"]
