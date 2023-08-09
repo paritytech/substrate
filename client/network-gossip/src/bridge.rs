@@ -202,16 +202,11 @@ impl<B: BlockT> Future for GossipEngine<B> {
 								handshake,
 								result_tx,
 							} => {
-								log::debug!(
-									target: "gossip",
-									"accepting inbound substream from {peer}, handshake {handshake:?}"
-								);
 								let _ = result_tx.send(ValidationResult::Accept);
 							},
 							NotificationEvent::NotificationStreamOpened {
 								peer, handshake, ..
 							} => {
-								log::debug!(target: "gossip", "handshake {handshake:?}");
 								let Some(role) = this.network.peer_role(peer, handshake) else {
 									log::debug!(target: "gossip", "role for {peer} couldn't be determined");
 									continue
@@ -344,7 +339,7 @@ mod tests {
 	use quickcheck::{Arbitrary, Gen, QuickCheck};
 	use sc_network::{
 		config::MultiaddrWithPeerId,
-		service::traits::{MessageSink, NotificationEvent},
+		service::traits::{Direction, MessageSink, NotificationEvent},
 		Event, NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 		NotificationSenderError, NotificationSenderT as NotificationSender, NotificationService,
 		NotificationsSink, Roles,
@@ -515,28 +510,20 @@ mod tests {
 		rx: UnboundedReceiver<NotificationEvent>,
 	}
 
-	// TODO: provide implementation
 	#[async_trait::async_trait]
 	impl sc_network::service::traits::NotificationService for TestNotificationService {
-		/// Instruct `Notifications` to open a new substream for `peer`.
-		///
-		/// `dial_if_disconnected` informs `Notifications` whether to dial
-		// the peer if there is currently no active connection to it.
 		async fn open_substream(&mut self, _peer: PeerId) -> Result<(), ()> {
 			unimplemented!();
 		}
 
-		/// Instruct `Notifications` to close substream for `peer`.
 		async fn close_substream(&mut self, _peer: PeerId) -> Result<(), ()> {
 			unimplemented!();
 		}
 
-		/// Send synchronous `notification` to `peer`.
 		fn send_sync_notification(&self, _peer: &PeerId, _notification: Vec<u8>) {
 			unimplemented!();
 		}
 
-		/// Send asynchronous `notification` to `peer`, allowing sender to exercise backpressure.
 		async fn send_async_notification(
 			&self,
 			_peer: &PeerId,
@@ -545,12 +532,10 @@ mod tests {
 			unimplemented!();
 		}
 
-		/// Set handshake for the notification protocol replacing the old handshake.
-		async fn set_hanshake(&mut self, _handshake: Vec<u8>) -> Result<(), ()> {
+		async fn set_handshake(&mut self, _handshake: Vec<u8>) -> Result<(), ()> {
 			unimplemented!();
 		}
 
-		/// Get next event from the `Notifications` event stream.
 		async fn next_event(&mut self) -> Option<NotificationEvent> {
 			self.rx.next().await
 		}
@@ -635,6 +620,7 @@ mod tests {
 		// Register the remote peer.
 		tx.send(NotificationEvent::NotificationStreamOpened {
 			peer: remote_peer,
+			direction: Direction::Inbound,
 			negotiated_fallback: None,
 			handshake: Roles::FULL.encode(),
 		})
@@ -797,6 +783,7 @@ mod tests {
 			// Register the remote peer.
 			tx.start_send(NotificationEvent::NotificationStreamOpened {
 				peer: remote_peer,
+				direction: Direction::Inbound,
 				negotiated_fallback: None,
 				handshake: Roles::FULL.encode(),
 			})

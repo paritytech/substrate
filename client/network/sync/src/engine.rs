@@ -790,7 +790,7 @@ where
 							log::debug!(target: LOG_TARGET, "`SyncingEngine` rejected {peer}");
 
 							if wrong_genesis {
-								self.peer_store_handle.report_peer(*peer_id, rep::GENESIS_MISMATCH);
+								self.peer_store_handle.report_peer(peer, rep::GENESIS_MISMATCH);
 							}
 
 							self.network_service

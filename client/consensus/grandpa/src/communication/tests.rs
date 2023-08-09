@@ -28,7 +28,7 @@ use parity_scale_codec::{DecodeAll, Encode};
 use sc_network::{
 	config::{MultiaddrWithPeerId, Role},
 	event::Event as NetworkEvent,
-	service::traits::{MessageSink, NotificationEvent, NotificationService},
+	service::traits::{Direction, MessageSink, NotificationEvent, NotificationService},
 	types::ProtocolName,
 	Multiaddr, NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 	NetworkSyncForkRequest, NotificationSenderError, NotificationSenderT as NotificationSender,
@@ -239,7 +239,6 @@ impl NotificationService for TestNotificationService {
 
 	/// Send synchronous `notification` to `peer`.
 	fn send_sync_notification(&self, _peer: &PeerId, _notification: Vec<u8>) {
-		// TODO: this needs to be implemented
 		unimplemented!();
 	}
 
@@ -253,7 +252,7 @@ impl NotificationService for TestNotificationService {
 	}
 
 	/// Set handshake for the notification protocol replacing the old handshake.
-	async fn set_hanshake(&mut self, _handshake: Vec<u8>) -> Result<(), ()> {
+	async fn set_handshake(&mut self, _handshake: Vec<u8>) -> Result<(), ()> {
 		unimplemented!();
 	}
 
@@ -472,6 +471,7 @@ fn good_commit_leads_to_relay() {
 				let _ = tester.notification_tx.unbounded_send(
 					NotificationEvent::NotificationStreamOpened {
 						peer: sender_id,
+						direction: Direction::Inbound,
 						negotiated_fallback: None,
 						handshake: Roles::FULL.encode(),
 					},
@@ -488,6 +488,7 @@ fn good_commit_leads_to_relay() {
 				let _ = tester.notification_tx.unbounded_send(
 					NotificationEvent::NotificationStreamOpened {
 						peer: receiver_id,
+						direction: Direction::Inbound,
 						negotiated_fallback: None,
 						handshake: Roles::FULL.encode(),
 					},
@@ -621,6 +622,7 @@ fn bad_commit_leads_to_report() {
 				let _ = tester.notification_tx.unbounded_send(
 					NotificationEvent::NotificationStreamOpened {
 						peer: sender_id,
+						direction: Direction::Inbound,
 						negotiated_fallback: None,
 						handshake: Roles::FULL.encode(),
 					},

@@ -167,6 +167,9 @@ pub struct Notifications {
 	// returned by the completed future against the `crate::peerset::IncomingIndex` stored in
 	// `PeerState::Incoming` to check whether the completed future is stale or not.
 	pending_inbound_validations: FuturesUnordered<PendingInboundValidation>,
+
+	/// Metrics for notifications.
+	metrics: Option<metrics::Metrics>,
 }
 
 /// Configuration for a notifications protocol.
@@ -441,6 +444,7 @@ impl Notifications {
 			next_incoming_index: IncomingIndex(0),
 			events: VecDeque::new(),
 			pending_inbound_validations: FuturesUnordered::new(),
+			metrics,
 		}
 	}
 
@@ -886,27 +890,28 @@ impl Notifications {
 	/// Substream has been accepted by the `ProtocolController` and must now be sent
 	/// to the protocol for validation.
 	fn peerset_report_preaccept(&mut self, index: IncomingIndex) {
-		if let Some(pos) = self.incoming.iter().position(|i| i.incoming_id == index) {
-			trace!(
-				target: LOG_TARGET,
-				"PSM => Preaccept({:?}): Sent to protocol for validation",
-				index
-			);
-			let incoming = &self.incoming[pos];
-
-			match self.protocol_handles[usize::from(incoming.set_id)]
-				.report_incoming_substream(incoming.peer_id, incoming.handshake.clone())
-			{
-				Ok(rx) => self
-					.pending_inbound_validations
-					.push(Box::pin(async move { (rx.await, index) })),
-				Err(err) => {
-					error!(target: LOG_TARGET, "protocol has exited: {err:?}");
-					debug_assert!(false);
-				},
-			}
-		} else {
+		let Some(pos) = self.incoming.iter().position(|i| i.incoming_id == index) else {
 			error!(target: LOG_TARGET, "PSM => Preaccept({:?}): Invalid index", index);
+			return;
+		};
+
+		trace!(
+			target: LOG_TARGET,
+			"PSM => Preaccept({:?}): Sent to protocol for validation",
+			index
+		);
+		let incoming = &self.incoming[pos];
+
+		match self.protocol_handles[usize::from(incoming.set_id)]
+			.report_incoming_substream(incoming.peer_id, incoming.handshake.clone())
+		{
+			Ok(rx) => self
+				.pending_inbound_validations
+				.push(Box::pin(async move { (rx.await, index) })),
+			Err(err) => {
+				error!(target: LOG_TARGET, "protocol has exited: {err:?}");
+				debug_assert!(false);
+			},
 		}
 	}
 
@@ -1074,7 +1079,7 @@ impl Notifications {
 			},
 			peer => {
 				error!(
-					target: "sub-libp2p",
+					target: LOG_TARGET,
 					"State mismatch in libp2p: Expected alive incoming. Got {peer:?}.",
 				);
 				None
@@ -1120,6 +1125,7 @@ impl NetworkBehaviour for Notifications {
 				send_back_addr: remote_addr.clone(),
 			},
 			self.notif_protocols.clone(),
+			self.metrics.clone(),
 		))
 	}
 
@@ -1134,6 +1140,7 @@ impl NetworkBehaviour for Notifications {
 			peer,
 			ConnectedPoint::Dialer { address: addr.clone(), role_override },
 			self.notif_protocols.clone(),
+			self.metrics.clone(),
 		))
 	}
 
@@ -2175,7 +2182,7 @@ impl NetworkBehaviour for Notifications {
 					},
 				},
 				Poll::Ready(None) => {
-					error!(target: "sub-libp2p", "Protocol command streams have been shut down");
+					error!(target: LOG_TARGET, "Protocol command streams have been shut down");
 					break
 				},
 				Poll::Pending => break,
@@ -2193,7 +2200,7 @@ impl NetworkBehaviour for Notifications {
 					self.protocol_report_reject(index);
 				},
 				Err(_) => {
-					error!(target: "sub-libp2p", "Protocol has shut down");
+					error!(target: LOG_TARGET, "Protocol has shut down");
 					break
 				},
 			}
@@ -2303,7 +2310,6 @@ mod tests {
 		}
 	}
 
-	// <<<<<<< HEAD
 	fn development_notifs(
 	) -> (Notifications, ProtocolController, Box<dyn crate::service::traits::NotificationService>) {
 		let (protocol_handle_pair, notif_service) =
@@ -2558,7 +2564,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -2758,7 +2764,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -2911,7 +2917,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -2955,7 +2961,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -3025,7 +3031,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -3173,7 +3179,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn1,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -3299,7 +3305,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -3373,7 +3379,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -3436,7 +3442,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn1,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected.clone(), vec![]),
+				handler: NotifsHandler::new(peer, connected.clone(), vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -3450,7 +3456,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn2,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -3504,7 +3510,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -3562,7 +3568,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn2,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -3623,7 +3629,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn1,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -3692,7 +3698,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn1,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -3733,7 +3739,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -3856,7 +3862,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -4170,7 +4176,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -4379,7 +4385,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: ConnectionId::new_unchecked(0),
 				endpoint: &endpoint.clone(),
-				handler: NotifsHandler::new(peer, endpoint, vec![]),
+				handler: NotifsHandler::new(peer, endpoint, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -4539,7 +4545,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: ConnectionId::new_unchecked(1337),
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -4574,7 +4580,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: ConnectionId::new_unchecked(1337),
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -4625,7 +4631,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: ConnectionId::new_unchecked(1337),
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -4672,7 +4678,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -4722,7 +4728,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: ConnectionId::new_unchecked(1337),
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -4765,7 +4771,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected.clone(), vec![]),
+				handler: NotifsHandler::new(peer, connected.clone(), vec![], None),
 				remaining_established: 0usize,
 			},
 		));
@@ -4776,7 +4782,7 @@ mod tests {
 				peer_id: peer,
 				connection_id: conn,
 				endpoint: &connected.clone(),
-				handler: NotifsHandler::new(peer, connected, vec![]),
+				handler: NotifsHandler::new(peer, connected, vec![], None),
 				remaining_established: 0usize,
 			},
 		));

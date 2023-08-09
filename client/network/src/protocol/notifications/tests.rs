@@ -22,6 +22,8 @@ use crate::{
 	peer_store::PeerStore,
 	protocol::notifications::{Notifications, NotificationsOut, ProtocolConfig},
 	protocol_controller::{ProtoSetConfig, ProtocolController, SetId},
+	service::traits::{NotificationEvent, ValidationResult},
+	NotificationService,
 };
 
 use futures::{future::BoxFuture, prelude::*};
@@ -70,7 +72,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 			.timeout(Duration::from_secs(20))
 			.boxed();
 
-		let (protocol_handle_pair, _notif_service) =
+		let (protocol_handle_pair, mut notif_service) =
 			crate::protocol::notifications::service::notification_service("/foo".into());
 		let peer_store = PeerStore::new(if index == 0 {
 			keypairs.iter().skip(1).map(|keypair| keypair.public().to_peer_id()).collect()
@@ -123,7 +125,17 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				.collect(),
 		};
 
-		let runtime = tokio::runtime::Runtime::new().unwrap();
+		let mut runtime = tokio::runtime::Runtime::new().unwrap();
+		runtime.spawn(async move {
+			loop {
+				if let NotificationEvent::ValidateInboundSubstream { result_tx, .. } =
+					notif_service.next_event().await.unwrap()
+				{
+					result_tx.send(ValidationResult::Accept).unwrap();
+				}
+			}
+		});
+
 		let mut swarm = SwarmBuilder::with_executor(
 			transport,
 			behaviour,
@@ -253,7 +265,6 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 }
 
 #[test]
-#[ignore]
 fn reconnect_after_disconnect() {
 	// We connect two nodes together, then force a disconnect (through the API of the `Service`),
 	// check that the disconnect worked, and finally check whether they successfully reconnect.
@@ -368,7 +379,6 @@ fn reconnect_after_disconnect() {
 				}
 			};
 
-			// TODO: rewrite these using `NotificationService`
 			match event {
 				SwarmEvent::Behaviour(NotificationsOut::CustomProtocolOpen { .. }) |
 				SwarmEvent::Behaviour(NotificationsOut::CustomProtocolClosed { .. }) => panic!(),

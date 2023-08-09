@@ -743,7 +743,6 @@ pub struct Params<Block: BlockT> {
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
 
-	// TODO(aaro): remove maybe?
 	/// Block announce protocol configuration
 	pub block_announce_config: NonDefaultSetConfig,
 }

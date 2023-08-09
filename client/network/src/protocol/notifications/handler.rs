@@ -58,9 +58,12 @@
 //! [`NotifsHandlerIn::Open`] has gotten an answer.
 
 use crate::{
-	protocol::notifications::upgrade::{
-		NotificationsIn, NotificationsInSubstream, NotificationsOut, NotificationsOutSubstream,
-		UpgradeCollec,
+	protocol::notifications::{
+		service::metrics,
+		upgrade::{
+			NotificationsIn, NotificationsInSubstream, NotificationsOut, NotificationsOutSubstream,
+			UpgradeCollec,
+		},
 	},
 	types::ProtocolName,
 };
@@ -106,6 +109,28 @@ const OPEN_TIMEOUT: Duration = Duration::from_secs(10);
 /// open substreams.
 const INITIAL_KEEPALIVE_TIME: Duration = Duration::from_secs(5);
 
+/// Metrics-related information.
+#[derive(Debug)]
+pub struct MetricsInfo {
+	/// Protocol name.
+	protocol: ProtocolName,
+
+	/// Metrics.
+	metrics: Option<metrics::Metrics>,
+}
+
+impl MetricsInfo {
+	/// Create new [`MetricsInfo`].
+	pub fn new(protocol: ProtocolName, metrics: Option<metrics::Metrics>) -> Self {
+		Self { protocol, metrics }
+	}
+
+	/// Create new empty [`MetricsInfo`].
+	pub fn new_empty() -> Self {
+		Self { protocol: ProtocolName::from(""), metrics: None }
+	}
+}
+
 /// The actual handler once the connection has been established.
 ///
 /// See the documentation at the module level for more information.
@@ -126,11 +151,24 @@ pub struct NotifsHandler {
 	events_queue: VecDeque<
 		ConnectionHandlerEvent<NotificationsOut, usize, NotifsHandlerOut, NotifsHandlerError>,
 	>,
+
+	/// Metrics-related information.
+	metrics_info: Vec<Arc<MetricsInfo>>,
 }
 
 impl NotifsHandler {
 	/// Creates new [`NotifsHandler`].
-	pub fn new(peer_id: PeerId, endpoint: ConnectedPoint, protocols: Vec<ProtocolConfig>) -> Self {
+	pub fn new(
+		peer_id: PeerId,
+		endpoint: ConnectedPoint,
+		protocols: Vec<ProtocolConfig>,
+		metrics: Option<metrics::Metrics>,
+	) -> Self {
+		let metrics_info = protocols
+			.iter()
+			.map(|config| Arc::new(MetricsInfo::new(config.name.clone(), metrics.clone())))
+			.collect();
+
 		Self {
 			protocols: protocols
 				.into_iter()
@@ -148,6 +186,7 @@ impl NotifsHandler {
 			endpoint,
 			when_connection_open: Instant::now(),
 			events_queue: VecDeque::with_capacity(16),
+			metrics_info,
 		}
 	}
 }
@@ -335,7 +374,7 @@ pub struct NotificationsSink {
 	inner: Arc<NotificationsSinkInner>,
 }
 
-// #[cfg(test)]
+// NOTE: only used for testing but must be `pub` as other crates in `client/network` use this.
 impl NotificationsSink {
 	/// Create new
 	pub fn new(
@@ -350,6 +389,7 @@ impl NotificationsSink {
 					peer_id,
 					async_channel: FuturesMutex::new(async_tx),
 					sync_channel: Mutex::new(Some(sync_tx)),
+					metrics_info: Arc::new(MetricsInfo::new_empty()),
 				}),
 			},
 			async_rx,
@@ -371,6 +411,8 @@ struct NotificationsSinkInner {
 	/// back-pressure cannot be properly exerted.
 	/// It will be removed in a future version.
 	sync_channel: Mutex<Option<mpsc::Sender<NotificationsSinkMessage>>>,
+	/// Metrics-related information.
+	metrics_info: Arc<MetricsInfo>,
 }
 
 /// Message emitted through the [`NotificationsSink`] and processed by the background task
@@ -404,8 +446,14 @@ impl NotificationsSink {
 		let mut lock = self.inner.sync_channel.lock();
 
 		if let Some(tx) = lock.as_mut() {
-			let result =
-				tx.try_send(NotificationsSinkMessage::Notification { message: message.into() });
+			let message = message.into();
+			metrics::register_notification_sent(
+				&self.inner.metrics_info.metrics,
+				&self.inner.metrics_info.protocol,
+				message.len(),
+			);
+
+			let result = tx.try_send(NotificationsSinkMessage::Notification { message });
 
 			if result.is_err() {
 				// Cloning the `mpsc::Sender` guarantees the allocation of an extra spot in the
@@ -558,6 +606,7 @@ impl ConnectionHandler for NotifsHandler {
 								peer_id: self.peer_id,
 								async_channel: FuturesMutex::new(async_tx),
 								sync_channel: Mutex::new(Some(sync_tx)),
+								metrics_info: self.metrics_info[protocol_index].clone(),
 							}),
 						};
 
@@ -909,6 +958,7 @@ pub mod tests {
 					peer_id: peer,
 					async_channel: FuturesMutex::new(async_tx),
 					sync_channel: Mutex::new(Some(sync_tx)),
+					metrics_info: Arc::new(MetricsInfo::new_empty()),
 				}),
 			};
 			let (in_substream, out_substream) = MockSubstream::new();

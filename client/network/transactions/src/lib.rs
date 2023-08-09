@@ -473,7 +473,6 @@ where
 					propagated_to.entry(hash).or_default().push(who.to_base58());
 				}
 				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), who);
-				// TODO: don't ignore error
 				let _ = self.notification_service.send_sync_notification(who, to_send.encode());
 			}
 		}

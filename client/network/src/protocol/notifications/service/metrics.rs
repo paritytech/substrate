@@ -26,9 +26,14 @@ use prometheus_endpoint::{
 /// Notification metrics.
 #[derive(Debug, Clone)]
 pub struct Metrics {
-	pub notifications_sizes: HistogramVec,
-	pub notifications_streams_closed_total: CounterVec<U64>,
+	// Total number of opened substreams.
 	pub notifications_streams_opened_total: CounterVec<U64>,
+
+	/// Total number of closed substreams.
+	pub notifications_streams_closed_total: CounterVec<U64>,
+
+	/// In/outbound notification sizez.
+	pub notifications_sizes: HistogramVec,
 }
 
 impl Metrics {
@@ -84,7 +89,7 @@ pub fn register_substream_opened(metrics: &Option<Metrics>, protocol: &ProtocolN
 	}
 }
 
-/// Register opened substream to Prometheus.
+/// Register closed substream to Prometheus.
 pub fn register_substream_closed(metrics: &Option<Metrics>, protocol: &ProtocolName) {
 	if let Some(metrics) = metrics {
 		metrics
@@ -94,16 +99,17 @@ pub fn register_substream_closed(metrics: &Option<Metrics>, protocol: &ProtocolN
 	}
 }
 
-/// Register opened substream to Prometheus.
-pub fn _register_notification_sent(
-	_metrics: &Option<Metrics>,
-	_protocol: &ProtocolName,
-	_size: usize,
-) {
-	todo!();
+/// Register sent notification to Prometheus.
+pub fn register_notification_sent(metrics: &Option<Metrics>, protocol: &ProtocolName, size: usize) {
+	if let Some(metrics) = metrics {
+		metrics
+			.notifications_sizes
+			.with_label_values(&["out", protocol])
+			.observe(size as f64);
+	}
 }
 
-/// Register opened substream to Prometheus.
+/// Register received notification to Prometheus.
 pub fn register_notification_received(
 	metrics: &Option<Metrics>,
 	protocol: &ProtocolName,
