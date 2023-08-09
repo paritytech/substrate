@@ -8,9 +8,3 @@ error[E0412]: cannot find type `Area` in this scope
    | ---------------------------- in this macro invocation
    |
    = note: this error originates in the macro `__export_tokens_tt_default_shape` which comes from the expansion of the macro `frame_support::macro_magic::forward_tokens` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error[E0412]: cannot find type `Area` in this scope
-  --> tests/derive_impl_ui/verbatim_fails_when_type_not_in_scope.rs:21:46
-   |
-21 | assert_type_eq_all!(<Circle as Shape>::Area, Area);
-   |                                              ^^^^ not found in this scope

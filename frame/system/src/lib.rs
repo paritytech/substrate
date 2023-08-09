@@ -206,7 +206,6 @@ pub mod pallet {
 	/// Contains default types suitable for various environments
 	pub mod config_preludes {
 		use super::*;
-		use sp_runtime::traits::ConstU64;
 
 		/// Provides a viable default config that can be used with
 		/// [`derive_impl`](`frame_support::derive_impl`) to derive a testing pallet config
@@ -244,7 +243,7 @@ pub mod pallet {
 			#[verbatim]
 			type PalletInfo = ();
 			type BaseCallFilter = frame_support::traits::Everything;
-			type BlockHashCount = ConstU64<10>;
+			type BlockHashCount = frame_support::traits::ConstU64<10>;
 			type OnSetCode = ();
 		}
 	}
@@ -254,7 +253,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: 'static + Eq + Clone {
 		/// The aggregated event type of the runtime.
-		#[pallet::no_bounds]
+		#[pallet::no_default_bounds]
 		type RuntimeEvent: Parameter
 			+ Member
 			+ From<Event<Self>>
@@ -263,7 +262,7 @@ pub mod pallet {
 
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
-		#[pallet::no_bounds]
+		#[pallet::no_default_bounds]
 		type BaseCallFilter: Contains<Self::RuntimeCall>;
 
 		/// Block & extrinsics weights: base values and limits.
@@ -275,14 +274,14 @@ pub mod pallet {
 		type BlockLength: Get<limits::BlockLength>;
 
 		/// The `RuntimeOrigin` type used by dispatchable calls.
-		#[pallet::no_bounds]
+		#[pallet::no_default_bounds]
 		type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, Self::RuntimeOrigin>>
 			+ From<RawOrigin<Self::AccountId>>
 			+ Clone
 			+ OriginTrait<Call = Self::RuntimeCall, AccountId = Self::AccountId>;
 
 		/// The aggregated `RuntimeCall` type.
-		#[pallet::no_bounds]
+		#[pallet::no_default_bounds]
 		type RuntimeCall: Parameter
 			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
 			+ Debug
@@ -337,12 +336,12 @@ pub mod pallet {
 
 		/// The Block type used by the runtime. This is used by `construct_runtime` to retrieve the
 		/// extrinsics or other block specific data as needed.
-		#[pallet::no_bounds]
+		#[pallet::no_default_bounds]
 		type Block: Parameter + Member + traits::Block<Hash = Self::Hash>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
-		#[pallet::no_bounds]
+		#[pallet::no_default_bounds]
 		type BlockHashCount: Get<BlockNumberFor<Self>>;
 
 		/// The weight of runtime database operations the runtime can invoke.
@@ -359,7 +358,7 @@ pub mod pallet {
 		/// runtime.
 		///
 		/// For tests it is okay to use `()` as type, however it will provide "useless" data.
-		#[pallet::no_bounds]
+		#[pallet::no_default_bounds]
 		type PalletInfo: PalletInfo;
 
 		/// Data to be associated with an account (other than nonce/transaction counter, which this
@@ -391,7 +390,7 @@ pub mod pallet {
 		/// [`Pallet::update_code_in_storage`]).
 		/// It's unlikely that this needs to be customized, unless you are writing a parachain using
 		/// `Cumulus`, where the actual code change is deferred.
-		#[pallet::no_bounds]
+		#[pallet::no_default_bounds]
 		type OnSetCode: SetCode<Self>;
 
 		/// The maximum number of consumers allowed on a single account.

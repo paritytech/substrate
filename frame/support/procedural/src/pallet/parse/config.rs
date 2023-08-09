@@ -34,7 +34,7 @@ mod keyword {
 	syn::custom_keyword!(frame_system);
 	syn::custom_keyword!(disable_frame_system_supertrait_check);
 	syn::custom_keyword!(no_default);
-	syn::custom_keyword!(no_bounds);
+	syn::custom_keyword!(no_default_bounds);
 	syn::custom_keyword!(constant);
 }
 
@@ -61,9 +61,9 @@ pub struct ConfigDef {
 	/// Vec will be empty if `#[pallet::config(with_default)]` is not specified or if there are
 	/// no trait items
 	///
-	/// A bool for each sub-trait item indicates whether the item has `#[pallet::no_bounds]`
-	/// attached to it. If true, the item will not have any bounds in the generated default
-	/// sub-trait.
+	/// A bool for each sub-trait item indicates whether the item has
+	/// `#[pallet::no_default_bounds]` attached to it. If true, the item will not have any bounds
+	/// in the generated default sub-trait.
 	pub default_sub_trait: Vec<(syn::TraitItem, bool)>,
 }
 
@@ -141,8 +141,8 @@ impl syn::parse::Parse for DisableFrameSystemSupertraitCheck {
 pub enum PalletAttrType {
 	#[peek(keyword::no_default, name = "no_default")]
 	NoDefault(keyword::no_default),
-	#[peek(keyword::no_bounds, name = "no_bounds")]
-	NoBounds(keyword::no_bounds),
+	#[peek(keyword::no_default_bounds, name = "no_default_bounds")]
+	NoBounds(keyword::no_default_bounds),
 	#[peek(keyword::constant, name = "constant")]
 	Constant(keyword::constant),
 }
@@ -355,7 +355,7 @@ impl ConfigDef {
 
 			let mut already_no_default = false;
 			let mut already_constant = false;
-			let mut already_no_bounds = false;
+			let mut already_no_default_bounds = false;
 
 			while let Ok(Some(pallet_attr)) =
 				helper::take_first_item_pallet_attr::<PalletAttr>(trait_item)
@@ -396,23 +396,23 @@ impl ConfigDef {
 						if !enable_default {
 							return Err(syn::Error::new(
 								pallet_attr._bracket.span.join(),
-								"`#[pallet:no_bounds]` can only be used if `#[pallet::config(with_default)]` \
+								"`#[pallet:no_default_bounds]` can only be used if `#[pallet::config(with_default)]` \
 								has been specified"
 							))
 						}
-						if already_no_bounds {
+						if already_no_default_bounds {
 							return Err(syn::Error::new(
 								pallet_attr._bracket.span.join(),
-								"Duplicate #[pallet::no_bounds] attribute not allowed.",
+								"Duplicate #[pallet::no_default_bounds] attribute not allowed.",
 							))
 						}
-						already_no_bounds = true;
+						already_no_default_bounds = true;
 					},
 				}
 			}
 
 			if !already_no_default && enable_default {
-				default_sub_trait.push((trait_item.clone(), already_no_bounds));
+				default_sub_trait.push((trait_item.clone(), already_no_default_bounds));
 			}
 		}
 

@@ -6,7 +6,7 @@ mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		#[pallet::constant]
-		#[pallet::no_bounds]
+		#[pallet::no_default_bounds]
 		type MyGetParam2: Get<u32>;
 	}
 

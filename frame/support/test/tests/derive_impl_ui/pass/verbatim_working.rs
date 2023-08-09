@@ -12,7 +12,7 @@ struct DefaultShape;
 #[register_default_impl(DefaultShape)]
 impl Shape for DefaultShape {
     #[verbatim]
-    type Area = ();
+    type Area = Area;
 }
 
 struct Circle;

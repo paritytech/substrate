@@ -774,7 +774,7 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
-/// The optional attribute `#[pallet::no_bounds]` can be attached to trait items within a
+/// The optional attribute `#[pallet::no_default_bounds]` can be attached to trait items within a
 /// `Config` trait impl that has [`#[pallet::config(with_default)]`](`macro@config`) attached.
 ///
 /// Attaching this attribute to a trait item ensures that the generated trait `DefaultConfig`
@@ -783,7 +783,7 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 /// As an example, if you have a trait item `type AccountId: SomeTrait;` in your `Config` trait,
 /// the generated `DefaultConfig` will only have `type AccountId;` with no trait bound.
 #[proc_macro_attribute]
-pub fn no_bounds(_: TokenStream, _: TokenStream) -> TokenStream {
+pub fn no_default_bounds(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 

@@ -18,6 +18,6 @@ struct Circle;
 #[derive_impl(DefaultShape)] // Injects type Area = Area;
 impl Shape for Circle {}
 
-assert_type_eq_all!(<Circle as Shape>::Area, Area);
+assert_type_eq_all!(<Circle as Shape>::Area, ());
 
 fn main() {}

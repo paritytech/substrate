@@ -145,7 +145,7 @@ pub mod tests {
 		// type BlockLength = ();
 		// type DbWeight = ();
 		// type BaseCallFilter = frame_support::traits::Everything;
-		// type BlockHashCount = ConstU64<10>;
+		// type BlockHashCount = frame_support::traits::ConstU64<10>;
 		// type OnSetCode = ();
 
 		// These are marked as `#[verbatim]`. Hence, they are being injected as
