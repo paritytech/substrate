@@ -79,6 +79,7 @@ mod types;
 pub mod weights;
 
 use frame_support::traits::{BalanceStatus, Currency, OnUnbalanced, ReservableCurrency};
+use scale_info::prelude::string::String;
 use sp_runtime::traits::{AppendZerosInput, Hash, Saturating, StaticLookup, Zero};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
@@ -203,7 +204,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub identities: Vec<T::AccountId>,
+		pub identities: Vec<(T::AccountId, String)>,
 	}
 
 	#[cfg(feature = "std")]
@@ -216,7 +217,26 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			// todo: insert genesis accounts
+			for (account, name) in &self.identities {
+				<IdentityOf<T>>::insert(
+					account,
+					Registration {
+						info: IdentityInfo {
+							display: Data::Raw(BoundedVec::try_from(name.encode()).unwrap()),
+							twitter: Data::None,
+							riot: Data::None,
+							email: Data::None,
+							pgp_fingerprint: None,
+							image: Data::None,
+							legal: Data::None,
+							web: Data::None,
+							additional: BoundedVec::default(),
+						},
+						judgements: BoundedVec::default(),
+						deposit: Zero::zero(),
+					},
+				);
+			}
 		}
 	}
 
