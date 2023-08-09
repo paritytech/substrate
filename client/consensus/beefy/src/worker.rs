@@ -1100,6 +1100,7 @@ pub(crate) mod tests {
 		key: &Keyring,
 		min_block_delta: u32,
 		genesis_validator_set: ValidatorSet<AuthorityId>,
+		runtime_api: Option<Arc<TestApi>>,
 	) -> BeefyWorker<
 		Block,
 		Backend,
@@ -1129,7 +1130,7 @@ pub(crate) mod tests {
 
 		let backend = peer.client().as_backend();
 		let beefy_genesis = 1;
-		let api = Arc::new(TestApi::with_validator_set(&genesis_validator_set));
+		let api = runtime_api.unwrap_or_else(|| Arc::new(TestApi::with_validator_set(&genesis_validator_set)));
 		let network = peer.network_service().clone();
 		let sync = peer.sync_service().clone();
 		let payload_provider = MmrRootProvider::new(api.clone());
@@ -1456,7 +1457,7 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
-		let mut worker = create_beefy_worker(net.peer(0), &keys[0], 1, validator_set.clone());
+		let mut worker = create_beefy_worker(net.peer(0), &keys[0], 1, validator_set.clone(), None);
 
 		// keystore doesn't contain other keys than validators'
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), Ok(()));
@@ -1480,7 +1481,7 @@ pub(crate) mod tests {
 		let validator_set = ValidatorSet::new(make_beefy_ids(&keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
-		let mut worker = create_beefy_worker(net.peer(0), &keys[0], 1, validator_set.clone());
+		let mut worker = create_beefy_worker(net.peer(0), &keys[0], 1, validator_set.clone(), None);
 		// remove default session, will manually add custom one.
 		worker.persisted_state.voting_oracle.sessions.clear();
 
@@ -1584,7 +1585,7 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
-		let mut worker = create_beefy_worker(net.peer(0), &keys[0], 1, validator_set.clone());
+		let mut worker = create_beefy_worker(net.peer(0), &keys[0], 1, validator_set.clone(), None);
 
 		let worker_rounds = worker.active_rounds().unwrap();
 		assert_eq!(worker_rounds.session_start(), 1);
@@ -1622,8 +1623,7 @@ pub(crate) mod tests {
 		let api_alice = Arc::new(api_alice);
 
 		let mut net = BeefyTestNet::new(1);
-		let mut worker = create_beefy_worker(net.peer(0), &keys[0], 1, validator_set.clone());
-		worker.runtime = api_alice.clone();
+		let worker = create_beefy_worker(net.peer(0), &keys[0], 1, validator_set.clone(), Some(api_alice.clone()));
 
 		// let there be a block with num = 1:
 		let _ = net.peer(0).push_blocks(1, false);
