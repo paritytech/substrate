@@ -356,6 +356,8 @@ pub mod pallet {
 		PathError,
 		/// The provided path must consists of unique assets.
 		NonUniquePath,
+		/// It was not possible to get or increment the Id of the pool.
+		IncorrectPoolAssetId,
 		/// Unable to find an element in an array/vec that should have one-to-one correspondence
 		/// with another. For example, an array of assets constituting a `path` should have a
 		/// corresponding array of `amounts` along the path.
@@ -426,8 +428,10 @@ pub mod pallet {
 				MultiAssetIdConversionResult::Native => (),
 			}
 
-			let lp_token = NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value());
-			let next_lp_token_id = lp_token.increment();
+			let lp_token = NextPoolAssetId::<T>::get()
+				.or(T::PoolAssetId::initial_value())
+				.ok_or(Error::<T>::IncorrectPoolAssetId)?;
+			let next_lp_token_id = lp_token.increment().ok_or(Error::<T>::IncorrectPoolAssetId)?;
 			NextPoolAssetId::<T>::set(Some(next_lp_token_id));
 
 			T::PoolAssets::create(lp_token.clone(), pool_account.clone(), false, 1u32.into())?;
@@ -477,22 +481,21 @@ pub mod pallet {
 				} else {
 					(amount2_desired, amount1_desired, amount2_min, amount1_min)
 				};
-			let (asset1, asset2) = pool_id.clone();
-
 			ensure!(
 				amount1_desired > Zero::zero() && amount2_desired > Zero::zero(),
 				Error::<T>::WrongDesiredAmount
 			);
 
-			let maybe_pool = Pools::<T>::get(pool_id.clone());
+			let maybe_pool = Pools::<T>::get(&pool_id);
 			let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
+			let pool_account = Self::get_pool_account(&pool_id);
+
+			let (asset1, asset2) = &pool_id;
+			let reserve1 = Self::get_balance(&pool_account, asset1)?;
+			let reserve2 = Self::get_balance(&pool_account, asset2)?;
 
 			let amount1: T::AssetBalance;
 			let amount2: T::AssetBalance;
-			let pool_account = Self::get_pool_account(&pool_id);
-			let reserve1 = Self::get_balance(&pool_account, &asset1)?;
-			let reserve2 = Self::get_balance(&pool_account, &asset2)?;
-
 			if reserve1.is_zero() || reserve2.is_zero() {
 				amount1 = amount1_desired;
 				amount2 = amount2_desired;
@@ -521,13 +524,13 @@ pub mod pallet {
 				}
 			}
 
-			Self::validate_minimal_amount(amount1.saturating_add(reserve1), &asset1)
+			Self::validate_minimal_amount(amount1.saturating_add(reserve1), asset1)
 				.map_err(|_| Error::<T>::AmountOneLessThanMinimal)?;
-			Self::validate_minimal_amount(amount2.saturating_add(reserve2), &asset2)
+			Self::validate_minimal_amount(amount2.saturating_add(reserve2), asset2)
 				.map_err(|_| Error::<T>::AmountTwoLessThanMinimal)?;
 
-			Self::transfer(&asset1, &sender, &pool_account, amount1, true)?;
-			Self::transfer(&asset2, &sender, &pool_account, amount2, true)?;
+			Self::transfer(asset1, &sender, &pool_account, amount1, true)?;
+			Self::transfer(asset2, &sender, &pool_account, amount2, true)?;
 
 			let total_supply = T::PoolAssets::total_issuance(pool.lp_token.clone());
 
@@ -592,7 +595,7 @@ pub mod pallet {
 
 			ensure!(lp_token_burn > Zero::zero(), Error::<T>::ZeroLiquidity);
 
-			let maybe_pool = Pools::<T>::get(pool_id.clone());
+			let maybe_pool = Pools::<T>::get(&pool_id);
 			let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
 
 			let pool_account = Self::get_pool_account(&pool_id);
@@ -1223,7 +1226,9 @@ pub mod pallet {
 		/// Returns the next pool asset id for benchmark purposes only.
 		#[cfg(any(test, feature = "runtime-benchmarks"))]
 		pub fn get_next_pool_asset_id() -> T::PoolAssetId {
-			NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value())
+			NextPoolAssetId::<T>::get()
+				.or(T::PoolAssetId::initial_value())
+				.expect("Next pool asset ID can not be None")
 		}
 	}
 }

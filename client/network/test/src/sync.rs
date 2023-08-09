@@ -550,7 +550,10 @@ async fn can_sync_explicit_forks() {
 	.await;
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+// TODO: for unknown reason, this test is flaky on a multithreaded runtime, so we run it
+//       in a single-threaded mode.
+//       See issue https://github.com/paritytech/substrate/issues/14622.
+#[tokio::test]
 async fn syncs_header_only_forks() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(0);

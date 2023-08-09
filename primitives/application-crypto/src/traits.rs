@@ -23,7 +23,7 @@ use sp_core::crypto::Pair;
 use sp_core::crypto::{CryptoType, CryptoTypeId, IsWrappedBy, KeyTypeId, Public};
 use sp_std::{fmt::Debug, vec::Vec};
 
-/// An application-specific cryptographic object.
+/// Application-specific cryptographic object.
 ///
 /// Combines all the core types and constants that are defined by a particular
 /// cryptographic scheme when it is used in a specific application domain.
@@ -31,7 +31,7 @@ use sp_std::{fmt::Debug, vec::Vec};
 /// Typically, the implementers of this trait are its associated types themselves.
 /// This provides a convenient way to access generic information about the scheme
 /// given any of the associated types.
-pub trait AppCrypto: 'static + Send + Sync + Sized + CryptoType + Clone {
+pub trait AppCrypto: 'static + Sized + CryptoType {
 	/// Identifier for application-specific key type.
 	const ID: KeyTypeId;
 
@@ -61,38 +61,30 @@ pub trait MaybeHash {}
 #[cfg(all(not(feature = "std"), not(feature = "full_crypto")))]
 impl<T> MaybeHash for T {}
 
-/// A application's public key.
-pub trait AppPublic:
-	AppCrypto + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + Codec
-{
-	/// The wrapped type which is just a plain instance of `Public`.
-	type Generic: IsWrappedBy<Self>
-		+ Public
-		+ Ord
-		+ PartialOrd
-		+ Eq
-		+ PartialEq
-		+ Debug
-		+ MaybeHash
-		+ Codec;
-}
-
-/// A application's key pair.
+/// Application-specific key pair.
 #[cfg(feature = "full_crypto")]
-pub trait AppPair: AppCrypto + Pair<Public = <Self as AppCrypto>::Public> {
+pub trait AppPair:
+	AppCrypto + Pair<Public = <Self as AppCrypto>::Public, Signature = <Self as AppCrypto>::Signature>
+{
 	/// The wrapped type which is just a plain instance of `Pair`.
 	type Generic: IsWrappedBy<Self>
 		+ Pair<Public = <<Self as AppCrypto>::Public as AppPublic>::Generic>
 		+ Pair<Signature = <<Self as AppCrypto>::Signature as AppSignature>::Generic>;
 }
 
-/// A application's signature.
-pub trait AppSignature: AppCrypto + Eq + PartialEq + Debug {
+/// Application-specific public key.
+pub trait AppPublic: AppCrypto + Public + Debug + MaybeHash + Codec {
+	/// The wrapped type which is just a plain instance of `Public`.
+	type Generic: IsWrappedBy<Self> + Public + Debug + MaybeHash + Codec;
+}
+
+/// Application-specific signature.
+pub trait AppSignature: AppCrypto + Eq + PartialEq + Debug + Clone {
 	/// The wrapped type which is just a plain instance of `Signature`.
 	type Generic: IsWrappedBy<Self> + Eq + PartialEq + Debug;
 }
 
-/// A runtime interface for a public key.
+/// Runtime interface for a public key.
 pub trait RuntimePublic: Sized {
 	/// The signature that will be generated when signing with the corresponding private key.
 	type Signature: Debug + Eq + PartialEq + Clone;
@@ -123,7 +115,7 @@ pub trait RuntimePublic: Sized {
 	fn to_raw_vec(&self) -> Vec<u8>;
 }
 
-/// A runtime interface for an application's public key.
+/// Runtime interface for an application's public key.
 pub trait RuntimeAppPublic: Sized {
 	/// An identifier for this application-specific key type.
 	const ID: KeyTypeId;

@@ -47,6 +47,19 @@ test-rust-features:
       https://github.com/paritytech/pipeline-scripts
     - bash ./pipeline-scripts/rust-features.sh .
 
+test-rust-feature-propagation:
+  stage: check
+  extends:
+    - .kubernetes-env
+    - .test-refs-no-trigger-prs-only
+  script:
+    - cargo install --locked --version 0.7.4 -q -f zepter && zepter --version
+    - echo "👉 Hello developer! If you see this CI check failing then it means that one of the crates is missing a feature for one of its dependencies. The output below tells you which feature needs to be added for which dependency to which crate. You can do this by modifying the Cargo.toml file. For more context see the MR where this check was introduced https://github.com/paritytech/substrate/pull/14660"
+    - zepter lint propagate-feature --feature try-runtime --left-side-feature-missing=ignore --workspace --feature-enables-dep="try-runtime:frame-try-runtime" --locked
+    - zepter lint propagate-feature --feature runtime-benchmarks --left-side-feature-missing=ignore --workspace --feature-enables-dep="runtime-benchmarks:frame-benchmarking" --locked
+    - zepter lint propagate-feature --feature std --left-side-feature-missing=ignore --workspace --locked
+  allow_failure: true # Experimental
+
 test-prometheus-alerting-rules:
   stage: check
   extends: .kubernetes-env
