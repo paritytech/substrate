@@ -400,18 +400,15 @@ mod reward_pool {
 				);
 
 				// Fixing the reward counter by decreasing it to the factor of increase in ED.
-				let pool = BondedPool::<Runtime>::get(1).unwrap();
-				let decrease_factor =
-					RewardCounter::checked_from_rational(ed_diff, pool.points).unwrap();
 				RewardPools::<Runtime>::mutate(1, |reward_pool| {
-					reward_pool.as_mut().expect("pool exists").last_recorded_reward_counter =
-						reward_pool
-							.clone()
-							.unwrap()
-							.last_recorded_reward_counter
-							.checked_sub(&decrease_factor)
-							.unwrap_or_default();
+					reward_pool.as_mut().unwrap().last_recorded_total_payouts +=
+						ed_diff
 				});
+				assert_eq!(reward_imbalance(1), Surplus(0));
+
+				// 14 joins the pool.
+				Balances::make_free_balance_be(&14, 500);
+				assert_ok!(Pools::join(RuntimeOrigin::signed(14), 100, 1));
 				assert_eq!(reward_imbalance(1), Surplus(0));
 			});
 	}
