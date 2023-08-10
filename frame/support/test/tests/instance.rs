@@ -20,13 +20,13 @@
 use frame_support::{
 	derive_impl,
 	inherent::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent},
-	metadata_ir::{
-		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,
-		StorageEntryTypeIR, StorageHasherIR,
-	},
 	traits::ConstU32,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
+use sp_api::metadata_ir::{
+	PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR, StorageEntryTypeIR,
+	StorageHasherIR,
+};
 use sp_core::sr25519;
 use sp_runtime::{
 	generic,

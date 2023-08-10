@@ -414,7 +414,7 @@ macro_rules! parameter_types_impl_thread_local {
 		$crate::parameter_types_impl_thread_local!(
 			IMPL_THREAD_LOCAL $( $vis, $name, $type, $value, )*
 		);
-		$crate::paste::item! {
+		$crate::__private::paste::item! {
 			$crate::parameter_types!(
 				$(
 					$( #[ $attr ] )*
@@ -449,7 +449,7 @@ macro_rules! parameter_types_impl_thread_local {
 		}
 	};
 	(IMPL_THREAD_LOCAL $( $vis:vis, $name:ident, $type:ty, $value:expr, )* ) => {
-		$crate::paste::item! {
+		$crate::__private::paste::item! {
 			thread_local! {
 				$(
 					pub static [<$name:snake:upper>]: std::cell::RefCell<$type> =
