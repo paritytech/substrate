@@ -442,7 +442,7 @@ pub struct UnlockChunk<Balance: HasCompact + MaxEncodedLen> {
 ///
 /// TODO: move struct definition and full implementation into `/src/ledger.rs`. Currently
 /// leaving here to enforce a clean PR diff, given how critical this logic is. Tracking issue
-/// <https://github.com/paritytech/substrate/issues/XXXXX/>.
+/// <https://github.com/paritytech/substrate/issues/14749>.
 #[derive(
 	PartialEqNoBound,
 	EqNoBound,
@@ -483,7 +483,7 @@ pub struct StakingLedger<T: Config> {
 impl<T: Config> StakingLedger<T> {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
-	pub(crate) fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
+	pub fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
 		let mut total = self.total;
 		let unlocking: BoundedVec<_, _> = self
 			.unlocking
@@ -515,7 +515,7 @@ impl<T: Config> StakingLedger<T> {
 	/// Re-bond funds that were scheduled for unlocking.
 	///
 	/// Returns the updated ledger, and the amount actually rebonded.
-	pub(crate) fn rebond(mut self, value: BalanceOf<T>) -> (Self, BalanceOf<T>) {
+	pub fn rebond(mut self, value: BalanceOf<T>) -> (Self, BalanceOf<T>) {
 		let mut unlocking_balance = BalanceOf::<T>::zero();
 
 		while let Some(last) = self.unlocking.last_mut() {
@@ -562,7 +562,7 @@ impl<T: Config> StakingLedger<T> {
 	///
 	/// This calls `Config::OnStakingUpdate::on_slash` with information as to how the slash was
 	/// applied.
-	pub(crate) fn slash(
+	pub fn slash(
 		&mut self,
 		slash_amount: BalanceOf<T>,
 		minimum_balance: BalanceOf<T>,
