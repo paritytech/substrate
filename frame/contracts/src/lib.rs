@@ -103,7 +103,7 @@ pub mod weights;
 #[cfg(test)]
 mod tests;
 use crate::{
-	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
+	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack, MomentOf},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
 	wasm::{CodeInfo, WasmBlob},
@@ -124,7 +124,7 @@ use frame_support::{
 	weights::Weight,
 	BoundedVec, RuntimeDebugNoBound,
 };
-use frame_system::{ensure_signed, pallet_prelude::OriginFor, EventRecord, Pallet as System};
+use frame_system::{ensure_signed, pallet_prelude::{OriginFor, BlockNumberFor}, EventRecord, Pallet as System};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
 	ContractInstantiateResult, ContractResult, ExecReturnValue, GetStorageResult,
@@ -178,6 +178,19 @@ const SENTINEL: u32 = u32::MAX;
 ///
 /// Example: `RUST_LOG=runtime::contracts=debug my_code --dev`
 const LOG_TARGET: &str = "runtime::contracts";
+
+
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Encode, Decode, Default, TypeInfo)]
+#[scale_info(skip_type_params(T))]
+pub struct Environment<T: Config> {
+	account_id: PhantomData<AccountIdOf<T>>,
+	balance: PhantomData<BalanceOf<T>>,
+	hash: PhantomData<<T as frame_system::Config>::Hash>,
+	hasher: PhantomData<<T as frame_system::Config>::Hashing>,
+	timestamp: PhantomData<MomentOf<T>>,
+	block_number: PhantomData<BlockNumberFor<T>>,
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -360,6 +373,9 @@ pub mod pallet {
 		/// Do **not** use it in a production environment or for benchmarking purposes.
 		#[cfg(feature = "unsafe-debug")]
 		type Debug: unsafe_debug::UnsafeDebug<Self>;
+
+		#[pallet::constant]
+		type Environment: Get<Environment<Self>>;
 	}
 
 	#[pallet::hooks]
