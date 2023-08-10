@@ -47,8 +47,10 @@ fn setup_proposal<T: Config<I>, I: 'static>(
 fn create_approved_proposals<T: Config<I>, I: 'static>(n: u32) -> Result<(), &'static str> {
 	for i in 0..n {
 		let (caller, value, lookup) = setup_proposal::<T, I>(i);
+		#[allow(deprecated)]
 		Treasury::<T, I>::propose_spend(RawOrigin::Signed(caller).into(), value, lookup)?;
 		let proposal_id = <ProposalCount<T, I>>::get() - 1;
+		#[allow(deprecated)]
 		Treasury::<T, I>::approve_proposal(RawOrigin::Root.into(), proposal_id)?;
 	}
 	ensure!(<Approvals<T, I>>::get().len() == n as usize, "Not all approved");
@@ -93,6 +95,7 @@ benchmarks_instance_pallet! {
 
 	reject_proposal {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
+		#[allow(deprecated)]
 		Treasury::<T, _>::propose_spend(
 			RawOrigin::Signed(caller).into(),
 			value,
@@ -107,6 +110,7 @@ benchmarks_instance_pallet! {
 		let p in 0 .. T::MaxApprovals::get() - 1;
 		create_approved_proposals::<T, _>(p)?;
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
+		#[allow(deprecated)]
 		Treasury::<T, _>::propose_spend(
 			RawOrigin::Signed(caller).into(),
 			value,
@@ -119,12 +123,14 @@ benchmarks_instance_pallet! {
 
 	remove_approval {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
+		#[allow(deprecated)]
 		Treasury::<T, _>::propose_spend(
 			RawOrigin::Signed(caller).into(),
 			value,
 			beneficiary_lookup
 		)?;
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
+		#[allow(deprecated)]
 		Treasury::<T, I>::approve_proposal(RawOrigin::Root.into(), proposal_id)?;
 		let reject_origin =
 			T::RejectOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
