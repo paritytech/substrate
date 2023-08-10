@@ -272,10 +272,10 @@ impl StorageGenerics {
 			Self::Map { query_kind, .. } |
 			Self::CountedMap { query_kind, .. } |
 			Self::Value { query_kind, .. } |
-			// A list cannot be queried - only iterated.
-			Self::PagedList { .. } => None,
 			Self::NMap { query_kind, .. } |
 			Self::CountedNMap { query_kind, .. } => query_kind.clone(),
+			// A list cannot be queried - only iterated.
+			Self::PagedList { .. } => None,
 		}
 	}
 }
