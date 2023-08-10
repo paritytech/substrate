@@ -31,7 +31,7 @@ pub fn expand_executive(
 	let executive = generate_crate_access_2018("frame-executive")?;
 
 	let on_runtime_upgrade = match executive_section.custom_on_runtime_upgrade {
-		Some(custom) => quote!(Some(#custom)),
+		Some(custom) => quote!(#custom),
 		None => quote!(()),
 	};
 
