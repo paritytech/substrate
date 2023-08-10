@@ -603,7 +603,7 @@ fn generate_storage_instance(
 
 		quote! {
 			#visibility struct #counter_name< #impl_generics >(
-				#crate_::sp_std::marker::PhantomData<(#type_generics)>
+				#crate_::__private::sp_std::marker::PhantomData<(#type_generics)>
 			) #where_clause;
 
 			impl<#impl_generics> #crate_::traits::StorageInstance
@@ -628,7 +628,7 @@ fn generate_storage_instance(
 	let code = quote! {
 		#[allow(non_camel_case_types)]
 		#visibility struct #name< #impl_generics >(
-			#crate_::sp_std::marker::PhantomData<(#type_generics)>
+			#crate_::__private::sp_std::marker::PhantomData<(#type_generics)>
 		) #where_clause;
 
 		impl<#impl_generics> #crate_::traits::StorageInstance

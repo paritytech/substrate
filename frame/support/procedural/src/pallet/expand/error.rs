@@ -44,7 +44,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 					$caller:tt
 					frame_support = [{ $($frame_support:ident)::* }]
 				} => {
-					$($frame_support::)*tt_return! {
+					$($frame_support::)*__private::tt_return! {
 						$caller
 					}
 				};
@@ -172,7 +172,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 				$caller:tt
 				frame_support = [{ $($frame_support:ident)::* }]
 			} => {
-				$($frame_support::)*tt_return! {
+				$($frame_support::)*__private::tt_return! {
 					$caller
 					error = [{ #error_ident }]
 				}

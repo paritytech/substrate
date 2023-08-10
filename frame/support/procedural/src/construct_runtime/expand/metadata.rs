@@ -61,7 +61,7 @@ pub fn expand_runtime_metadata(
 
 			quote! {
 				#attr
-				#scrate::metadata_ir::PalletMetadataIR {
+				#scrate::__private::metadata_ir::PalletMetadataIR {
 					name: stringify!(#name),
 					index: #index,
 					storage: #storage,
@@ -77,7 +77,7 @@ pub fn expand_runtime_metadata(
 
 	quote! {
 		impl #runtime {
-			fn metadata_ir() -> #scrate::metadata_ir::MetadataIR {
+			fn metadata_ir() -> #scrate::__private::metadata_ir::MetadataIR {
 				// Each runtime must expose the `runtime_metadata()` to fetch the runtime API metadata.
 				// The function is implemented by calling `impl_runtime_apis!`.
 				//
@@ -96,23 +96,23 @@ pub fn expand_runtime_metadata(
 				// `Deref` needs a reference for resolving the function call.
 				let rt = #runtime;
 
-				let ty = #scrate::scale_info::meta_type::<#extrinsic>();
-				let address_ty = #scrate::scale_info::meta_type::<
+				let ty = #scrate::__private::scale_info::meta_type::<#extrinsic>();
+				let address_ty = #scrate::__private::scale_info::meta_type::<
 						<<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::SignaturePayload as #scrate::sp_runtime::traits::SignaturePayload>::SignatureAddress
 					>();
-				let call_ty = #scrate::scale_info::meta_type::<
+				let call_ty = #scrate::__private::scale_info::meta_type::<
 					<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::Call
 					>();
-				let signature_ty = #scrate::scale_info::meta_type::<
+				let signature_ty = #scrate::__private::scale_info::meta_type::<
 						<<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::SignaturePayload as #scrate::sp_runtime::traits::SignaturePayload>::Signature
 					>();
-				let extra_ty = #scrate::scale_info::meta_type::<
+				let extra_ty = #scrate::__private::scale_info::meta_type::<
 						<<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::SignaturePayload as #scrate::sp_runtime::traits::SignaturePayload>::SignatureExtra
 					>();
 
-				#scrate::metadata_ir::MetadataIR {
-					pallets: #scrate::sp_std::vec![ #(#pallets),* ],
-					extrinsic: #scrate::metadata_ir::ExtrinsicMetadataIR {
+				#scrate::__private::metadata_ir::MetadataIR {
+					pallets: #scrate::__private::sp_std::vec![ #(#pallets),* ],
+					extrinsic: #scrate::__private::metadata_ir::ExtrinsicMetadataIR {
 						ty,
 						version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
 						address_ty,
@@ -125,39 +125,39 @@ pub fn expand_runtime_metadata(
 								>::SignedExtensions as #scrate::sp_runtime::traits::SignedExtension
 							>::metadata()
 								.into_iter()
-								.map(|meta| #scrate::metadata_ir::SignedExtensionMetadataIR {
+								.map(|meta| #scrate::__private::metadata_ir::SignedExtensionMetadataIR {
 									identifier: meta.identifier,
 									ty: meta.ty,
 									additional_signed: meta.additional_signed,
 								})
 								.collect(),
 					},
-					ty: #scrate::scale_info::meta_type::<#runtime>(),
+					ty: #scrate::__private::scale_info::meta_type::<#runtime>(),
 					apis: (&rt).runtime_metadata(),
-					outer_enums: #scrate::metadata_ir::OuterEnumsIR {
-						call_enum_ty: #scrate::scale_info::meta_type::<
+					outer_enums: #scrate::__private::metadata_ir::OuterEnumsIR {
+						call_enum_ty: #scrate::__private::scale_info::meta_type::<
 								<#runtime as #system_path::Config>::RuntimeCall
 							>(),
-						event_enum_ty: #scrate::scale_info::meta_type::<RuntimeEvent>(),
-						error_enum_ty: #scrate::scale_info::meta_type::<RuntimeError>(),
+						event_enum_ty: #scrate::__private::scale_info::meta_type::<RuntimeEvent>(),
+						error_enum_ty: #scrate::__private::scale_info::meta_type::<RuntimeError>(),
 					}
 				}
 			}
 
-			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
+			pub fn metadata() -> #scrate::__private::metadata::RuntimeMetadataPrefixed {
 				// Note: this always returns the V14 version. The runtime API function
 				// must be deprecated.
-				#scrate::metadata_ir::into_v14(#runtime::metadata_ir())
+				#scrate::__private::metadata_ir::into_v14(#runtime::metadata_ir())
 			}
 
-			pub fn metadata_at_version(version: u32) -> Option<#scrate::OpaqueMetadata> {
-				#scrate::metadata_ir::into_version(#runtime::metadata_ir(), version).map(|prefixed| {
-					#scrate::OpaqueMetadata::new(prefixed.into())
+			pub fn metadata_at_version(version: u32) -> Option<#scrate::__private::OpaqueMetadata> {
+				#scrate::__private::metadata_ir::into_version(#runtime::metadata_ir(), version).map(|prefixed| {
+					#scrate::__private::OpaqueMetadata::new(prefixed.into())
 				})
 			}
 
-			pub fn metadata_versions() -> #scrate::sp_std::vec::Vec<u32> {
-				#scrate::metadata_ir::supported_versions()
+			pub fn metadata_versions() -> #scrate::__private::sp_std::vec::Vec<u32> {
+				#scrate::__private::metadata_ir::supported_versions()
 			}
 		}
 	}
@@ -220,8 +220,8 @@ fn expand_pallet_metadata_events(
 
 		quote! {
 			Some(
-				#scrate::metadata_ir::PalletEventMetadataIR {
-					ty: #scrate::scale_info::meta_type::<#pallet_event>()
+				#scrate::__private::metadata_ir::PalletEventMetadataIR {
+					ty: #scrate::__private::scale_info::meta_type::<#pallet_event>()
 				}
 			)
 		}
