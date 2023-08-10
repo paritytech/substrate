@@ -32,6 +32,9 @@ runtime-benchmarks = [
 	"frame-benchmarking",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"frame-benchmarking/runtime-benchmarks",
+	"pallet-preimage/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks"
 ]
 std = [
 	"codec/std",
@@ -44,5 +47,12 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-weights/std",
+	"pallet-preimage/std",
+	"sp-core/std"
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-preimage/try-runtime",
+	"sp-runtime/try-runtime"
+]

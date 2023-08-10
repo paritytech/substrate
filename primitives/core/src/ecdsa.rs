@@ -417,7 +417,7 @@ impl TraitPair for Pair {
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, public: &Self::Public) -> bool {
+	fn verify<M: AsRef<[u8]>>(sig: &Signature, message: M, public: &Public) -> bool {
 		sig.recover(message).map(|actual| actual == *public).unwrap_or_default()
 	}
 
