@@ -60,12 +60,12 @@ type NotificationSink = Arc<Mutex<NotificationsSink>>;
 
 #[async_trait::async_trait]
 impl MessageSink for NotificationSink {
-	/// Send synchronous `notification` to the peer associated with this [`MessageService`].
+	/// Send synchronous `notification` to the peer associated with this [`MessageSink`].
 	fn send_sync_notification(&self, notification: Vec<u8>) {
 		self.lock().send_sync_notification(notification);
 	}
 
-	/// Send an asynchronous `notification` to to the peer associated with this [`MessageService`],
+	/// Send an asynchronous `notification` to to the peer associated with this [`MessageSink`],
 	/// allowing sender to exercise backpressure.
 	///
 	/// Returns an error if the peer does not exist.

@@ -482,7 +482,7 @@ pub struct NonDefaultSetConfig {
 	/// Notification handle.
 	///
 	/// Notification handle is created during `NonDefaultSetConfig` creation and its other half,
-	/// Box<dyn NotificationService>` is given to the protocol created the config and
+	/// `Box<dyn NotificationService>` is given to the protocol created the config and
 	/// `ProtocolHandle` is given to `Notifications` when it initializes itself. This handle allows
 	/// `Notifications ` to communicate with the protocol directly without relaying events through
 	/// `sc-network.`

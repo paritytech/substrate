@@ -723,19 +723,19 @@ pub enum NotificationEvent {
 /// notifications.
 ///
 /// Two different flavors of sending options are provided:
-///  * synchronous sending ([`ProtocolNotificationService::send_sync_notification()`])
-///  * asynchronous sending ([`ProtocolNotificationService::send_async_notification()`])
+///  * synchronous sending ([`NotificationService::send_sync_notification()`])
+///  * asynchronous sending ([`NotificationService::send_async_notification()`])
 ///
 /// The former is used by protocols are not ready to exercise backpressure and the latter for the
 /// protocols that can do it.
 ///
 /// Both local and remote peer can close the substream at any time. Local peer can do so by calling
-/// [`ProtocolNotificationService::close_substream()`] which instrucs `Notifications` to close the
+/// [`NotificationService::close_substream()`] which instrucs `Notifications` to close the
 /// substream. Remote closing the substream is indicated to the local peer by receiving
-/// [`NotificationEvent::SubstreamClosed`] event
+/// [`NotificationEvent::NotificationStreamClosed`] event
 ///
 /// In case the protocol must update its handshake while it's operating (such as updating the best
-/// block information), it can do so by calling [`ProtocolNotificationService::set_handshake()`]
+/// block information), it can do so by calling [`NotificationService::set_handshake()`]
 /// which instructs `Notifications` to update the handshake it stored during protocol
 /// initialization.
 ///
@@ -790,7 +790,7 @@ pub trait NotificationService: Debug + Send {
 ///
 /// If protocol cannot use [`NotificationService`] to send notifications to peers and requires,
 /// e.g., notifications to be sent in another task, the protocol may acquire a [`MessageSink`]
-/// object for each peer by calling [`NotificationService::notification_sink()`]. Calling this
+/// object for each peer by calling [`NotificationService::message_sink()`]. Calling this
 /// function returns an object which allows the protocol to send notifications to the remote peer.
 ///
 /// Use of this API is discouraged as it's not as performant as sending notifications through
