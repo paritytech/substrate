@@ -76,7 +76,7 @@ pub struct PalletTaskAttr {
 	#[inside(_bracket)]
 	_colons: Token![::],
 	#[inside(_bracket)]
-	attr: TaskAttrType,
+	_attr: TaskAttrType,
 }
 
 #[cfg(test)]
