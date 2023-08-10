@@ -22,7 +22,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{fungible, tokens::ConversionToAssetBalance},
 };
-use sp_runtime::{traits::Convert, FixedPointNumber, FixedPointOperand, FixedU128};
+use sp_runtime::{traits::Convert, FixedPointNumber, FixedU128};
 
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
@@ -293,8 +293,6 @@ where
 	T: Config<I>,
 	I: 'static,
 	CON: Convert<BalanceOf<F, T>, AssetBalanceOf<T, I>>,
-	BalanceOf<F, T>: FixedPointOperand + Zero,
-	AssetBalanceOf<T, I>: FixedPointOperand + Zero,
 {
 	type Error = ConversionError;
 

@@ -24,7 +24,7 @@ use crate::chain_head::{
 		BestBlockChanged, Finalized, FollowEvent, Initialized, NewBlock, RuntimeEvent,
 		RuntimeVersionEvent,
 	},
-	subscription::{SubscriptionManagement, SubscriptionManagementError},
+	subscription::{InsertedSubscriptionData, SubscriptionManagement, SubscriptionManagementError},
 };
 use futures::{
 	channel::oneshot,
@@ -80,6 +80,8 @@ enum NotificationType<Block: BlockT> {
 	NewBlock(BlockImportNotification<Block>),
 	/// The finalized block notification obtained from `finality_notification_stream`.
 	Finalized(FinalityNotification<Block>),
+	/// The response of `chainHead` method calls.
+	MethodResponse(FollowEvent<Block::Hash>),
 }
 
 /// The initial blocks that should be reported or ignored by the chainHead.
@@ -515,6 +517,7 @@ where
 					self.handle_import_blocks(notification, &startup_point),
 				NotificationType::Finalized(notification) =>
 					self.handle_finalized_blocks(notification, &mut to_ignore, &startup_point),
+				NotificationType::MethodResponse(notification) => Ok(vec![notification]),
 			};
 
 			let events = match events {
@@ -572,7 +575,7 @@ where
 	pub async fn generate_events(
 		&mut self,
 		mut sink: SubscriptionSink,
-		rx_stop: oneshot::Receiver<()>,
+		sub_data: InsertedSubscriptionData<Block>,
 	) {
 		// Register for the new block and finalized notifications.
 		let stream_import = self
@@ -584,6 +587,10 @@ where
 			.client
 			.finality_notification_stream()
 			.map(|notification| NotificationType::Finalized(notification));
+
+		let stream_responses = sub_data
+			.response_receiver
+			.map(|response| NotificationType::MethodResponse(response));
 
 		let startup_point = StartupPoint::from(self.client.info());
 		let (initial_events, pruned_forks) = match self.generate_init_events(&startup_point) {
@@ -602,9 +609,10 @@ where
 
 		let initial = NotificationType::InitialEvents(initial_events);
 		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
+		let merged = tokio_stream::StreamExt::merge(merged, stream_responses);
 		let stream = stream::once(futures::future::ready(initial)).chain(merged);
 
-		self.submit_events(&startup_point, stream.boxed(), pruned_forks, sink, rx_stop)
+		self.submit_events(&startup_point, stream.boxed(), pruned_forks, sink, sub_data.rx_stop)
 			.await;
 	}
 }

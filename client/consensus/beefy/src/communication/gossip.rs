@@ -41,7 +41,7 @@ use crate::{
 	LOG_TARGET,
 };
 use sp_consensus_beefy::{
-	crypto::{AuthorityId, Signature},
+	ecdsa_crypto::{AuthorityId, Signature},
 	ValidatorSet, ValidatorSetId, VoteMessage,
 };
 
@@ -476,9 +476,10 @@ pub(crate) mod tests {
 	use super::*;
 	use crate::keystore::BeefyKeystore;
 	use sc_network_test::Block;
+	use sp_application_crypto::key_types::BEEFY as BEEFY_KEY_TYPE;
 	use sp_consensus_beefy::{
-		crypto::Signature, known_payloads, Commitment, Keyring, MmrRootHash, Payload,
-		SignedCommitment, VoteMessage, KEY_TYPE,
+		ecdsa_crypto::Signature, known_payloads, Commitment, Keyring, MmrRootHash, Payload,
+		SignedCommitment, VoteMessage,
 	};
 	use sp_keystore::{testing::MemoryKeystore, Keystore};
 
@@ -536,7 +537,7 @@ pub(crate) mod tests {
 
 	pub fn sign_commitment<BN: Encode>(who: &Keyring, commitment: &Commitment<BN>) -> Signature {
 		let store = MemoryKeystore::new();
-		store.ecdsa_generate_new(KEY_TYPE, Some(&who.to_seed())).unwrap();
+		store.ecdsa_generate_new(BEEFY_KEY_TYPE, Some(&who.to_seed())).unwrap();
 		let beefy_keystore: BeefyKeystore = Some(store.into()).into();
 		beefy_keystore.sign(&who.public(), &commitment.encode()).unwrap()
 	}

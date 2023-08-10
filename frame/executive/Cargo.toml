@@ -49,5 +49,16 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-tracing/std",
+	"pallet-balances/std",
+	"pallet-transaction-payment/std",
+	"sp-inherents/std",
+	"sp-version/std"
 ]
-try-runtime = ["frame-support/try-runtime", "frame-try-runtime/try-runtime", "sp-runtime/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-try-runtime/try-runtime",
+	"sp-runtime/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-transaction-payment/try-runtime"
+]

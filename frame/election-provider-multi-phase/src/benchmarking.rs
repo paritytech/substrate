@@ -20,6 +20,7 @@
 use super::*;
 use crate::{unsigned::IndexAssignmentOf, Pallet as MultiPhase};
 use frame_benchmarking::account;
+use frame_election_provider_support::bounds::DataProviderBounds;
 use frame_support::{
 	assert_ok,
 	traits::{Hooks, TryCollect},
@@ -270,8 +271,9 @@ frame_benchmarking::benchmarks! {
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider::<T>(v, t);
-		let targets = T::DataProvider::electable_targets(None)?;
-		let voters = T::DataProvider::electing_voters(None)?;
+		// default bounds are unbounded.
+		let targets = T::DataProvider::electable_targets(DataProviderBounds::default())?;
+		let voters = T::DataProvider::electing_voters(DataProviderBounds::default())?;
 		let desired_targets = T::DataProvider::desired_targets()?;
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
