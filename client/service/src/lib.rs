@@ -55,8 +55,8 @@ use sp_runtime::{
 
 pub use self::{
 	builder::{
-		build_network, build_offchain_workers, new_client, new_db_backend, new_full_client,
-		new_full_parts, new_full_parts_with_genesis_builder, new_native_or_wasm_executor,
+		build_network, new_client, new_db_backend, new_full_client, new_full_parts,
+		new_full_parts_with_genesis_builder, new_native_or_wasm_executor, new_wasm_executor,
 		spawn_tasks, BuildNetworkParams, KeystoreContainer, NetworkStarter, SpawnTasksParams,
 		TFullBackend, TFullCallExecutor, TFullClient,
 	},
@@ -255,7 +255,7 @@ pub async fn build_system_rpc_future<
 				let _ = sender.send(network_service.local_peer_id().to_base58());
 			},
 			sc_rpc::system::Request::LocalListenAddresses(sender) => {
-				let peer_id = (network_service.local_peer_id()).into();
+				let peer_id = network_service.local_peer_id();
 				let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
 				let addresses = network_service
 					.listen_addresses()

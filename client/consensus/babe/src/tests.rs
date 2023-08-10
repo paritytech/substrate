@@ -26,6 +26,7 @@ use sc_consensus::{BoxBlockImport, BoxJustificationImport};
 use sc_consensus_epochs::{EpochIdentifier, EpochIdentifierPosition};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_network_test::{Block as TestBlock, *};
+use sc_transaction_pool_api::RejectAllTxPool;
 use sp_application_crypto::key_types::BABE;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_babe::{
@@ -283,6 +284,9 @@ impl TestNetFactory for BabeTestNet {
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
 				telemetry: None,
+				offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+					RejectAllTxPool::default(),
+				),
 			},
 			mutator: MUTATOR.with(|m| m.borrow().clone()),
 		}

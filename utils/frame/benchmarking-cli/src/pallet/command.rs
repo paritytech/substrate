@@ -23,9 +23,7 @@ use frame_benchmarking::{
 };
 use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
-use sc_cli::{
-	execution_method_from_cli, CliConfiguration, ExecutionStrategy, Result, SharedParams,
-};
+use sc_cli::{execution_method_from_cli, CliConfiguration, Result, SharedParams};
 use sc_client_db::BenchmarkingState;
 use sc_executor::WasmExecutor;
 use sc_service::Configuration;
@@ -149,6 +147,16 @@ impl PalletCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		ExtraHostFunctions: sp_wasm_interface::HostFunctions,
 	{
+		let _d = self.execution.as_ref().map(|exec| {
+			// We print the warning at the end, since there is often A LOT of output.
+			sp_core::defer::DeferGuard::new(move || {
+				log::warn!(
+					target: LOG_TARGET,
+					"⚠️  Argument `--execution` is deprecated. Its value of `{exec}` has on effect.",
+				)
+			})
+		});
+
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
 				return Err("Output file or path is invalid!".into())
@@ -182,7 +190,6 @@ impl PalletCmd {
 		}
 
 		let spec = config.chain_spec;
-		let strategy = self.execution.unwrap_or(ExecutionStrategy::Wasm);
 		let pallet = self.pallet.clone().unwrap_or_default();
 		let pallet = pallet.as_bytes();
 		let extrinsic = self.extrinsic.clone().unwrap_or_default();
@@ -243,11 +250,11 @@ impl PalletCmd {
 			&executor,
 			"Benchmark_benchmark_metadata",
 			&(self.extra).encode(),
-			extensions(),
+			&mut extensions(),
 			&sp_state_machine::backend::BackendRuntimeCode::new(state).runtime_code()?,
 			CallContext::Offchain,
 		)
-		.execute(strategy.into())
+		.execute()
 		.map_err(|e| format!("{}: {}", ERROR_METADATA_NOT_FOUND, e))?;
 
 		let (list, storage_info) =
@@ -379,12 +386,12 @@ impl PalletCmd {
 							1,    // no need to do internal repeats
 						)
 							.encode(),
-						extensions(),
+						&mut extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						CallContext::Offchain,
 					)
-					.execute(strategy.into())
+					.execute()
 					.map_err(|e| {
 						format!("Error executing and verifying runtime benchmark: {}", e)
 					})?;
@@ -419,12 +426,12 @@ impl PalletCmd {
 							self.repeat,
 						)
 							.encode(),
-						extensions(),
+						&mut extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						CallContext::Offchain,
 					)
-					.execute(strategy.into())
+					.execute()
 					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;
 
 					let batch =
@@ -451,12 +458,12 @@ impl PalletCmd {
 							self.repeat,
 						)
 							.encode(),
-						extensions(),
+						&mut extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						CallContext::Offchain,
 					)
-					.execute(strategy.into())
+					.execute()
 					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;
 
 					let batch =
@@ -624,12 +631,6 @@ impl PalletCmd {
 				println!("Raw Storage Info\n========");
 				for comment in comments {
 					println!("{}", comment);
-				}
-				println!();
-
-				println!("-- Proof Sizes --\n");
-				for result in batch.db_results.iter() {
-					println!("{} bytes", result.proof_size);
 				}
 				println!();
 			}

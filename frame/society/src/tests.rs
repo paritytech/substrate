@@ -77,7 +77,7 @@ fn migration_works() {
 			.collect::<Vec<_>>();
 		old::Bids::<Test, ()>::put(bids);
 
-		migrations::from_original::<Test, ()>(&mut [][..]);
+		migrations::from_original::<Test, ()>(&mut [][..]).expect("migration failed");
 		migrations::assert_internal_consistency::<Test, ()>();
 
 		assert_eq!(

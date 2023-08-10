@@ -43,6 +43,8 @@ pub use serde;
 #[doc(hidden)]
 pub use sp_std::{ops::Deref, vec::Vec};
 
+#[cfg(feature = "bandersnatch-experimental")]
+pub mod bandersnatch;
 #[cfg(feature = "bls-experimental")]
 pub mod bls377;
 #[cfg(feature = "bls-experimental")]
@@ -178,6 +180,13 @@ macro_rules! app_crypto_pair {
 
 		impl $crate::AppPair for Pair {
 			type Generic = $pair;
+		}
+
+		impl Pair {
+			/// Convert into wrapped generic key pair type.
+			pub fn into_inner(self) -> $pair {
+				self.0
+			}
 		}
 	};
 }

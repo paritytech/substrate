@@ -404,7 +404,7 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 		})
 	}
 
-	/// This voter's budget
+	/// This voter's budget.
 	#[inline]
 	pub fn budget(&self) -> ExtendedBalance {
 		self.budget

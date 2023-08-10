@@ -71,10 +71,10 @@
 //! ### Example
 //!
 //! 1. Fast-unstake with multiple participants in the queue.
-#![doc = docify::embed!("frame/fast-unstake/src/tests.rs", successful_multi_queue)]
+#![doc = docify::embed!("src/tests.rs", successful_multi_queue)]
 //!
 //! 2. Fast unstake failing because a nominator is exposed.
-#![doc = docify::embed!("frame/fast-unstake/src/tests.rs", exposed_nominator_cannot_unstake)]
+#![doc = docify::embed!("src/tests.rs", exposed_nominator_cannot_unstake)]
 //!
 //! ## Pallet API
 //!
@@ -268,8 +268,8 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
-		fn on_idle(_: T::BlockNumber, remaining_weight: Weight) -> Weight {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			if remaining_weight.any_lt(T::DbWeight::get().reads(2)) {
 				return Weight::from_parts(0, 0)
 			}
@@ -278,20 +278,16 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
-			sp_std::if_std! {
-				sp_io::TestExternalities::new_empty().execute_with(|| {
-					// ensure that the value of `ErasToCheckPerBlock` is less than
-					// `T::MaxErasToCheckPerBlock`.
-					assert!(
-						ErasToCheckPerBlock::<T>::get() <= T::MaxErasToCheckPerBlock::get(),
-						"the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`",
-					);
-				});
-			}
+			// Ensure that the value of `ErasToCheckPerBlock` is less or equal to
+			// `T::MaxErasToCheckPerBlock`.
+			assert!(
+				ErasToCheckPerBlock::<T>::get() <= T::MaxErasToCheckPerBlock::get(),
+				"the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`",
+			);
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> Result<(), TryRuntimeError> {
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
 			// ensure that the value of `ErasToCheckPerBlock` is less than
 			// `T::MaxErasToCheckPerBlock`.
 			ensure!(
