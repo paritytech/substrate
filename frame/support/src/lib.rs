@@ -124,7 +124,7 @@ impl TypeId for PalletId {
 ///
 /// ```
 /// # use frame_support::storage_alias;
-/// use frame_support::codec;
+/// use codec;
 /// use frame_support::Twox64Concat;
 /// // generate a storage value with type u32.
 /// #[storage_alias]
@@ -701,9 +701,13 @@ macro_rules! assert_noop {
 		$x:expr,
 		$y:expr $(,)?
 	) => {
-		let h = $crate::storage_root($crate::StateVersion::V1);
+		let h = $crate::__private::storage_root($crate::__private::StateVersion::V1);
 		$crate::assert_err!($x, $y);
-		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1), "storage has been mutated");
+		assert_eq!(
+			h,
+			$crate::__private::storage_root($crate::__private::StateVersion::V1),
+			"storage has been mutated"
+		);
 	};
 }
 
@@ -716,9 +720,9 @@ macro_rules! assert_storage_noop {
 	(
 		$x:expr
 	) => {
-		let h = $crate::storage_root($crate::StateVersion::V1);
+		let h = $crate::__private::storage_root($crate::__private::StateVersion::V1);
 		$x;
-		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1));
+		assert_eq!(h, $crate::__private::storage_root($crate::__private::StateVersion::V1));
 	};
 }
 

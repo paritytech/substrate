@@ -590,7 +590,7 @@ pub fn benchmarks(
 						#krate::benchmarking::reset_read_write_count();
 
 						// Time the extrinsic logic.
-						#krate::__private::log::trace!(
+						#krate::log::trace!(
 							target: "benchmark",
 							"Start Benchmark: {} ({:?})",
 							extrinsic,
@@ -614,12 +614,12 @@ pub fn benchmarks(
 
 						// Commit the changes to get proper write count
 						#krate::benchmarking::commit_db();
-						#krate::__private::log::trace!(
+						#krate::log::trace!(
 							target: "benchmark",
 							"End Benchmark: {} ns", elapsed_extrinsic
 						);
 						let read_write_count = #krate::benchmarking::read_write_count();
-						#krate::__private::log::trace!(
+						#krate::log::trace!(
 							target: "benchmark",
 							"Read/Write Count {:?}", read_write_count
 						);
