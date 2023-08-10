@@ -389,13 +389,18 @@ impl<T: Config> Pallet<T> {
 	/// a call to `report_fork_equivocation_unsigned` and will push the transaction
 	/// to the pool. Only useful in an offchain context.
 	pub fn submit_unsigned_fork_equivocation_report(
-		_fork_equivocation_proof: sp_consensus_beefy::ForkEquivocationProof<BlockNumberFor<T>, T::BeefyId,
+		fork_equivocation_proof: sp_consensus_beefy::ForkEquivocationProof<BlockNumberFor<T>, T::BeefyId,
 			<T::BeefyId as RuntimeAppPublic>::Signature, HeaderFor<T>
 >,
-		_key_owner_proofs: Vec<T::KeyOwnerProof>,
+		key_owner_proofs: Vec<T::KeyOwnerProof>,
 	) -> Option<()> {
-		// T::EquivocationReportSystem::publish_evidence((fork_equivocation_proof, key_owner_proofs)).ok()
-		None
+		T::EquivocationReportSystem::publish_evidence(
+			EquivocationEvidenceFor::<T>::ForkEquivocationProof(
+				fork_equivocation_proof,
+				key_owner_proofs,
+			),
+		)
+		.ok()
 	}
 
 	fn change_authorities(
