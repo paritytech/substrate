@@ -548,13 +548,21 @@ where
 		let next_batch_size = if request_duration > Self::REQUEST_DURATION_TARGET {
 			max(1, (batch_size as f32 * Self::BATCH_SIZE_DECREASE_FACTOR) as usize)
 		} else {
-			min(payloads.len(), (batch_size as f32 * Self::BATCH_SIZE_INCREASE_FACTOR) as usize)
+			// Increase the batch size by *at most* the number of remaining payloads
+			min(
+				payloads.len(),
+				// Increase the batch size by *at least* 1
+				max(
+					batch_size + 1,
+					(batch_size as f32 * Self::BATCH_SIZE_INCREASE_FACTOR) as usize,
+				),
+			)
 		};
 
 		log::debug!(
 			target: LOG_TARGET,
-			"Request duration: {:?} Target duration: {:?} Next Batch size: {}",
-			request_duration, Self::REQUEST_DURATION_TARGET, next_batch_size
+			"Request duration: {:?} Target duration: {:?} Last batch size: {} Next batch size: {}",
+			request_duration, Self::REQUEST_DURATION_TARGET, batch_size, next_batch_size
 		);
 
 		// Collect the data from this batch
