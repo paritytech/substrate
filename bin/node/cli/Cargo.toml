@@ -184,7 +184,8 @@ try-runtime = [
 	"pallet-balances/try-runtime",
 	"pallet-im-online/try-runtime",
 	"pallet-timestamp/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
+	"substrate-cli-test-utils/try-runtime"
 ]
 
 [[bench]]
