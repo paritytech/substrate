@@ -1297,7 +1297,7 @@ impl<T: Config> Pallet<T> {
 		let phase = ExecutionPhase::<T>::get().unwrap_or_default();
 		let event = EventRecord { phase, event, topics: topics.to_vec() };
 
-		// Index of the to be added event.
+		// Index of the event to be added.
 		let event_idx = {
 			let old_event_count = EventCount::<T>::get();
 			let new_event_count = match old_event_count.checked_add(1) {
