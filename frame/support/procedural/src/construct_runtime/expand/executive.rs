@@ -98,9 +98,9 @@ pub fn expand_executive(
 			pub fn api_impl_offchain_worker(header: &<Block as #scrate::sp_runtime::traits::Block>::Header) {
 				Executive::offchain_worker(header)
 			}
-
-			#try_runtime_section
 		}
+
+		#try_runtime_section
 	};
 
 	Ok(res)
