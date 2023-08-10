@@ -203,6 +203,9 @@ pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
 
+	#[cfg(doc)]
+	use frame_support::traits::Task;
+
 	/// Contains default types suitable for various environments
 	pub mod config_preludes {
 		use super::DefaultConfig;
@@ -510,10 +513,15 @@ pub mod pallet {
 			ensure_signed(origin)?;
 
 			if !task.is_valid() {
+				Self::deposit_event(Event::TaskInvalid { task });
 				return Err(Error::<T>::InvalidTask.into())
 			}
 
-			task.run()?;
+			Self::deposit_event(Event::TaskStarted { task: task.clone() });
+			if let Err(err) = task.run() {
+				Self::deposit_event(Event::TaskFailed { task, err });
+				return Err(Error::<T>::FailedTask.into())
+			}
 
 			// Emit a success event, if your design includes events for this pallet.
 			Self::deposit_event(Event::TaskCompleted { task });
@@ -538,8 +546,14 @@ pub mod pallet {
 		KilledAccount { account: T::AccountId },
 		/// On on-chain remark happened.
 		Remarked { sender: T::AccountId, hash: T::Hash },
-		/// A task has finished executing.
+		/// A [`Task`] has started executing
+		TaskStarted { task: T::RuntimeTask },
+		/// A [`Task`] has finished executing.
 		TaskCompleted { task: T::RuntimeTask },
+		/// An attempt was made to run an invalid [`Task`].
+		TaskInvalid { task: T::RuntimeTask },
+		/// A [`Task`] failed during execution.
+		TaskFailed { task: T::RuntimeTask, err: DispatchError },
 	}
 
 	/// Error for the System pallet
@@ -561,8 +575,10 @@ pub mod pallet {
 		NonZeroRefCount,
 		/// The origin filter prevent the call to be dispatched.
 		CallFiltered,
-		/// The specified `Task` is not valid
+		/// The specified [`Task`] is not valid.
 		InvalidTask,
+		/// The specified [`Task`] failed during execution.
+		FailedTask,
 	}
 
 	/// Exposed trait-generic origin type.
