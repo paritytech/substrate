@@ -349,7 +349,7 @@ where
 				Err(_) => return Err(ChainHeadRpcError::InvalidBlock.into()),
 			};
 
-		let storage_client = ChainHeadStorage::<Client, Block, BE>::new(self.client.clone());
+		let mut storage_client = ChainHeadStorage::<Client, Block, BE>::new(self.client.clone());
 		let operation_id = block_guard.operation_id();
 
 		// The number of operations we are allowed to execute.
@@ -359,7 +359,7 @@ where
 		items.truncate(num_operations);
 
 		let fut = async move {
-			storage_client.generate_events(block_guard, hash, items, child_trie);
+			storage_client.generate_events(block_guard, hash, items, child_trie).await;
 		};
 
 		self.executor
@@ -449,6 +449,15 @@ where
 		follow_subscription: String,
 		operation_id: String,
 	) -> RpcResult<()> {
-		Ok(())
+		let Some(operation) = self.subscriptions.get_operation(&follow_subscription, &operation_id) else {
+			return Ok(())
+		};
+
+		if !operation.submit_continue() {
+			// Continue called without generating a `WaitingForContinue` event.
+			Err(ChainHeadRpcError::InvalidContinue.into())
+		} else {
+			Ok(())
+		}
 	}
 }
