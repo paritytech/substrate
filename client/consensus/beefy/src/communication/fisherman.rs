@@ -119,8 +119,16 @@ where
 			return Ok(())
 		}
 
-		let hash = proof.correct_header.hash();
 		let offender_ids = proof.signatories.iter().cloned().map(|(id, _sig)| id).collect::<Vec<_>>();
+		if let Some(local_id) = self.key_store.authority_id(validator_set.validators()) {
+			if offender_ids.contains(&local_id) {
+				debug!(target: LOG_TARGET, "🥩 Skip equivocation report for own equivocation");
+				// TODO: maybe error here instead?
+				return Ok(())
+			}
+		}
+
+		let hash = proof.correct_header.hash();
 		let runtime_api = self.runtime.runtime_api();
 
 		// generate key ownership proof at that block

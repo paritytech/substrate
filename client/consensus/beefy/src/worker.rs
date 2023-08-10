@@ -1696,14 +1696,24 @@ pub(crate) mod tests {
 
 		let validator_set_id = 0;
 
-		let proof = generate_fork_equivocation_proof_vote((block_number as u64, payload, validator_set_id, &Keyring::Bob), header);
+		let proof = generate_fork_equivocation_proof_vote((block_number as u64, payload.clone(), validator_set_id, &Keyring::Bob), header.clone());
 		{
-			// expect fisher (Alice) to successfully report it
+			// expect fisher (Alice) to successfully process it
 			assert_eq!(alice_worker.gossip_validator.fisherman.report_fork_equivocation(proof.clone()), Ok(()));
 			// verify Alice reports Bob's equivocation to runtime
 			let reported = alice_worker.runtime.reported_fork_equivocations.as_ref().unwrap().lock();
 			assert_eq!(reported.len(), 1);
 			assert_eq!(*reported.get(0).unwrap(), proof);
+		}
+
+		let proof = generate_fork_equivocation_proof_vote((block_number as u64, payload, validator_set_id, &Keyring::Alice), header);
+		{
+			// expect fisher (Alice) to successfully process it
+			assert_eq!(alice_worker.gossip_validator.fisherman.report_fork_equivocation(proof.clone()), Ok(()));
+			// verify Alice does not report her own equivocation to runtime
+			let reported = alice_worker.runtime.reported_fork_equivocations.as_ref().unwrap().lock();
+			assert_eq!(reported.len(), 1);
+			assert!(*reported.get(0).unwrap() != proof);
 		}
 
 	}
