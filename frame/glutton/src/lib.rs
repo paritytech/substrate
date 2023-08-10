@@ -15,12 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # WARNING
+//!
+//! **DO NOT USE ON VALUE-BEARING CHAINS. THIS PALLET IS ONLY INTENDED FOR TESTING USAGE.**
+//!
 //! # Glutton Pallet
 //!
 //! Pallet that consumes `ref_time` and `proof_size` of a block. Based on the
 //! `Compute` and `Storage` parameters the pallet consumes the adequate amount
 //! of weight.
 
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -32,10 +37,10 @@ mod tests;
 pub mod weights;
 
 use blake2::{Blake2b512, Digest};
-use frame_support::{pallet_prelude::*, weights::WeightMeter};
+use frame_support::{pallet_prelude::*, weights::WeightMeter, DefaultNoBound};
 use frame_system::pallet_prelude::*;
 use sp_io::hashing::twox_256;
-use sp_runtime::{traits::Zero, Perbill};
+use sp_runtime::{traits::Zero, FixedPointNumber, FixedU64};
 use sp_std::{vec, vec::Vec};
 
 pub use pallet::*;
@@ -43,8 +48,10 @@ pub use weights::WeightInfo;
 
 /// The size of each value in the `TrashData` storage in bytes.
 pub const VALUE_SIZE: usize = 1024;
-/// Max number of entries for `TrashData` storage item
+/// Max number of entries for the `TrashData` map.
 pub const MAX_TRASH_DATA_ENTRIES: u32 = 65_000;
+/// Hard limit for any other resource limit (in units).
+pub const RESOURCE_HARD_LIMIT: FixedU64 = FixedU64::from_u32(10);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -52,6 +59,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
+		/// The overarching event type.
 		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The admin origin that can set computational limits and initialize the pallet.
@@ -68,11 +76,20 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event {
 		/// The pallet has been (re)initialized.
-		PalletInitialized { reinit: bool },
+		PalletInitialized {
+			/// Whether the pallet has been re-initialized.
+			reinit: bool,
+		},
 		/// The computation limit has been updated.
-		ComputationLimitSet { compute: Perbill },
+		ComputationLimitSet {
+			/// The computation limit.
+			compute: FixedU64,
+		},
 		/// The storage limit has been updated.
-		StorageLimitSet { storage: Perbill },
+		StorageLimitSet {
+			/// The storage limit.
+			storage: FixedU64,
+		},
 	}
 
 	#[pallet::error]
@@ -81,17 +98,24 @@ pub mod pallet {
 		///
 		/// Set `witness_count` to `Some` to bypass this error.
 		AlreadyInitialized,
+
+		/// The limit was over [`crate::RESOURCE_HARD_LIMIT`].
+		InsaneLimit,
 	}
 
-	/// Storage value used to specify what percentage of the left over `ref_time`
-	/// to consume during `on_idle`.
+	/// The proportion of the remaining `ref_time` to consume during `on_idle`.
+	///
+	/// `1.0` is mapped to `100%`. Must be at most [`crate::RESOURCE_HARD_LIMIT`]. Setting this to
+	/// over `1.0` could stall the chain.
 	#[pallet::storage]
-	pub(crate) type Compute<T: Config> = StorageValue<_, Perbill, ValueQuery>;
+	pub(crate) type Compute<T: Config> = StorageValue<_, FixedU64, ValueQuery>;
 
-	/// Storage value used the specify what percentage of left over `proof_size`
-	/// to consume during `on_idle`.
+	/// The proportion of the remaining `proof_size` to consume during `on_idle`.
+	///
+	/// `1.0` is mapped to `100%`. Must be at most [`crate::RESOURCE_HARD_LIMIT`]. Setting this to
+	/// over `1.0` could stall the chain.
 	#[pallet::storage]
-	pub(crate) type Storage<T: Config> = StorageValue<_, Perbill, ValueQuery>;
+	pub(crate) type Storage<T: Config> = StorageValue<_, FixedU64, ValueQuery>;
 
 	/// Storage map used for wasting proof size.
 	///
@@ -115,24 +139,21 @@ pub mod pallet {
 	pub(crate) type TrashDataCount<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
-		pub compute: Perbill,
-		pub storage: Perbill,
+	#[derive(DefaultNoBound)]
+	pub struct GenesisConfig<T: Config> {
+		/// The compute limit.
+		pub compute: FixedU64,
+		/// The storage limit.
+		pub storage: FixedU64,
+		/// The amount of trash data for wasting proof size.
 		pub trash_data_count: u32,
-	}
-
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self {
-				compute: Default::default(),
-				storage: Default::default(),
-				trash_data_count: Default::default(),
-			}
-		}
+		#[serde(skip)]
+		/// The required configuration field.
+		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			assert!(
 				self.trash_data_count <= MAX_TRASH_DATA_ENTRIES,
@@ -145,7 +166,10 @@ pub mod pallet {
 
 			TrashDataCount::<T>::set(self.trash_data_count);
 
+			assert!(self.compute <= RESOURCE_HARD_LIMIT, "Compute limit is insane");
 			<Compute<T>>::put(self.compute);
+
+			assert!(self.storage <= RESOURCE_HARD_LIMIT, "Storage limit is insane");
 			<Storage<T>>::put(self.storage);
 		}
 	}
@@ -165,13 +189,14 @@ pub mod pallet {
 
 		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut meter = WeightMeter::from_limit(remaining_weight);
-			if !meter.check_accrue(T::WeightInfo::empty_on_idle()) {
+			if meter.try_consume(T::WeightInfo::empty_on_idle()).is_err() {
 				return T::WeightInfo::empty_on_idle()
 			}
 
-			let proof_size_limit = Storage::<T>::get().mul_floor(meter.remaining().proof_size());
+			let proof_size_limit =
+				Storage::<T>::get().saturating_mul_int(meter.remaining().proof_size());
 			let computation_weight_limit =
-				Compute::<T>::get().mul_floor(meter.remaining().ref_time());
+				Compute::<T>::get().saturating_mul_int(meter.remaining().ref_time());
 			let mut meter = WeightMeter::from_limit(Weight::from_parts(
 				computation_weight_limit,
 				proof_size_limit,
@@ -180,19 +205,18 @@ pub mod pallet {
 			Self::waste_at_most_proof_size(&mut meter);
 			Self::waste_at_most_ref_time(&mut meter);
 
-			meter.consumed
+			meter.consumed()
 		}
 	}
 
-	#[pallet::call]
+	#[pallet::call(weight = T::WeightInfo)]
 	impl<T: Config> Pallet<T> {
-		/// Initializes the pallet by writing into `TrashData`.
+		/// Initialize the pallet. Should be called once, if no genesis state was provided.
 		///
 		/// `current_count` is the current number of elements in `TrashData`. This can be set to
 		/// `None` when the pallet is first initialized.
 		///
-		/// Only callable by Root or `AdminOrigin`. A good default for `new_count` is
-		/// `5_000`.
+		/// Only callable by Root or `AdminOrigin`. A good default for `new_count` is `5_000`.
 		#[pallet::call_index(0)]
 		#[pallet::weight(
 			T::WeightInfo::initialize_pallet_grow(witness_count.unwrap_or_default())
@@ -227,10 +251,10 @@ pub mod pallet {
 		///
 		/// Only callable by Root or `AdminOrigin`.
 		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::set_compute())]
-		pub fn set_compute(origin: OriginFor<T>, compute: Perbill) -> DispatchResult {
+		pub fn set_compute(origin: OriginFor<T>, compute: FixedU64) -> DispatchResult {
 			T::AdminOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
 
+			ensure!(compute <= RESOURCE_HARD_LIMIT, Error::<T>::InsaneLimit);
 			Compute::<T>::set(compute);
 
 			Self::deposit_event(Event::ComputationLimitSet { compute });
@@ -239,17 +263,16 @@ pub mod pallet {
 
 		/// Set how much of the remaining `proof_size` weight should be consumed by `on_idle`.
 		//
-		/// 100% means that all remaining `proof_size` will be consumed. The PoV benchmarking
+		/// `1.0` means that all remaining `proof_size` will be consumed. The PoV benchmarking
 		/// results that are used here are likely an over-estimation. 100% intended consumption will
-		/// therefore translate to less than 100% actual consumption. In the future, this could be
-		/// counter-acted by allowing the glutton to specify over-unity consumption ratios.
+		/// therefore translate to less than 100% actual consumption.
 		///
 		/// Only callable by Root or `AdminOrigin`.
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::set_storage())]
-		pub fn set_storage(origin: OriginFor<T>, storage: Perbill) -> DispatchResult {
+		pub fn set_storage(origin: OriginFor<T>, storage: FixedU64) -> DispatchResult {
 			T::AdminOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
 
+			ensure!(storage <= RESOURCE_HARD_LIMIT, Error::<T>::InsaneLimit);
 			Storage::<T>::set(storage);
 
 			Self::deposit_event(Event::StorageLimitSet { storage });
@@ -262,11 +285,9 @@ pub mod pallet {
 		///
 		/// Tries to come as close to the limit as possible.
 		pub(crate) fn waste_at_most_proof_size(meter: &mut WeightMeter) {
-			let Ok(n) = Self::calculate_proof_size_iters(&meter) else {
-				return;
-			};
+			let Ok(n) = Self::calculate_proof_size_iters(&meter) else { return };
 
-			meter.defensive_saturating_accrue(T::WeightInfo::waste_proof_size_some(n));
+			meter.consume(T::WeightInfo::waste_proof_size_some(n));
 
 			(0..n).for_each(|i| {
 				TrashData::<T>::get(i);
@@ -294,10 +315,8 @@ pub mod pallet {
 		///
 		/// Tries to come as close to the limit as possible.
 		pub(crate) fn waste_at_most_ref_time(meter: &mut WeightMeter) {
-			let Ok(n) = Self::calculate_ref_time_iters(&meter) else {
-				return;
-			};
-			meter.defensive_saturating_accrue(T::WeightInfo::waste_ref_time_iter(n));
+			let Ok(n) = Self::calculate_ref_time_iters(&meter) else { return };
+			meter.consume(T::WeightInfo::waste_ref_time_iter(n));
 
 			let clobber = Self::waste_ref_time_iter(vec![0u8; 64], n);
 

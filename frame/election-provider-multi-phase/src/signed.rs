@@ -29,6 +29,7 @@ use frame_election_provider_support::NposSolution;
 use frame_support::traits::{
 	defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_core::bounded::BoundedVec;
 use sp_npos_elections::ElectionScore;
@@ -102,10 +103,8 @@ pub type SignedSubmissionOf<T> = SignedSubmission<
 
 /// Always sorted vector of a score, submitted at the given block number, which can be found at the
 /// given index (`u32`) of the `SignedSubmissionsMap`.
-pub type SubmissionIndicesOf<T> = BoundedVec<
-	(ElectionScore, <T as frame_system::Config>::BlockNumber, u32),
-	<T as Config>::SignedMaxSubmissions,
->;
+pub type SubmissionIndicesOf<T> =
+	BoundedVec<(ElectionScore, BlockNumberFor<T>, u32), <T as Config>::SignedMaxSubmissions>;
 
 /// Outcome of [`SignedSubmissions::insert`].
 pub enum InsertResult<T: Config> {
@@ -218,7 +217,7 @@ impl<T: Config> SignedSubmissions<T> {
 	fn swap_out_submission(
 		&mut self,
 		remove_pos: usize,
-		insert: Option<(ElectionScore, T::BlockNumber, u32)>,
+		insert: Option<(ElectionScore, BlockNumberFor<T>, u32)>,
 	) -> Option<SignedSubmissionOf<T>> {
 		if remove_pos >= self.indices.len() {
 			return None
@@ -565,7 +564,10 @@ impl<T: Config> Pallet<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{mock::*, ElectionCompute, ElectionError, Error, Event, Perbill, Phase};
+	use crate::{
+		mock::*, ElectionBoundsBuilder, ElectionCompute, ElectionError, Error, Event, Perbill,
+		Phase,
+	};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 	use sp_runtime::Percent;
 
@@ -595,13 +597,14 @@ mod tests {
 	fn data_provider_should_respect_target_limits() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given a reduced expectation of maximum electable targets
-			MaxElectableTargets::set(2);
+			let new_bounds = ElectionBoundsBuilder::default().targets_count(2.into()).build();
+			ElectionsBounds::set(new_bounds);
 			// and a data provider that does not respect limits
 			DataProviderAllowBadData::set(true);
 
 			assert_noop!(
 				MultiPhase::create_snapshot(),
-				ElectionError::DataProvider("Snapshot too big for submission."),
+				ElectionError::DataProvider("Ensure targets bounds: bounds exceeded."),
 			);
 		})
 	}
@@ -610,13 +613,14 @@ mod tests {
 	fn data_provider_should_respect_voter_limits() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given a reduced expectation of maximum electing voters
-			MaxElectingVoters::set(2);
+			let new_bounds = ElectionBoundsBuilder::default().voters_count(2.into()).build();
+			ElectionsBounds::set(new_bounds);
 			// and a data provider that does not respect limits
 			DataProviderAllowBadData::set(true);
 
 			assert_noop!(
 				MultiPhase::create_snapshot(),
-				ElectionError::DataProvider("Snapshot too big for submission."),
+				ElectionError::DataProvider("Ensure voters bounds: bounds exceeded."),
 			);
 		})
 	}

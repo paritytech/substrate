@@ -18,8 +18,6 @@ arbitrary = "1.3.0"
 fraction = "0.13.1"
 honggfuzz = "0.5.49"
 num-bigint = "0.4.3"
-num-traits = "0.2.15"
-primitive-types = "0.12.0"
 sp-arithmetic = { version = "16.0.0", path = ".." }
 
 [[bin]]

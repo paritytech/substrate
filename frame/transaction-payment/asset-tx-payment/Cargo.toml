@@ -25,7 +25,7 @@ pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking", optional = true }
 
 # Other dependencies
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.163", optional = true }
 
@@ -52,10 +52,25 @@ std = [
 	"sp-core/std",
 	"pallet-transaction-payment/std",
 	"frame-benchmarking?/std",
+	"pallet-assets/std",
+	"pallet-authorship/std",
+	"pallet-balances/std",
+	"sp-storage/std"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"pallet-assets/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks"
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-assets/try-runtime",
+	"pallet-authorship/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-transaction-payment/try-runtime",
+	"sp-runtime/try-runtime"
+]

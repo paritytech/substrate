@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = [
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = [
 	"derive",
 ] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
@@ -27,7 +27,7 @@ sp-std = { version = "8.0.0", default-features = false, path = "../../primitives
 sp-tracing = { version = "10.0.0", default-features = false, path = "../../primitives/tracing" }
 
 [dev-dependencies]
-array-bytes = "4.1"
+array-bytes = "6.1"
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../transaction-payment" }
 sp-core = { version = "21.0.0", path = "../../primitives/core" }
@@ -49,5 +49,16 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-tracing/std",
+	"pallet-balances/std",
+	"pallet-transaction-payment/std",
+	"sp-inherents/std",
+	"sp-version/std"
 ]
-try-runtime = ["frame-support/try-runtime", "frame-try-runtime/try-runtime", "sp-runtime/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-try-runtime/try-runtime",
+	"sp-runtime/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-transaction-payment/try-runtime"
+]

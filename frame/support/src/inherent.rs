@@ -15,11 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[doc(hidden)]
-pub use crate::sp_runtime::traits::{Block as BlockT, Extrinsic};
-#[doc(hidden)]
-pub use crate::sp_std::vec::Vec;
-
 pub use sp_inherents::{
 	CheckInherentsResult, InherentData, InherentIdentifier, IsFatalError, MakeFatalError,
 };

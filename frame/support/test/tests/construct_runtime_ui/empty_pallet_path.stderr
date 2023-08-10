@@ -1,5 +1,5 @@
 error: expected one of: `crate`, `self`, `super`, identifier
- --> $DIR/empty_pallet_path.rs:9:11
+ --> tests/construct_runtime_ui/empty_pallet_path.rs:6:11
   |
-9 |         system: ,
+6 |         system: ,
   |                 ^

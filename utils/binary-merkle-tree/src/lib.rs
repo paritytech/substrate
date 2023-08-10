@@ -202,7 +202,7 @@ where
 		collect_proof
 			.proof
 			.iter()
-			.map(|s| array_bytes::bytes2hex("", s.as_ref()))
+			.map(|s| array_bytes::bytes2hex("", s))
 			.collect::<Vec<_>>()
 	);
 
@@ -272,10 +272,10 @@ where
 		#[cfg(feature = "debug")]
 		log::debug!(
 			"[verify_proof]: (a, b) {:?}, {:?} => {:?} ({:?}) hash",
-			array_bytes::bytes2hex("", &a.as_ref()),
-			array_bytes::bytes2hex("", &b.as_ref()),
-			array_bytes::bytes2hex("", &hash.as_ref()),
-			array_bytes::bytes2hex("", &combined.as_ref())
+			array_bytes::bytes2hex("", a),
+			array_bytes::bytes2hex("", b),
+			array_bytes::bytes2hex("", hash),
+			array_bytes::bytes2hex("", &combined)
 		);
 		position /= 2;
 		width = ((width - 1) / 2) + 1;
@@ -316,8 +316,8 @@ where
 		#[cfg(feature = "debug")]
 		log::debug!(
 			"  {:?}\n  {:?}",
-			a.as_ref().map(|s| array_bytes::bytes2hex("", s.as_ref())),
-			b.as_ref().map(|s| array_bytes::bytes2hex("", s.as_ref()))
+			a.as_ref().map(|s| array_bytes::bytes2hex("", s)),
+			b.as_ref().map(|s| array_bytes::bytes2hex("", s))
 		);
 
 		index += 2;
@@ -339,7 +339,7 @@ where
 				#[cfg(feature = "debug")]
 				log::debug!(
 					"[merkelize_row] Next: {:?}",
-					next.iter().map(|s| array_bytes::bytes2hex("", s.as_ref())).collect::<Vec<_>>()
+					next.iter().map(|s| array_bytes::bytes2hex("", s)).collect::<Vec<_>>()
 				);
 				return Err(next)
 			},
@@ -364,7 +364,7 @@ mod tests {
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", out.as_ref()),
+			array_bytes::bytes2hex("", out),
 			"0000000000000000000000000000000000000000000000000000000000000000"
 		);
 	}
@@ -373,7 +373,7 @@ mod tests {
 	fn should_generate_single_root() {
 		// given
 		let _ = env_logger::try_init();
-		let data = vec![array_bytes::hex2array_unchecked::<20>(
+		let data = vec![array_bytes::hex2array_unchecked::<_, 20>(
 			"E04CC55ebEE1cBCE552f250e85c57B70B2E2625b",
 		)];
 
@@ -382,7 +382,7 @@ mod tests {
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", out.as_ref()),
+			array_bytes::bytes2hex("", out),
 			"aeb47a269393297f4b0a3c9c9cfd00c7a4195255274cf39d83dabc2fcc9ff3d7"
 		);
 	}
@@ -392,8 +392,8 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let data = vec![
-			array_bytes::hex2array_unchecked::<20>("E04CC55ebEE1cBCE552f250e85c57B70B2E2625b"),
-			array_bytes::hex2array_unchecked::<20>("25451A4de12dcCc2D166922fA938E900fCc4ED24"),
+			array_bytes::hex2array_unchecked::<_, 20>("E04CC55ebEE1cBCE552f250e85c57B70B2E2625b"),
+			array_bytes::hex2array_unchecked::<_, 20>("25451A4de12dcCc2D166922fA938E900fCc4ED24"),
 		];
 
 		// when
@@ -401,7 +401,7 @@ mod tests {
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", out.as_ref()),
+			array_bytes::bytes2hex("", out),
 			"697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402"
 		);
 	}
@@ -410,10 +410,7 @@ mod tests {
 	fn should_generate_root_complex() {
 		let _ = env_logger::try_init();
 		let test = |root, data| {
-			assert_eq!(
-				array_bytes::bytes2hex("", &merkle_root::<Keccak256, _>(data).as_ref()),
-				root
-			);
+			assert_eq!(array_bytes::bytes2hex("", &merkle_root::<Keccak256, _>(data)), root);
 		};
 
 		test(
@@ -473,12 +470,12 @@ mod tests {
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", &proof0.root.as_ref()),
-			array_bytes::bytes2hex("", &proof1.root.as_ref())
+			array_bytes::bytes2hex("", &proof0.root),
+			array_bytes::bytes2hex("", &proof1.root)
 		);
 		assert_eq!(
-			array_bytes::bytes2hex("", &proof2.root.as_ref()),
-			array_bytes::bytes2hex("", &proof1.root.as_ref())
+			array_bytes::bytes2hex("", &proof2.root),
+			array_bytes::bytes2hex("", &proof1.root)
 		);
 
 		assert!(!verify_proof::<Keccak256, _, _>(
@@ -762,10 +759,7 @@ mod tests {
 		for l in 0..data.len() {
 			// when
 			let proof = merkle_proof::<Keccak256, _, _>(data.clone(), l);
-			assert_eq!(
-				array_bytes::bytes2hex("", &proof.root.as_ref()),
-				array_bytes::bytes2hex("", &root.as_ref())
-			);
+			assert_eq!(array_bytes::bytes2hex("", &proof.root), array_bytes::bytes2hex("", &root));
 			assert_eq!(proof.leaf_index, l);
 			assert_eq!(&proof.leaf, &data[l]);
 
@@ -805,7 +799,7 @@ mod tests {
 				],
 				number_of_leaves: data.len(),
 				leaf_index: data.len() - 1,
-				leaf: array_bytes::hex2array_unchecked::<20>(
+				leaf: array_bytes::hex2array_unchecked::<_, 20>(
 					"c26B34D375533fFc4c5276282Fa5D660F3d8cbcB"
 				)
 				.to_vec(),
