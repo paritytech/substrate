@@ -507,7 +507,18 @@ pub mod pallet {
 		#[pallet::call_index(8)]
 		#[pallet::weight(task.weight())]
 		pub fn do_task(origin: OriginFor<T>, task: T::RuntimeTask) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
+			ensure_signed(origin)?;
+
+			if !task.is_valid() {
+				return Err(Error::<T>::InvalidTask { hashcode: task.hash_code() }.into())
+			}
+
+			task.run()?;
+
+			// Emit a success event, if your design includes events for this pallet.
+			Self::deposit_event(Event::TaskCompleted { task });
+
+			// Return success.
 			Ok(().into())
 		}
 	}
@@ -527,6 +538,8 @@ pub mod pallet {
 		KilledAccount { account: T::AccountId },
 		/// On on-chain remark happened.
 		Remarked { sender: T::AccountId, hash: T::Hash },
+		/// A task has finished executing.
+		TaskCompleted { task: T::RuntimeTask },
 	}
 
 	/// Error for the System pallet
@@ -548,6 +561,8 @@ pub mod pallet {
 		NonZeroRefCount,
 		/// The origin filter prevent the call to be dispatched.
 		CallFiltered,
+		/// The specified `Task` is not valid
+		InvalidTask { hashcode: u64 },
 	}
 
 	/// Exposed trait-generic origin type.

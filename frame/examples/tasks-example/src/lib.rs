@@ -68,7 +68,7 @@ pub mod pallet {
 	{
 		type Enumeration = std::vec::IntoIter<Task<T>>;
 
-		const TASK_INDEX: usize = 0;
+		const TASK_INDEX: u64 = 0;
 
 		fn enumerate() -> Self::Enumeration {
 			vec![Task::Increment, Task::Decrement].into_iter()

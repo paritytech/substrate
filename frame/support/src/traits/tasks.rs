@@ -20,6 +20,7 @@
 
 use codec::FullCodec;
 use scale_info::TypeInfo;
+use sp_core::blake2_128;
 use sp_runtime::DispatchError;
 use sp_std::{fmt::Debug, iter::Iterator};
 use sp_weights::Weight;
@@ -31,7 +32,7 @@ pub trait Task: Sized + FullCodec + TypeInfo + Clone + Debug + PartialEq + Eq {
 	type Enumeration: Iterator<Item = Self>;
 
 	/// A unique value representing this `Task`. Analogous to `call_index`, but for tasks.
-	const TASK_INDEX: usize;
+	const TASK_INDEX: u64;
 
 	/// Inspects the pallet's state and enumerates tasks of this type.
 	fn enumerate() -> Self::Enumeration;
@@ -44,4 +45,25 @@ pub trait Task: Sized + FullCodec + TypeInfo + Clone + Debug + PartialEq + Eq {
 
 	/// Returns the weight of executing this `Task`.
 	fn weight(&self) -> Weight;
+
+	fn task_index(&self) -> u64 {
+		Self::TASK_INDEX
+	}
+
+	/// Returns a 64-bit hash code uniquely identifying this task and its inputs and associated
+	/// data based on the full 256-bit Blake2 hash code. This is used in the `InvalidTask`
+	/// event to differentiate between instances of the same task.
+	fn hash_code(&self) -> u64 {
+		let full_hash = blake2_128(&self.encode());
+		u64::from_le_bytes([
+			full_hash[0],
+			full_hash[1],
+			full_hash[2],
+			full_hash[3],
+			full_hash[4],
+			full_hash[5],
+			full_hash[6],
+			full_hash[7],
+		])
+	}
 }
