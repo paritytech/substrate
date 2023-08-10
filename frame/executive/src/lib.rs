@@ -127,7 +127,6 @@ use frame_support::{
 	weights::Weight,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
-use log;
 use sp_runtime::{
 	generic::Digest,
 	traits::{
@@ -139,6 +138,8 @@ use sp_runtime::{
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
+#[cfg(feature = "try-runtime")]
+use log;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 
