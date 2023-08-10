@@ -1623,8 +1623,9 @@ impl pallet_nis::Config for Runtime {
 parameter_types! {
 	pub const CollectionDeposit: Balance = 100 * DOLLARS;
 	pub const ItemDeposit: Balance = 1 * DOLLARS;
-	pub const KeyLimit: u32 = 32;
+	pub const KeyLimit: u32 = 64;
 	pub const ValueLimit: u32 = 256;
+	pub const MetadataLimit: u32 = 256;
 	pub const ApprovalsLimit: u32 = 20;
 	pub const ItemAttributesApprovalsLimit: u32 = 20;
 	pub const MaxTips: u32 = 10;
@@ -1642,7 +1643,7 @@ impl pallet_uniques::Config for Runtime {
 	type MetadataDepositBase = MetadataDepositBase;
 	type AttributeDepositBase = MetadataDepositBase;
 	type DepositPerByte = MetadataDepositPerByte;
-	type StringLimit = StringLimit;
+	type StringLimit = MetadataLimit;
 	type KeyLimit = KeyLimit;
 	type ValueLimit = ValueLimit;
 	type WeightInfo = pallet_uniques::weights::SubstrateWeight<Runtime>;
@@ -1729,7 +1730,7 @@ impl pallet_nfts::Config for Runtime {
 	type MetadataDepositBase = MetadataDepositBase;
 	type AttributeDepositBase = MetadataDepositBase;
 	type DepositPerByte = MetadataDepositPerByte;
-	type StringLimit = StringLimit;
+	type StringLimit = MetadataLimit;
 	type KeyLimit = KeyLimit;
 	type ValueLimit = ValueLimit;
 	type ApprovalsLimit = ApprovalsLimit;
