@@ -5943,6 +5943,7 @@ dependencies = [
  "frame-election-provider-support",
  "frame-support",
  "frame-system",
+ "log",
  "pallet-authorship",
  "pallet-balances",
  "pallet-offences",
@@ -5959,6 +5960,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-staking",
+ "sp-state-machine",
  "sp-std",
 ]
 
