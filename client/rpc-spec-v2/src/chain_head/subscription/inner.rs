@@ -876,8 +876,7 @@ mod tests {
 			with_runtime: false,
 			tx_stop: None,
 			response_sender,
-			next_operation_id: 0,
-			limits: LimitOperations::new(MAX_OPERATIONS_PER_SUB),
+			operations: Operations::new(MAX_OPERATIONS_PER_SUB),
 			blocks: Default::default(),
 		};
 
@@ -906,9 +905,8 @@ mod tests {
 			with_runtime: false,
 			tx_stop: None,
 			response_sender,
-			next_operation_id: 0,
-			limits: LimitOperations::new(MAX_OPERATIONS_PER_SUB),
 			blocks: Default::default(),
+			operations: Operations::new(MAX_OPERATIONS_PER_SUB),
 		};
 
 		let hash = H256::random();
@@ -1225,12 +1223,12 @@ mod tests {
 
 		// One operation is reserved.
 		let permit_one = ops.reserve_at_most(1).unwrap();
-		assert_eq!(permit_one.num_reserved(), 1);
+		assert_eq!(permit_one.num_ops, 1);
 
 		// Request 2 operations, however there is capacity only for one.
 		let permit_two = ops.reserve_at_most(2).unwrap();
 		// Number of reserved permits is smaller than provided.
-		assert_eq!(permit_two.num_reserved(), 1);
+		assert_eq!(permit_two.num_ops, 1);
 
 		// Try to reserve operations when there's no space.
 		let permit = ops.reserve_at_most(1);
@@ -1241,6 +1239,6 @@ mod tests {
 
 		// Can reserve again
 		let permit_three = ops.reserve_at_most(1).unwrap();
-		assert_eq!(permit_three.num_reserved(), 1);
+		assert_eq!(permit_three.num_ops, 1);
 	}
 }

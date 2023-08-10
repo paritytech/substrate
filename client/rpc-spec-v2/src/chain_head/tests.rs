@@ -743,11 +743,16 @@ async fn get_storage_multi_query_iter() {
 	assert_matches!(
 		get_next_event::<FollowEvent<String>>(&mut block_sub).await,
 		FollowEvent::OperationStorageItems(res) if res.operation_id == operation_id &&
-			res.items.len() == 2 &&
+			res.items.len() == 1 &&
 			res.items[0].key == key &&
-			res.items[1].key == key &&
-			res.items[0].result == StorageResultType::Hash(expected_hash) &&
-			res.items[1].result == StorageResultType::Value(expected_value)
+			res.items[0].result == StorageResultType::Hash(expected_hash)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+		FollowEvent::OperationStorageItems(res) if res.operation_id == operation_id &&
+			res.items.len() == 1 &&
+			res.items[0].key == key &&
+			res.items[0].result == StorageResultType::Value(expected_value)
 	);
 	assert_matches!(
 			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
@@ -788,11 +793,16 @@ async fn get_storage_multi_query_iter() {
 	assert_matches!(
 		get_next_event::<FollowEvent<String>>(&mut block_sub).await,
 		FollowEvent::OperationStorageItems(res) if res.operation_id == operation_id &&
-			res.items.len() == 2 &&
+			res.items.len() == 1 &&
 			res.items[0].key == key &&
-			res.items[1].key == key &&
-			res.items[0].result == StorageResultType::Hash(expected_hash) &&
-			res.items[1].result == StorageResultType::Value(expected_value)
+			res.items[0].result == StorageResultType::Hash(expected_hash)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+		FollowEvent::OperationStorageItems(res) if res.operation_id == operation_id &&
+			res.items.len() == 1 &&
+			res.items[0].key == key &&
+			res.items[0].result == StorageResultType::Value(expected_value)
 	);
 	assert_matches!(
 			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
