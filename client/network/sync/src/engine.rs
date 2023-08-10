@@ -38,7 +38,7 @@ use sc_consensus::import_queue::ImportQueueService;
 use sc_network::{
 	config::{FullNetworkConfiguration, NonDefaultSetConfig, ProtocolId},
 	peer_store::{PeerStoreHandle, PeerStoreProvider},
-	service::traits::{NotificationEvent, ValidationResult},
+	service::traits::{Direction, NotificationEvent, ValidationResult},
 	types::ProtocolName,
 	utils::LruHashSet,
 	NotificationService, ReputationChange,
@@ -690,6 +690,7 @@ where
 					log::debug!(target: "sync", "New best block imported {:?}/#{}", hash, number);
 
 					self.chain_sync.update_chain_info(&hash, number);
+					// TODO: remove once `SyncingEngine` is refactored
 					while let Poll::Pending = self
 						.notification_service
 						.set_handshake(
@@ -748,7 +749,7 @@ where
 			match event {
 				NotificationEvent::ValidateInboundSubstream { peer, handshake, result_tx } => {
 					let validation_result = self
-						.validate_connection(&peer, handshake, true)
+						.validate_connection(&peer, handshake, Direction::Inbound)
 						.map_or(ValidationResult::Reject, |_| ValidationResult::Accept);
 
 					let _ = result_tx.send(validation_result);
@@ -761,12 +762,9 @@ where
 						"Substream opened for {peer}, handshake {handshake:?}"
 					);
 
-					match self.validate_connection(&peer, handshake, direction.is_inbound()) {
+					match self.validate_connection(&peer, handshake, direction) {
 						Ok(handshake) => {
-							if self
-								.on_sync_peer_connected(peer, &handshake, direction.is_inbound())
-								.is_err()
-							{
+							if self.on_sync_peer_connected(peer, &handshake, direction).is_err() {
 								log::debug!(target: LOG_TARGET, "Failed to register peer {peer}");
 								self.network_service.disconnect_peer(
 									peer,
@@ -774,18 +772,6 @@ where
 								);
 							}
 						},
-						// TODO: `wrong_genesis` is a really ugly hack to work around the issue that
-						// that `PeerStore` thinks the peer is connected when in fact it can be
-						// still be under validation. If the peer has different genesis than the
-						// local node the validation fails but the peer cannot be reported in
-						// `validate_connection()` as that is also called by
-						// `ValiateInboundSubstream` which means that the peer is still being
-						// validated and banning the peer when handling that event would
-						// result in peer getting dropped twice.
-						//
-						// The proper way to fix this is to integrate `ProtocolController` more
-						// tightly with `NotificationService` or add an additional API call for
-						// banning pre-accepted peers (which is not desirable)
 						Err(wrong_genesis) => {
 							log::debug!(target: LOG_TARGET, "`SyncingEngine` rejected {peer}");
 
@@ -918,12 +904,24 @@ where
 		Ok(handshake)
 	}
 
-	/// Validate inbound connection.
+	/// Validate connection.
+	// NOTE Returning `Err(bool)` is a really ugly hack to work around the issue that
+	// that `PeerStore` thinks the peer is connected when in fact it can be
+	// still be under validation. If the peer has different genesis than the
+	// local node the validation fails but the peer cannot be reported in
+	// `validate_connection()` as that is also called by
+	// `ValiateInboundSubstream` which means that the peer is still being
+	// validated and banning the peer when handling that event would
+	// result in peer getting dropped twice.
+	//
+	// The proper way to fix this is to integrate `ProtocolController` more
+	// tightly with `NotificationService` or add an additional API call for
+	// banning pre-accepted peers (which is not desirable)
 	fn validate_connection(
 		&mut self,
 		peer_id: &PeerId,
 		handshake: Vec<u8>,
-		inbound: bool,
+		direction: Direction,
 	) -> Result<BlockAnnouncesHandshake<B>, bool> {
 		log::trace!(target: LOG_TARGET, "New peer {peer_id} {handshake:?}");
 
@@ -954,7 +952,8 @@ where
 		// make sure to accept no more than `--in-peers` many full nodes
 		if !no_slot_peer &&
 			handshake.roles.is_full() &&
-			inbound && self.num_in_peers == self.max_in_peers
+			direction.is_inbound() &&
+			self.num_in_peers == self.max_in_peers
 		{
 			log::debug!(target: LOG_TARGET, "All inbound slots have been consumed, rejecting {peer_id}");
 			return Err(false)
@@ -980,7 +979,7 @@ where
 		&mut self,
 		who: PeerId,
 		status: &BlockAnnouncesHandshake<B>,
-		inbound: bool,
+		direction: Direction,
 	) -> Result<(), ()> {
 		log::trace!(target: "sync", "New peer {} {:?}", who, status);
 
@@ -995,7 +994,7 @@ where
 			),
 			last_notification_sent: Instant::now(),
 			last_notification_received: Instant::now(),
-			inbound,
+			inbound: direction.is_inbound(),
 		};
 
 		let req = if peer.info.roles.is_full() {
@@ -1017,7 +1016,7 @@ where
 
 		if self.default_peers_set_no_slot_peers.contains(&who) {
 			self.default_peers_set_no_slot_connected_peers.insert(who);
-		} else if inbound && status.roles.is_full() {
+		} else if direction.is_inbound() && status.roles.is_full() {
 			self.num_in_peers += 1;
 		}
 
