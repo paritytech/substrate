@@ -510,7 +510,7 @@ pub mod pallet {
 			ensure_signed(origin)?;
 
 			if !task.is_valid() {
-				return Err(Error::<T>::InvalidTask { hashcode: task.hash_code() }.into())
+				return Err(Error::<T>::InvalidTask.into())
 			}
 
 			task.run()?;
@@ -562,7 +562,7 @@ pub mod pallet {
 		/// The origin filter prevent the call to be dispatched.
 		CallFiltered,
 		/// The specified `Task` is not valid
-		InvalidTask { hashcode: u64 },
+		InvalidTask,
 	}
 
 	/// Exposed trait-generic origin type.
