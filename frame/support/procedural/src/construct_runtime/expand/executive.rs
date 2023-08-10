@@ -29,10 +29,34 @@ pub fn expand_executive(
 	executive_section: ExecutiveSection,
 ) -> Result<TokenStream> {
 	let executive = generate_crate_access_2018("frame-executive")?;
-	let try_runtime = generate_crate_access_2018("frame-try-runtime")?;
+
 	let on_runtime_upgrade = match executive_section.custom_on_runtime_upgrade {
 		Some(custom) => quote!(Some(#custom)),
 		None => quote!(()),
+	};
+
+	let try_runtime_section = if let Ok(try_runtime) =
+		generate_crate_access_2018("frame-try-runtime")
+	{
+		quote! {
+			#[cfg(feature = "try-runtime")]
+			impl #runtime {
+				fn api_impl_try_runtime_upgrade(checks: #try_runtime::UpgradeCheckSelect) -> Result<Weight, #scrate::sp_runtime::TryRuntimeError> {
+					Executive::try_runtime_upgrade(checks)
+				}
+
+				fn api_impl_try_execute_block(
+					block: #block,
+					state_root_check: bool,
+					signature_check: bool,
+					select: #try_runtime::TryStateSelect
+				) -> Result<Weight, &'static str> {
+					Executive::try_execute_block(block, state_root_check, signature_check, select)
+				}
+			}
+		}
+	} else {
+		quote!()
 	};
 
 	let res = quote! {
@@ -74,22 +98,8 @@ pub fn expand_executive(
 			pub fn api_impl_offchain_worker(header: &<Block as #scrate::sp_runtime::traits::Block>::Header) {
 				Executive::offchain_worker(header)
 			}
-		}
 
-		#[cfg(feature = "try-runtime")]
-		impl #runtime {
-			fn api_impl_try_runtime_upgrade(checks: #try_runtime::UpgradeCheckSelect) -> Result<Weight, #scrate::sp_runtime::TryRuntimeError> {
-				Executive::try_runtime_upgrade(checks)
-			}
-
-			fn api_impl_try_execute_block(
-				block: #block,
-				state_root_check: bool,
-				signature_check: bool,
-				select: #try_runtime::TryStateSelect
-			) -> Result<Weight, &'static str> {
-				Executive::try_execute_block(block, state_root_check, signature_check, select)
-			}
+			#try_runtime_section
 		}
 	};
 
