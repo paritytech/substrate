@@ -18,7 +18,6 @@
 //! Storage counted map type.
 
 use crate::{
-	metadata_ir::StorageEntryMetadataIR,
 	storage::{
 		generator::StorageMap as _,
 		types::{
@@ -31,6 +30,7 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
+use sp_api::metadata_ir::StorageEntryMetadataIR;
 use sp_io::MultiRemovalResults;
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;

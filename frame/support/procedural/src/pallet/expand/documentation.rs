@@ -163,9 +163,9 @@ pub fn expand_documentation(def: &mut Def) -> proc_macro2::TokenStream {
 
 			#[doc(hidden)]
 			pub fn pallet_documentation_metadata()
-				-> #frame_support::sp_std::vec::Vec<&'static str>
+				-> #frame_support::__private::sp_std::vec::Vec<&'static str>
 			{
-				#frame_support::sp_std::vec![ #( #docs ),* ]
+				#frame_support::__private::sp_std::vec![ #( #docs ),* ]
 			}
 		}
 	)

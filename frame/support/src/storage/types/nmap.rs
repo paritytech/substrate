@@ -19,7 +19,6 @@
 //! traits and their methods directly.
 
 use crate::{
-	metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR},
 	storage::{
 		types::{
 			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, OptionQuery, QueryKindTrait,
@@ -30,6 +29,7 @@ use crate::{
 	traits::{Get, GetDefault, StorageInfo, StorageInstance},
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
+use sp_api::metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR};
 use sp_runtime::SaturatedConversion;
 use sp_std::prelude::*;
 

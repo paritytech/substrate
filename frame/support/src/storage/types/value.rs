@@ -18,7 +18,6 @@
 //! Storage value type. Implements StorageValue trait and its method directly.
 
 use crate::{
-	metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR},
 	storage::{
 		generator::StorageValue as StorageValueT,
 		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
@@ -27,6 +26,7 @@ use crate::{
 	traits::{GetDefault, StorageInfo, StorageInstance},
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
+use sp_api::metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::prelude::*;
 

@@ -17,8 +17,8 @@
 
 //! Hash utilities.
 
-use crate::metadata_ir;
 use codec::{Codec, MaxEncodedLen};
+use sp_api::metadata_ir;
 use sp_io::hashing::{blake2_128, blake2_256, twox_128, twox_256, twox_64};
 use sp_std::prelude::Vec;
 

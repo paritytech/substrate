@@ -57,10 +57,10 @@
 #![warn(missing_docs)]
 
 use codec::Encode;
-use frame_support::RuntimeDebug;
 use sp_runtime::{
 	app_crypto::RuntimeAppPublic,
 	traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One},
+	RuntimeDebug,
 };
 use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 

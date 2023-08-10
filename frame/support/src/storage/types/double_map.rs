@@ -19,7 +19,6 @@
 //! StoragePrefixedDoubleMap traits and their methods directly.
 
 use crate::{
-	metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR},
 	storage::{
 		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
 		KeyLenOf, StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
@@ -28,6 +27,7 @@ use crate::{
 	StorageHasher, Twox128,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
+use sp_api::metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::prelude::*;
 

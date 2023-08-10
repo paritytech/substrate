@@ -18,21 +18,14 @@
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
 
-pub use crate::{
-	codec::{
-		Codec, Decode, Encode, EncodeAsRef, EncodeLike, HasCompact, Input, MaxEncodedLen, Output,
-	},
-	scale_info::TypeInfo,
-	sp_std::{
-		fmt, marker,
-		prelude::{Clone, Eq, PartialEq, Vec},
-		result,
-	},
-	traits::{
-		CallMetadata, GetCallIndex, GetCallMetadata, GetCallName, GetStorageVersion,
-		UnfilteredDispatchable,
-	},
+pub use crate::traits::{
+	CallMetadata, GetCallIndex, GetCallMetadata, GetCallName, GetStorageVersion,
+	UnfilteredDispatchable,
 };
+use codec::{
+	Codec, Decode, Encode, EncodeAsRef, EncodeLike, HasCompact, Input, MaxEncodedLen, Output,
+};
+use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
@@ -41,6 +34,11 @@ use sp_runtime::{
 };
 pub use sp_runtime::{
 	traits::Dispatchable, transaction_validity::TransactionPriority, DispatchError, RuntimeDebug,
+};
+use sp_std::{
+	fmt, marker,
+	prelude::{Clone, Eq, PartialEq, Vec},
+	result,
 };
 pub use sp_weights::Weight;
 
