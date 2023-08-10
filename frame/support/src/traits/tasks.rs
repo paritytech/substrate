@@ -51,7 +51,7 @@ pub trait Task: Sized + FullCodec + TypeInfo + Clone + Debug + PartialEq + Eq {
 	}
 
 	/// Returns a 64-bit hash code uniquely identifying this task and its inputs and associated
-	/// data based on the full 256-bit Blake2 hash code. This is used in the `InvalidTask`
+	/// data based on the full 128-bit Blake2 hash code. This is used in the `InvalidTask`
 	/// event to differentiate between instances of the same task.
 	fn hash_code(&self) -> u64 {
 		let full_hash = blake2_128(&self.encode());
