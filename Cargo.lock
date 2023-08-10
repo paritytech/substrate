@@ -2446,6 +2446,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "frame-try-runtime",
+ "log",
  "pallet-balances",
  "pallet-transaction-payment",
  "parity-scale-codec",
