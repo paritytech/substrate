@@ -734,11 +734,8 @@ where
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{
-		hash::*,
-		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
-		storage::types::ValueQuery,
-	};
+	use crate::{hash::*, storage::types::ValueQuery};
+	use sp_api::metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;

@@ -512,10 +512,10 @@ mod test {
 	use super::*;
 	use crate::{
 		hash::*,
-		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
 		storage::{bounded_vec::BoundedVec, types::ValueQuery},
 		traits::ConstU32,
 	};
+	use sp_api::metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;

@@ -620,9 +620,9 @@ mod test {
 	use super::*;
 	use crate::{
 		hash::{StorageHasher as _, *},
-		metadata_ir::{StorageEntryModifierIR, StorageHasherIR},
 		storage::types::{Key as NMapKey, ValueQuery},
 	};
+	use sp_api::metadata_ir::{StorageEntryModifierIR, StorageHasherIR};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;

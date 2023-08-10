@@ -349,7 +349,7 @@ macro_rules! parameter_types {
 		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the key for this parameter type.
 			pub fn key() -> [u8; 16] {
-				$crate::sp_core_hashing_proc_macro::twox_128!(b":", $name, b":")
+				$crate::__private::sp_core_hashing_proc_macro::twox_128!(b":", $name, b":")
 			}
 
 			/// Set the value of this parameter type in the storage.
@@ -814,7 +814,7 @@ pub use macro_magic;
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::metadata_ir::{
+	use sp_api::metadata_ir::{
 		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,
 		StorageEntryTypeIR, StorageHasherIR,
 	};

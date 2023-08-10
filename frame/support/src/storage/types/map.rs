@@ -511,9 +511,9 @@ mod test {
 	use super::*;
 	use crate::{
 		hash::*,
-		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
 		storage::{types::ValueQuery, IterableStorageMap},
 	};
+	use sp_api::metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;
