@@ -1982,15 +1982,6 @@ pub type UncheckedExtrinsic =
 pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, RuntimeCall, SignedExtra>;
-/// Executive: handles dispatch to the various modules.
-pub type Executive = frame_executive::Executive<
-	Runtime,
-	Block,
-	frame_system::ChainContext<Runtime>,
-	Runtime,
-	AllPalletsWithSystem,
-	Migrations,
->;
 
 // All migrations executed on runtime upgrade as a nested tuple of types implementing
 // `OnRuntimeUpgrade`.
@@ -2085,11 +2076,11 @@ impl_runtime_apis! {
 		}
 
 		fn execute_block(block: Block) {
-			Executive::execute_block(block);
+			Runtime::api_impl_core_execute_block(block);
 		}
 
 		fn initialize_block(header: &<Block as BlockT>::Header) {
-			Executive::initialize_block(header)
+			Runtime::api_impl_core_initialize_block(header)
 		}
 	}
 
@@ -2109,11 +2100,11 @@ impl_runtime_apis! {
 
 	impl sp_block_builder::BlockBuilder<Block> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
-			Executive::apply_extrinsic(extrinsic)
+			Runtime::api_impl_builder_apply_extrinsic(extrinsic)
 		}
 
 		fn finalize_block() -> <Block as BlockT>::Header {
-			Executive::finalize_block()
+			Runtime::api_impl_builder_finalize_block()
 		}
 
 		fn inherent_extrinsics(data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
@@ -2131,7 +2122,7 @@ impl_runtime_apis! {
 			tx: <Block as BlockT>::Extrinsic,
 			block_hash: <Block as BlockT>::Hash,
 		) -> TransactionValidity {
-			Executive::validate_transaction(source, tx, block_hash)
+			Runtime::api_impl_validate_transaction(source, tx, block_hash)
 		}
 	}
 
@@ -2146,7 +2137,7 @@ impl_runtime_apis! {
 
 	impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
 		fn offchain_worker(header: &<Block as BlockT>::Header) {
-			Executive::offchain_worker(header)
+			Runtime::api_impl_offchain_worker(header)
 		}
 	}
 
@@ -2520,7 +2511,7 @@ impl_runtime_apis! {
 			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
 			// have a backtrace here. If any of the pre/post migration checks fail, we shall stop
 			// right here and right now.
-			let weight = Executive::try_runtime_upgrade(checks).unwrap();
+			let weight = Runtime::api_impl_try_runtime_upgrade(checks).unwrap();
 			(weight, RuntimeBlockWeights::get().max_block)
 		}
 
@@ -2532,7 +2523,7 @@ impl_runtime_apis! {
 		) -> Weight {
 			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
 			// have a backtrace here.
-			Executive::try_execute_block(block, state_root_check, signature_check, select).unwrap()
+			Runtime::api_impl_try_execute_block(block, state_root_check, signature_check, select).unwrap()
 		}
 	}
 
