@@ -1874,7 +1874,7 @@ impl pallet_statement::Config for Runtime {
 }
 
 construct_runtime!(
-	pub struct Runtime<_>
+	pub struct Runtime<Migrations>
 	{
 		System: frame_system,
 		Utility: pallet_utility,
