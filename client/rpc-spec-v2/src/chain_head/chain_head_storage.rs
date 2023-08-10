@@ -37,10 +37,6 @@ use super::{
 	FollowEvent,
 };
 
-/// The maximum number of items the `chainHead_storage` can return
-/// before paginations is required.
-const MAX_ITER_ITEMS: usize = 5;
-
 /// The query type of an interation.
 enum IterQueryType {
 	/// Iterating over (key, value) pairs.
@@ -55,13 +51,21 @@ pub struct ChainHeadStorage<Client, Block, BE> {
 	client: Arc<Client>,
 	/// Queue of operations that may require pagination.
 	iter_operations: VecDeque<QueryIter>,
+	/// The maximum number of items reported by the `chainHead_storage` before
+	/// pagination is required.
+	operation_max_storage_items: usize,
 	_phandom: PhantomData<(BE, Block)>,
 }
 
 impl<Client, Block, BE> ChainHeadStorage<Client, Block, BE> {
 	/// Constructs a new [`ChainHeadStorage`].
-	pub fn new(client: Arc<Client>) -> Self {
-		Self { client, iter_operations: VecDeque::new(), _phandom: PhantomData }
+	pub fn new(client: Arc<Client>, operation_max_storage_items: usize) -> Self {
+		Self {
+			client,
+			iter_operations: VecDeque::new(),
+			operation_max_storage_items,
+			_phandom: PhantomData,
+		}
 	}
 }
 
@@ -160,8 +164,8 @@ where
 		}
 		.map_err(|err| err.to_string())?;
 
-		let mut ret = Vec::with_capacity(MAX_ITER_ITEMS);
-		for _ in 0..MAX_ITER_ITEMS {
+		let mut ret = Vec::with_capacity(self.operation_max_storage_items);
+		for _ in 0..self.operation_max_storage_items {
 			let Some(key) = keys_iter.next() else {
 				break
 			};

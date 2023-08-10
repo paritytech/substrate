@@ -61,6 +61,9 @@ pub struct ChainHeadConfig {
 	pub subscription_max_pinned_duration: Duration,
 	/// The maximum number of ongoing operations per subscription.
 	pub subscription_max_ongoing_operations: usize,
+	/// The maximum number of items reported by the `chainHead_storage` before
+	/// pagination is required.
+	pub operation_max_storage_items: usize,
 }
 
 /// Maximum pinned blocks across all connections.
@@ -78,12 +81,17 @@ const MAX_PINNED_DURATION: Duration = Duration::from_secs(60);
 /// Note: The lower limit imposed by the spec is 16.
 const MAX_ONGOING_OPERATIONS: usize = 16;
 
+/// The maximum number of items the `chainHead_storage` can return
+/// before paginations is required.
+const MAX_STORAGE_ITER_ITEMS: usize = 5;
+
 impl Default for ChainHeadConfig {
 	fn default() -> Self {
 		ChainHeadConfig {
 			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
 			subscription_max_pinned_duration: MAX_PINNED_DURATION,
 			subscription_max_ongoing_operations: MAX_ONGOING_OPERATIONS,
+			operation_max_storage_items: MAX_STORAGE_ITER_ITEMS,
 		}
 	}
 }
@@ -100,6 +108,9 @@ pub struct ChainHead<BE: Backend<Block>, Block: BlockT, Client> {
 	subscriptions: Arc<SubscriptionManagement<Block, BE>>,
 	/// The hexadecimal encoded hash of the genesis block.
 	genesis_hash: String,
+	/// The maximum number of items reported by the `chainHead_storage` before
+	/// pagination is required.
+	operation_max_storage_items: usize,
 	/// Phantom member to pin the block type.
 	_phantom: PhantomData<Block>,
 }
@@ -124,6 +135,7 @@ impl<BE: Backend<Block>, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 				config.subscription_max_ongoing_operations,
 				backend,
 			)),
+			operation_max_storage_items: config.operation_max_storage_items,
 			genesis_hash,
 			_phantom: PhantomData,
 		}
@@ -349,7 +361,10 @@ where
 				Err(_) => return Err(ChainHeadRpcError::InvalidBlock.into()),
 			};
 
-		let mut storage_client = ChainHeadStorage::<Client, Block, BE>::new(self.client.clone());
+		let mut storage_client = ChainHeadStorage::<Client, Block, BE>::new(
+			self.client.clone(),
+			self.operation_max_storage_items,
+		);
 		let operation_id = block_guard.operation_id();
 
 		// The number of operations we are allowed to execute.
