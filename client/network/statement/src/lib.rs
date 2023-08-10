@@ -21,8 +21,8 @@
 //! Usage:
 //!
 //! - Use [`StatementHandlerPrototype::new`] to create a prototype.
-//! - Pass the return value of [`StatementHandlerPrototype::set_config`] to the network
-//! configuration as an extra peers set.
+//! - Pass the `NonDefaultSetConfig` returned from [`StatementHandlerPrototype::new`] to the network
+//!   configuration as an extra peers set.
 //! - Use [`StatementHandlerPrototype::build`] then [`StatementHandler::run`] to obtain a
 //! `Future` that processes statements.
 
