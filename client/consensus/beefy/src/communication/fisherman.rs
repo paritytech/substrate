@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	error::Error, justification::BeefyVersionedFinalityProof, keystore::BeefySignatureHasher,
+	error::Error, justification::BeefyVersionedFinalityProof, keystore::{BeefyKeystore, BeefySignatureHasher},
 	LOG_TARGET,
 };
 use log::debug;
@@ -57,6 +57,7 @@ pub(crate) trait BeefyFisherman<B: Block>: Send + Sync {
 pub(crate) struct Fisherman<B: Block, BE, R, P> {
 	pub backend: Arc<BE>,
 	pub runtime: Arc<R>,
+	pub key_store: Arc<BeefyKeystore>,
 	pub payload_provider: P,
 	pub _phantom: PhantomData<B>,
 }

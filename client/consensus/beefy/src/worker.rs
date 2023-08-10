@@ -321,7 +321,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, RuntimeApi, S, F> {
 	pub payload_provider: P,
 	pub runtime: Arc<RuntimeApi>,
 	pub sync: Arc<S>,
-	pub key_store: BeefyKeystore,
+	pub key_store: Arc<BeefyKeystore>,
 
 	// communication
 	pub gossip_engine: GossipEngine<B>,
@@ -1109,7 +1109,7 @@ pub(crate) mod tests {
 		Arc<SyncingService<Block>>,
 		Fisherman<Block, Backend, TestApi, MmrRootProvider<Block, TestApi>>,
 	> {
-		let keystore = create_beefy_keystore(*key);
+		let key_store: Arc<BeefyKeystore> = Arc::new(Some(create_beefy_keystore(*key)).into());
 
 		let (to_rpc_justif_sender, from_voter_justif_stream) =
 			BeefyVersionedFinalityProofStream::<Block>::channel();
@@ -1137,6 +1137,7 @@ pub(crate) mod tests {
 		let fisherman = Fisherman {
 			backend: backend.clone(),
 			runtime: api.clone(),
+			key_store: key_store.clone(),
 			payload_provider: payload_provider.clone(),
 			_phantom: PhantomData,
 		};
@@ -1179,7 +1180,7 @@ pub(crate) mod tests {
 			backend,
 			payload_provider,
 			runtime: api,
-			key_store: Some(keystore).into(),
+			key_store,
 			links,
 			gossip_engine,
 			gossip_validator,
@@ -1470,7 +1471,7 @@ pub(crate) mod tests {
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), expected);
 
 		// worker has no keystore
-		worker.key_store = None.into();
+		worker.key_store = Arc::new(None.into());
 		let expected_err = Err(Error::Keystore("no Keystore".into()));
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), expected_err);
 	}
