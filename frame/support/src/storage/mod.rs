@@ -46,6 +46,7 @@ pub mod child;
 #[doc(hidden)]
 pub mod generator;
 pub mod hashed;
+pub mod lists;
 pub mod migration;
 pub mod storage_noop_guard;
 mod stream_iter;
@@ -53,6 +54,8 @@ pub mod transactional;
 pub mod types;
 pub mod unhashed;
 pub mod weak_bounded_vec;
+
+pub use lists::*;
 
 /// Utility type for converting a storage map into a `Get<u32>` impl which returns the maximum
 /// key size.
@@ -157,77 +160,6 @@ pub trait StorageValue<T: FullCodec> {
 		T: StorageDecodeLength,
 	{
 		T::decode_len(&Self::hashed_key())
-	}
-}
-
-/// A non-continuous container type.
-pub trait StorageList<V: FullCodec> {
-	/// Iterator for normal and draining iteration.
-	type Iterator: Iterator<Item = V>;
-
-	/// Append iterator for fast append operations.
-	type Appender: StorageAppender<V>;
-
-	fn len() -> u64;
-
-	/// List the elements in append order.
-	fn iter() -> Self::Iterator;
-
-	/// Drain the elements in append order.
-	///
-	/// Note that this drains a value as soon as it is being inspected. For example `take_while(|_|
-	/// false)` still drains the first element. This also applies to `peek()`.
-	fn drain() -> Self::Iterator;
-
-	/// A fast append iterator.
-	fn appender() -> Self::Appender;
-
-	/// Append a single element.
-	///
-	/// Should not be called repeatedly; use `append_many` instead.  
-	/// Worst case linear `O(len)` with `len` being the number if elements in the list.
-	fn append_one<EncodeLikeValue>(item: EncodeLikeValue)
-	where
-		EncodeLikeValue: EncodeLike<V>,
-	{
-		Self::append_many(core::iter::once(item));
-	}
-
-	/// Append many elements.
-	///
-	/// Should not be called repeatedly; use `appender` instead.  
-	/// Worst case linear `O(len + items.count())` with `len` beings the number if elements in the
-	/// list.
-	fn append_many<EncodeLikeValue, I>(items: I)
-	where
-		EncodeLikeValue: EncodeLike<V>,
-		I: IntoIterator<Item = EncodeLikeValue>,
-	{
-		let mut ap = Self::appender();
-		ap.append_many(items);
-	}
-}
-
-/// Append iterator to append values to a storage struct.
-///
-/// Can be used in situations where appending does not have constant time complexity.
-pub trait StorageAppender<V: FullCodec> {
-	/// Append a single item in constant time `O(1)`.
-	fn append<EncodeLikeValue>(&mut self, item: EncodeLikeValue)
-	where
-		EncodeLikeValue: EncodeLike<V>;
-
-	/// Append many items in linear time `O(items.count())`.
-	// Note: a default impl is provided since `Self` is already assumed to be optimal for single
-	// append operations.
-	fn append_many<EncodeLikeValue, I>(&mut self, items: I)
-	where
-		EncodeLikeValue: EncodeLike<V>,
-		I: IntoIterator<Item = EncodeLikeValue>,
-	{
-		for item in items.into_iter() {
-			self.append(item);
-		}
 	}
 }
 

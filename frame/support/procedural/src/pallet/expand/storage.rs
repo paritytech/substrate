@@ -154,7 +154,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 			}
 			syn::parse_quote!(#frame_support::traits::GetDefault)
 		};
-		let default_max_values: syn::Type = syn::parse_quote!(#frame_support::traits::GetDefault);
+		let get_default: syn::Type = syn::parse_quote!(#frame_support::traits::GetDefault);
 
 		let set_result_query_type_parameter = |query_type: &mut syn::Type| -> syn::Result<()> {
 			if let Some(QueryKind::ResultQuery(error_path, _)) = storage_def.query_kind.as_ref() {
@@ -203,8 +203,16 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 					args.args.push(syn::GenericArgument::Type(query_kind));
 					let on_empty = on_empty.unwrap_or_else(|| default_on_empty(value));
 					args.args.push(syn::GenericArgument::Type(on_empty));
-					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
+					let max_values = max_values.unwrap_or_else(|| get_default.clone());
 					args.args.push(syn::GenericArgument::Type(max_values));
+				},
+				// FAIL-CI
+				StorageGenerics::PagedList { value, heap_size, max_pages } => {
+					args.args.push(syn::GenericArgument::Type(value.clone()));
+					let heap_size = heap_size.unwrap_or_else(|| get_default.clone());
+					args.args.push(syn::GenericArgument::Type(heap_size));
+					let max_pages = max_pages.unwrap_or_else(|| get_default.clone());
+					args.args.push(syn::GenericArgument::Type(max_pages));
 				},
 				StorageGenerics::CountedMap {
 					hasher,
@@ -222,7 +230,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 					args.args.push(syn::GenericArgument::Type(query_kind));
 					let on_empty = on_empty.unwrap_or_else(|| default_on_empty(value));
 					args.args.push(syn::GenericArgument::Type(on_empty));
-					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
+					let max_values = max_values.unwrap_or_else(|| get_default.clone());
 					args.args.push(syn::GenericArgument::Type(max_values));
 				},
 				StorageGenerics::DoubleMap {
@@ -245,7 +253,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 					args.args.push(syn::GenericArgument::Type(query_kind));
 					let on_empty = on_empty.unwrap_or_else(|| default_on_empty(value));
 					args.args.push(syn::GenericArgument::Type(on_empty));
-					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
+					let max_values = max_values.unwrap_or_else(|| get_default.clone());
 					args.args.push(syn::GenericArgument::Type(max_values));
 				},
 				StorageGenerics::NMap { keygen, value, query_kind, on_empty, max_values } => {
@@ -256,7 +264,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 					args.args.push(syn::GenericArgument::Type(query_kind));
 					let on_empty = on_empty.unwrap_or_else(|| default_on_empty(value));
 					args.args.push(syn::GenericArgument::Type(on_empty));
-					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
+					let max_values = max_values.unwrap_or_else(|| get_default.clone());
 					args.args.push(syn::GenericArgument::Type(max_values));
 				},
 			}
@@ -265,6 +273,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 
 			let (value_idx, query_idx, on_empty_idx) = match storage_def.metadata {
 				Metadata::Value { .. } => (1, 2, 3),
+				Metadata::PagedList { .. } => (1, 2, 3), // FAIL-CI
 				Metadata::NMap { .. } => (2, 3, 4),
 				Metadata::Map { .. } | Metadata::CountedMap { .. } => (3, 4, 5),
 				Metadata::DoubleMap { .. } => (5, 6, 7),
@@ -335,6 +344,14 @@ fn augment_final_docs(def: &mut Def) {
 			let doc_line = format!(
 				"Storage type is [`StorageMap`] with key type `{}` and value type `{}`.",
 				key.to_token_stream(),
+				value.to_token_stream()
+			);
+			push_string_literal(&doc_line, storage);
+		},
+		// FAIL-CI
+		Metadata::PagedList { value } => {
+			let doc_line = format!(
+				"Storage type is [`StoragePagedList`] with value type `{}`.",
 				value.to_token_stream()
 			);
 			push_string_literal(&doc_line, storage);
@@ -493,6 +510,9 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 							}
 						}
 					)
+				},
+				Metadata::PagedList { .. } => {
+					unreachable!("Getters are forbidden for storage type 'PagedList'.") // FAIL-CI
 				},
 				Metadata::CountedMap { key, value } => {
 					let query = match storage.query_kind.as_ref().expect("Checked by def") {

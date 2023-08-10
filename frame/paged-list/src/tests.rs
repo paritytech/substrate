@@ -21,11 +21,7 @@
 #![cfg(test)]
 
 use crate::{mock::*, *};
-use sp_core::ConstU32;
 use frame_support::storage::{StorageList, StoragePrefixedContainer};
-
-type PagedList = List<Test, u32, ConstU32<65_536>>;
-type PagedList2 = List<Test, u32, ConstU32<65_536>>;
 
 #[docify::export]
 #[test]
@@ -34,7 +30,6 @@ fn append_one_works() {
 		PagedList::append_one(1);
 
 		assert_eq!(PagedList::iter().collect::<Vec<_>>(), vec![1]);
-		assert_eq!(PagedList::len(), 1);
 	});
 }
 
@@ -45,14 +40,13 @@ fn append_many_works() {
 		PagedList::append_many(0..3);
 
 		assert_eq!(PagedList::iter().collect::<Vec<_>>(), vec![0, 1, 2]);
-		assert_eq!(PagedList::len(), 3);
 	});
 }
 
 #[docify::export]
 #[test]
 fn appender_works() {
-	use frame_support::storage::StorageAppender;
+	use frame_support::storage::StorageListAppender;
 	test_closure(|| {
 		let mut appender = PagedList::appender();
 
@@ -61,7 +55,6 @@ fn appender_works() {
 		appender.append_many(2..4);
 
 		assert_eq!(PagedList::iter().collect::<Vec<_>>(), vec![0, 1, 2, 3]);
-		assert_eq!(PagedList::len(), 4);
 	});
 }
 
@@ -75,7 +68,6 @@ fn iter_works() {
 		assert_eq!(iter.next(), Some(0));
 		assert_eq!(iter.next(), Some(1));
 		assert_eq!(iter.collect::<Vec<_>>(), (2..10).collect::<Vec<_>>());
-		assert_eq!(PagedList::len(), 10);
 	});
 }
 
@@ -86,33 +78,32 @@ fn drain_works() {
 		PagedList::append_many(0..3);
 		PagedList::drain().next();
 		assert_eq!(PagedList::iter().collect::<Vec<_>>(), vec![1, 2], "0 is drained");
-		assert_eq!(PagedList::len(), 2);
 		PagedList::drain().peekable().peek();
 		assert_eq!(PagedList::iter().collect::<Vec<_>>(), vec![2], "Peeking removed 1");
-		assert_eq!(PagedList::len(), 1);
 	});
 }
 
 #[test]
 fn iter_independent_works() {
 	test_closure(|| {
-		PagedList::append_many(0..1000);
-		PagedList2::append_many(0..1000);
+		PagedList::append_many(0..100);
+		PagedList2::append_many(0..200);
 
-		assert_eq!(PagedList::iter().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
-		assert_eq!(PagedList::iter().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
+		assert_eq!(PagedList::iter().collect::<Vec<_>>(), (0..100).collect::<Vec<_>>());
+		assert_eq!(PagedList2::iter().collect::<Vec<_>>(), (0..200).collect::<Vec<_>>());
 
 		// drain
-		assert_eq!(PagedList::drain().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
-		assert_eq!(PagedList2::iter().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
+		assert_eq!(PagedList::drain().collect::<Vec<_>>(), (0..100).collect::<Vec<_>>());
+		assert_eq!(PagedList2::drain().collect::<Vec<_>>(), (0..200).collect::<Vec<_>>());
 
 		assert_eq!(PagedList::iter().count(), 0);
+		assert_eq!(PagedList2::iter().count(), 0);
 	});
 }
-/*
+
 #[test]
 fn prefix_distinct() {
-	let p1 = List::<Test, u32, ConstU32<1024>, ()>::final_prefix();
-	let p2 = List::<Test, u32, ConstU32<1024>, crate::Instance2>::final_prefix();
+	let p1 = MetaOf::<Test, ()>::storage_key(((),));
+	let p2 = MetaOf::<Test, crate::Instance2>::storage_key(((),));
 	assert_ne!(p1, p2);
-}*/
+}

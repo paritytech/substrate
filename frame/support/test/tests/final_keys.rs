@@ -19,6 +19,11 @@ use codec::Encode;
 use frame_support::{derive_impl, storage::unhashed, StoragePrefixedMap};
 use frame_system::pallet_prelude::BlockNumberFor;
 
+use frame_support::{
+	pallet_prelude::*,
+	storage::{types::StoragePagedListMeta, StoragePrefixedContainer},
+};
+
 use sp_core::{sr25519, ConstU32};
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
@@ -32,7 +37,6 @@ use sp_runtime::{
 #[frame_support::pallet]
 mod no_instance {
 	use super::*;
-	use frame_support::pallet_prelude::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -73,6 +77,17 @@ mod no_instance {
 		ValueQuery,
 	>;
 
+	#[pallet::storage]
+	pub type PagedList<T: Config> = StoragePagedList<_, u32, ConstU32<40>>;
+
+	#[pallet::storage]
+	pub type PagedNMap<T: Config> = StoragePagedNMap<
+		_,
+		(NMapKey<Blake2_128Concat, u32>, NMapKey<Twox64Concat, u32>),
+		u32,
+		ConstU32<40>,
+	>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub value: u32,
@@ -105,7 +120,6 @@ mod no_instance {
 #[frame_support::pallet]
 mod instance {
 	use super::*;
-	use frame_support::pallet_prelude::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -147,6 +161,17 @@ mod instance {
 		BlockNumberFor<T>,
 		u32,
 		ValueQuery,
+	>;
+
+	#[pallet::storage]
+	pub type PagedList<T: Config<I>, I: 'static = ()> = StoragePagedList<_, u32, ConstU32<40>>;
+
+	#[pallet::storage]
+	pub type PagedNMap<T: Config<I>, I: 'static = ()> = StoragePagedNMap<
+		_,
+		(NMapKey<Blake2_128Concat, u32>, NMapKey<Twox64Concat, u32>),
+		u32,
+		ConstU32<40>,
 	>;
 
 	#[pallet::genesis_config]
@@ -260,6 +285,78 @@ fn final_keys_no_instance() {
 		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
 		assert_eq!(&k[..32], &<no_instance::DoubleMap2<Runtime>>::final_prefix());
 	});
+	// The metadata key of a PagedList is correct.
+	TestExternalities::default().execute_with(|| {
+		<no_instance::PagedList<Runtime>>::append_many(0..123);
+		let mut k = [twox_128(b"FinalKeysNone"), twox_128(b"PagedList")].concat();
+		k.extend(b"meta");
+		assert_eq!(
+			unhashed::get::<StoragePagedListMeta<no_instance::Pallet<Runtime>, u32, ()>>(&k),
+			Some(StoragePagedListMeta {
+				total_items: 123,
+				last_page: 12,
+				last_page_byte_offset: 12,
+				..Default::default()
+			})
+		);
+		assert_eq!(&k[..32], &<no_instance::PagedList<Runtime>>::final_prefix());
+	});
+	// The page key of a PagedList is correct.
+	TestExternalities::default().execute_with(|| {
+		<no_instance::PagedList<Runtime>>::append_many(0..400);
+		for page in 0u32..10 {
+			let items = page * 10;
+			let mut k = [twox_128(b"FinalKeysNone"), twox_128(b"PagedList")].concat();
+			k.extend(b"page");
+			k.extend(page.encode());
+			assert_eq!(
+				unhashed::get_raw(&k),
+				Some((items..items + 10).collect::<Vec<_>>().encode())
+			);
+			assert_eq!(&k[..32], &<no_instance::PagedList<Runtime>>::final_prefix());
+		}
+	});
+	// The metadata key of a PagedMap is correct.
+	TestExternalities::default().execute_with(|| {
+		for key in 0..10 {
+			let key2 = key * 123; // random...
+			<no_instance::PagedNMap<Runtime>>::append_many((key, key2), 0..123);
+			let mut k = [twox_128(b"FinalKeysNone"), twox_128(b"PagedNMap")].concat();
+			k.extend(key.using_encoded(blake2_128_concat));
+			k.extend(key2.using_encoded(twox_64_concat));
+			k.extend(b"meta");
+			assert_eq!(
+				unhashed::get::<StoragePagedListMeta<no_instance::Pallet<Runtime>, u32, ()>>(&k),
+				Some(StoragePagedListMeta {
+					total_items: 123,
+					last_page: 12,
+					last_page_byte_offset: 12,
+					..Default::default()
+				})
+			);
+			assert_eq!(&k[..32], &<no_instance::PagedNMap<Runtime>>::final_prefix());
+		}
+	});
+	// The page key of a PagedMap is correct.
+	TestExternalities::default().execute_with(|| {
+		for key in 0..10 {
+			let key2 = key * 123; // random...
+			<no_instance::PagedNMap<Runtime>>::append_many((key, key2), 0..400);
+			for page in 0u32..10 {
+				let items = page * 10;
+				let mut k = [twox_128(b"FinalKeysNone"), twox_128(b"PagedNMap")].concat();
+				k.extend(key.using_encoded(blake2_128_concat));
+				k.extend(key2.using_encoded(twox_64_concat));
+				k.extend(b"page");
+				k.extend(page.encode());
+				assert_eq!(
+					unhashed::get_raw(&k),
+					Some((items..items + 10).collect::<Vec<_>>().encode())
+				);
+				assert_eq!(&k[..32], &<no_instance::PagedNMap<Runtime>>::final_prefix());
+			}
+		}
+	});
 }
 
 #[test]
@@ -295,6 +392,78 @@ fn final_keys_default_instance() {
 		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
 		assert_eq!(&k[..32], &<instance::DoubleMap2<Runtime>>::final_prefix());
 	});
+	// The metadata key of a PagedList is correct.
+	TestExternalities::default().execute_with(|| {
+		<instance::PagedList<Runtime>>::append_many(0..123);
+		let mut k = [twox_128(b"FinalKeysSome"), twox_128(b"PagedList")].concat();
+		k.extend(b"meta");
+		assert_eq!(
+			unhashed::get::<StoragePagedListMeta<instance::Pallet<Runtime>, u32, ()>>(&k),
+			Some(StoragePagedListMeta {
+				total_items: 123,
+				last_page: 12,
+				last_page_byte_offset: 12,
+				..Default::default()
+			})
+		);
+		assert_eq!(&k[..32], &<instance::PagedList<Runtime>>::final_prefix());
+	});
+	// The page key of a PagedList is correct.
+	TestExternalities::default().execute_with(|| {
+		<instance::PagedList<Runtime>>::append_many(0..400);
+		for page in 0u32..10 {
+			let items = page * 10;
+			let mut k = [twox_128(b"FinalKeysSome"), twox_128(b"PagedList")].concat();
+			k.extend(b"page");
+			k.extend(page.encode());
+			assert_eq!(
+				unhashed::get_raw(&k),
+				Some((items..items + 10).collect::<Vec<_>>().encode())
+			);
+			assert_eq!(&k[..32], &<instance::PagedList<Runtime>>::final_prefix());
+		}
+	});
+	// The metadata key of a PagedMap is correct.
+	TestExternalities::default().execute_with(|| {
+		for key in 0..10 {
+			let key2 = key * 123; // random...
+			<instance::PagedNMap<Runtime>>::append_many((key, key2), 0..123);
+			let mut k = [twox_128(b"FinalKeysSome"), twox_128(b"PagedNMap")].concat();
+			k.extend(key.using_encoded(blake2_128_concat));
+			k.extend(key2.using_encoded(twox_64_concat));
+			k.extend(b"meta");
+			assert_eq!(
+				unhashed::get::<StoragePagedListMeta<instance::Pallet<Runtime>, u32, ()>>(&k),
+				Some(StoragePagedListMeta {
+					total_items: 123,
+					last_page: 12,
+					last_page_byte_offset: 12,
+					..Default::default()
+				})
+			);
+			assert_eq!(&k[..32], &<instance::PagedNMap<Runtime>>::final_prefix());
+		}
+	});
+	// The page key of a PagedMap is correct.
+	TestExternalities::default().execute_with(|| {
+		for key in 0..10 {
+			let key2 = key * 123; // random...
+			<instance::PagedNMap<Runtime>>::append_many((key, key2), 0..400);
+			for page in 0u32..10 {
+				let items = page * 10;
+				let mut k = [twox_128(b"FinalKeysSome"), twox_128(b"PagedNMap")].concat();
+				k.extend(key.using_encoded(blake2_128_concat));
+				k.extend(key2.using_encoded(twox_64_concat));
+				k.extend(b"page");
+				k.extend(page.encode());
+				assert_eq!(
+					unhashed::get_raw(&k),
+					Some((items..items + 10).collect::<Vec<_>>().encode())
+				);
+				assert_eq!(&k[..32], &<instance::PagedNMap<Runtime>>::final_prefix());
+			}
+		}
+	});
 }
 
 #[test]
@@ -329,5 +498,90 @@ fn final_keys_instance_2() {
 		k.extend(2u32.using_encoded(twox_64_concat));
 		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
 		assert_eq!(&k[..32], &<instance::DoubleMap2<Runtime, instance::Instance2>>::final_prefix());
+	});
+	// The metadata key of a PagedList is correct.
+	TestExternalities::default().execute_with(|| {
+		<instance::PagedList<Runtime, instance::Instance2>>::append_many(0..123);
+		let mut k = [twox_128(b"Instance2FinalKeysSome"), twox_128(b"PagedList")].concat();
+		k.extend(b"meta");
+		assert_eq!(
+			unhashed::get::<
+				StoragePagedListMeta<instance::Pallet<Runtime, instance::Instance2>, u32, ()>,
+			>(&k),
+			Some(StoragePagedListMeta {
+				total_items: 123,
+				last_page: 12,
+				last_page_byte_offset: 12,
+				..Default::default()
+			})
+		);
+		assert_eq!(&k[..32], &<instance::PagedList<Runtime, instance::Instance2>>::final_prefix());
+	});
+	// The page key of a PagedList is correct.
+	TestExternalities::default().execute_with(|| {
+		<instance::PagedList<Runtime, instance::Instance2>>::append_many(0..400);
+		for page in 0u32..10 {
+			let items = page * 10;
+			let mut k = [twox_128(b"Instance2FinalKeysSome"), twox_128(b"PagedList")].concat();
+			k.extend(b"page");
+			k.extend(page.encode());
+			assert_eq!(
+				unhashed::get_raw(&k),
+				Some((items..items + 10).collect::<Vec<_>>().encode())
+			);
+			assert_eq!(
+				&k[..32],
+				&<instance::PagedList<Runtime, instance::Instance2>>::final_prefix()
+			);
+		}
+	});
+	// The metadata key of a PagedMap is correct.
+	TestExternalities::default().execute_with(|| {
+		for key in 0..10 {
+			let key2 = key * 123; // random...
+			<instance::PagedNMap<Runtime, instance::Instance2>>::append_many((key, key2), 0..123);
+			let mut k = [twox_128(b"Instance2FinalKeysSome"), twox_128(b"PagedNMap")].concat();
+			k.extend(key.using_encoded(blake2_128_concat));
+			k.extend(key2.using_encoded(twox_64_concat));
+			k.extend(b"meta");
+			assert_eq!(
+				unhashed::get::<
+					StoragePagedListMeta<instance::Pallet<Runtime, instance::Instance2>, u32, ()>,
+				>(&k),
+				Some(StoragePagedListMeta {
+					total_items: 123,
+					last_page: 12,
+					last_page_byte_offset: 12,
+					..Default::default()
+				})
+			);
+			assert_eq!(
+				&k[..32],
+				&<instance::PagedNMap<Runtime, instance::Instance2>>::final_prefix()
+			);
+		}
+	});
+	// The page key of a PagedMap is correct.
+	TestExternalities::default().execute_with(|| {
+		for key in 0..10 {
+			let key2 = key * 123; // random...
+			<instance::PagedNMap<Runtime, instance::Instance2>>::append_many((key, key2), 0..400);
+			for page in 0u32..10 {
+				let items = page * 10;
+				let mut k = [twox_128(b"Instance2FinalKeysSome"), twox_128(b"PagedNMap")].concat();
+				k.extend(key.using_encoded(blake2_128_concat));
+				k.extend(key2.using_encoded(twox_64_concat));
+				k.extend(b"page");
+				k.extend(page.encode());
+				assert_eq!(
+					unhashed::get_raw(&k),
+					Some((items..items + 10).collect::<Vec<_>>().encode())
+				);
+				assert_eq!(
+					&k[..32],
+					&<instance::PagedNMap<Runtime, instance::Instance2>>::final_prefix()
+				);
+			}
+		}
 	});
 }

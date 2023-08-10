@@ -135,6 +135,7 @@ impl PalletStorageAttrInfo {
 pub enum Metadata {
 	Value { value: syn::Type },
 	Map { value: syn::Type, key: syn::Type },
+	PagedList { value: syn::Type },
 	CountedMap { value: syn::Type, key: syn::Type },
 	DoubleMap { value: syn::Type, key1: syn::Type, key2: syn::Type },
 	NMap { keys: Vec<syn::Type>, keygen: syn::Type, value: syn::Type },
@@ -210,6 +211,12 @@ pub enum StorageGenerics {
 		on_empty: Option<syn::Type>,
 		max_values: Option<syn::Type>,
 	},
+	// FAIL-CI
+	PagedList {
+		value: syn::Type,
+		heap_size: Option<syn::Type>,
+		max_pages: Option<syn::Type>,
+	},
 	CountedMap {
 		hasher: syn::Type,
 		key: syn::Type,
@@ -238,6 +245,7 @@ impl StorageGenerics {
 		let res = match self.clone() {
 			Self::DoubleMap { value, key1, key2, .. } => Metadata::DoubleMap { value, key1, key2 },
 			Self::Map { value, key, .. } => Metadata::Map { value, key },
+			Self::PagedList { value, .. } => Metadata::PagedList { value },
 			Self::CountedMap { value, key, .. } => Metadata::CountedMap { value, key },
 			Self::Value { value, .. } => Metadata::Value { value },
 			Self::NMap { keygen, value, .. } =>
@@ -255,6 +263,8 @@ impl StorageGenerics {
 			Self::CountedMap { query_kind, .. } |
 			Self::Value { query_kind, .. } |
 			Self::NMap { query_kind, .. } => query_kind.clone(),
+			// A list cannot be queried - only iterated.
+			Self::PagedList { .. } => None,
 		}
 	}
 }
@@ -262,6 +272,7 @@ impl StorageGenerics {
 enum StorageKind {
 	Value,
 	Map,
+	PagedList,
 	CountedMap,
 	DoubleMap,
 	NMap,
@@ -399,6 +410,25 @@ fn process_named_generics(
 				query_kind: parsed.remove("QueryKind").map(|binding| binding.ty),
 				on_empty: parsed.remove("OnEmpty").map(|binding| binding.ty),
 				max_values: parsed.remove("MaxValues").map(|binding| binding.ty),
+			}
+		},
+		StorageKind::PagedList => {
+			check_generics(
+				&parsed,
+				&map_mandatory_generics,
+				&map_optional_generics,
+				"StoragePagedList",
+				args_span,
+			)?;
+
+			StorageGenerics::PagedList {
+				// FAIL-CI
+				value: parsed
+					.remove("Value")
+					.map(|binding| binding.ty)
+					.expect("checked above as mandatory generic"),
+				heap_size: parsed.remove("HeapSize").map(|binding| binding.ty),
+				max_pages: parsed.remove("MaxPagex").map(|binding| binding.ty),
 			}
 		},
 		StorageKind::CountedMap => {
@@ -552,6 +582,13 @@ fn process_unnamed_generics(
 			retrieve_arg(4).ok(),
 			use_default_hasher(1)?,
 		),
+		StorageKind::PagedList => (
+			// FAIL-CI double check
+			None,
+			Metadata::PagedList { value: retrieve_arg(1)? },
+			None,
+			true,
+		),
 		StorageKind::CountedMap => (
 			None,
 			Metadata::CountedMap { key: retrieve_arg(2)?, value: retrieve_arg(3)? },
@@ -591,6 +628,8 @@ fn process_generics(
 	let storage_kind = match &*segment.ident.to_string() {
 		"StorageValue" => StorageKind::Value,
 		"StorageMap" => StorageKind::Map,
+		"StoragePagedList" => StorageKind::PagedList,
+		"StoragePagedNMap" => StorageKind::PagedList,
 		"CountedStorageMap" => StorageKind::CountedMap,
 		"StorageDoubleMap" => StorageKind::DoubleMap,
 		"StorageNMap" => StorageKind::NMap,

@@ -21,20 +21,16 @@
 //!
 //! # Debugging a panic
 //! Once a panic is found, it can be debugged with
-//! `cargo hfuzz run-debug pallet-paged-list-fuzzer
-//! hfuzz_workspace/pallet-paged-list-fuzzer/*.fuzz`.
+//! `cargo hfuzz run-debug pallet-paged-list hfuzz_workspace/pallet-paged-list/*.fuzz`.
 //!
 //! # More information
 //! More information about `honggfuzz` can be found
 //! [here](https://docs.rs/honggfuzz/).
 
-use arbitrary::Arbitrary;
+use frame_support::StorageNoopGuard;
 use honggfuzz::fuzz;
 
-use frame_support::{storage::StorageList, StorageNoopGuard};
-use pallet_paged_list::mock::{PagedList as List, *};
-use sp_io::TestExternalities;
-type Meta = MetaOf<Test, ()>;
+use frame_support_storage_fuzzer::*;
 
 fn main() {
 	loop {
@@ -48,17 +44,17 @@ fn main() {
 ///
 /// It also changes the maximal number of elements per page dynamically, hence the `page_size`.
 fn drain_append_work(ops: Vec<Op>, page_size: u8) {
-	if page_size < 4 {
+	if page_size == 0 {
 		return
 	}
 
 	TestExternalities::default().execute_with(|| {
-		ValuesPerNewPage::set(&page_size.into());
+		//ValuesPerNewPage::set(&page_size.into());
 		let _g = StorageNoopGuard::default();
 		let mut total: i64 = 0;
 
 		for op in ops.into_iter() {
-			total += op.exec();
+			total += op.exec_list::<List>();
 
 			assert!(total >= 0);
 			assert_eq!(List::iter().count(), total as usize);
@@ -67,39 +63,11 @@ fn drain_append_work(ops: Vec<Op>, page_size: u8) {
 			// We have the assumption that the queue removes the metadata when empty.
 			if total == 0 {
 				assert_eq!(List::drain().count(), 0);
-				assert_eq!(Meta::from_storage(((),)).unwrap_or_default(), Default::default());
+				assert_eq!(List::meta(), Default::default());
 			}
 		}
 
 		assert_eq!(List::drain().count(), total as usize);
 		// `StorageNoopGuard` checks that there is no storage leaked.
 	});
-}
-
-enum Op {
-	Append(Vec<u32>),
-	Drain(u8),
-}
-
-impl Arbitrary<'_> for Op {
-	fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
-		if u.arbitrary::<bool>()? {
-			Ok(Op::Append(Vec::<u32>::arbitrary(u)?))
-		} else {
-			Ok(Op::Drain(u.arbitrary::<u8>()?))
-		}
-	}
-}
-
-impl Op {
-	pub fn exec(self) -> i64 {
-		match self {
-			Op::Append(v) => {
-				let l = v.len();
-				List::append_many(v);
-				l as i64
-			},
-			Op::Drain(v) => -(List::drain().take(v as usize).count() as i64),
-		}
-	}
 }

@@ -39,18 +39,18 @@
 //! ## Examples
 //!
 //! 1. **Appending** some data to the list can happen either by [`Pallet::append_one`]:
-#![doc = docify::embed!("frame/paged-list/src/tests.rs", append_one_works)]
+#![doc = docify::embed!("src/tests.rs", append_one_works)]
 //! 2. or by [`Pallet::append_many`]. This should always be preferred to repeated calls to
 //! [`Pallet::append_one`]:
-#![doc = docify::embed!("frame/paged-list/src/tests.rs", append_many_works)]
+#![doc = docify::embed!("src/tests.rs", append_many_works)]
 //! 3. If you want to append many values (ie. in a loop), then best use the [`Pallet::appender`]:
-#![doc = docify::embed!("frame/paged-list/src/tests.rs", appender_works)]
+#![doc = docify::embed!("src/tests.rs", appender_works)]
 //! 4. **Iterating** over the list can be done with [`Pallet::iter`]. It uses the standard
 //! `Iterator` trait:
-#![doc = docify::embed!("frame/paged-list/src/tests.rs", iter_works)]
+#![doc = docify::embed!("src/tests.rs", iter_works)]
 //! 5. **Draining** elements happens through the [`Pallet::drain`] iterator. Note that even
 //! *peeking* a value will already remove it.
-#![doc = docify::embed!("frame/paged-list/src/tests.rs", drain_works)]
+#![doc = docify::embed!("src/tests.rs", drain_works)]
 //!
 //! ## Pallet API
 //!
@@ -66,16 +66,14 @@
 pub use pallet::*;
 
 pub mod mock;
-mod paged_list;
 mod tests;
 
 use codec::FullCodec;
 use frame_support::{
 	pallet_prelude::StorageList,
+	storage::types::StoragePagedList,
 	traits::{PalletInfoAccess, StorageInstance},
 };
-use sp_core::Get;
-pub use paged_list::StoragePagedList;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -83,48 +81,59 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(_);
+	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {}
+	pub trait Config<I: 'static = ()>: frame_system::Config {
+		/// The value type that can be stored in the list.
+		type Value: FullCodec;
 
-	// A storage paged list akin to what the FRAME macros would generate.
+		/// The number of values that can be put into newly created pages.
+		///
+		/// Note that this does not retroactively affect already created pages. This value can be
+		/// changed at any time without requiring a runtime migration.
+		#[pallet::constant]
+		type ValuesPerNewPage: Get<u32>;
+	}
+
+	/// A storage paged list akin to what the FRAME macros would generate.
 	// Note that FRAME does natively support paged lists in storage.
-	/*pub type List<T, I> =
-		StoragePagedList<ListPrefix<T, I>, <T as Config<I>>::Value, <T as Config<I>>::HeapSize>;*/
+	pub type List<T, I> = StoragePagedList<
+		ListPrefix<T, I>,
+		<T as Config<I>>::Value,
+		<T as Config<I>>::ValuesPerNewPage,
+	>;
 }
 
-pub struct List<T, Value, HeapSize, const I: u8>(core::marker::PhantomData<(T, Value, HeapSize, I)>);
-
 // This exposes the list functionality to other pallets.
-impl<T: Config<I>, Value: FullCodec, HeapSize: Get<u32>, const I: u8> StorageList<Value> for List<T, Value, HeapSize, I> {
-	type Iterator = <StoragePagedList<ListPrefix<T, I>, Value, HeapSize> as StorageList<Value>>::Iterator;
-	type Appender = <StoragePagedList<ListPrefix<T, I>, Value, HeapSize> as StorageList<Value>>::Appender;
+impl<T: Config<I>, I: 'static> StorageList<T::Value> for Pallet<T, I> {
+	type Iterator = <List<T, I> as StorageList<T::Value>>::Iterator;
+	type Appender = <List<T, I> as StorageList<T::Value>>::Appender;
 
 	fn len() -> u64 {
-		StoragePagedList::<ListPrefix<T, I>, Value, HeapSize>::len()
+		List::<T, I>::len()
 	}
 
 	fn iter() -> Self::Iterator {
-		StoragePagedList::<ListPrefix<T, I>, Value, HeapSize>::iter()
+		List::<T, I>::iter()
 	}
 
 	fn drain() -> Self::Iterator {
-		StoragePagedList::<ListPrefix<T, I>, Value, HeapSize>::drain()
+		List::<T, I>::drain()
 	}
 
 	fn appender() -> Self::Appender {
-		StoragePagedList::<ListPrefix<T, I>, Value, HeapSize>::appender()
+		List::<T, I>::appender()
 	}
 }
 
 /// Generates a unique storage prefix for each instance of the pallet.
 pub struct ListPrefix<T, I>(core::marker::PhantomData<(T, I)>);
 
-impl<T: Config<I>, const I: u8> StorageInstance for ListPrefix<T, I> {
-	fn pallet_prefix() -> &[u8] {
-		crate::Pallet::<T>::name()
+impl<T: Config<I>, I: 'static> StorageInstance for ListPrefix<T, I> {
+	fn pallet_prefix() -> &'static str {
+		crate::Pallet::<T, I>::name()
 	}
 
-	const STORAGE_PREFIX: &[u8] = b"paged_list";
+	const STORAGE_PREFIX: &'static str = "paged_list";
 }

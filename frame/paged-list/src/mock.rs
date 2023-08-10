@@ -19,8 +19,11 @@
 
 #![cfg(feature = "std")]
 
-use crate::{paged_list::StoragePagedListMeta, Config, ListPrefix};
-use frame_support::traits::{ConstU16, ConstU64};
+use crate::{Config, ListPrefix};
+use frame_support::{
+	storage::types::StoragePagedListMeta,
+	traits::{ConstU16, ConstU64},
+};
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
@@ -65,16 +68,22 @@ impl frame_system::Config for Test {
 }
 
 frame_support::parameter_types! {
-	pub storage HeapSize: u32 = 20; // 5 u32 per page
+	pub storage ValuesPerNewPage: u32 = 5;
 	pub const MaxPages: Option<u32> = Some(20);
 }
 
-impl crate::Config for Test {}
+impl crate::Config for Test {
+	type Value = u32;
+	type ValuesPerNewPage = ValuesPerNewPage;
+}
 
-impl crate::Config<crate::Instance2> for Test {}
+impl crate::Config<crate::Instance2> for Test {
+	type Value = u32;
+	type ValuesPerNewPage = ValuesPerNewPage;
+}
 
-pub type MetaOf<T, Value, HeapSize, I> =
-	StoragePagedListMeta<ListPrefix<T, I>, Value, HeapSize>;
+pub type MetaOf<T, I> =
+	StoragePagedListMeta<ListPrefix<T, I>, <T as Config>::Value, <T as Config>::ValuesPerNewPage>;
 
 /// Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
