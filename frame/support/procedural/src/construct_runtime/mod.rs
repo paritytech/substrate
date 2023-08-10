@@ -402,7 +402,8 @@ fn construct_runtime_final_expansion(
 	let slash_reason = expand::expand_outer_slash_reason(&pallets, &scrate);
 	let integrity_test = decl_integrity_test(&scrate);
 	let static_assertions = decl_static_assertions(&name, &pallets, &scrate);
-	let executive = expand::expand_executive(&name, &frame_system, &scrate, &block)?;
+	let executive =
+		expand::expand_executive(&name, &frame_system, &scrate, &block).unwrap_or(quote!());
 
 	let warning =
 		where_section.map_or(None, |where_section| {
