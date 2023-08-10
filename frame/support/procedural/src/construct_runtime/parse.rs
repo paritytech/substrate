@@ -67,6 +67,7 @@ pub struct ImplicitRuntimeDeclaration {
 	pub name: Ident,
 	pub where_section: Option<WhereSection>,
 	pub pallets: Vec<PalletDeclaration>,
+	pub executive_section: Option<ExecutiveSection>,
 }
 
 /// Declaration of a runtime with all pallet having explicit declaration of parts.
@@ -76,6 +77,7 @@ pub struct ExplicitRuntimeDeclaration {
 	pub where_section: Option<WhereSection>,
 	pub pallets: Vec<Pallet>,
 	pub pallets_token: token::Brace,
+	pub executive_section: Option<ExecutiveSection>,
 }
 
 impl Parse for RuntimeDeclaration {
@@ -90,6 +92,9 @@ impl Parse for RuntimeDeclaration {
 		}
 
 		let name = input.parse::<syn::Ident>()?;
+
+		let executive_section = if input.peek(Token![<]) { Some(input.parse()?) } else { None };
+
 		let where_section = if input.peek(token::Where) { Some(input.parse()?) } else { None };
 		let pallets =
 			input.parse::<ext::Braces<ext::Punctuated<PalletDeclaration, Token![,]>>>()?;
@@ -101,6 +106,7 @@ impl Parse for RuntimeDeclaration {
 					name,
 					where_section,
 					pallets,
+					executive_section,
 				})),
 			PalletsConversion::Explicit(pallets) =>
 				Ok(RuntimeDeclaration::Explicit(ExplicitRuntimeDeclaration {
@@ -108,6 +114,7 @@ impl Parse for RuntimeDeclaration {
 					where_section,
 					pallets,
 					pallets_token,
+					executive_section,
 				})),
 			PalletsConversion::ExplicitExpanded(pallets) =>
 				Ok(RuntimeDeclaration::ExplicitExpanded(ExplicitRuntimeDeclaration {
@@ -115,8 +122,29 @@ impl Parse for RuntimeDeclaration {
 					where_section,
 					pallets,
 					pallets_token,
+					executive_section,
 				})),
 		}
+	}
+}
+
+#[derive(Debug)]
+pub struct ExecutiveSection {
+	pub span: Span,
+	pub custom_on_runtime_upgrade: Option<Ident>,
+}
+
+impl Parse for ExecutiveSection {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let _ = input.parse::<Token![<]>()?;
+		let custom_on_runtime_upgrade = if input.peek(Token![_]) {
+			let _ = input.parse::<Token![_]>()?;
+			None
+		} else {
+			Some(input.parse::<syn::Ident>()?)
+		};
+		let _ = input.parse::<Token![>]>()?;
+		Ok(Self { span: input.span(), custom_on_runtime_upgrade })
 	}
 }
 

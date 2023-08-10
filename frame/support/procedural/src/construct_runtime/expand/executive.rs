@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License
 
+use crate::construct_runtime::parse::ExecutiveSection;
 use frame_support_procedural_tools::generate_crate_access_2018;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
@@ -25,9 +26,14 @@ pub fn expand_executive(
 	system: &Ident,
 	scrate: &TokenStream,
 	block: &TokenStream,
+	executive_section: ExecutiveSection,
 ) -> Result<TokenStream> {
 	let executive = generate_crate_access_2018("frame-executive")?;
 	let try_runtime = generate_crate_access_2018("frame-try-runtime")?;
+	let on_runtime_upgrade = match executive_section.custom_on_runtime_upgrade {
+		Some(custom) => quote!(Some(#custom)),
+		None => quote!(()),
+	};
 
 	let res = quote! {
 		/// Executive: handles dispatch to the various modules.
@@ -37,6 +43,7 @@ pub fn expand_executive(
 			#system::ChainContext<#runtime>,
 			#runtime,
 			AllPalletsWithSystem,
+			#on_runtime_upgrade
 		>;
 
 		impl #runtime {
