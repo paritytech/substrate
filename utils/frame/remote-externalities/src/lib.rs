@@ -1366,7 +1366,7 @@ mod remote_tests {
 			.execute_with(|| {});
 	}
 
-	#[tokio::test(flavor = "multi_thread")]
+	#[tokio::test]
 	async fn can_create_snapshot() {
 		const CACHE: &'static str = "can_create_snapshot";
 		init_logger();
@@ -1390,7 +1390,7 @@ mod remote_tests {
 			.filter(|p| p.path().file_name().unwrap_or_default() == CACHE)
 			.collect::<Vec<_>>();
 
-		let snap: Snapshot<Block> = Builder::<Block>::new().load_snapshot(CACHE.into()).unwrap();
+		let snap: Snapshot<Block> = Snapshot::load(&PathBuf::from(CACHE)).unwrap();
 		assert!(matches!(snap, Snapshot { raw_storage, .. } if raw_storage.len() > 0));
 
 		assert!(to_delete.len() == 1);
@@ -1422,7 +1422,7 @@ mod remote_tests {
 			.filter(|p| p.path().file_name().unwrap_or_default() == CACHE)
 			.collect::<Vec<_>>();
 
-		let snap: Snapshot<Block> = Builder::<Block>::new().load_snapshot(CACHE.into()).unwrap();
+		let snap: Snapshot<Block> = Snapshot::load(&PathBuf::from(CACHE)).unwrap();
 		assert!(matches!(snap, Snapshot { raw_storage, .. } if raw_storage.len() > 0));
 
 		assert!(to_delete.len() == 1);
