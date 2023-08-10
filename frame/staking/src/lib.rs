@@ -483,7 +483,7 @@ pub struct StakingLedger<T: Config> {
 impl<T: Config> StakingLedger<T> {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
-	pub fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
+	fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
 		let mut total = self.total;
 		let unlocking: BoundedVec<_, _> = self
 			.unlocking
@@ -515,7 +515,7 @@ impl<T: Config> StakingLedger<T> {
 	/// Re-bond funds that were scheduled for unlocking.
 	///
 	/// Returns the updated ledger, and the amount actually rebonded.
-	pub fn rebond(mut self, value: BalanceOf<T>) -> (Self, BalanceOf<T>) {
+	fn rebond(mut self, value: BalanceOf<T>) -> (Self, BalanceOf<T>) {
 		let mut unlocking_balance = BalanceOf::<T>::zero();
 
 		while let Some(last) = self.unlocking.last_mut() {
@@ -562,7 +562,7 @@ impl<T: Config> StakingLedger<T> {
 	///
 	/// This calls `Config::OnStakingUpdate::on_slash` with information as to how the slash was
 	/// applied.
-	pub fn slash(
+	fn slash(
 		&mut self,
 		slash_amount: BalanceOf<T>,
 		minimum_balance: BalanceOf<T>,
