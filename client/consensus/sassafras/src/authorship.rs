@@ -24,7 +24,7 @@ use sp_consensus_sassafras::{
 	digests::PreDigest, slot_claim_sign_data, ticket_id, ticket_id_threshold, AuthorityId, Slot,
 	TicketBody, TicketClaim, TicketEnvelope, TicketId,
 };
-use sp_core::{bandersnatch::ring_vrf::RingVrfContext, ed25519, twox_64, ByteArray};
+use sp_core::{bandersnatch::ring_vrf::RingContext, ed25519, twox_64, ByteArray};
 use std::pin::Pin;
 
 /// Get secondary authority index for the given epoch and slot.
@@ -97,7 +97,7 @@ pub(crate) fn claim_slot(
 fn generate_epoch_tickets(
 	epoch: &mut Epoch,
 	keystore: &KeystorePtr,
-	ring_ctx: &RingVrfContext,
+	ring_ctx: &RingContext,
 ) -> Vec<TicketEnvelope> {
 	let config = &epoch.config;
 	let max_attempts = config.threshold_params.attempts_number;

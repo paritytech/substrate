@@ -64,7 +64,7 @@ use sp_consensus::{
 	BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle,
 };
 use sp_consensus_slots::Slot;
-use sp_core::{ExecutionContext, Pair};
+use sp_core::Pair;
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::KeystorePtr;
 use sp_runtime::{

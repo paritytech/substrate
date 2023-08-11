@@ -77,7 +77,7 @@ fn check_header<B: BlockT + Sized>(
 	}
 
 	let Some(authority_id) = config.authorities.get(pre_digest.authority_idx as usize) else {
-		return Err(sassafras_err(Error::SlotAuthorNotFound));
+		return Err(sassafras_err(Error::SlotAuthorNotFound))
 	};
 
 	// Check header signature (aka the Seal)
@@ -188,12 +188,11 @@ where
 		at_hash: Block::Hash,
 		inherent_data: InherentData,
 		create_inherent_data_providers: CIDP::InherentDataProviders,
-		execution_context: ExecutionContext,
 	) -> Result<(), Error<Block>> {
 		let inherent_res = self
 			.client
 			.runtime_api()
-			.check_inherents_with_context(at_hash, execution_context, block, inherent_data)
+			.check_inherents(at_hash, block, inherent_data)
 			.map_err(Error::RuntimeApi)?;
 
 		if !inherent_res.ok() {
@@ -415,7 +414,7 @@ where
 					let new_block = Block::new(pre_header.clone(), inner_body);
 
 					if !block.state_action.skip_execution_checks() {
-						// TODO-SASS-P3 :??? DOC
+						// TODO-SASS-P3 : @davxy??? DOC
 						let mut inherent_data = create_inherent_data_providers
 							.create_inherent_data()
 							.await
@@ -426,7 +425,6 @@ where
 							parent_hash,
 							inherent_data,
 							create_inherent_data_providers,
-							block.origin.into(),
 						)
 						.await?;
 					}

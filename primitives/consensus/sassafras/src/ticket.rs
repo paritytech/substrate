@@ -21,6 +21,7 @@ use crate::{Randomness, RingVrfSignature, VrfInput, VrfOutput, VrfSignData, SASS
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_consensus_slots::Slot;
+use sp_std::vec::Vec;
 
 /// Ticket identifier.
 ///
