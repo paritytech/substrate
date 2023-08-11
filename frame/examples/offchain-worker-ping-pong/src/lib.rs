@@ -633,8 +633,7 @@ impl<T: Config> Pallet<T> {
 	/// A helper function to send a raw unsigned pong transaction.
 	fn ocw_pong_raw_unsigned(block_number: BlockNumberFor<T>) -> Result<(), &'static str> {
 		let pings = <Pings<T>>::get();
-		for p in pings {
-			let Ping(nonce) = p;
+		for Ping(nonce) in pings {
 			// nonce is wrapped into a call to `pong_unsigned` public function of this pallet. This
 			// means that the transaction, when executed, will simply call that function passing
 			// `nonce` as an argument.
