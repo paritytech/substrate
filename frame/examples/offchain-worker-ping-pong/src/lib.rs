@@ -568,7 +568,10 @@ impl<T: Config> Pallet<T> {
 			for (acc, res) in &results {
 				match res {
 					Ok(()) => log::info!("[{:?}] Submitted pong with nonce {}", acc.id, nonce),
-					Err(e) => log::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e),
+					Err(e) => {
+						log::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e);
+						return Err("Failed to submit transaction");
+					},
 				}
 			}
 		}
