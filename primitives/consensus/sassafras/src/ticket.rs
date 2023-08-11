@@ -17,14 +17,10 @@
 
 //! Primitives related to tickets.
 
-use super::{Randomness, SASSAFRAS_ENGINE_ID};
+use crate::{Randomness, RingVrfSignature, VrfInput, VrfOutput, VrfSignData, SASSAFRAS_ENGINE_ID};
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_consensus_slots::Slot;
-use sp_core::bandersnatch::{
-	ring_vrf::RingVrfSignature,
-	vrf::{VrfInput, VrfOutput, VrfSignData},
-};
 
 /// Ticket identifier.
 ///
@@ -33,7 +29,7 @@ use sp_core::bandersnatch::{
 pub type TicketId = u128;
 
 /// Ticket data persisted on-chain.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct TicketBody {
 	/// Attempt index.
 	pub attempt_idx: u32,

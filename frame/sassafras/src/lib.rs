@@ -51,10 +51,13 @@ use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use frame_support::{traits::Get, weights::Weight, BoundedVec, WeakBoundedVec};
-use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
+use frame_system::{
+	offchain::{SendTransactionTypes, SubmitTransaction},
+	pallet_prelude::{BlockNumberFor, HeaderFor},
+};
 use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
-	AuthorityId, Epoch, EquivocationProof, Randomness, RingVrfContext, SassafrasConfiguration,
+	AuthorityId, Epoch, EquivocationProof, Randomness, RingContext, SassafrasConfiguration,
 	SassafrasEpochConfiguration, Slot, TicketBody, TicketEnvelope, TicketId, RANDOMNESS_LENGTH,
 	SASSAFRAS_ENGINE_ID,
 };
@@ -218,7 +221,7 @@ pub mod pallet {
 
 	/// Tickets to be used for current and next epoch.
 	#[pallet::storage]
-	pub type TicketsData<T> = StorageMap<_, Identity, TicketId, TicketBody, ValueQuery>;
+	pub type TicketsData<T> = StorageMap<_, Identity, TicketId, TicketBody>;
 
 	/// Next epoch tickets accumulator.
 	/// Special `u32::MAX` key is reserved for a partially sorted segment.
@@ -232,28 +235,26 @@ pub mod pallet {
 	/// In practice: Updatable Universal Reference String and the seed.
 	#[pallet::storage]
 	#[pallet::getter(fn ring_context)]
-	pub type RingContext<T: Config> = StorageValue<_, RingVrfContext>;
+	pub type RingVrfContext<T: Config> = StorageValue<_, RingContext>;
 
 	/// Genesis configuration for Sassafras protocol.
-	#[derive(Default)]
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
+	#[derive(frame_support::DefaultNoBound)]
+	pub struct GenesisConfig<T: Config> {
 		/// Genesis authorities.
 		pub authorities: Vec<AuthorityId>,
 		/// Genesis epoch configuration.
 		pub epoch_config: SassafrasEpochConfiguration,
+		/// Phantom config
+		#[serde(skip)]
+		pub _phantom: sp_std::marker::PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			Pallet::<T>::initialize_genesis_authorities(&self.authorities);
 			EpochConfig::<T>::put(self.epoch_config.clone());
-
-			// TODO davxy : temporary code to generate a testing ring context
-			log::debug!(target: LOG_TARGET, "Building new testing ring context");
-			let ring_ctx = RingVrfContext::new_testing();
-			RingContext::<T>::set(Some(ring_ctx));
 		}
 	}
 
@@ -318,7 +319,7 @@ pub mod pallet {
 
 			let randomness = pre_digest
 				.vrf_signature
-				.vrf_outputs
+				.outputs
 				.get(0)
 				.expect("vrf preout should have been already checked by the client; qed")
 				.make_bytes::<RANDOMNESS_LENGTH>(RANDOMNESS_VRF_CONTEXT, &vrf_input);
@@ -361,13 +362,14 @@ pub mod pallet {
 			log::debug!(target: LOG_TARGET, "Received {} tickets", tickets.len());
 
 			log::debug!(target: LOG_TARGET, "LOADING RING CTX");
-			let Some(ring_ctx) = RingContext::<T>::get() else {
+			let Some(ring_ctx) = RingVrfContext::<T>::get() else {
 				return Err("Ring context not initialized".into())
 			};
 			log::debug!(target: LOG_TARGET, "... Loaded");
 
-			log::debug!(target: LOG_TARGET, "Building prover");
+			// TODO @davxy this should be done once per epoch and with the NEXT EPOCH AUTHORITIES!!!
 			let pks: Vec<_> = Self::authorities().iter().map(|auth| *auth.as_ref()).collect();
+			log::debug!(target: LOG_TARGET, "Building verifier. Ring size {}", pks.len());
 			let verifier = ring_ctx.verifier(pks.as_slice()).unwrap();
 			log::debug!(target: LOG_TARGET, "... Built");
 
@@ -399,7 +401,7 @@ pub mod pallet {
 
 				let Some(vrf_preout) = ticket.ring_signature.outputs.get(0) else {
 					log::debug!(target: LOG_TARGET, "Missing ticket pre-output from ring signature");
-					continue;
+					continue
 				};
 				let ticket_id = sp_consensus_sassafras::ticket_id(&vrf_input, &vrf_preout);
 				if ticket_id >= ticket_threshold {
@@ -411,7 +413,7 @@ pub mod pallet {
 				sign_data.push_vrf_input(vrf_input).expect("Can't fail");
 
 				if ticket.ring_signature.verify(&sign_data, &verifier) {
-					TicketsData::<T>::set(ticket_id, ticket.body.clone());
+					TicketsData::<T>::set(ticket_id, Some(ticket.body));
 					segment
 						.try_push(ticket_id)
 						.expect("has same length as bounded input vector; qed");
@@ -471,7 +473,7 @@ pub mod pallet {
 		#[pallet::weight({0})]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
-			_equivocation_proof: EquivocationProof<T::Header>,
+			_equivocation_proof: EquivocationProof<HeaderFor<T>>,
 			//key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResult {
 			ensure_none(origin)?;
@@ -577,7 +579,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Determine whether an epoch change should take place at this block.
 	/// Assumes that initialization has already taken place.
-	pub fn should_end_epoch(now: T::BlockNumber) -> bool {
+	pub fn should_end_epoch(now: BlockNumberFor<T>) -> bool {
 		// The epoch has technically ended during the passage of time between this block and the
 		// last, but we have to "end" the epoch now, since there is no earlier possible block we
 		// could have done it.
@@ -601,11 +603,47 @@ impl<T: Config> Pallet<T> {
 		slot.checked_sub(Self::current_epoch_start().into()).unwrap_or(u64::MAX)
 	}
 
-	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_end_epoch`
-	/// has returned `true`, and the caller is the only caller of this function.
+	/// Remove all tickets related data.
 	///
-	/// Typically, this is not handled directly, but by a higher-level validator-set
-	/// manager like `pallet-session`.
+	/// May not be efficient as the calling places may repeat some of this operations
+	/// but is a very extraordinary operation (hopefully never happens in production)
+	/// and better safe than sorry.
+	fn reset_tickets_data() {
+		let tickets_metadata = TicketsMeta::<T>::get();
+
+		// Remove even-epoch data.
+		let tickets_count = tickets_metadata.tickets_count[0];
+		(0..tickets_count).into_iter().for_each(|idx| {
+			if let Some(id) = TicketsIds::<T>::get((0, idx)) {
+				TicketsData::<T>::remove(id);
+			}
+		});
+
+		// Remove odd-epoch data.
+		let tickets_count = tickets_metadata.tickets_count[1];
+		(0..tickets_count).into_iter().for_each(|idx| {
+			if let Some(id) = TicketsIds::<T>::get((1, idx)) {
+				TicketsData::<T>::remove(id);
+			}
+		});
+
+		// Remove all outstanding tickets segments.
+		(0..tickets_metadata.segments_count).into_iter().for_each(|i| {
+			NextTicketsSegments::<T>::remove(i);
+		});
+		NextTicketsSegments::<T>::remove(u32::MAX);
+
+		// Reset tickets metadata
+		TicketsMeta::<T>::set(Default::default());
+	}
+
+	/// Enact an epoch change.
+	///
+	/// Should be done on every block where `should_end_epoch` has returned `true`, and the caller
+	/// is the only caller of this function.
+	///
+	/// Typically, this is not handled directly, but by a higher-level component implementing the
+	/// `EpochChangeTrigger` or `OneSessionHandler` trait.
 	///
 	/// If we detect one or more skipped epochs the policy is to use the authorities and values
 	/// from the first skipped epoch. The tickets are invalidated.
@@ -628,10 +666,15 @@ impl<T: Config> Pallet<T> {
 
 		let slot_idx = CurrentSlot::<T>::get().saturating_sub(Self::epoch_start(epoch_idx));
 		if slot_idx >= T::EpochDuration::get() {
-			// Detected one or more skipped epochs, kill tickets and recompute epoch index.
-			TicketsMeta::<T>::kill();
-			epoch_idx += u64::from(slot_idx) / T::EpochDuration::get();
+			// Detected one or more skipped epochs, clear tickets data and recompute epoch index.
+			Self::reset_tickets_data();
+			let skipped_epochs = u64::from(slot_idx) / T::EpochDuration::get();
+			epoch_idx += skipped_epochs;
+			log::warn!(target: LOG_TARGET, "Detected {} skipped epochs, resuming from epoch {}", skipped_epochs, epoch_idx);
 		}
+
+		let mut tickets_metadata = TicketsMeta::<T>::get();
+
 		EpochIndex::<T>::put(epoch_idx);
 
 		let next_epoch_index = epoch_idx
@@ -660,15 +703,24 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
 
 		let epoch_tag = (epoch_idx & 1) as u8;
-		let mut tickets_metadata = TicketsMeta::<T>::get();
 		// Optionally finish sorting
 		if tickets_metadata.segments_count != 0 {
 			Self::sort_tickets(tickets_metadata.segments_count, epoch_tag, &mut tickets_metadata);
 		}
-		// Clear the prev (equal to the next) epoch tickets counter.
+
+		// Clear the "prev ≡ next (mod 2)" epoch tickets counter and bodies.
+		// Ids are left since are just cyclically overwritten on-the-go.
 		let next_epoch_tag = epoch_tag ^ 1;
-		tickets_metadata.tickets_count[next_epoch_tag as usize] = 0;
-		TicketsMeta::<T>::set(tickets_metadata);
+		let prev_epoch_tickets_count = &mut tickets_metadata.tickets_count[next_epoch_tag as usize];
+		if *prev_epoch_tickets_count != 0 {
+			(0..*prev_epoch_tickets_count).into_iter().for_each(|idx| {
+				if let Some(id) = TicketsIds::<T>::get((next_epoch_tag, idx)) {
+					TicketsData::<T>::remove(id);
+				}
+			});
+			*prev_epoch_tickets_count = 0;
+			TicketsMeta::<T>::set(tickets_metadata);
+		}
 	}
 
 	/// Call this function on epoch change to update the randomness.
@@ -764,7 +816,7 @@ impl<T: Config> Pallet<T> {
 		Epoch { epoch_idx, start_slot, config }
 	}
 
-	/// Current epoch configuration.
+	/// Next epoch configuration.
 	pub fn next_epoch() -> Epoch {
 		let config = SassafrasConfiguration {
 			slot_duration: T::SlotDuration::get(),
@@ -851,62 +903,66 @@ impl<T: Config> Pallet<T> {
 	/// Refer to the `slot_ticket_id` documentation for the slot-ticket association
 	/// criteria.
 	pub fn slot_ticket(slot: Slot) -> Option<(TicketId, TicketBody)> {
-		Self::slot_ticket_id(slot).map(|id| (id, TicketsData::<T>::get(id)))
+		Self::slot_ticket_id(slot).and_then(|id| TicketsData::<T>::get(id).map(|body| (id, body)))
 	}
 
 	// Lexicographically sort the tickets who belongs to the next epoch.
 	//
-	// Tickets are fetched from at most `max_iter` segments received via the `submit_tickets`
-	// extrinsic.
+	// Tickets are fetched from at most `max_segments` segments.
 	//
 	// The resulting sorted vector is optionally truncated to contain at most `MaxTickets`
 	// entries. If all the segments were consumed then the sorted vector is saved as the
 	// next epoch tickets, else it is saved to be used by next calls to this function.
-	fn sort_tickets(max_iter: u32, epoch_tag: u8, metadata: &mut TicketsMetadata) {
-		let max_iter = max_iter.min(metadata.segments_count);
+	fn sort_tickets(mut max_segments: u32, epoch_tag: u8, metadata: &mut TicketsMetadata) {
+		max_segments = max_segments.min(metadata.segments_count);
 		let max_tickets = T::MaxTickets::get() as usize;
 
 		// Fetch the sorted result (if any).
-		let mut new_segment = NextTicketsSegments::<T>::take(u32::MAX).into_inner();
+		let mut sorted_segment = NextTicketsSegments::<T>::take(u32::MAX).into_inner();
 
-		let mut require_sort = max_iter != 0;
+		let mut require_sort = max_segments != 0;
 
-		let mut sup = if new_segment.len() >= max_tickets {
-			new_segment[new_segment.len() - 1]
-		} else {
-			TicketId::MAX
-		};
+		// There is an upper bound to check only if we already sorted the max number
+		// of allowed tickets.
+		let mut upper_bound = *sorted_segment.get(max_tickets).unwrap_or(&TicketId::MAX);
 
 		// Consume at most `max_iter` segments.
-		for _ in 0..max_iter {
+		// During the process remove every stale ticket from `TicketsData` storage.
+		for _ in 0..max_segments {
 			metadata.segments_count -= 1;
 			let segment = NextTicketsSegments::<T>::take(metadata.segments_count);
 
 			// Merge only elements below the current sorted segment sup.
-			segment.into_iter().filter(|t| t < &sup).for_each(|t| new_segment.push(t));
-			if new_segment.len() > max_tickets {
+			segment.iter().for_each(|id| {
+				if id < &upper_bound {
+					sorted_segment.push(*id);
+				} else {
+					TicketsData::<T>::remove(id);
+				}
+			});
+			if sorted_segment.len() > max_tickets {
 				require_sort = false;
-				// Sort and truncnate the result
-				new_segment.sort_unstable();
-				new_segment[max_tickets..].iter().for_each(|id| TicketsData::<T>::remove(id));
-				new_segment.truncate(max_tickets);
-				sup = new_segment[max_tickets - 1];
+				// Sort and truncate good tickets.
+				sorted_segment.sort_unstable();
+				sorted_segment[max_tickets..].iter().for_each(|id| TicketsData::<T>::remove(id));
+				sorted_segment.truncate(max_tickets);
+				upper_bound = sorted_segment[max_tickets - 1];
 			}
 		}
 
 		if require_sort {
-			new_segment.sort_unstable();
+			sorted_segment.sort_unstable();
 		}
 
 		if metadata.segments_count == 0 {
-			// Sort is over, write to next epoch map.
-			new_segment.iter().enumerate().for_each(|(i, id)| {
+			// Sorting is over, write to next epoch map.
+			sorted_segment.iter().enumerate().for_each(|(i, id)| {
 				TicketsIds::<T>::insert((epoch_tag, i as u32), id);
 			});
-			metadata.tickets_count[epoch_tag as usize] = new_segment.len() as u32;
+			metadata.tickets_count[epoch_tag as usize] = sorted_segment.len() as u32;
 		} else {
 			// Keep the partial result for next calls.
-			NextTicketsSegments::<T>::insert(u32::MAX, BoundedVec::truncate_from(new_segment));
+			NextTicketsSegments::<T>::insert(u32::MAX, BoundedVec::truncate_from(sorted_segment));
 		}
 	}
 
@@ -934,7 +990,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Unsigned extrinsic is created with a call to `report_equivocation_unsigned`.
 	pub fn submit_unsigned_equivocation_report(
-		equivocation_proof: EquivocationProof<T::Header>,
+		equivocation_proof: EquivocationProof<HeaderFor<T>>,
 		//key_owner_proof: T::KeyOwnerProof,
 	) -> bool {
 		let call = Call::report_equivocation_unsigned {
@@ -956,7 +1012,7 @@ impl<T: Config> Pallet<T> {
 pub trait EpochChangeTrigger {
 	/// Trigger an epoch change, if any should take place. This should be called
 	/// during every block, after initialization is done.
-	fn trigger<T: Config>(now: T::BlockNumber);
+	fn trigger<T: Config>(now: BlockNumberFor<T>);
 }
 
 /// A type signifying to Sassafras that an external trigger for epoch changes
@@ -964,7 +1020,7 @@ pub trait EpochChangeTrigger {
 pub struct ExternalTrigger;
 
 impl EpochChangeTrigger for ExternalTrigger {
-	fn trigger<T: Config>(_: T::BlockNumber) {} // nothing - trigger is external.
+	fn trigger<T: Config>(_: BlockNumberFor<T>) {} // nothing - trigger is external.
 }
 
 /// A type signifying to Sassafras that it should perform epoch changes with an internal
@@ -972,7 +1028,7 @@ impl EpochChangeTrigger for ExternalTrigger {
 pub struct SameAuthoritiesForever;
 
 impl EpochChangeTrigger for SameAuthoritiesForever {
-	fn trigger<T: Config>(now: T::BlockNumber) {
+	fn trigger<T: Config>(now: BlockNumberFor<T>) {
 		if <Pallet<T>>::should_end_epoch(now) {
 			let authorities = <Pallet<T>>::authorities();
 			let next_authorities = authorities.clone();

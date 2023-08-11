@@ -17,53 +17,46 @@
 
 //! Test utilities for Sassafras pallet.
 
-use crate::{self as pallet_sassafras, SameAuthoritiesForever};
+use crate::{self as pallet_sassafras, SameAuthoritiesForever, *};
 
-use frame_support::traits::{ConstU32, ConstU64, GenesisBuild, OnFinalize, OnInitialize};
+use frame_support::traits::{ConstU32, ConstU64, OnFinalize, OnInitialize};
 use scale_codec::Encode;
 use sp_consensus_sassafras::{
 	digests::PreDigest, AuthorityIndex, AuthorityPair, RingProver, SassafrasEpochConfiguration,
-	Slot, TicketBody, TicketEnvelope, VrfSignature,
+	Slot, TicketBody, TicketEnvelope, TicketId, VrfSignature,
 };
 use sp_core::{
-	crypto::{Pair, VrfSecret},
+	crypto::{Pair, VrfSecret, Wraps},
 	H256, U256,
 };
 use sp_runtime::{
 	testing::{Digest, DigestItem, Header, TestXt},
 	traits::IdentityLookup,
+	BuildStorage,
 };
 
 const SLOT_DURATION: u64 = 1000;
 const EPOCH_DURATION: u64 = 10;
 const MAX_TICKETS: u32 = 6;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
-
-type DummyValidatorId = u64;
-
-type AccountData = u128;
-
 impl frame_system::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Version = ();
 	type Hashing = sp_runtime::traits::BlakeTwo256;
-	type AccountId = DummyValidatorId;
+	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = frame_system::mocking::MockBlock<Test>;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type PalletInfo = PalletInfo;
-	type AccountData = AccountData;
+	type AccountData = u128;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -96,10 +89,7 @@ impl pallet_sassafras::Config for Test {
 }
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		Sassafras: pallet_sassafras,
@@ -115,49 +105,57 @@ pub const TEST_EPOCH_CONFIGURATION: SassafrasEpochConfiguration =
 
 /// Build and returns test storage externalities
 pub fn new_test_ext(authorities_len: usize) -> sp_io::TestExternalities {
-	new_test_ext_with_pairs(authorities_len).1
+	new_test_ext_with_pairs(authorities_len, false).1
 }
 
 /// Build and returns test storage externalities and authority set pairs used
 /// by Sassafras genesis configuration.
 pub fn new_test_ext_with_pairs(
 	authorities_len: usize,
+	with_ring_context: bool,
 ) -> (Vec<AuthorityPair>, sp_io::TestExternalities) {
+	// @davxy temporary logging facility
+	// env_logger::init();
+
 	let pairs = (0..authorities_len)
 		.map(|i| AuthorityPair::from_seed(&U256::from(i).into()))
 		.collect::<Vec<_>>();
 
 	let authorities = pairs.iter().map(|p| p.public()).collect();
 
-	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut storage = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
-	let config =
-		pallet_sassafras::GenesisConfig { authorities, epoch_config: TEST_EPOCH_CONFIGURATION };
-	<pallet_sassafras::GenesisConfig as GenesisBuild<Test>>::assimilate_storage(
-		&config,
-		&mut storage,
-	)
+	pallet_sassafras::GenesisConfig::<Test> {
+		authorities,
+		epoch_config: TEST_EPOCH_CONFIGURATION,
+		_phantom: sp_std::marker::PhantomData,
+	}
+	.assimilate_storage(&mut storage)
 	.unwrap();
 
-	(pairs, storage.into())
+	let mut ext: sp_io::TestExternalities = storage.into();
+
+	if with_ring_context {
+		ext.execute_with(|| {
+			log::debug!("Building new testing ring context");
+			let ring_ctx = RingContext::new_testing();
+			RingVrfContext::<Test>::set(Some(ring_ctx.clone()));
+		});
+	}
+
+	(pairs, ext)
 }
 
 fn make_ticket_with_prover(
-	slot: Slot,
 	attempt: u32,
 	pair: &AuthorityPair,
 	prover: &RingProver,
 ) -> TicketEnvelope {
-	println!("ATTEMPT: {}", attempt);
-	let mut epoch = Sassafras::epoch_index();
-	let mut randomness = Sassafras::randomness();
+	log::debug!("attempt: {}", attempt);
 
-	// Check if epoch is going to change on initialization
-	let epoch_start = Sassafras::current_epoch_start();
-	if epoch_start != 0_u64 && slot >= epoch_start + EPOCH_DURATION {
-		epoch += slot.saturating_sub(epoch_start).saturating_div(EPOCH_DURATION);
-		randomness = crate::NextRandomness::<Test>::get();
-	}
+	// Values are referring to the next epoch
+	let epoch = Sassafras::epoch_index() + 1;
+	let randomness = Sassafras::next_randomness();
 
 	let body = TicketBody { attempt_idx: attempt, erased_public: [0; 32] };
 
@@ -169,8 +167,7 @@ fn make_ticket_with_prover(
 	let ring_signature = pair.as_ref().ring_vrf_sign(&sign_data, &prover);
 
 	// Ticket-id can be generated via vrf-preout.
-	// We don't care that much about the value here.
-
+	// We don't care that much about its value here.
 	TicketEnvelope { body, ring_signature }
 }
 
@@ -191,22 +188,81 @@ pub fn make_prover(pair: &AuthorityPair) -> RingProver {
 		})
 		.collect();
 
-	println!("Make prover");
+	log::debug!("Building prover. Ring size: {}", pks.len());
 	let prover = ring_ctx.prover(&pks, prover_idx.unwrap()).unwrap();
-	println!("Done");
+	log::debug!("Done");
 
 	prover
+}
+
+pub fn make_ticket_body(attempt_idx: u32, pair: &AuthorityPair) -> (TicketId, TicketBody) {
+	// Values are referring to the next epoch
+	let epoch = Sassafras::epoch_index() + 1;
+	let randomness = Sassafras::next_randomness();
+
+	let body = TicketBody { attempt_idx, erased_public: [0; 32] };
+
+	let input = sp_consensus_sassafras::ticket_id_vrf_input(&randomness, attempt_idx, epoch);
+	let output = pair.as_inner_ref().vrf_output(&input);
+
+	let id = sp_consensus_sassafras::ticket_id(&input, &output);
+
+	(id, body)
+}
+
+pub fn make_ticket_bodies(number: u32, pair: &AuthorityPair) -> Vec<(TicketId, TicketBody)> {
+	(0..number).into_iter().map(|i| make_ticket_body(i, pair)).collect()
 }
 
 /// Construct at most `attempts` tickets envelopes for the given `slot`.
 /// TODO-SASS-P3: filter out invalid tickets according to test threshold.
 /// E.g. by passing an optional threshold
-pub fn make_tickets(slot: Slot, attempts: u32, pair: &AuthorityPair) -> Vec<TicketEnvelope> {
+pub fn make_tickets(attempts: u32, pair: &AuthorityPair) -> Vec<TicketEnvelope> {
 	let prover = make_prover(pair);
 	(0..attempts)
 		.into_iter()
-		.map(|attempt| make_ticket_with_prover(slot, attempt, pair, &prover))
+		.map(|attempt| make_ticket_with_prover(attempt, pair, &prover))
 		.collect()
+}
+
+/// Persist the given tickets in `segments_count` separated segments by appending
+/// them to the storage segments list.
+///
+/// If segments_count > tickets.len() => segments_count = tickets.len()
+pub fn persist_next_epoch_tickets_as_segments(
+	tickets: &[(TicketId, TicketBody)],
+	mut segments_count: usize,
+) {
+	if segments_count > tickets.len() {
+		segments_count = tickets.len();
+	}
+	let segment_len = tickets.len() / segments_count;
+
+	// Update metadata
+	let mut meta = TicketsMeta::<Test>::get();
+	meta.segments_count += segments_count as u32;
+	TicketsMeta::<Test>::set(meta);
+
+	for i in 0..segments_count {
+		let segment: Vec<TicketId> = tickets[i * segment_len..(i + 1) * segment_len]
+			.iter()
+			.map(|(id, body)| {
+				TicketsData::<Test>::set(id, Some(body.clone()));
+				*id
+			})
+			.collect();
+		let segment = BoundedVec::truncate_from(segment);
+		NextTicketsSegments::<Test>::insert(i as u32, segment);
+	}
+}
+
+pub fn persist_next_epoch_tickets(tickets: &[(TicketId, TicketBody)]) {
+	persist_next_epoch_tickets_as_segments(tickets, 1);
+	// Force sorting of next epoch tickets (enactment) by explicitly querying the first of them.
+	let next_epoch = Sassafras::next_epoch();
+	assert_eq!(TicketsMeta::<Test>::get().segments_count, 1);
+	Sassafras::slot_ticket(next_epoch.start_slot).unwrap();
+	assert_eq!(TicketsMeta::<Test>::get().segments_count, 0);
 }
 
 fn slot_claim_vrf_signature(slot: Slot, pair: &AuthorityPair) -> VrfSignature {

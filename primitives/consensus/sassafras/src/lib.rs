@@ -33,7 +33,7 @@ use sp_std::vec::Vec;
 
 pub use sp_consensus_slots::{Slot, SlotDuration};
 pub use sp_core::bandersnatch::{
-	ring_vrf::{RingContext, RingProver, RingVerifier},
+	ring_vrf::{RingContext, RingProver, RingVerifier, RingVrfSignature},
 	vrf::{VrfInput, VrfOutput, VrfSignData, VrfSignature},
 };
 

@@ -22,8 +22,8 @@ use frame_support::traits::{EstimateNextSessionRotation, Hooks, OneSessionHandle
 use pallet_session::ShouldEndSession;
 use sp_runtime::{traits::SaturatedConversion, Permill};
 
-impl<T: Config> ShouldEndSession<T::BlockNumber> for Pallet<T> {
-	fn should_end_session(now: T::BlockNumber) -> bool {
+impl<T: Config> ShouldEndSession<BlockNumberFor<T>> for Pallet<T> {
+	fn should_end_session(now: BlockNumberFor<T>) -> bool {
 		// It might be (and it is in current implementation) that session module is calling
 		// `should_end_session` from it's own `on_initialize` handler, in which case it's
 		// possible that Sassafras's own `on_initialize` has not run yet, so let's ensure that we
@@ -74,12 +74,12 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	}
 }
 
-impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
-	fn average_session_length() -> T::BlockNumber {
+impl<T: Config> EstimateNextSessionRotation<BlockNumberFor<T>> for Pallet<T> {
+	fn average_session_length() -> BlockNumberFor<T> {
 		T::EpochDuration::get().saturated_into()
 	}
 
-	fn estimate_current_session_progress(_now: T::BlockNumber) -> (Option<Permill>, Weight) {
+	fn estimate_current_session_progress(_now: BlockNumberFor<T>) -> (Option<Permill>, Weight) {
 		let elapsed = CurrentSlot::<T>::get().saturating_sub(Self::current_epoch_start()) + 1;
 		let progress = Permill::from_rational(*elapsed, T::EpochDuration::get());
 
@@ -100,11 +100,13 @@ impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 	//
 	// This implementation is linked to how [`should_session_change`] is working. This might need
 	// to be updated accordingly, if the underlying mechanics of slot and epochs change.
-	fn estimate_next_session_rotation(now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
+	fn estimate_next_session_rotation(
+		now: BlockNumberFor<T>,
+	) -> (Option<BlockNumberFor<T>>, Weight) {
 		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
 		let upper_bound = next_slot.checked_sub(*CurrentSlot::<T>::get()).map(|slots_remaining| {
 			// This is a best effort guess. Drifts in the slot/block ratio will cause errors here.
-			let blocks_remaining: T::BlockNumber = slots_remaining.saturated_into();
+			let blocks_remaining: BlockNumberFor<T> = slots_remaining.saturated_into();
 			now.saturating_add(blocks_remaining)
 		});
 
