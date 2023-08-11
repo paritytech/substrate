@@ -145,7 +145,7 @@ where
 			.unwrap_or_else(|error| QueryResult::Err(error.to_string()))
 	}
 
-	/// Iterate over at most `MAX_ITER_ITEMS` keys.
+	/// Iterate over at most `operation_max_storage_items` keys.
 	///
 	/// Returns the storage result with a potential next key to resume iteration.
 	fn query_storage_iter_pagination(
