@@ -694,7 +694,7 @@ impl_runtime_apis! {
 	}
 
 	impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
-		fn ring_context() -> Option<sp_consensus_sassafras::RingVrfContext> {
+		fn ring_context() -> Option<sp_consensus_sassafras::RingContext> {
 			Sassafras::ring_context()
 		}
 
@@ -1343,7 +1343,7 @@ mod tests {
 		#[test]
 		fn build_minimal_genesis_config_works() {
 			sp_tracing::try_init_simple();
-			let default_minimal_json = r#"{"system":{"code":"0x"},"babe":{"authorities":[],"epochConfig":{"c": [ 3, 10 ],"allowed_slots":"PrimaryAndSecondaryPlainSlots"}},"substrateTest":{"authorities":[]},"balances":{"balances":[]}}"#;
+			let default_minimal_json = r#"{"system":{"code":"0x"},"babe":{"authorities":[],"epochConfig":{"c": [ 3, 10 ],"allowed_slots":"PrimaryAndSecondaryPlainSlots"}},"sassafras":{"authorities":[],"epochConfig":{"redundancy_factor": 1,"attempts_number": 32}},"substrateTest":{"authorities":[]},"balances":{"balances":[]}}"#;
 			let mut t = BasicExternalities::new_empty();
 
 			executor_call(&mut t, "GenesisBuilder_build_config", &default_minimal_json.encode())
@@ -1386,6 +1386,15 @@ mod tests {
 				"1cb6f36e027abb2091cfb5110ab5087f4e7b9012096b41c4eb3aaf947f6ea429",
 				//SubstrateTest|:__STORAGE_VERSION__:
 				"00771836bebdd29870ff246d305c578c4e7b9012096b41c4eb3aaf947f6ea429",
+
+				// Sassafras|__STORAGE_VERSION__:
+				"be5e1f844c68e483aa815e45bbd9d3184e7b9012096b41c4eb3aaf947f6ea429",
+				// Sassafras|Authorities
+				"be5e1f844c68e483aa815e45bbd9d3185e0621c4869aa60c02be9adcc98a0d1d",
+				// Sassafras|NextAuthorities
+				"be5e1f844c68e483aa815e45bbd9d318aacf00b9b41fda7a9268821c2a2b3e4c",
+				// Sassafras|EpochConfig
+				"be5e1f844c68e483aa815e45bbd9d318dc6b171b77304263c292cc3ea5ed31ef",
 				].into_iter().map(String::from).collect::<Vec<_>>();
 			expected.sort();
 
@@ -1400,7 +1409,7 @@ mod tests {
 			let r = Vec::<u8>::decode(&mut &r[..]).unwrap();
 			let json = String::from_utf8(r.into()).expect("returned value is json. qed.");
 
-			let expected = r#"{"system":{"code":"0x"},"babe":{"authorities":[],"epochConfig":null},"substrateTest":{"authorities":[]},"balances":{"balances":[]}}"#;
+			let expected = r#"{"system":{"code":"0x"},"babe":{"authorities":[],"epochConfig":null},"sassafras":{"authorities":[],"epochConfig":{"redundancy_factor":0,"attempts_number":0}},"substrateTest":{"authorities":[]},"balances":{"balances":[]}}"#;
 			assert_eq!(expected.to_string(), json);
 		}
 

@@ -18,6 +18,17 @@
       "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y"
     ]
   },
+  "sassafras": {
+    "authorities": [
+      "KmTJSgAeSqH6VFSbfLuAGPtNfkXD5NQr2mqgomtyckpvfbRpn",
+      "KYW9snBs4hEMC2MFbXTWHjHVRt2Mov91h7mEsAEkQfMy9PD61",
+      "KXMr3GG4GkpFoQoDXUPEcPbSWePNzuPNtEPycdJ3yveZnm56G"
+    ],
+    "epochConfig": {
+      "redundancy_factor": 1,
+      "attempts_number": 32
+    }
+  },
   "balances": {
     "balances": [
       [

@@ -107,22 +107,15 @@ impl GenesisStorageBuilder {
 		self
 	}
 
-	// <<<<<<< HEAD
-	// 	/// Builds the `GenesisConfig` and returns its storage.
-	// 	pub fn build(self) -> Storage {
-	// 		let authorities_sr25519: Vec<sr25519::Public> =
-	// 			self.authorities.clone().into_iter().map(|id| id.into()).collect();
-
-	// 		let authorities_bandersnatch: Vec<bandersnatch::Public> = self
-	// =======
 	/// A `RuntimeGenesisConfig` from internal configuration
 	pub fn genesis_config(&self) -> RuntimeGenesisConfig {
-		let authorities_sr25519: Vec<_> = self
+		let authorities_sr25519: Vec<sr25519::Public> = self
 			.authorities
 			.iter()
 			.map(|id| {
 				use std::str::FromStr;
 				let seed: &'static str = AccountKeyring::from_public(id).unwrap().into();
+				println!(">>>>> {}", seed);
 				sp_keyring::Sr25519Keyring::from_str(&seed).unwrap().into()
 			})
 			.collect();
@@ -156,6 +149,7 @@ impl GenesisStorageBuilder {
 					redundancy_factor: 1,
 					attempts_number: 32,
 				},
+				..Default::default()
 			},
 			substrate_test: substrate_test_pallet::GenesisConfig {
 				authorities: authorities_sr25519.clone(),

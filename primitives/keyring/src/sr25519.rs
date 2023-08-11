@@ -140,14 +140,14 @@ impl std::str::FromStr for Keyring {
 
 	fn from_str(s: &str) -> Result<Self, <Self as std::str::FromStr>::Err> {
 		match s {
-			"alice" => Ok(Keyring::Alice),
-			"bob" => Ok(Keyring::Bob),
-			"charlie" => Ok(Keyring::Charlie),
-			"dave" => Ok(Keyring::Dave),
-			"eve" => Ok(Keyring::Eve),
-			"ferdie" => Ok(Keyring::Ferdie),
-			"one" => Ok(Keyring::One),
-			"two" => Ok(Keyring::Two),
+			"Alice" => Ok(Keyring::Alice),
+			"Bob" => Ok(Keyring::Bob),
+			"Charlie" => Ok(Keyring::Charlie),
+			"Dave" => Ok(Keyring::Dave),
+			"Eve" => Ok(Keyring::Eve),
+			"Ferdie" => Ok(Keyring::Ferdie),
+			"One" => Ok(Keyring::One),
+			"Two" => Ok(Keyring::Two),
 			_ => Err(ParseKeyringError),
 		}
 	}
