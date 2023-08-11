@@ -188,14 +188,14 @@ impl<B: BlockT> Future for GossipEngine<B> {
 		'outer: loop {
 			match &mut this.forwarding_state {
 				ForwardingState::Idle => {
-					let next_notification = this.notification_service.next_event().poll_unpin(cx);
+					let next_notification_event = this.notification_service.next_event().poll_unpin(cx);
 					let sync_event_stream = this.sync_event_stream.poll_next_unpin(cx);
 
-					if next_notification.is_pending() && sync_event_stream.is_pending() {
+					if next_notification_event.is_pending() && sync_event_stream.is_pending() {
 						break
 					}
 
-					match next_notification {
+					match next_notification_event {
 						Poll::Ready(Some(event)) => match event {
 							NotificationEvent::ValidateInboundSubstream { result_tx, .. } => {
 								let _ = result_tx.send(ValidationResult::Accept);

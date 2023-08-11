@@ -504,7 +504,6 @@ async fn notifications_back_pressure() {
 
 	let receiver = tokio::spawn(async move {
 		let mut received_notifications = 0;
-		// let mut sync_protocol_name = None;
 
 		while received_notifications < TOTAL_NOTIFS {
 			match handle2.next_event().await.unwrap() {

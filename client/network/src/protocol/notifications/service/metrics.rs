@@ -32,7 +32,7 @@ pub struct Metrics {
 	/// Total number of closed substreams.
 	pub notifications_streams_closed_total: CounterVec<U64>,
 
-	/// In/outbound notification sizez.
+	/// In/outbound notification sizes.
 	pub notifications_sizes: HistogramVec,
 }
 

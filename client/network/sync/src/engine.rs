@@ -905,8 +905,8 @@ where
 	}
 
 	/// Validate connection.
-	// NOTE Returning `Err(bool)` is a really ugly hack to work around the issue that
-	// that `PeerStore` thinks the peer is connected when in fact it can be
+	// NOTE Returning `Err(bool)` is a really ugly hack to work around the issue
+	// that `ProtocolController` thinks the peer is connected when in fact it can
 	// still be under validation. If the peer has different genesis than the
 	// local node the validation fails but the peer cannot be reported in
 	// `validate_connection()` as that is also called by
@@ -1176,7 +1176,7 @@ mod tests {
 
 		tokio::spawn(engine.run());
 
-		// add maximum number of allowed inbound peers to `SyncingEngine`
+		// add maximum number of allowed full inbound peers to `SyncingEngine`
 		let num_in_peers = 32;
 		for i in 0..num_in_peers {
 			let peer_id = PeerId::random();

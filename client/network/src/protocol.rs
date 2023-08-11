@@ -388,10 +388,6 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 				if self.bad_handshake_substreams.contains(&(peer_id, set_id)) {
 					CustomMessageOutcome::None
 				} else if set_id == HARDCODED_PEERSETS_SYNC {
-					// 	let _ = self.tx.unbounded_send(crate::SyncEvent::NotificationSinkReplaced {
-					// 		remote: peer_id,
-					// 		sink: notifications_sink,
-					// 	});
 					CustomMessageOutcome::None
 				} else {
 					CustomMessageOutcome::NotificationStreamReplaced {
@@ -408,10 +404,6 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 					// substream, and consequently shouldn't receive a closing event either.
 					CustomMessageOutcome::None
 				} else if set_id == HARDCODED_PEERSETS_SYNC {
-					// 	let _ = self.tx.unbounded_send(crate::SyncEvent::NotificationStreamClosed {
-					// 		remote: peer_id,
-					// 	});
-					// 	self.peers.remove(&peer_id);
 					CustomMessageOutcome::None
 				} else {
 					CustomMessageOutcome::NotificationStreamClosed {
@@ -424,10 +416,6 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 				if self.bad_handshake_substreams.contains(&(peer_id, set_id)) {
 					CustomMessageOutcome::None
 				} else if set_id == HARDCODED_PEERSETS_SYNC {
-					// 	let _ = self.tx.unbounded_send(crate::SyncEvent::NotificationsReceived {
-					// 		remote: peer_id,
-					// 		messages: vec![message.freeze()],
-					// 	});
 					CustomMessageOutcome::None
 				} else {
 					let protocol_name = self.notification_protocols[usize::from(set_id)].clone();

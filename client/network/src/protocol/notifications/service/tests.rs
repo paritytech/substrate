@@ -753,7 +753,7 @@ async fn notification_sink_replaced() {
 	);
 
 	// now send two notifications using the acquired message sink and verify that
-	// it also upated t
+	// it's also updated
 	sink.send_sync_notification(vec![1, 3, 3, 6]);
 
 	// send an asynchronous notification using the acquired notifications sink.

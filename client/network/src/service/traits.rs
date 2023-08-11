@@ -229,7 +229,7 @@ pub trait NetworkPeers {
 
 	/// Attempt to get peer role.
 	///
-	/// Right now the peer role is decoded into the received handshake for all protocols
+	/// Right now the peer role is decoded from the received handshake for all protocols
 	/// (`/block-announces/1` has other information as well). If the handshake cannot be
 	/// decoded into a role, the role queried from `PeerStore` and if the role is not stored
 	/// there either, `None` is returned and the peer should be discarded.
@@ -726,13 +726,13 @@ pub enum NotificationEvent {
 ///  * synchronous sending ([`NotificationService::send_sync_notification()`])
 ///  * asynchronous sending ([`NotificationService::send_async_notification()`])
 ///
-/// The former is used by protocols are not ready to exercise backpressure and the latter for the
+/// The former is used by the protocols not ready to exercise backpressure and the latter by the
 /// protocols that can do it.
 ///
 /// Both local and remote peer can close the substream at any time. Local peer can do so by calling
 /// [`NotificationService::close_substream()`] which instrucs `Notifications` to close the
 /// substream. Remote closing the substream is indicated to the local peer by receiving
-/// [`NotificationEvent::NotificationStreamClosed`] event
+/// [`NotificationEvent::NotificationStreamClosed`] event.
 ///
 /// In case the protocol must update its handshake while it's operating (such as updating the best
 /// block information), it can do so by calling [`NotificationService::set_handshake()`]
