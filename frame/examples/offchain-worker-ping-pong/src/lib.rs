@@ -645,7 +645,7 @@ impl<T: Config> Pallet<T> {
 			//
 			// By default unsigned transactions are disallowed, so we need to whitelist this case by
 			// writing our implementation for the `ValidateUnsigned` trait. Note that it's EXTREMELY
-			// important to carefuly implement unsigned validation logic, as any mistakes can lead
+			// important to carefully implement unsigned validation logic, as any mistakes can lead
 			// to opening DoS or spam attack vectors. See validation logic docs for more details.
 			SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
 				.map_err(|()| "Unable to submit unsigned transaction.")?;
