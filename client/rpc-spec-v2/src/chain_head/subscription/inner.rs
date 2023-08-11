@@ -187,6 +187,7 @@ impl OperationState {
 		}
 
 		// Has enough capacity for 1 message.
+		// Can fail if the `stop_operation` propagated the stop first.
 		self.send_continue.try_send(()).is_ok()
 	}
 
@@ -234,7 +235,7 @@ impl SharedOperationState {
 /// The registered operation passed to the `chainHead` methods.
 ///
 /// This is used internally by the `chainHead` methods.
-struct RegisteredOperation {
+pub struct RegisteredOperation {
 	/// The shared operation state that holds information about the
 	/// `waitingForContinue` event and cancellation.
 	shared_state: Arc<SharedOperationState>,
@@ -249,12 +250,18 @@ struct RegisteredOperation {
 }
 
 impl RegisteredOperation {
-	/// Wait until the user calls `chainHead_continue`.
+	/// Wait until the user calls `chainHead_continue` or the operation
+	/// is cancelled via `chainHead_stopOperation`.
 	pub async fn wait_for_continue(&self) {
 		self.shared_state
 			.requested_continue
 			.store(true, std::sync::atomic::Ordering::Release);
+
 		let _ = self.recv_continue.recv().await;
+
+		self.shared_state
+			.requested_continue
+			.store(false, std::sync::atomic::Ordering::Release);
 	}
 
 	/// Returns true if the current operation was stopped.
@@ -263,14 +270,14 @@ impl RegisteredOperation {
 	}
 
 	/// Get the operation ID.
-	fn operation_id(&self) -> String {
+	pub fn operation_id(&self) -> String {
 		self.operation_id.clone()
 	}
 
 	/// Returns the number of reserved elements for this permit.
 	///
 	/// This can be smaller than the number of items requested via [`LimitOperations::reserve()`].
-	fn num_reserved(&self) -> usize {
+	pub fn num_reserved(&self) -> usize {
 		self.permit.num_ops
 	}
 }
@@ -523,21 +530,9 @@ impl<Block: BlockT, BE: Backend<Block>> BlockGuard<Block, BE> {
 		self.response_sender.clone()
 	}
 
-	/// The operation ID of this method.
-	pub fn operation_id(&self) -> String {
-		self.operation.operation_id()
-	}
-
-	/// Returns the number of reserved elements for this permit.
-	///
-	/// This can be smaller than the number of items requested.
-	pub fn num_reserved(&self) -> usize {
-		self.operation.num_reserved()
-	}
-
-	/// Wait until the user calls `chainHead_continue`.
-	pub async fn wait_for_continue(&self) {
-		self.operation.wait_for_continue().await
+	/// Get the details of the registered operation.
+	pub fn operation(&self) -> &RegisteredOperation {
+		&self.operation
 	}
 }
 

@@ -194,14 +194,18 @@ where
 		child_key: Option<ChildInfo>,
 	) {
 		let sender = block_guard.response_sender();
-		let operation_id = block_guard.operation_id();
+		let operation = block_guard.operation();
 
 		while let Some(query) = self.iter_operations.pop_front() {
+			if operation.was_stopped() {
+				return
+			}
+
 			let result = self.query_storage_iter_pagination(query, hash, child_key.as_ref());
 			let (events, maybe_next_query) = match result {
 				QueryIterResult::Ok(result) => result,
 				QueryIterResult::Err(error) => {
-					send_error::<Block>(&sender, operation_id.clone(), error.to_string());
+					send_error::<Block>(&sender, operation.operation_id(), error.to_string());
 					return
 				},
 			};
@@ -209,25 +213,32 @@ where
 			if !events.is_empty() {
 				// Send back the results of the iteration produced so far.
 				let _ = sender.unbounded_send(FollowEvent::<Block::Hash>::OperationStorageItems(
-					OperationStorageItems { operation_id: operation_id.clone(), items: events },
+					OperationStorageItems { operation_id: operation.operation_id(), items: events },
 				));
 			}
 
 			if let Some(next_query) = maybe_next_query {
 				let _ =
 					sender.unbounded_send(FollowEvent::<Block::Hash>::OperationWaitingForContinue(
-						OperationId { operation_id: operation_id.clone() },
+						OperationId { operation_id: operation.operation_id() },
 					));
-				block_guard.wait_for_continue().await;
 
-				// Give a chance for the other operations to advance next time.
+				// The operation might be continued or cancelled only after the
+				// `OperationWaitingForContinue` is generated above.
+				operation.wait_for_continue().await;
+
+				// Give a chance for the other items to advance next time.
 				self.iter_operations.push_back(next_query);
 			}
 		}
 
+		if operation.was_stopped() {
+			return
+		}
+
 		let _ =
 			sender.unbounded_send(FollowEvent::<Block::Hash>::OperationStorageDone(OperationId {
-				operation_id,
+				operation_id: operation.operation_id(),
 			}));
 	}
 
@@ -240,11 +251,12 @@ where
 		child_key: Option<ChildInfo>,
 	) {
 		let sender = block_guard.response_sender();
+		let operation = block_guard.operation();
 
 		if let Some(child_key) = child_key.as_ref() {
 			if !is_key_queryable(child_key.storage_key()) {
 				let _ = sender.unbounded_send(FollowEvent::<Block::Hash>::OperationStorageDone(
-					OperationId { operation_id: block_guard.operation_id() },
+					OperationId { operation_id: operation.operation_id() },
 				));
 				return
 			}
@@ -262,7 +274,7 @@ where
 						Ok(Some(value)) => storage_results.push(value),
 						Ok(None) => continue,
 						Err(error) => {
-							send_error::<Block>(&sender, block_guard.operation_id(), error);
+							send_error::<Block>(&sender, operation.operation_id(), error);
 							return
 						},
 					}
@@ -272,7 +284,7 @@ where
 						Ok(Some(value)) => storage_results.push(value),
 						Ok(None) => continue,
 						Err(error) => {
-							send_error::<Block>(&sender, block_guard.operation_id(), error);
+							send_error::<Block>(&sender, operation.operation_id(), error);
 							return
 						},
 					},
@@ -289,7 +301,7 @@ where
 		if !storage_results.is_empty() {
 			let _ = sender.unbounded_send(FollowEvent::<Block::Hash>::OperationStorageItems(
 				OperationStorageItems {
-					operation_id: block_guard.operation_id(),
+					operation_id: operation.operation_id(),
 					items: storage_results,
 				},
 			));

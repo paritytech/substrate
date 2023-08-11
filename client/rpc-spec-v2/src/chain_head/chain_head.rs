@@ -255,6 +255,7 @@ where
 			Err(_) => return Err(ChainHeadRpcError::InvalidBlock.into()),
 		};
 
+		let operation = block_guard.operation();
 		let event = match self.client.block(hash) {
 			Ok(Some(signed_block)) => {
 				let extrinsics = signed_block
@@ -264,7 +265,7 @@ where
 					.map(|extrinsic| hex_string(&extrinsic.encode()))
 					.collect();
 				FollowEvent::<Block::Hash>::OperationBodyDone(OperationBodyDone {
-					operation_id: block_guard.operation_id(),
+					operation_id: operation.operation_id(),
 					value: extrinsics,
 				})
 			},
@@ -280,14 +281,14 @@ where
 				return Err(ChainHeadRpcError::InvalidBlock.into())
 			},
 			Err(error) => FollowEvent::<Block::Hash>::OperationError(OperationError {
-				operation_id: block_guard.operation_id(),
+				operation_id: operation.operation_id(),
 				error: error.to_string(),
 			}),
 		};
 
 		let _ = block_guard.response_sender().unbounded_send(event);
 		Ok(MethodResponse::Started(MethodResponseStarted {
-			operation_id: block_guard.operation_id(),
+			operation_id: operation.operation_id(),
 			discarded_items: None,
 		}))
 	}
@@ -365,10 +366,11 @@ where
 			self.client.clone(),
 			self.operation_max_storage_items,
 		);
-		let operation_id = block_guard.operation_id();
+		let operation = block_guard.operation();
+		let operation_id = operation.operation_id();
 
 		// The number of operations we are allowed to execute.
-		let num_operations = block_guard.num_reserved();
+		let num_operations = operation.num_reserved();
 		let discarded = items.len().saturating_sub(num_operations);
 		let mut items = items;
 		items.truncate(num_operations);
@@ -416,26 +418,27 @@ where
 			.into())
 		}
 
+		let operation = block_guard.operation();
 		let event = self
 			.client
 			.executor()
 			.call(hash, &function, &call_parameters, CallContext::Offchain)
 			.map(|result| {
 				FollowEvent::<Block::Hash>::OperationCallDone(OperationCallDone {
-					operation_id: block_guard.operation_id(),
+					operation_id: operation.operation_id(),
 					output: hex_string(&result),
 				})
 			})
 			.unwrap_or_else(|error| {
 				FollowEvent::<Block::Hash>::OperationError(OperationError {
-					operation_id: block_guard.operation_id(),
+					operation_id: operation.operation_id(),
 					error: error.to_string(),
 				})
 			});
 
 		let _ = block_guard.response_sender().unbounded_send(event);
 		Ok(MethodResponse::Started(MethodResponseStarted {
-			operation_id: block_guard.operation_id(),
+			operation_id: operation.operation_id(),
 			discarded_items: None,
 		}))
 	}
@@ -481,6 +484,12 @@ where
 		follow_subscription: String,
 		operation_id: String,
 	) -> RpcResult<()> {
+		let Some(operation) = self.subscriptions.get_operation(&follow_subscription, &operation_id) else {
+			return Ok(())
+		};
+
+		operation.stop_operation();
+
 		Ok(())
 	}
 }
