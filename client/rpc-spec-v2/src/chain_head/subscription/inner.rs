@@ -164,10 +164,14 @@ impl PermitOperations {
 }
 
 /// The state of one operation.
+///
+/// This is directly exposed to users via `chain_head_unstable_continue` and
+/// `chain_head_unstable_stop_operation`.
 #[derive(Clone)]
 pub struct OperationState {
-	/// True if the `chainHead` generated `waitingForContinue` event.
-	requested_continue: Arc<AtomicBool>,
+	/// The shared operation state that holds information about the
+	/// `waitingForContinue` event and cancellation.
+	shared_state: Arc<SharedOperationState>,
 	/// Send notifications when the user calls `chainHead_continue` method.
 	send_continue: async_channel::Sender<()>,
 }
@@ -178,19 +182,62 @@ impl OperationState {
 	/// operation ID.
 	pub fn submit_continue(&self) -> bool {
 		// `waitingForContinue` not generated.
-		if !self.requested_continue.load(std::sync::atomic::Ordering::Acquire) {
+		if !self.shared_state.requested_continue.load(std::sync::atomic::Ordering::Acquire) {
 			return false
 		}
 
 		// Has enough capacity for 1 message.
 		self.send_continue.try_send(()).is_ok()
 	}
+
+	/// Stops the operation if `waitingForContinue` event was emitted for the associated
+	/// operation ID.
+	///
+	/// Returns nothing in accordance with `chainHead_unstable_stopOperation`.
+	pub fn stop_operation(&self) {
+		// `waitingForContinue` not generated.
+		if !self.shared_state.requested_continue.load(std::sync::atomic::Ordering::Acquire) {
+			return
+		}
+
+		self.shared_state
+			.operation_stopped
+			.store(true, std::sync::atomic::Ordering::Release);
+
+		// Send might not have enough capacity if `submit_continue` was sent first.
+		// However, the `operation_stopped` boolean was set.
+		let _ = self.send_continue.try_send(());
+	}
+}
+
+/// The shared operation state between the backend [`RegisteredOperation`] and frontend
+/// [`RegisteredOperation`].
+struct SharedOperationState {
+	/// True if the `chainHead` generated `waitingForContinue` event.
+	requested_continue: AtomicBool,
+	/// True if the operation was cancelled by the user.
+	operation_stopped: AtomicBool,
+}
+
+impl SharedOperationState {
+	/// Constructs a new [`SharedOperationState`].
+	///
+	/// This is efficiently cloned under a single heap allocation.
+	fn new() -> Arc<Self> {
+		Arc::new(SharedOperationState {
+			requested_continue: AtomicBool::new(false),
+			operation_stopped: AtomicBool::new(false),
+		})
+	}
 }
 
 /// The registered operation passed to the `chainHead` methods.
+///
+/// This is used internally by the `chainHead` methods.
 struct RegisteredOperation {
-	/// True if the `chainHead` generated `waitingForContinue` event.
-	requested_continue: Arc<AtomicBool>,
+	/// The shared operation state that holds information about the
+	/// `waitingForContinue` event and cancellation.
+	shared_state: Arc<SharedOperationState>,
 	/// Receive notifications when the user calls `chainHead_continue` method.
 	recv_continue: async_channel::Receiver<()>,
 	/// The operation ID of the request.
@@ -204,8 +251,15 @@ struct RegisteredOperation {
 impl RegisteredOperation {
 	/// Wait until the user calls `chainHead_continue`.
 	pub async fn wait_for_continue(&self) {
-		self.requested_continue.store(true, std::sync::atomic::Ordering::Release);
+		self.shared_state
+			.requested_continue
+			.store(true, std::sync::atomic::Ordering::Release);
 		let _ = self.recv_continue.recv().await;
+	}
+
+	/// Returns true if the current operation was stopped.
+	pub fn was_stopped(&self) -> bool {
+		self.shared_state.operation_stopped.load(std::sync::atomic::Ordering::Acquire)
 	}
 
 	/// Get the operation ID.
@@ -256,22 +310,15 @@ impl Operations {
 
 		// At most one message can be sent.
 		let (send_continue, recv_continue) = async_channel::bounded(1);
-		let requested_continue = Arc::new(AtomicBool::new(false));
+		let shared_state = SharedOperationState::new();
 
-		let state =
-			OperationState { requested_continue: requested_continue.clone(), send_continue };
+		let state = OperationState { send_continue, shared_state: shared_state.clone() };
 
 		// Cloned operations for removing the current ID on drop.
 		let operations = self.operations.clone();
 		operations.lock().insert(operation_id.clone(), state);
 
-		Some(RegisteredOperation {
-			requested_continue,
-			operation_id,
-			recv_continue,
-			operations,
-			permit,
-		})
+		Some(RegisteredOperation { shared_state, operation_id, recv_continue, operations, permit })
 	}
 
 	/// Get the associated operation state with the ID.
