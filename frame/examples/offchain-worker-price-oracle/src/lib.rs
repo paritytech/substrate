@@ -224,10 +224,6 @@ pub mod pallet {
 			let average: Option<u32> = Self::average_price();
 			log::debug!("Current price: {:?}", average);
 
-			/// A friendlier name for the error that is going to be returned in case we are in the
-			/// grace period.
-			const RECENTLY_SENT: () = ();
-
 			// Start off by creating a reference to Local Storage value. Since the local storage is
 			// common for all offchain workers, it's a good practice to prepend your entry with the
 			// module name.
@@ -244,7 +240,7 @@ pub mod pallet {
 						// If we already have a value in storage and the block number is recent
 						// enough we avoid sending another transaction at this time.
 						Ok(Some(block)) if block_number < block + T::GracePeriod::get() =>
-							Err(RECENTLY_SENT),
+							Err(()),
 						// In every other case we attempt to acquire the lock and send a
 						// transaction.
 						_ => Ok(block_number),
@@ -265,7 +261,7 @@ pub mod pallet {
 						log::error!("Error: {}", e);
 					},
 				// We are in the grace period, we should not send a transaction this time.
-				Err(MutateStorageError::ValueFunctionFailed(RECENTLY_SENT)) => {
+				Err(MutateStorageError::ValueFunctionFailed(())) => {
 					log::info!("Sent transaction too recently, waiting for grace period.")
 				},
 				// We wanted to send a transaction, but failed to write the block number (acquire a
