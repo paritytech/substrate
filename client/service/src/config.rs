@@ -112,6 +112,8 @@ pub struct Configuration {
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
 	pub disable_grandpa: bool,
+	/// Disable BEEFY when running in validator mode
+	pub disable_beefy: bool,
 	/// Development key seed.
 	///
 	/// When running in development mode, the seed will be used to generate authority keys by the
