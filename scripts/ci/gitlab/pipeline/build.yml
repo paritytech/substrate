@@ -15,6 +15,7 @@
   variables:
     RUSTFLAGS: "-D warnings"
   script:
+    - cargo install --git https://github.com/paritytech/try-runtime-cli --branch liam-v0.1.0
     - git clone
       --depth=1
       --branch="$PIPELINE_SCRIPTS_TAG"
@@ -36,7 +37,6 @@
       substrate: polkadot-v*
       polkadot: release-v*
     COMPANION_CHECK_COMMAND: >
-      time cargo install --git https://github.com/paritytech/try-runtime-cli --branch liam-v0.1.0 &&
       time cargo build --release -p "$NETWORK"-runtime &&
       time try-runtime \
           --runtime ./target/release/wbuild/"$NETWORK"-runtime/target/wasm32-unknown-unknown/release/"$NETWORK"_runtime.wasm \
