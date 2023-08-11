@@ -44,8 +44,8 @@
 //!     "jsonrpc": "2.0",
 //!     "method": "author_insertKey",
 //!     "params": [
-//!	      "btc!", 
-//!       "bread tongue spell stadium clean grief coin rent spend total practice document", 
+//!	      "btc!",
+//!       "bread tongue spell stadium clean grief coin rent spend total practice document",
 //!       "0xb6a8b4b6bf796991065035093d3265e314c3fe89e75ccb623985e57b0c2e0c30"
 //!     ],
 //!     "id": 1
@@ -239,8 +239,7 @@ pub mod pallet {
 					match last_send {
 						// If we already have a value in storage and the block number is recent
 						// enough we avoid sending another transaction at this time.
-						Ok(Some(block)) if block_number < block + T::GracePeriod::get() =>
-							Err(()),
+						Ok(Some(block)) if block_number < block + T::GracePeriod::get() => Err(()),
 						// In every other case we attempt to acquire the lock and send a
 						// transaction.
 						_ => Ok(block_number),
@@ -256,10 +255,11 @@ pub mod pallet {
 			match res {
 				// The value has been set correctly, which means we can safely send a transaction
 				// now.
-				Ok(_) =>
+				Ok(_) => {
 					if let Err(e) = Self::fetch_price_and_send_signed() {
 						log::error!("Error: {}", e);
-					},
+					}
+				},
 				// We are in the grace period, we should not send a transaction this time.
 				Err(MutateStorageError::ValueFunctionFailed(())) => {
 					log::info!("Sent transaction too recently, waiting for grace period.")
@@ -373,7 +373,7 @@ impl<T: Config> Pallet<T> {
 		if !signer.can_sign() {
 			return Err(
 				"No local accounts available. Consider adding one via `author_insertKey` RPC.",
-			)
+			);
 		}
 		// Make an external HTTP request to fetch the current price. Note this call will block until
 		// response is received.
@@ -425,7 +425,7 @@ impl<T: Config> Pallet<T> {
 		// Let's check the status code before we proceed to reading the response.
 		if response.code != 200 {
 			log::warn!("Unexpected status code: {}", response.code);
-			return Err(http::Error::Unknown)
+			return Err(http::Error::Unknown);
 		}
 
 		// Next we want to fully read the response body and collect it to a vector of bytes. Note

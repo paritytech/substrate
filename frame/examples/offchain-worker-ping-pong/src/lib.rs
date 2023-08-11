@@ -70,8 +70,8 @@
 //!     "jsonrpc": "2.0",
 //!     "method": "author_insertKey",
 //!     "params": [
-//!       "pong", 
-//!       "bread tongue spell stadium clean grief coin rent spend total practice document", 
+//!       "pong",
+//!       "bread tongue spell stadium clean grief coin rent spend total practice document",
 //!       "0xb6a8b4b6bf796991065035093d3265e314c3fe89e75ccb623985e57b0c2e0c30"
 //!     ],
 //!     "id": 1
@@ -457,7 +457,7 @@ pub mod pallet {
 				let signature_valid =
 					SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
 				if !signature_valid {
-					return InvalidTransaction::BadProof.into()
+					return InvalidTransaction::BadProof.into();
 				}
 				Self::validate_transaction_parameters(&payload.block_number)
 			} else if let Call::pong_unsigned { block_number, nonce: _n } = call {
@@ -510,12 +510,12 @@ impl<T: Config> Pallet<T> {
 		// Now let's check if the transaction has any chance to succeed.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
 		if &next_unsigned_at > block_number {
-			return InvalidTransaction::Stale.into()
+			return InvalidTransaction::Stale.into();
 		}
 		// Let's make sure to reject transactions from the future.
 		let current_block = <system::Pallet<T>>::block_number();
 		if &current_block < block_number {
-			return InvalidTransaction::Future.into()
+			return InvalidTransaction::Future.into();
 		}
 
 		ValidTransaction::with_tag_prefix("ExampleOffchainWorker")
@@ -547,7 +547,7 @@ impl<T: Config> Pallet<T> {
 		if !signer.can_sign() {
 			return Err(
 				"No local accounts available. Consider adding one via `author_insertKey` RPC.",
-			)
+			);
 		}
 
 		let pings = <Pings<T>>::get();
@@ -619,7 +619,7 @@ impl<T: Config> Pallet<T> {
 				);
 			for (_account_id, result) in transaction_results.into_iter() {
 				if result.is_err() {
-					return Err("Unable to submit transaction")
+					return Err("Unable to submit transaction");
 				}
 			}
 		}
