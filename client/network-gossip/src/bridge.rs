@@ -188,7 +188,8 @@ impl<B: BlockT> Future for GossipEngine<B> {
 		'outer: loop {
 			match &mut this.forwarding_state {
 				ForwardingState::Idle => {
-					let next_notification_event = this.notification_service.next_event().poll_unpin(cx);
+					let next_notification_event =
+						this.notification_service.next_event().poll_unpin(cx);
 					let sync_event_stream = this.sync_event_stream.poll_next_unpin(cx);
 
 					if next_notification_event.is_pending() && sync_event_stream.is_pending() {

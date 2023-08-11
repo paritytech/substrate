@@ -789,7 +789,7 @@ where
 				},
 				NotificationEvent::NotificationReceived { peer, notification } => {
 					if !self.peers.contains_key(&peer) {
-						log::trace!(
+						log::error!(
 							target: LOG_TARGET,
 							"received notification from {peer} who had been earlier refused by `SyncingEngine`",
 						);
@@ -855,7 +855,6 @@ where
 		}
 
 		self.chain_sync.peer_disconnected(&peer);
-		self.default_peers_set_no_slot_connected_peers.remove(&peer);
 		self.event_streams
 			.retain(|stream| stream.unbounded_send(SyncEvent::PeerDisconnected(peer)).is_ok());
 	}
@@ -959,10 +958,13 @@ where
 			return Err(false)
 		}
 
+		// make sure that all slots are not occupied by light peers
+		//
+		// `ChainSync` only accepts full peers whereas `SyncingEngine` accepts both full and light
+		// peers. Verify that there is a slot in `SyncingEngine` for the inbound light peer
 		if handshake.roles.is_light() &&
 			(self.peers.len() - self.chain_sync.num_peers()) >= self.default_peers_set_num_light
 		{
-			// Make sure that not all slots are occupied by light clients.
 			log::debug!(target: LOG_TARGET, "Too many light nodes, rejecting {peer_id}");
 			return Err(false)
 		}

@@ -265,12 +265,13 @@ impl PeerStoreInner {
 	fn set_peer_role(&mut self, peer_id: &PeerId, role: ObservedRole) {
 		log::trace!(target: LOG_TARGET, "Set {peer_id} role to {role:?}");
 
-		match self.peers.get_mut(peer_id) {
-			Some(info) => {
-				info.role = Some(role);
+		match self.peers.entry(*peer_id) {
+			Entry::Occupied(mut entry) => {
+				entry.get_mut().role = Some(role);
 			},
-			None =>
-				log::debug!(target: LOG_TARGET, "Failed to set role for {peer_id}, peer doesn't exist"),
+			Entry::Vacant(entry) => {
+				entry.insert(PeerInfo { role: Some(role), ..Default::default() });
+			},
 		}
 	}
 

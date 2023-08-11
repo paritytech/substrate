@@ -1003,15 +1003,20 @@ impl Notifications {
 		}
 	}
 
+	/// Function that is called when `ProtocolController` wants us to reject an incoming peer.
+	fn peerset_report_reject(&mut self, index: IncomingIndex) {
+		let _ = self.report_reject(index);
+	}
+
 	/// Function that is called when the protocol wants us to reject an incoming peer.
 	fn protocol_report_reject(&mut self, index: IncomingIndex) {
-		if let Some((set_id, peer_id)) = self.peerset_report_reject(index) {
+		if let Some((set_id, peer_id)) = self.report_reject(index) {
 			self.protocol_controller_handles[usize::from(set_id)].dropped(peer_id)
 		}
 	}
 
 	/// Function that is called when the peerset wants us to reject an incoming peer.
-	fn peerset_report_reject(&mut self, index: IncomingIndex) -> Option<(SetId, PeerId)> {
+	fn report_reject(&mut self, index: IncomingIndex) -> Option<(SetId, PeerId)> {
 		let incoming = if let Some(pos) = self.incoming.iter().position(|i| i.incoming_id == index)
 		{
 			self.incoming.remove(pos)
@@ -1846,9 +1851,11 @@ impl NetworkBehaviour for Notifications {
 								let event = NotificationsOut::CustomProtocolReplaced {
 									peer_id,
 									set_id,
-									notifications_sink: replacement_sink,
+									notifications_sink: replacement_sink.clone(),
 								};
 								self.events.push_back(ToSwarm::GenerateEvent(event));
+								let _ = self.protocol_handles[usize::from(set_id)]
+									.report_notification_sink_replaced(peer_id, replacement_sink);
 							}
 
 							*entry.into_mut() = PeerState::Enabled { connections };

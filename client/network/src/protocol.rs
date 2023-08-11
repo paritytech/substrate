@@ -384,7 +384,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 					CustomMessageOutcome::None
 				}
 			},
-			NotificationsOut::CustomProtocolReplaced { peer_id, notifications_sink, set_id } => {
+			NotificationsOut::CustomProtocolReplaced { peer_id, notifications_sink, set_id } =>
 				if self.bad_handshake_substreams.contains(&(peer_id, set_id)) {
 					CustomMessageOutcome::None
 				} else if set_id == HARDCODED_PEERSETS_SYNC {
@@ -395,8 +395,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 						protocol: self.notification_protocols[usize::from(set_id)].clone(),
 						notifications_sink,
 					}
-				}
-			},
+				},
 			NotificationsOut::CustomProtocolClosed { peer_id, set_id } => {
 				if self.bad_handshake_substreams.remove(&(peer_id, set_id)) {
 					// The substream that has just been closed had been opened with a bad
