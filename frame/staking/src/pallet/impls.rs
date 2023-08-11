@@ -46,8 +46,9 @@ use sp_staking::{
 use sp_std::prelude::*;
 
 use crate::{
-	election_size_tracker::StaticTracker, log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraInfo, EraPayout, Exposure,
-	ExposureOf, Forcing, IndividualExposure, MaxWinnersOf, MaxNominationsOf, Nominations, NominationsQuota, PositiveImbalanceOf,
+	election_size_tracker::StaticTracker, log, slashing, weights::WeightInfo, ActiveEraInfo,
+	BalanceOf, EraInfo, EraPayout, Exposure, ExposureOf, Forcing, IndividualExposure,
+	MaxNominationsOf, MaxWinnersOf, Nominations, NominationsQuota, PositiveImbalanceOf,
 	RewardDestination, SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
