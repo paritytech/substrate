@@ -475,4 +475,12 @@ where
 			Ok(())
 		}
 	}
+
+	fn chain_head_unstable_stop_operation(
+		&self,
+		follow_subscription: String,
+		operation_id: String,
+	) -> RpcResult<()> {
+		Ok(())
+	}
 }
