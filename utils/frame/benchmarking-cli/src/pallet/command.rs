@@ -277,6 +277,7 @@ impl PalletCmd {
 							benchmark.name.clone(),
 							benchmark.components.clone(),
 							benchmark.pov_modes.clone(),
+							item.instance.clone(),
 						))
 					}
 				}
@@ -294,6 +295,7 @@ impl PalletCmd {
 							(String::from_utf8(p).unwrap(), String::from_utf8(s).unwrap())
 						})
 						.collect(),
+					b.4,
 				)
 			})
 			.collect();
@@ -316,7 +318,7 @@ impl PalletCmd {
 		let mut component_ranges = HashMap::<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>::new();
 		let pov_modes = Self::parse_pov_modes(&benchmarks_to_run)?;
 
-		for (pallet, extrinsic, components, _) in benchmarks_to_run.clone() {
+		for (pallet, extrinsic, components, _, _) in benchmarks_to_run.clone() {
 			log::info!(
 				target: LOG_TARGET,
 				"Starting benchmark: {}::{}",
@@ -694,12 +696,13 @@ impl PalletCmd {
 			Vec<u8>,
 			Vec<(BenchmarkParameter, u32, u32)>,
 			Vec<(String, String)>,
+			Vec<u8>,
 		)>,
 	) -> Result<PovModesMap> {
 		use std::collections::hash_map::Entry;
 		let mut parsed = PovModesMap::new();
 
-		for (pallet, call, _components, pov_modes) in benchmarks {
+		for (pallet, call, _components, pov_modes, _) in benchmarks {
 			for (pallet_storage, mode) in pov_modes {
 				let mode = PovEstimationMode::from_str(&mode)?;
 				let splits = pallet_storage.split("::").collect::<Vec<_>>();
@@ -753,10 +756,16 @@ fn list_benchmark(
 		Vec<u8>,
 		Vec<(BenchmarkParameter, u32, u32)>,
 		Vec<(String, String)>,
+		Vec<u8>,
 	)>,
 ) {
 	println!("pallet, benchmark");
-	for (pallet, extrinsic, _, _) in benchmarks_to_run {
-		println!("{}, {}", String::from_utf8_lossy(&pallet), String::from_utf8_lossy(&extrinsic));
+	for (pallet, extrinsic, _, _, instance) in benchmarks_to_run {
+		println!(
+			"{}, {}, {}",
+			String::from_utf8_lossy(&pallet),
+			String::from_utf8_lossy(&extrinsic),
+			String::from_utf8_lossy(&instance),
+		);
 	}
 }
