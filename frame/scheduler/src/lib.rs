@@ -25,10 +25,9 @@
 //! specified block number or at a specified period. These scheduled runtime calls
 //! may be named or anonymous and may be canceled.
 //!
-//! **NOTE:** The scheduled runtime calls will be dispatched with the default filter
-//! for the origin: namely `frame_system::Config::BaseCallFilter` for all origin
-//! except root which will get no filter. And not the filter contained in origin
-//! use to call `fn schedule`.
+//! **NOTE:** Instead of the filter contained in the origin used to call `fn schedule`, scheduled runtime calls will be 
+//! dispatched with the default filter for the origin: namely `frame_system::Config::BaseCallFilter` for all origin
+//! types (except root which will get no filter).
 //!
 //! If a call is scheduled using proxy or whatever mecanism which adds filter,
 //! then those filter will not be used when dispatching the schedule runtime call.
