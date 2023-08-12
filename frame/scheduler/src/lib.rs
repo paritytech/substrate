@@ -58,7 +58,7 @@
 //! scheduling and execution. For example, the runtime upgrade could have:
 //!
 //! * Modified the implementation of the runtime call (runtime specification upgrade).
-//!     * Could lead to unintended behavior.
+//!     * Could lead to undefined behavior.
 //! * Removed or changed the ordering/index of the runtime call.
 //!     * Could fail due to the runtime call index not being part of the `Call`.
 //!     * Could lead to unintended behavior, such as executing another runtime call with the same
