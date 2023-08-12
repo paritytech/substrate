@@ -72,7 +72,8 @@ fn vrf_input_from_data(
 	let raw = data.into_iter().fold(Vec::new(), |mut v, e| {
 		let bytes = e.as_ref();
 		v.extend_from_slice(bytes);
-		v.extend_from_slice(&bytes.len().to_le_bytes());
+		let len = u8::try_from(bytes.len()).expect("private function with well known inputs; qed");
+		v.extend_from_slice(&len.to_le_bytes());
 		v
 	});
 	VrfInput::new(domain, raw)
