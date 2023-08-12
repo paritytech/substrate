@@ -5871,6 +5871,8 @@ dependencies = [
 name = "pallet-bags-list"
 version = "4.0.0-dev"
 dependencies = [
+ "aquamarine",
+ "docify",
  "frame-benchmarking",
  "frame-election-provider-support",
  "frame-support",
