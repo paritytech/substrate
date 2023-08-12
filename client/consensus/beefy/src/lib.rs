@@ -404,7 +404,7 @@ where
 			let best_beefy = *header.number();
 			// If no session boundaries detected so far, just initialize new rounds here.
 			if sessions.is_empty() {
-				let active_set = expect_validator_set(runtime, header.hash())?;
+				let active_set = expect_validator_set(runtime, backend, &header, beefy_genesis)?;
 				let mut rounds = Rounds::new(best_beefy, active_set);
 				// Mark the round as already finalized.
 				rounds.conclude(best_beefy);
@@ -423,7 +423,7 @@ where
 
 		if *header.number() == beefy_genesis {
 			// We've reached BEEFY genesis, initialize voter here.
-			let genesis_set = expect_validator_set(runtime, header.hash())?;
+			let genesis_set = expect_validator_set(runtime, backend, &header, beefy_genesis)?;
 			info!(
 				target: LOG_TARGET,
 				"🥩 Loading BEEFY voter state from genesis on what appears to be first startup. \
@@ -452,16 +452,8 @@ where
 			sessions.push_front(Rounds::new(*header.number(), active));
 		}
 
-		// Check if state is still available if we move up the chain.
-		let parent_hash = *header.parent_hash();
-		runtime.runtime_api().validator_set(parent_hash).ok().flatten().ok_or_else(|| {
-			let msg = format!("{}. Could not initialize BEEFY voter.", parent_hash);
-			error!(target: LOG_TARGET, "🥩 {}", msg);
-			ClientError::Consensus(sp_consensus::Error::StateUnavailable(msg))
-		})?;
-
 		// Move up the chain.
-		header = blockchain.expect_header(parent_hash)?;
+		header = blockchain.expect_header(*header.parent_hash())?;
 	};
 
 	aux_schema::write_current_version(backend)?;
@@ -512,19 +504,36 @@ where
 	Err(ClientError::Backend(err_msg))
 }
 
-fn expect_validator_set<B, R>(
+fn expect_validator_set<B, BE, R>(
 	runtime: &R,
-	at_hash: B::Hash,
+	backend: &BE,
+	at_header: &B::Header,
+	beefy_genesis: NumberFor<B>,
 ) -> ClientResult<ValidatorSet<AuthorityId>>
 where
 	B: Block,
+	BE: Backend<B>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B, AuthorityId>,
 {
 	runtime
 		.runtime_api()
-		.validator_set(at_hash)
+		.validator_set(at_header.hash())
 		.ok()
 		.flatten()
-		.ok_or_else(|| ClientError::Backend("BEEFY pallet expected to be active.".into()))
+		.or_else(|| {
+			// if state unavailable, fallback to walking up the chain looking for the header
+			// Digest emitted when validator set active 'at_header' was enacted.
+			let blockchain = backend.blockchain();
+			let mut header = at_header.clone();
+			while *header.number() >= beefy_genesis {
+				match worker::find_authorities_change::<B>(&header) {
+					Some(active) => return Some(active),
+					// Move up the chain.
+					None => header = blockchain.expect_header(*header.parent_hash()).ok()?,
+				}
+			}
+			None
+		})
+		.ok_or_else(|| ClientError::Backend("Could not find initial validator set".into()))
 }
