@@ -115,7 +115,6 @@ impl GenesisStorageBuilder {
 			.map(|id| {
 				use std::str::FromStr;
 				let seed: &'static str = AccountKeyring::from_public(id).unwrap().into();
-				println!(">>>>> {}", seed);
 				sp_keyring::Sr25519Keyring::from_str(&seed).unwrap().into()
 			})
 			.collect();
