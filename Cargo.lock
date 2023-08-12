@@ -10741,16 +10741,13 @@ name = "sp-consensus-sassafras"
 version = "0.3.4-dev"
 dependencies = [
  "async-trait",
- "merlin 2.0.1",
  "parity-scale-codec",
  "scale-info",
- "serde",
  "sp-api",
  "sp-application-crypto",
  "sp-consensus-slots",
  "sp-core",
  "sp-inherents",
- "sp-keystore",
  "sp-runtime",
  "sp-std",
  "sp-timestamp",
