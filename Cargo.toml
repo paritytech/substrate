@@ -243,6 +243,7 @@ members = [
 	"primitives/consensus/common",
 	"primitives/consensus/grandpa",
 	"primitives/consensus/pow",
+	"primitives/consensus/sassafras",
 	"primitives/consensus/slots",
 	"primitives/core",
 	"primitives/core/hashing",
