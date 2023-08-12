@@ -45,7 +45,7 @@ pub use impls::*;
 
 use crate::{
 	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
-	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, NominationsQuota,
+	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, NominationsQuota, MaxNominationsOf,
 	PayoutDestination, PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger,
 	UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
