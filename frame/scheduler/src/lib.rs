@@ -54,7 +54,7 @@
 //! [`sp_weights::constants`].
 //!
 //! Please be aware that any scheduled runtime calls executed in a future block may __fail__ or may
-//! result in __unintended behavior__ since the runtime could have upgraded between the time of
+//! result in __undefined behavior__ since the runtime could have upgraded between the time of
 //! scheduling and execution. For example, the runtime upgrade could have:
 //!
 //! * Modified the implementation of the runtime call (runtime specification upgrade).
