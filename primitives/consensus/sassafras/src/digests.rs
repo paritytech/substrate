@@ -28,7 +28,7 @@ use scale_info::TypeInfo;
 use sp_runtime::{DigestItem, RuntimeDebug};
 use sp_std::vec::Vec;
 
-/// Sassafras primary slot assignment pre-digest.
+/// Sassafras slot assignment pre-digest.
 #[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct PreDigest {
 	/// Authority index that claimed the slot.
@@ -36,7 +36,6 @@ pub struct PreDigest {
 	/// Corresponding slot number.
 	pub slot: Slot,
 	/// Slot claim VRF signature.
-	/// TODO DAVXY we can store this Signature as a Seal DigestItem
 	pub vrf_signature: VrfSignature,
 	/// Ticket auxiliary information for claim check.
 	pub ticket_claim: Option<TicketClaim>,

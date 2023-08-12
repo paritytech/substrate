@@ -108,7 +108,6 @@ pub fn ticket_id_vrf_input(randomness: &Randomness, attempt: u32, epoch: u64) ->
 }
 
 /// Data to be signed via ring-vrf.
-/// TODO davxy: ticket_body is not a vrf input???
 pub fn ticket_body_sign_data(ticket_body: &TicketBody) -> VrfSignData {
 	VrfSignData::new_unchecked(
 		&SASSAFRAS_ENGINE_ID,
