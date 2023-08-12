@@ -48,7 +48,7 @@ use sp_std::prelude::*;
 use crate::{
 	election_size_tracker::StaticTracker, log, slashing, weights::WeightInfo, ActiveEraInfo,
 	BalanceOf, EraPayout, Exposure, ExposureOf, Forcing, IndividualExposure, MaxNominationsOf,
-	MaxWinnersOf, Nominations, NominationsQuota, PositiveImbalanceOf, PayoutDestination,
+	MaxWinnersOf, Nominations, NominationsQuota, PayoutDestination, PositiveImbalanceOf,
 	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 

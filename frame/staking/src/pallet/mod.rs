@@ -45,9 +45,9 @@ pub use impls::*;
 
 use crate::{
 	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
-	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf,NegativeImbalanceOf, Nominations, 
-  PayoutDestination, PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger, 
-  UnappliedSlash, UnlockChunk, ValidatorPrefs,
+	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PayoutDestination,
+	PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash,
+	UnlockChunk, ValidatorPrefs,
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
