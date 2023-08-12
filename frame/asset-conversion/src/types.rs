@@ -80,11 +80,11 @@ where
 	}
 }
 
-/// Representation of the final credit imbalance after a swap.
-pub struct SwapCredits<AccountId, Balance>(
-	Credit<AccountId, Balance>, // In asset
-	Credit<AccountId, Balance>, // Out asset
-);
+/// Representation of the final credit imbalance after a swap for exact.
+pub struct CreditPair<AccountId, Balance: Balanced<AccountId>> {
+	pub in_leftover: Credit<AccountId, Balance>,
+	pub out_credit: Credit<AccountId, Balance>,
+}
 
 /// Trait for providing methods to swap between the various asset classes.
 pub trait Swap<AccountId, Balance, MultiAssetId> {
@@ -108,27 +108,29 @@ pub trait Swap<AccountId, Balance, MultiAssetId> {
 	/// Swap `amount_in_max` of asset `path[0]` for asset `path[1]` declared in `amount_out`.
 	/// It will return an error if acquiring `amount_out` would be too costly.
 	///
-	/// Thus it is on the RPC side to ensure that `amount_in_max` is enough to acquire `amount_out`.
+	/// Thus it is on the RPC side to ensure that `amount_in` is enough to acquire `amount_out`.
 	///
-	/// This method implies that the amount_in is an imbalance of the `path[0]` asset.
+	/// Uses the `amount_in` imbalance to offset into the pool account.
 	///
-	/// Uses the `amount_in_max` imbalance to offset into the pool account.
-	///
-	/// If successful, returns the amount of `path[1]` acquired for the `amount_in_max`
-	/// along with the `amount_in_max` as an imbalance.
+	/// If successful, returns the amount of `path[1]` acquired for the `amount_in`
+	/// along with the leftovers from `amount_in` as an imbalance.
 	/// They could be credited somewhere as the type implies, but can also be dropped.
 	///
 	/// Note: This method effectively prevents overswapping, so that the
-	/// returned Credit.0 can then be directly refunded in the initial asset
-	/// without swapping back from the `path[1]` asset, saving us a bit of gas.
+	/// returned `CreditPair::in_leftover` can then be directly refunded in the initial asset
+	/// without swapping back from the `path[1]` asset.
 	///
-	/// `amount_in_max` is not optional due to the fact that it is a balance to be offset
+	/// `amount_in` is not optional due to the fact that it is a balance to be offset
 	/// (credited to the pool), and not an amount to be acquired from a sender.
+	///
+	/// If this function returns an error, no credit will be taken from amount_in, like a no-op.
 	fn swap_tokens_for_exact_tokens_credit(
 		path: Vec<MultiAssetId>,
-		amount_in_max: Balance, // Is there a benefit of changing this to Credit?
 		amount_out: Balance,
-	) -> Result<SwapCredits<AccountId, Balance>, DispatchError>;
+		credit_in: Credit<AccountId, Balance>,
+	) -> Result<CreditPair<AccountId, Balance>, DispatchError>
+	where
+		Balance: Balanced<AccountId>;
 
 	/// Take the `path[0]` asset and swap some amount for `amount_out` of the `path[1]`. If an
 	/// `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
