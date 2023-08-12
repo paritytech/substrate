@@ -49,7 +49,7 @@
 //! within a bag must be within the range of the bag. If not, the permissionless [`Pallet::rebag`]
 //! can be used to move any node to the right bag.
 //!
-//! Once a `rebag` happens, the the order within a node is still not enforced. To move a node to the
+//! Once a `rebag` happens, the order within a node is still not enforced. To move a node to the
 //! optimal position in a bag, the [`Pallet::put_in_front_of`] or [`Pallet::put_in_front_of_other`]
 //! can be used.
 //!
