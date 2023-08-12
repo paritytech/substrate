@@ -38,7 +38,7 @@ sp-consensus-sassafras = { path = "primitives/consensus/sassafras", optional = t
 sc-keystore = { path = "client/keystore" }
 
 [features]
-sassafras = [ 
+sassafras-experimental = [ 
 	"sp-consensus-sassafras",
 	"sc-keystore/bandersnatch-experimental",
 ]
