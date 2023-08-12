@@ -262,7 +262,7 @@ pub mod pallet {
 
 		/// Same as [`put_in_front_of`], but it can be called by anyone.
 		///
-		/// Fee is payed by the origin under all circumstances.
+		/// Fee is paid by the origin under all circumstances.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::put_in_front_of())]
 		pub fn put_in_front_of_other(
