@@ -1,6 +1,6 @@
 [package]
 name = "sp-consensus-sassafras"
-version = "0.3.3-dev"
+version = "0.3.4-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for Sassafras consensus"
 edition = "2021"

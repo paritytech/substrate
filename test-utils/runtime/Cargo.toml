@@ -17,7 +17,7 @@ sp-application-crypto = { version = "23.0.0", default-features = false, path = "
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura", features = ["serde"] }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe", features = ["serde"] }
 sp-genesis-builder = { version = "0.1.0-dev", default-features = false, path = "../../primitives/genesis-builder" }
-sp-consensus-sassafras = { version = "0.3.3-dev", default-features = false, path = "../../primitives/consensus/sassafras" }
+sp-consensus-sassafras = { version = "0.3.4-dev", default-features = false, path = "../../primitives/consensus/sassafras" }
 sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../primitives/block-builder" }
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
@@ -33,7 +33,7 @@ sp-session = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime", features = ["serde"] }
 pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../frame/babe" }
-pallet-sassafras = { version = "0.3.3-dev", default-features = false, path = "../../frame/sassafras" }
+pallet-sassafras = { version = "0.3.4-dev", default-features = false, path = "../../frame/sassafras" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../frame/balances" }
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../frame/executive" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }

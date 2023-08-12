@@ -1,6 +1,6 @@
 [package]
 name = "node-sassafras"
-version = "0.3.3-dev"
+version = "0.3.4-dev"
 authors = ["Parity Technologies <admin@parity.io>", "Davide Galassi <davxy@datawok.net>"]
 description = "Node testbed for Sassafras consensus."
 homepage = "https://substrate.io/"
@@ -29,8 +29,8 @@ sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 sc-offchain = { version = "4.0.0-dev", path = "../../../client/offchain" }
-sc-consensus-sassafras = { version = "0.3.3-dev", path = "../../../client/consensus/sassafras" }
-sp-consensus-sassafras = { version = "0.3.3-dev", path = "../../../primitives/consensus/sassafras" }
+sc-consensus-sassafras = { version = "0.3.4-dev", path = "../../../client/consensus/sassafras" }
+sp-consensus-sassafras = { version = "0.3.4-dev", path = "../../../primitives/consensus/sassafras" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sc-consensus-grandpa = { version = "0.10.0-dev", path = "../../../client/consensus/grandpa" }
@@ -59,7 +59,7 @@ frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarkin
 frame-benchmarking-cli = { version = "4.0.0-dev", path = "../../../utils/frame/benchmarking-cli" }
 
 # Local Dependencies
-node-sassafras-runtime = { version = "0.3.3-dev", path = "../runtime" }
+node-sassafras-runtime = { version = "0.3.4-dev", path = "../runtime" }
 
 [build-dependencies]
 substrate-build-script-utils = { version = "3.0.0", path = "../../../utils/build-script-utils" }
