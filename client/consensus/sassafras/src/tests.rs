@@ -31,6 +31,7 @@ use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::Finalizer;
 use sc_consensus::{BlockImport, BoxJustificationImport};
 use sc_network_test::*;
+use sc_transaction_pool_api::{OffchainTransactionPoolFactory, RejectAllTxPool};
 use sp_application_crypto::key_types::SASSAFRAS;
 use sp_blockchain::Error as TestError;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
@@ -361,10 +362,7 @@ impl TestContext {
 #[test]
 fn tests_assumptions_sanity_check() {
 	let env = TestContext::new();
-	let config = env.link.genesis_config;
-	let test_config = create_test_config();
-
-	assert_eq!(config, test_config);
+	assert_eq!(env.link.genesis_config, create_test_config());
 }
 
 #[test]
@@ -430,7 +428,7 @@ fn claim_primary_slots_works() {
 	let ticket_secret = TicketSecret { attempt_idx: 0, erased_secret: [0; 32] };
 
 	// Fail if we have authority key in our keystore but not ticket aux data
-	// 	ticket-aux: KO , authority-key: OK => FAIL
+	// 	ticket-aux = None && authority-key = Some => claim = None
 
 	let claim = authorship::claim_slot(
 		0.into(),
@@ -443,7 +441,7 @@ fn claim_primary_slots_works() {
 	assert!(epoch.tickets_aux.is_empty());
 
 	// Success if we have ticket aux data and the authority key in our keystore
-	// 	ticket-aux: OK , authority-key: OK => SUCCESS
+	// 	ticket-aux = Some && authority-key = Some => claim = Some
 
 	epoch
 		.tickets_aux
@@ -462,7 +460,7 @@ fn claim_primary_slots_works() {
 	assert_eq!(auth_id, Keyring::Alice.public().into());
 
 	// Fail if we have ticket aux data but not the authority key in out keystore
-	// 	ticket-aux: OK , authority-key: KO => FAIL
+	// 	ticket-aux = Some && authority-key = None => claim = None
 
 	epoch.tickets_aux.insert(ticket_id, (alice_authority_idx + 1, ticket_secret));
 
@@ -737,7 +735,7 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 }
 
 #[test]
-fn revert_not_allowed_for_finalized() {
+fn revert_stops_at_last_finalized() {
 	let mut env = TestContext::new();
 
 	let canon = env.propose_and_import_blocks(env.client.info().genesis_hash, 3);
@@ -745,7 +743,7 @@ fn revert_not_allowed_for_finalized() {
 	// Finalize best block
 	env.client.finalize_block(canon[2], None, false).unwrap();
 
-	// Revert canon chain to last finalized block
+	// Reverts canon chain down to last finalized block
 	crate::revert(env.backend.clone(), 100).expect("revert should work for baked test scenario");
 
 	let weight_data_check = |hashes: &[Hash], expected: bool| {
@@ -849,6 +847,7 @@ impl TestNetFactory for SassafrasTestNet {
 // Multiple nodes authoring and validating blocks
 #[tokio::test]
 async fn sassafras_network_progress() {
+	env_logger::init();
 	let net = SassafrasTestNet::new(3);
 	let net = Arc::new(Mutex::new(net));
 
@@ -919,6 +918,9 @@ async fn sassafras_network_progress() {
 			justification_sync_link: (),
 			force_authoring: false,
 			create_inherent_data_providers,
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
 		};
 		let sassafras_worker = start_sassafras(sassafras_params).unwrap();
 		sassafras_workers.push(sassafras_worker);

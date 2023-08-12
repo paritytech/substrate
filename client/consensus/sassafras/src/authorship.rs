@@ -20,6 +20,7 @@
 
 use super::*;
 
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_sassafras::{
 	digests::PreDigest, slot_claim_sign_data, ticket_id, ticket_id_threshold, AuthorityId, Slot,
 	TicketBody, TicketClaim, TicketEnvelope, TicketId,
@@ -54,7 +55,7 @@ pub(crate) fn claim_slot(
 
 	let (authority_idx, ticket_claim) = match maybe_ticket {
 		Some((ticket_id, ticket_data)) => {
-			log::debug!(target: LOG_TARGET, "[TRY PRIMARY (slot {slot}, tkt = {ticket_id:16x})]");
+			log::debug!(target: LOG_TARGET, "[TRY PRIMARY (slot {slot}, tkt = {ticket_id:016x})]");
 			let (authority_idx, ticket_secret) = epoch.tickets_aux.remove(&ticket_id)?.clone();
 			log::debug!(
 				target: LOG_TARGET,
@@ -397,6 +398,7 @@ async fn start_tickets_worker<B, C, SC>(
 	keystore: KeystorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	select_chain: SC,
+	offchain_tx_pool_factory: OffchainTransactionPoolFactory<B>,
 ) where
 	B: BlockT,
 	C: BlockchainEvents<B> + ProvideRuntimeApi<B>,
@@ -462,7 +464,12 @@ async fn start_tickets_worker<B, C, SC>(
 			continue
 		}
 
-		let err = match client.runtime_api().submit_tickets_unsigned_extrinsic(best_hash, tickets) {
+		// Register the offchain tx pool to be able to use it from the runtime.
+		let mut runtime_api = client.runtime_api();
+		runtime_api
+			.register_extension(offchain_tx_pool_factory.offchain_transaction_pool(best_hash));
+
+		let err = match runtime_api.submit_tickets_unsigned_extrinsic(best_hash, tickets) {
 			Err(err) => Some(err.to_string()),
 			Ok(false) => Some("Unknown reason".to_string()),
 			_ => None,
@@ -542,6 +549,8 @@ pub struct SassafrasWorkerParams<B: BlockT, C, SC, EN, I, SO, L, CIDP> {
 	pub force_authoring: bool,
 	/// State shared between import queue and authoring worker.
 	pub sassafras_link: SassafrasLink<B>,
+	/// The offchain transaction pool factory used for tickets submission.
+	pub offchain_tx_pool_factory: OffchainTransactionPoolFactory<B>,
 }
 
 /// Start the Sassafras worker.
@@ -557,6 +566,7 @@ pub fn start_sassafras<B, C, SC, EN, I, SO, CIDP, L, ER>(
 		create_inherent_data_providers,
 		force_authoring,
 		sassafras_link,
+		offchain_tx_pool_factory,
 	}: SassafrasWorkerParams<B, C, SC, EN, I, SO, L, CIDP>,
 ) -> Result<SassafrasWorker<B>, ConsensusError>
 where
@@ -583,7 +593,7 @@ where
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	ER: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
-	info!(target: LOG_TARGET, "🍁 Starting Sassafras Authorship worker");
+	info!(target: LOG_TARGET, "🍁 Starting authorship worker");
 
 	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
 
@@ -613,6 +623,7 @@ where
 		keystore,
 		sassafras_link.epoch_changes.clone(),
 		select_chain,
+		offchain_tx_pool_factory,
 	);
 
 	let inner = future::select(Box::pin(slot_worker), Box::pin(tickets_worker));

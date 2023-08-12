@@ -274,6 +274,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
                         );
 				Ok((slot, timestamp))
 			},
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(transaction_pool.clone()),
 		};
 
 		let sassafras = sc_consensus_sassafras::start_sassafras(sassafras_params)?;

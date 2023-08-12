@@ -105,13 +105,13 @@ pub const INTERMEDIATE_KEY: &[u8] = b"sass1";
 #[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
 	/// Multiple Sassafras pre-runtime digests
-	#[error("Multiple Sassafras pre-runtime digests")]
+	#[error("Multiple pre-runtime digests")]
 	MultiplePreRuntimeDigests,
 	/// No Sassafras pre-runtime digest found
-	#[error("No Sassafras pre-runtime digest found")]
+	#[error("No pre-runtime digest found")]
 	NoPreRuntimeDigest,
 	/// Multiple Sassafras epoch change digests
-	#[error("Multiple Sassafras epoch change digests")]
+	#[error("Multiple epoch change digests")]
 	MultipleEpochChangeDigests,
 	/// Could not fetch epoch
 	#[error("Could not fetch epoch at {0:?}")]

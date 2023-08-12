@@ -403,7 +403,7 @@ where
 				{
 					warn!(
 						target: LOG_TARGET,
-						"Error checking/reporting Sassafras equivocation: {}", err
+						"Error checking/reporting equivocation: {}", err
 					);
 				}
 

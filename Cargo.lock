@@ -9234,6 +9234,7 @@ name = "sc-consensus-sassafras"
 version = "0.3.3-dev"
 dependencies = [
  "async-trait",
+ "env_logger 0.10.0",
  "fork-tree",
  "futures",
  "log",
@@ -9247,6 +9248,7 @@ dependencies = [
  "sc-keystore",
  "sc-network-test",
  "sc-telemetry",
+ "sc-transaction-pool-api",
  "sp-api",
  "sp-application-crypto",
  "sp-block-builder",
