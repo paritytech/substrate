@@ -195,25 +195,6 @@ pub fn make_prover(pair: &AuthorityPair) -> RingProver {
 	prover
 }
 
-pub fn make_ticket_body(attempt_idx: u32, pair: &AuthorityPair) -> (TicketId, TicketBody) {
-	// Values are referring to the next epoch
-	let epoch = Sassafras::epoch_index() + 1;
-	let randomness = Sassafras::next_randomness();
-
-	let body = TicketBody { attempt_idx, erased_public: [0; 32] };
-
-	let input = sp_consensus_sassafras::ticket_id_vrf_input(&randomness, attempt_idx, epoch);
-	let output = pair.as_inner_ref().vrf_output(&input);
-
-	let id = sp_consensus_sassafras::ticket_id(&input, &output);
-
-	(id, body)
-}
-
-pub fn make_ticket_bodies(number: u32, pair: &AuthorityPair) -> Vec<(TicketId, TicketBody)> {
-	(0..number).into_iter().map(|i| make_ticket_body(i, pair)).collect()
-}
-
 /// Construct at most `attempts` tickets envelopes for the given `slot`.
 /// TODO-SASS-P3: filter out invalid tickets according to test threshold.
 /// E.g. by passing an optional threshold
@@ -223,6 +204,31 @@ pub fn make_tickets(attempts: u32, pair: &AuthorityPair) -> Vec<TicketEnvelope> 
 		.into_iter()
 		.map(|attempt| make_ticket_with_prover(attempt, pair, &prover))
 		.collect()
+}
+
+pub fn make_ticket_body(attempt_idx: u32, pair: &AuthorityPair) -> (TicketId, TicketBody) {
+	// Values are referring to the next epoch
+	let epoch = Sassafras::epoch_index() + 1;
+	let randomness = Sassafras::next_randomness();
+
+	let input = sp_consensus_sassafras::ticket_id_vrf_input(&randomness, attempt_idx, epoch);
+	let output = pair.as_inner_ref().vrf_output(&input);
+
+	let id = sp_consensus_sassafras::ticket_id(&input, &output);
+
+	// Make a dummy ephemeral public that hopefully is unique within a test instance
+	use sp_core::ByteArray;
+	let mut erased_public = [0; 32];
+	erased_public[..16].copy_from_slice(&pair.public().as_slice()[0..16]);
+	erased_public[16..].copy_from_slice(&id.to_le_bytes());
+
+	let body = TicketBody { attempt_idx, erased_public };
+
+	(id, body)
+}
+
+pub fn make_ticket_bodies(number: u32, pair: &AuthorityPair) -> Vec<(TicketId, TicketBody)> {
+	(0..number).into_iter().map(|i| make_ticket_body(i, pair)).collect()
 }
 
 /// Persist the given tickets in `segments_count` separated segments by appending
