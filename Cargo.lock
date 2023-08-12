@@ -11529,7 +11529,9 @@ dependencies = [
  "sc-consensus-grandpa",
  "sc-consensus-manual-seal",
  "sc-consensus-pow",
+ "sc-keystore",
  "sc-service",
+ "sp-consensus-sassafras",
  "sp-runtime",
  "subkey",
 ]

@@ -29,6 +29,21 @@ frame-support = { path = "frame/support" }
 
 node-cli = { path = "bin/node/cli" }
 
+# This list of dependencies is necessary to build sassafras primitives
+# `bandersnatch-experimental` is transitifely passed between:
+# sp-consensus-sassafras → sp-application-crypto → sp-io → sp-keystore
+#   This last thus defines the bandersnatch functions for its trait `Keystore`.
+# We end up requiring bandersnatch implementations in the client keystore as well.
+sp-consensus-sassafras = { path = "primitives/consensus/sassafras", optional = true }
+sc-keystore = { path = "client/keystore" }
+
+[features]
+sassafras = [ 
+	"sp-consensus-sassafras",
+	"sc-keystore/bandersnatch-experimental",
+]
+
+
 # Exists here to be backwards compatible and to support `cargo run` in the workspace.
 #
 # Just uses the `node-cli` main binary. `node-cli` itself also again exposes the node as
@@ -243,7 +258,6 @@ members = [
 	"primitives/consensus/common",
 	"primitives/consensus/grandpa",
 	"primitives/consensus/pow",
-	"primitives/consensus/sassafras",
 	"primitives/consensus/slots",
 	"primitives/core",
 	"primitives/core/hashing",
