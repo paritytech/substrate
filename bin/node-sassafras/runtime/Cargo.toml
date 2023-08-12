@@ -1,7 +1,7 @@
 [package]
 name = "node-sassafras-runtime"
 version = "0.3.3-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
+authors = ["Parity Technologies <admin@parity.io>","Davide Galassi <davxy@datawok.net>"]
 description = "Runtime testbed for Sassafras consensus."
 homepage = "https://substrate.io/"
 edition = "2021"

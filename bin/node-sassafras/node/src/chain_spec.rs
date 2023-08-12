@@ -120,6 +120,7 @@ fn testnet_genesis(
 		system: SystemConfig {
 			// Add Wasm runtime to storage.
 			code: wasm_binary.to_vec(),
+			..Default::default()
 		},
 		balances: BalancesConfig {
 			// Configure endowed accounts with initial balance of 1 << 60.
@@ -134,12 +135,14 @@ fn testnet_genesis(
 				attempts_number: SASSAFRAS_TICKETS_MAX_ATTEMPTS_NUMBER,
 				redundancy_factor: SASSAFRAS_TICKETS_REDUNDANCY_FACTOR,
 			},
+			..Default::default()
 		},
 		grandpa: GrandpaConfig {
 			#[cfg(feature = "use-session-pallet")]
 			authorities: vec![],
 			#[cfg(not(feature = "use-session-pallet"))]
 			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
+			..Default::default()
 		},
 		sudo: SudoConfig {
 			// Assign network admin rights.

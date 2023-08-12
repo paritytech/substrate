@@ -5,7 +5,7 @@ use crate::{
 };
 use frame_benchmarking_cli::BenchmarkCmd;
 use node_sassafras_runtime::Block;
-use sc_cli::{ChainSpec, RuntimeVersion, SubstrateCli};
+use sc_cli::SubstrateCli;
 use sc_service::PartialComponents;
 
 impl SubstrateCli for Cli {
@@ -30,7 +30,7 @@ impl SubstrateCli for Cli {
 	}
 
 	fn copyright_start_year() -> i32 {
-		2022
+		2023
 	}
 
 	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
@@ -40,10 +40,6 @@ impl SubstrateCli for Cli {
 			path =>
 				Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path))?),
 		})
-	}
-
-	fn native_runtime_version(_: &Box<dyn ChainSpec>) -> &'static RuntimeVersion {
-		&node_sassafras_runtime::VERSION
 	}
 }
 
@@ -120,10 +116,10 @@ pub fn run() -> sc_cli::Result<()> {
 							)
 						}
 
-						cmd.run::<Block, service::ExecutorDispatch>(config)
+						cmd.run::<Block, ()>(config)
 					},
 					_ => {
-						println!("Not implemented...");
+						eprintln!("Not implemented...");
 						Ok(())
 					},
 				}

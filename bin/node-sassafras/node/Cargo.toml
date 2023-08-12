@@ -1,7 +1,7 @@
 [package]
 name = "node-sassafras"
 version = "0.3.3-dev"
-authors = ["Parity Technologies <admin@parity.io>"]
+authors = ["Parity Technologies <admin@parity.io>", "Davide Galassi <davxy@datawok.net>"]
 description = "Node testbed for Sassafras consensus."
 homepage = "https://substrate.io/"
 edition = "2021"
@@ -17,6 +17,7 @@ name = "node-sassafras"
 
 [dependencies]
 clap = { version = "4.0.9", features = ["derive"] }
+futures = { version = "0.3.21", features = ["thread-pool"]}
 
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }
 sp-core = { version = "21.0.0", path = "../../../primitives/core" }
@@ -27,6 +28,7 @@ sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
 sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
+sc-offchain = { version = "4.0.0-dev", path = "../../../client/offchain" }
 sc-consensus-sassafras = { version = "0.3.3-dev", path = "../../../client/consensus/sassafras" }
 sp-consensus-sassafras = { version = "0.3.3-dev", path = "../../../primitives/consensus/sassafras" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }

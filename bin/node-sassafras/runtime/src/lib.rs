@@ -41,9 +41,6 @@ pub type BlockNumber = u32;
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
 
-/// Index of a transaction in the chain.
-pub type Index = u32;
-
 /// A hash of some data used by the chain.
 pub type Hash = sp_core::H256;
 
@@ -78,6 +75,9 @@ pub type Address = sp_runtime::MultiAddress<AccountId, ()>;
 
 /// Balance of an account.
 pub type Balance = u128;
+
+/// Index of a transaction in the chain.
+pub type Nonce = u32;
 
 /// The payload being signed in transactions.
 pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
@@ -171,16 +171,15 @@ parameter_types! {
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
+	type Block = Block;
 	type BlockWeights = BlockWeights;
 	type BlockLength = BlockLength;
 	type AccountId = AccountId;
 	type RuntimeCall = RuntimeCall;
 	type Lookup = AccountIdLookup<AccountId, ()>;
-	type Index = Index;
-	type BlockNumber = BlockNumber;
+	type Nonce = Nonce;
 	type Hash = Hash;
 	type Hashing = BlakeTwo256;
-	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
 	type BlockHashCount = BlockHashCount;
@@ -211,6 +210,7 @@ impl pallet_grandpa::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
+	type MaxNominators = ConstU32<0>;
 	type MaxSetIdSessionEntries = ConstU64<0>;
 	type KeyOwnerProof = sp_core::Void;
 	type EquivocationReportSystem = ();
@@ -270,10 +270,7 @@ impl pallet_session::Config for Runtime {
 // Create a runtime using session pallet
 #[cfg(feature = "use-session-pallet")]
 construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = opaque::Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub enum Runtime
 	{
 		System: frame_system,
 		Timestamp: pallet_timestamp,
@@ -289,10 +286,7 @@ construct_runtime!(
 // Create a runtime NOT using session pallet
 #[cfg(not(feature = "use-session-pallet"))]
 construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = opaque::Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub enum Runtime
 	{
 		System: frame_system,
 		Timestamp: pallet_timestamp,
@@ -387,7 +381,7 @@ impl_runtime_apis! {
 	}
 
 	impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
-		fn ring_context() -> Option<sp_consensus_sassafras::RingVrfContext> {
+		fn ring_context() -> Option<sp_consensus_sassafras::RingContext> {
 			Sassafras::ring_context()
 		}
 
@@ -469,8 +463,8 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
-		fn account_nonce(account: AccountId) -> Index {
+	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Nonce> for Runtime {
+		fn account_nonce(account: AccountId) -> Nonce {
 			System::account_nonce(account)
 		}
 	}
