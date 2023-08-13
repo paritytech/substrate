@@ -23,6 +23,13 @@ use sp_wasm_interface::Value;
 
 pub use sc_allocator::AllocationStats;
 
+/// Default heap allocation strategy.
+pub const DEFAULT_HEAP_ALLOC_STRATEGY: HeapAllocStrategy =
+	HeapAllocStrategy::Static { extra_pages: DEFAULT_HEAP_ALLOC_PAGES };
+
+/// Default heap allocation pages.
+pub const DEFAULT_HEAP_ALLOC_PAGES: u32 = 2048;
+
 /// A method to be used to find the entrypoint when calling into the runtime
 ///
 /// Contains variants on how to resolve wasm function that will be invoked.

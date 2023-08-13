@@ -18,12 +18,16 @@
 
 //! Logic for keeping track of BEEFY peers.
 
-// TODO (issue #12296): replace this naive peer tracking with generic one that infers data
-// from multiple network protocols.
-
-use sc_network::PeerId;
+use sc_network::{PeerId, ReputationChange};
 use sp_runtime::traits::{Block, NumberFor, Zero};
 use std::collections::{HashMap, VecDeque};
+
+/// Report specifying a reputation change for a given peer.
+#[derive(Debug, PartialEq)]
+pub(crate) struct PeerReport {
+	pub who: PeerId,
+	pub cost_benefit: ReputationChange,
+}
 
 struct PeerData<B: Block> {
 	last_voted_on: NumberFor<B>,

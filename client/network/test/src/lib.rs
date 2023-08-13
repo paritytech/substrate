@@ -20,6 +20,8 @@
 #[cfg(test)]
 mod block_import;
 #[cfg(test)]
+mod fuzz;
+#[cfg(test)]
 mod service;
 #[cfg(test)]
 mod sync;
@@ -50,13 +52,14 @@ use sc_consensus::{
 };
 use sc_network::{
 	config::{
-		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode,
-		ProtocolId, Role, SyncMode, TransportConfig,
+		FullNetworkConfiguration, MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig,
+		NonReservedPeerMode, ProtocolId, Role, SyncMode, TransportConfig,
 	},
+	peer_store::PeerStore,
 	request_responses::ProtocolConfig as RequestResponseConfig,
 	types::ProtocolName,
-	Multiaddr, NetworkBlock, NetworkEventStream, NetworkService, NetworkStateInfo,
-	NetworkSyncForkRequest, NetworkWorker,
+	Multiaddr, NetworkBlock, NetworkService, NetworkStateInfo, NetworkSyncForkRequest,
+	NetworkWorker,
 };
 use sc_network_common::{
 	role::Roles,
@@ -83,17 +86,15 @@ use sp_core::H256;
 use sp_runtime::{
 	codec::{Decode, Encode},
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
 	Justification, Justifications,
 };
 use substrate_test_runtime_client::AccountKeyring;
 pub use substrate_test_runtime_client::{
-	runtime::{Block, Extrinsic, Hash, Header, Transfer},
+	runtime::{Block, ExtrinsicBuilder, Hash, Header, Transfer},
 	TestClient, TestClientBuilder, TestClientBuilderExt,
 };
 use tokio::time::timeout;
-
-type AuthorityId = sp_consensus_babe::AuthorityId;
 
 /// A Verifier that accepts all blocks and passes them on with the configured
 /// finality to be imported.
@@ -474,7 +475,7 @@ where
 						amount: 1,
 						nonce,
 					};
-					builder.push(transfer.into_signed_tx()).unwrap();
+					builder.push(transfer.into_unchecked_extrinsic()).unwrap();
 					nonce += 1;
 					builder.build().unwrap().block
 				},
@@ -495,16 +496,6 @@ where
 				ForkChoiceStrategy::LongestChain,
 			)
 		}
-	}
-
-	pub fn push_authorities_change_block(
-		&mut self,
-		new_authorities: Vec<AuthorityId>,
-	) -> Vec<H256> {
-		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
-			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
-			builder.build().unwrap().block
-		})
 	}
 
 	/// Get a reference to the client.
@@ -782,7 +773,7 @@ where
 			*genesis_extra_storage = storage;
 		}
 
-		if matches!(config.sync_mode, SyncMode::Fast { .. } | SyncMode::Warp) {
+		if matches!(config.sync_mode, SyncMode::LightState { .. } | SyncMode::Warp) {
 			test_client_builder = test_client_builder.set_no_genesis();
 		}
 		let backend = test_client_builder.backend();
@@ -812,20 +803,6 @@ where
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;
-		network_config
-			.request_response_protocols
-			.extend(config.request_response_protocols);
-		network_config.extra_sets = config
-			.notifications_protocols
-			.into_iter()
-			.map(|p| NonDefaultSetConfig {
-				notifications_protocol: p,
-				fallback_names: Vec::new(),
-				max_notification_size: 1024 * 1024,
-				handshake: None,
-				set_config: Default::default(),
-			})
-			.collect();
 		if let Some(connect_to) = config.connect_to_peers {
 			let addrs = connect_to
 				.iter()
@@ -838,6 +815,7 @@ where
 			network_config.default_peers_set.reserved_nodes = addrs;
 			network_config.default_peers_set.non_reserved_mode = NonReservedPeerMode::Deny;
 		}
+		let mut full_net_config = FullNetworkConfiguration::new(&network_config);
 
 		let protocol_id = ProtocolId::from("test-protocol-name");
 
@@ -896,12 +874,13 @@ where
 		let (chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
 
+		let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 		let (engine, sync_service, block_announce_config) =
 			sc_network_sync::engine::SyncingEngine::new(
 				Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
 				client.clone(),
 				None,
-				&network_config,
+				&full_net_config,
 				protocol_id.clone(),
 				&fork_id,
 				block_announce_validator,
@@ -911,29 +890,55 @@ where
 				block_request_protocol_config.name.clone(),
 				state_request_protocol_config.name.clone(),
 				Some(warp_protocol_config.name.clone()),
+				rx,
 			)
 			.unwrap();
 		let sync_service_import_queue = Box::new(sync_service.clone());
 		let sync_service = Arc::new(sync_service.clone());
 
+		for config in config.request_response_protocols {
+			full_net_config.add_request_response_protocol(config);
+		}
+		for config in [
+			block_request_protocol_config,
+			state_request_protocol_config,
+			light_client_request_protocol_config,
+			warp_protocol_config,
+		] {
+			full_net_config.add_request_response_protocol(config);
+		}
+
+		for protocol in config.notifications_protocols {
+			full_net_config.add_notification_protocol(NonDefaultSetConfig {
+				notifications_protocol: protocol,
+				fallback_names: Vec::new(),
+				max_notification_size: 1024 * 1024,
+				handshake: None,
+				set_config: Default::default(),
+			});
+		}
+
+		let peer_store = PeerStore::new(
+			network_config.boot_nodes.iter().map(|bootnode| bootnode.peer_id).collect(),
+		);
+		let peer_store_handle = peer_store.handle();
+		self.spawn_task(peer_store.run().boxed());
+
+		let genesis_hash =
+			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: Box::new(|f| {
 				tokio::spawn(f);
 			}),
-			network_config,
-			chain: client.clone(),
+			network_config: full_net_config,
+			peer_store: peer_store_handle,
+			genesis_hash,
 			protocol_id,
 			fork_id,
 			metrics_registry: None,
 			block_announce_config,
-			request_response_protocol_configs: [
-				block_request_protocol_config,
-				state_request_protocol_config,
-				light_client_request_protocol_config,
-				warp_protocol_config,
-			]
-			.to_vec(),
+			tx,
 		})
 		.unwrap();
 
@@ -948,9 +953,8 @@ where
 			import_queue.run(sync_service_import_queue).await;
 		});
 
-		let service = network.service().clone();
 		tokio::spawn(async move {
-			engine.run(service.event_stream("syncing")).await;
+			engine.run().await;
 		});
 
 		self.mut_peers(move |peers| {

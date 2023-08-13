@@ -41,7 +41,6 @@ pub struct ImportBlocksCmd {
 	pub input: Option<PathBuf>,
 
 	/// The default number of 64KB pages to ever allocate for Wasm execution.
-	///
 	/// Don't alter this unless you know what you're doing.
 	#[arg(long, value_name = "COUNT")]
 	pub default_heap_pages: Option<u32>,

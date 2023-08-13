@@ -421,11 +421,11 @@ impl FreeingBumpHeapAllocator {
 
 		let header_ptr: u32 = match self.free_lists[order] {
 			Link::Ptr(header_ptr) => {
-				assert!(
-					u64::from(header_ptr + order.size() + HEADER_SIZE) <= mem.size(),
-					"Pointer is looked up in list of free entries, into which
-					only valid values are inserted; qed"
-				);
+				if (u64::from(header_ptr) + u64::from(order.size()) + u64::from(HEADER_SIZE)) >
+					mem.size()
+				{
+					return Err(error("Invalid header pointer detected"))
+				}
 
 				// Remove this header from the free list.
 				let next_free = Header::read_from(mem, header_ptr)?
@@ -1105,5 +1105,26 @@ mod tests {
 		heap.allocate(&mut mem, PAGE_SIZE * 2).unwrap();
 
 		assert_eq!(3, mem.pages());
+	}
+
+	#[test]
+	fn modifying_the_header_leads_to_an_error() {
+		let mut mem = MemoryInstance::with_pages(1);
+		let mut heap = FreeingBumpHeapAllocator::new(0);
+
+		let ptr = heap.allocate(&mut mem, 5).unwrap();
+
+		heap.deallocate(&mut mem, ptr).unwrap();
+
+		Header::Free(Link::Ptr(u32::MAX - 1))
+			.write_into(&mut mem, u32::from(ptr) - HEADER_SIZE)
+			.unwrap();
+
+		heap.allocate(&mut mem, 5).unwrap();
+		assert!(heap
+			.allocate(&mut mem, 5)
+			.unwrap_err()
+			.to_string()
+			.contains("Invalid header pointer"));
 	}
 }

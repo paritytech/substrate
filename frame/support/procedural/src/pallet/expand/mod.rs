@@ -36,7 +36,6 @@ mod type_value;
 mod validate_unsigned;
 
 use crate::pallet::Def;
-use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
 
 /// Merge where clause together, `where` token span is taken from the first not none one.
@@ -75,16 +74,24 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	let tt_default_parts = tt_default_parts::expand_tt_default_parts(&mut def);
 	let doc_only = doc_only::expand_doc_only(&mut def);
 
-	if get_doc_literals(&def.item.attrs).is_empty() {
-		def.item.attrs.push(syn::parse_quote!(
-			#[doc = r"
-			The module that hosts all the
-			[FRAME](https://docs.substrate.io/main-docs/build/events-errors/)
-			types needed to add this pallet to a
-			runtime.
-			"]
-		));
-	}
+	def.item.attrs.insert(
+		0,
+		syn::parse_quote!(
+			#[doc = r"The `pallet` module in each FRAME pallet hosts the most important items needed
+to construct this pallet.
+
+The main components of this pallet are:
+- [`Pallet`], which implements all of the dispatchable extrinsics of the pallet, among
+other public functions.
+	- The subset of the functions that are dispatchable can be identified either in the
+	[`dispatchables`] module or in the [`Call`] enum.
+- [`storage_types`], which contains the list of all types that are representing a
+storage item. Otherwise, all storage items are listed among [*Type Definitions*](#types).
+- [`Config`], which contains the configuration trait of this pallet.
+- [`Event`] and [`Error`], which are listed among the [*Enums*](#enums).
+		"]
+		),
+	);
 
 	let new_items = quote::quote!(
 		#metadata_docs

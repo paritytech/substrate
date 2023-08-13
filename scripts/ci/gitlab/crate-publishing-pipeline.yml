@@ -1,1 +1,0 @@
-default: !reference [.crate-publishing-pipeline-definitions, default]

@@ -195,7 +195,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		DefensiveTruncateFrom, EnqueueMessage, ExecuteOverweightError, Footprint, ProcessMessage,
-		ProcessMessageError, ServiceQueues,
+		ProcessMessageError, QueuePausedQuery, ServiceQueues,
 	},
 	BoundedSlice, CloneNoBound, DefaultNoBound,
 };
@@ -204,7 +204,7 @@ pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{BaseArithmetic, Unsigned};
 use sp_runtime::{
-	traits::{Hash, One, Zero},
+	traits::{One, Zero},
 	SaturatedConversion, Saturating,
 };
 use sp_std::{fmt::Debug, ops::Deref, prelude::*, vec};
@@ -473,6 +473,13 @@ pub mod pallet {
 		/// removed.
 		type QueueChangeHandler: OnQueueChanged<<Self::MessageProcessor as ProcessMessage>::Origin>;
 
+		/// Queried by the pallet to check whether a queue can be serviced.
+		///
+		/// This also applies to manual servicing via `execute_overweight` and `service_queues`. The
+		/// value of this is only polled once before servicing the queue. This means that changes to
+		/// it that happen *within* the servicing will not be reflected.
+		type QueuePausedQuery: QueuePausedQuery<<Self::MessageProcessor as ProcessMessage>::Origin>;
+
 		/// The size of the page; this implies the maximum message size which can be sent.
 		///
 		/// A good value depends on the expected message sizes, their weights, the weight that is
@@ -499,16 +506,13 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Message discarded due to an inability to decode the item. Usually caused by state
-		/// corruption.
-		Discarded { hash: T::Hash },
 		/// Message discarded due to an error in the `MessageProcessor` (usually a format error).
-		ProcessingFailed { hash: T::Hash, origin: MessageOriginOf<T>, error: ProcessMessageError },
+		ProcessingFailed { id: [u8; 32], origin: MessageOriginOf<T>, error: ProcessMessageError },
 		/// Message is processed.
-		Processed { hash: T::Hash, origin: MessageOriginOf<T>, weight_used: Weight, success: bool },
+		Processed { id: [u8; 32], origin: MessageOriginOf<T>, weight_used: Weight, success: bool },
 		/// Message placed in overweight queue.
 		OverweightEnqueued {
-			hash: T::Hash,
+			id: [u8; 32],
 			origin: MessageOriginOf<T>,
 			page_index: PageIndex,
 			message_index: T::Size,
@@ -537,6 +541,10 @@ pub mod pallet {
 		/// Such errors are expected, but not guaranteed, to resolve themselves eventually through
 		/// retrying.
 		TemporarilyUnprocessable,
+		/// The queue is paused and no message can be executed from it.
+		///
+		/// This can change at any time and may resolve in the future by re-trying.
+		QueuePaused,
 	}
 
 	/// The index of the first and last (non-empty) pages.
@@ -729,7 +737,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns the current head if it got be bumped and `None` otherwise.
 	fn bump_service_head(weight: &mut WeightMeter) -> Option<MessageOriginOf<T>> {
-		if !weight.check_accrue(T::WeightInfo::bump_service_head()) {
+		if weight.try_consume(T::WeightInfo::bump_service_head()).is_err() {
 			return None
 		}
 
@@ -806,6 +814,8 @@ impl<T: Config> Pallet<T> {
 		weight_limit: Weight,
 	) -> Result<Weight, Error<T>> {
 		let mut book_state = BookStateFor::<T>::get(&origin);
+		ensure!(!T::QueuePausedQuery::is_paused(&origin), Error::<T>::QueuePaused);
+
 		let mut page = Pages::<T>::get(&origin, page_index).ok_or(Error::<T>::NoPage)?;
 		let (pos, is_processed, payload) =
 			page.peek_index(index.into() as usize).ok_or(Error::<T>::NoMessage)?;
@@ -855,7 +865,7 @@ impl<T: Config> Pallet<T> {
 					book_state.message_count,
 					book_state.size,
 				);
-				Ok(weight_counter.consumed.saturating_add(page_weight))
+				Ok(weight_counter.consumed().saturating_add(page_weight))
 			},
 		}
 	}
@@ -938,14 +948,22 @@ impl<T: Config> Pallet<T> {
 		overweight_limit: Weight,
 	) -> (bool, Option<MessageOriginOf<T>>) {
 		use PageExecutionStatus::*;
-		if !weight.check_accrue(
-			T::WeightInfo::service_queue_base().saturating_add(T::WeightInfo::ready_ring_unknit()),
-		) {
+		if weight
+			.try_consume(
+				T::WeightInfo::service_queue_base()
+					.saturating_add(T::WeightInfo::ready_ring_unknit()),
+			)
+			.is_err()
+		{
 			return (false, None)
 		}
 
 		let mut book_state = BookStateFor::<T>::get(&origin);
 		let mut total_processed = 0;
+		if T::QueuePausedQuery::is_paused(&origin) {
+			let next_ready = book_state.ready_neighbours.as_ref().map(|x| x.next.clone());
+			return (false, next_ready)
+		}
 
 		while book_state.end > book_state.begin {
 			let (processed, status) =
@@ -989,10 +1007,13 @@ impl<T: Config> Pallet<T> {
 		overweight_limit: Weight,
 	) -> (u32, PageExecutionStatus) {
 		use PageExecutionStatus::*;
-		if !weight.check_accrue(
-			T::WeightInfo::service_page_base_completion()
-				.max(T::WeightInfo::service_page_base_no_completion()),
-		) {
+		if weight
+			.try_consume(
+				T::WeightInfo::service_page_base_completion()
+					.max(T::WeightInfo::service_page_base_no_completion()),
+			)
+			.is_err()
+		{
 			return (0, Bailed)
 		}
 
@@ -1052,7 +1073,7 @@ impl<T: Config> Pallet<T> {
 		if page.is_complete() {
 			return ItemExecutionStatus::NoItem
 		}
-		if !weight.check_accrue(T::WeightInfo::service_page_item()) {
+		if weight.try_consume(T::WeightInfo::service_page_item()).is_err() {
 			return ItemExecutionStatus::Bailed
 		}
 
@@ -1147,15 +1168,16 @@ impl<T: Config> Pallet<T> {
 		meter: &mut WeightMeter,
 		overweight_limit: Weight,
 	) -> MessageExecutionStatus {
-		let hash = T::Hashing::hash(message);
+		let hash = sp_io::hashing::blake2_256(message);
 		use ProcessMessageError::*;
-		let prev_consumed = meter.consumed;
+		let prev_consumed = meter.consumed();
+		let mut id = hash;
 
-		match T::MessageProcessor::process_message(message, origin.clone(), meter) {
+		match T::MessageProcessor::process_message(message, origin.clone(), meter, &mut id) {
 			Err(Overweight(w)) if w.any_gt(overweight_limit) => {
 				// Permanently overweight.
 				Self::deposit_event(Event::<T>::OverweightEnqueued {
-					hash,
+					id,
 					origin,
 					page_index,
 					message_index,
@@ -1173,13 +1195,13 @@ impl<T: Config> Pallet<T> {
 			},
 			Err(error @ BadFormat | error @ Corrupt | error @ Unsupported) => {
 				// Permanent error - drop
-				Self::deposit_event(Event::<T>::ProcessingFailed { hash, origin, error });
+				Self::deposit_event(Event::<T>::ProcessingFailed { id, origin, error });
 				MessageExecutionStatus::Unprocessable { permanent: true }
 			},
 			Ok(success) => {
 				// Success
-				let weight_used = meter.consumed.saturating_sub(prev_consumed);
-				Self::deposit_event(Event::<T>::Processed { hash, origin, weight_used, success });
+				let weight_used = meter.consumed().saturating_sub(prev_consumed);
+				Self::deposit_event(Event::<T>::Processed { id, origin, weight_used, success });
 				MessageExecutionStatus::Processed
 			},
 		}
@@ -1239,7 +1261,7 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 
 		let mut next = match Self::bump_service_head(&mut weight) {
 			Some(h) => h,
-			None => return weight.consumed,
+			None => return weight.consumed(),
 		};
 		// The last queue that did not make any progress.
 		// The loop aborts as soon as it arrives at this queue again without making any progress
@@ -1265,7 +1287,7 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 				None => break,
 			}
 		}
-		weight.consumed
+		weight.consumed()
 	}
 
 	/// Execute a single overweight message.
@@ -1276,17 +1298,24 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		(message_origin, page, index): Self::OverweightMessageAddress,
 	) -> Result<Weight, ExecuteOverweightError> {
 		let mut weight = WeightMeter::from_limit(weight_limit);
-		if !weight.check_accrue(
-			T::WeightInfo::execute_overweight_page_removed()
-				.max(T::WeightInfo::execute_overweight_page_updated()),
-		) {
+		if weight
+			.try_consume(
+				T::WeightInfo::execute_overweight_page_removed()
+					.max(T::WeightInfo::execute_overweight_page_updated()),
+			)
+			.is_err()
+		{
 			return Err(ExecuteOverweightError::InsufficientWeight)
 		}
 
 		Pallet::<T>::do_execute_overweight(message_origin, page, index, weight.remaining()).map_err(
 			|e| match e {
 				Error::<T>::InsufficientWeight => ExecuteOverweightError::InsufficientWeight,
-				_ => ExecuteOverweightError::NotFound,
+				Error::<T>::AlreadyProcessed => ExecuteOverweightError::AlreadyProcessed,
+				Error::<T>::QueuePaused => ExecuteOverweightError::QueuePaused,
+				Error::<T>::NoPage | Error::<T>::NoMessage | Error::<T>::Queued =>
+					ExecuteOverweightError::NotFound,
+				_ => ExecuteOverweightError::Other,
 			},
 		)
 	}

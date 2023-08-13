@@ -15,9 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// tag::description[]
-//! Generic implementations of Extrinsic/Header/Block.
-// end::description[]
+//! Generic implementations of [`crate::traits::Header`], [`crate::traits::Block`] and
+//! [`crate::traits::Extrinsic`].
 
 mod block;
 mod checked_extrinsic;

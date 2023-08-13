@@ -24,13 +24,7 @@ use sp_std::vec::Vec;
 pub use sp_core::ed25519::*;
 
 mod app {
-	use sp_core::testing::ED25519;
-
-	crate::app_crypto!(super, ED25519);
-
-	impl crate::traits::BoundToRuntimeAppPublic for Public {
-		type Public = Self;
-	}
+	crate::app_crypto!(super, sp_core::testing::ED25519);
 }
 
 #[cfg(feature = "full_crypto")]

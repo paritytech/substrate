@@ -41,20 +41,21 @@
 
 #![deny(unused_crate_dependencies)]
 
+use std::sync::Arc;
+
 use jsonrpsee::{
-	core::{Error as JsonRpseeError, RpcResult},
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
 	types::{error::CallError, ErrorObject},
 };
+
 use sc_client_api::StorageData;
+use sc_consensus_babe::{BabeWorkerHandle, Error as BabeError};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use std::sync::Arc;
 
 type SharedAuthoritySet<TBl> =
 	sc_consensus_grandpa::SharedAuthoritySet<<TBl as BlockT>::Hash, NumberFor<TBl>>;
-type SharedEpochChanges<TBl> =
-	sc_consensus_epochs::SharedEpochChanges<TBl, sc_consensus_babe::Epoch>;
 
 /// Error type used by this crate.
 #[derive(Debug, thiserror::Error)]
@@ -65,6 +66,9 @@ pub enum Error<Block: BlockT> {
 
 	#[error("Failed to load the block weight for block {0:?}")]
 	LoadingBlockWeightFailed(Block::Hash),
+
+	#[error("Failed to load the BABE epoch data: {0}")]
+	LoadingEpochDataFailed(BabeError<Block>),
 
 	#[error("JsonRpc error: {0}")]
 	JsonRpc(String),
@@ -125,7 +129,7 @@ pub struct LightSyncState<Block: BlockT> {
 pub trait SyncStateApi {
 	/// Returns the JSON serialized chainspec running the node, with a sync state.
 	#[method(name = "sync_state_genSyncSpec")]
-	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<serde_json::Value>;
+	async fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<serde_json::Value>;
 }
 
 /// An api for sync state RPC calls.
@@ -133,7 +137,7 @@ pub struct SyncState<Block: BlockT, Client> {
 	chain_spec: Box<dyn sc_chain_spec::ChainSpec>,
 	client: Arc<Client>,
 	shared_authority_set: SharedAuthoritySet<Block>,
-	shared_epoch_changes: SharedEpochChanges<Block>,
+	babe_worker_handle: BabeWorkerHandle<Block>,
 }
 
 impl<Block, Client> SyncState<Block, Client>
@@ -146,18 +150,24 @@ where
 		chain_spec: Box<dyn sc_chain_spec::ChainSpec>,
 		client: Arc<Client>,
 		shared_authority_set: SharedAuthoritySet<Block>,
-		shared_epoch_changes: SharedEpochChanges<Block>,
+		babe_worker_handle: BabeWorkerHandle<Block>,
 	) -> Result<Self, Error<Block>> {
 		if sc_chain_spec::get_extension::<LightSyncStateExtension>(chain_spec.extensions())
 			.is_some()
 		{
-			Ok(Self { chain_spec, client, shared_authority_set, shared_epoch_changes })
+			Ok(Self { chain_spec, client, shared_authority_set, babe_worker_handle })
 		} else {
 			Err(Error::<Block>::LightSyncStateExtensionNotFound)
 		}
 	}
 
-	fn build_sync_state(&self) -> Result<LightSyncState<Block>, Error<Block>> {
+	async fn build_sync_state(&self) -> Result<LightSyncState<Block>, Error<Block>> {
+		let epoch_changes = self
+			.babe_worker_handle
+			.epoch_data()
+			.await
+			.map_err(Error::LoadingEpochDataFailed)?;
+
 		let finalized_hash = self.client.info().finalized_hash;
 		let finalized_header = self
 			.client
@@ -170,20 +180,21 @@ where
 
 		Ok(LightSyncState {
 			finalized_block_header: finalized_header,
-			babe_epoch_changes: self.shared_epoch_changes.shared_data().clone(),
+			babe_epoch_changes: epoch_changes,
 			babe_finalized_block_weight: finalized_block_weight,
 			grandpa_authority_set: self.shared_authority_set.clone_inner(),
 		})
 	}
 }
 
+#[async_trait]
 impl<Block, Backend> SyncStateApiServer for SyncState<Block, Backend>
 where
 	Block: BlockT,
 	Backend: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
 {
-	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<serde_json::Value> {
-		let current_sync_state = self.build_sync_state()?;
+	async fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<serde_json::Value> {
+		let current_sync_state = self.build_sync_state().await?;
 		let mut chain_spec = self.chain_spec.cloned_box();
 
 		let extension = sc_chain_spec::get_extension_mut::<LightSyncStateExtension>(

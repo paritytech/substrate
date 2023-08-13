@@ -15,23 +15,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sp_api::{Core, ProvideRuntimeApi};
-use sp_runtime::traits::{HashFor, Header as HeaderT};
-use sp_state_machine::{
-	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionStrategy,
+use std::panic::UnwindSafe;
+
+use sp_api::{ApiExt, Core, ProvideRuntimeApi};
+use sp_runtime::{
+	traits::{HashingFor, Header as HeaderT},
+	TransactionOutcome,
 };
+use sp_state_machine::{create_proof_check_backend, execution_proof_check_on_trie_backend};
+
 use substrate_test_runtime_client::{
 	prelude::*,
 	runtime::{Block, Header, TestAPI, Transfer},
-	DefaultTestClientBuilderExt, TestClientBuilder,
+	DefaultTestClientBuilderExt, TestClient, TestClientBuilder,
 };
 
 use codec::Encode;
 use sc_block_builder::BlockBuilderProvider;
 use sp_consensus::SelectChain;
+use substrate_test_runtime_client::sc_executor::WasmExecutor;
 
-fn calling_function_with_strat(strat: ExecutionStrategy) {
-	let client = TestClientBuilder::new().set_execution_strategy(strat).build();
+#[test]
+fn calling_runtime_function() {
+	let client = TestClientBuilder::new().build();
 	let runtime_api = client.runtime_api();
 	let best_hash = client.chain_info().best_hash;
 
@@ -39,20 +45,8 @@ fn calling_function_with_strat(strat: ExecutionStrategy) {
 }
 
 #[test]
-fn calling_native_runtime_function() {
-	calling_function_with_strat(ExecutionStrategy::NativeWhenPossible);
-}
-
-#[test]
-fn calling_wasm_runtime_function() {
-	calling_function_with_strat(ExecutionStrategy::AlwaysWasm);
-}
-
-#[test]
 fn calling_native_runtime_signature_changed_function() {
-	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::NativeWhenPossible)
-		.build();
+	let client = TestClientBuilder::new().build();
 	let runtime_api = client.runtime_api();
 	let best_hash = client.chain_info().best_hash;
 
@@ -60,59 +54,8 @@ fn calling_native_runtime_signature_changed_function() {
 }
 
 #[test]
-fn calling_wasm_runtime_signature_changed_old_function() {
-	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
-		.build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-
-	#[allow(deprecated)]
-	let res = runtime_api.function_signature_changed_before_version_2(best_hash).unwrap();
-	assert_eq!(&res, &[1, 2]);
-}
-
-#[test]
-fn calling_with_both_strategy_and_fail_on_wasm_should_return_error() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert!(runtime_api.fail_on_wasm(best_hash).is_err());
-}
-
-#[test]
-fn calling_with_both_strategy_and_fail_on_native_should_work() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert_eq!(runtime_api.fail_on_native(best_hash).unwrap(), 1);
-}
-
-#[test]
-fn calling_with_native_else_wasm_and_fail_on_wasm_should_work() {
-	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::NativeElseWasm)
-		.build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert_eq!(runtime_api.fail_on_wasm(best_hash).unwrap(), 1);
-}
-
-#[test]
-fn calling_with_native_else_wasm_and_fail_on_native_should_work() {
-	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::NativeElseWasm)
-		.build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert_eq!(runtime_api.fail_on_native(best_hash).unwrap(), 1);
-}
-
-#[test]
 fn use_trie_function() {
-	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
-		.build();
+	let client = TestClientBuilder::new().build();
 	let runtime_api = client.runtime_api();
 	let best_hash = client.chain_info().best_hash;
 	assert_eq!(runtime_api.use_trie(best_hash).unwrap(), 2);
@@ -120,7 +63,7 @@ fn use_trie_function() {
 
 #[test]
 fn initialize_block_works() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
+	let client = TestClientBuilder::new().build();
 	let runtime_api = client.runtime_api();
 	let best_hash = client.chain_info().best_hash;
 	runtime_api
@@ -140,9 +83,7 @@ fn initialize_block_works() {
 
 #[test]
 fn record_proof_works() {
-	let (client, longest_chain) = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::Both)
-		.build_with_longest_chain();
+	let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 
 	let storage_root =
 		*futures::executor::block_on(longest_chain.best_chain()).unwrap().state_root();
@@ -161,7 +102,7 @@ fn record_proof_works() {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Bob.into(),
 	}
-	.into_signed_tx();
+	.into_unchecked_extrinsic();
 
 	// Build the block and record proof
 	let mut builder = client
@@ -170,7 +111,7 @@ fn record_proof_works() {
 	builder.push(transaction.clone()).unwrap();
 	let (block, _, proof) = builder.build().expect("Bake block").into_inner();
 
-	let backend = create_proof_check_backend::<HashFor<Block>>(
+	let backend = create_proof_check_backend::<HashingFor<Block>>(
 		storage_root,
 		proof.expect("Proof was generated"),
 	)
@@ -178,17 +119,13 @@ fn record_proof_works() {
 
 	// Use the proof backend to execute `execute_block`.
 	let mut overlay = Default::default();
-	let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new(
-		WasmExecutionMethod::Interpreted,
-		None,
-		8,
-		2,
+	let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new_with_wasm_executor(
+		WasmExecutor::builder().build(),
 	);
 	execution_proof_check_on_trie_backend(
 		&backend,
 		&mut overlay,
 		&executor,
-		sp_core::testing::TaskExecutor::new(),
 		"Core_execute_block",
 		&block.encode(),
 		&runtime_code,
@@ -198,7 +135,7 @@ fn record_proof_works() {
 
 #[test]
 fn call_runtime_api_with_multiple_arguments() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
+	let client = TestClientBuilder::new().build();
 
 	let data = vec![1, 2, 4, 5, 6, 7, 8, 8, 10, 12];
 	let best_hash = client.chain_info().best_hash;
@@ -213,8 +150,7 @@ fn disable_logging_works() {
 	if std::env::var("RUN_TEST").is_ok() {
 		sp_tracing::try_init_simple();
 
-		let mut builder =
-			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm);
+		let mut builder = TestClientBuilder::new();
 		builder.genesis_init_mut().set_wasm_code(
 			substrate_test_runtime_client::runtime::wasm_binary_logging_disabled_unwrap().to_vec(),
 		);
@@ -238,4 +174,47 @@ fn disable_logging_works() {
 		assert!(!output.contains("Hey I'm runtime"));
 		assert!(output.contains("Logging from native works"));
 	}
+}
+
+// Certain logic like the transaction handling is not unwind safe.
+//
+// Ensure that the type is not unwind safe!
+static_assertions::assert_not_impl_any!(<TestClient as ProvideRuntimeApi<_>>::Api: UnwindSafe);
+
+#[test]
+fn ensure_transactional_works() {
+	const KEY: &[u8] = b"test";
+
+	let client = TestClientBuilder::new().build();
+	let best_hash = client.chain_info().best_hash;
+
+	let runtime_api = client.runtime_api();
+	runtime_api.execute_in_transaction(|api| {
+		api.write_key_value(best_hash, KEY.to_vec(), vec![1, 2, 3], false).unwrap();
+
+		api.execute_in_transaction(|api| {
+			api.write_key_value(best_hash, KEY.to_vec(), vec![1, 2, 3, 4], false).unwrap();
+
+			TransactionOutcome::Commit(())
+		});
+
+		TransactionOutcome::Commit(())
+	});
+
+	let changes = runtime_api
+		.into_storage_changes(&client.state_at(best_hash).unwrap(), best_hash)
+		.unwrap();
+	assert_eq!(changes.main_storage_changes[0].1, Some(vec![1, 2, 3, 4]));
+
+	let runtime_api = client.runtime_api();
+	runtime_api.execute_in_transaction(|api| {
+		assert!(api.write_key_value(best_hash, KEY.to_vec(), vec![1, 2, 3], true).is_err());
+
+		TransactionOutcome::Commit(())
+	});
+
+	let changes = runtime_api
+		.into_storage_changes(&client.state_at(best_hash).unwrap(), best_hash)
+		.unwrap();
+	assert_eq!(changes.main_storage_changes[0].1, Some(vec![1, 2, 3]));
 }

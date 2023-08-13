@@ -18,18 +18,16 @@
 //! Local keystore implementation
 
 use parking_lot::RwLock;
-use sp_application_crypto::{ecdsa, ed25519, sr25519, AppKey, AppPair, IsWrappedBy};
+use sp_application_crypto::{AppCrypto, AppPair, IsWrappedBy};
+#[cfg(feature = "bandersnatch-experimental")]
+use sp_core::bandersnatch;
+#[cfg(feature = "bls-experimental")]
+use sp_core::{bls377, bls381};
 use sp_core::{
-	crypto::{
-		ByteArray, CryptoTypePublicPair, ExposeSecret, KeyTypeId, Pair as PairT, SecretString,
-	},
-	sr25519::{Pair as Sr25519Pair, Public as Sr25519Public},
-	Encode,
+	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString, VrfSecret},
+	ecdsa, ed25519, sr25519,
 };
-use sp_keystore::{
-	vrf::{make_transcript, VRFSignature, VRFTranscriptData},
-	Error as TraitError, Keystore, KeystorePtr,
-};
+use sp_keystore::{Error as TraitError, Keystore, KeystorePtr};
 use std::{
 	collections::HashMap,
 	fs::{self, File},
@@ -62,146 +60,297 @@ impl LocalKeystore {
 	/// `Err(_)` when something failed.
 	pub fn key_pair<Pair: AppPair>(
 		&self,
-		public: &<Pair as AppKey>::Public,
+		public: &<Pair as AppCrypto>::Public,
 	) -> Result<Option<Pair>> {
 		self.0.read().key_pair::<Pair>(public)
+	}
+
+	fn public_keys<T: CorePair>(&self, key_type: KeyTypeId) -> Vec<T::Public> {
+		self.0
+			.read()
+			.raw_public_keys(key_type)
+			.map(|v| {
+				v.into_iter().filter_map(|k| T::Public::from_slice(k.as_slice()).ok()).collect()
+			})
+			.unwrap_or_default()
+	}
+
+	fn generate_new<T: CorePair>(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<T::Public, TraitError> {
+		let pair = match seed {
+			Some(seed) => self.0.write().insert_ephemeral_from_seed_by_type::<T>(seed, key_type),
+			None => self.0.write().generate_by_type::<T>(key_type),
+		}
+		.map_err(|e| -> TraitError { e.into() })?;
+		Ok(pair.public())
+	}
+
+	fn sign<T: CorePair>(
+		&self,
+		key_type: KeyTypeId,
+		public: &T::Public,
+		msg: &[u8],
+	) -> std::result::Result<Option<T::Signature>, TraitError> {
+		let signature = self
+			.0
+			.read()
+			.key_pair_by_type::<T>(public, key_type)?
+			.map(|pair| pair.sign(msg));
+		Ok(signature)
+	}
+
+	fn vrf_sign<T: CorePair + VrfSecret>(
+		&self,
+		key_type: KeyTypeId,
+		public: &T::Public,
+		data: &T::VrfSignData,
+	) -> std::result::Result<Option<T::VrfSignature>, TraitError> {
+		let sig = self
+			.0
+			.read()
+			.key_pair_by_type::<T>(public, key_type)?
+			.map(|pair| pair.vrf_sign(data));
+		Ok(sig)
+	}
+
+	fn vrf_output<T: CorePair + VrfSecret>(
+		&self,
+		key_type: KeyTypeId,
+		public: &T::Public,
+		input: &T::VrfInput,
+	) -> std::result::Result<Option<T::VrfOutput>, TraitError> {
+		let preout = self
+			.0
+			.read()
+			.key_pair_by_type::<T>(public, key_type)?
+			.map(|pair| pair.vrf_output(input));
+		Ok(preout)
 	}
 }
 
 impl Keystore for LocalKeystore {
-	fn keys(&self, id: KeyTypeId) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
-		let raw_keys = self.0.read().raw_public_keys(id)?;
-		Ok(raw_keys.into_iter().fold(Vec::new(), |mut v, k| {
-			v.push(CryptoTypePublicPair(sr25519::CRYPTO_ID, k.clone()));
-			v.push(CryptoTypePublicPair(ed25519::CRYPTO_ID, k.clone()));
-			v.push(CryptoTypePublicPair(ecdsa::CRYPTO_ID, k));
-			v
-		}))
-	}
-
-	fn sign_with(
-		&self,
-		id: KeyTypeId,
-		key: &CryptoTypePublicPair,
-		msg: &[u8],
-	) -> std::result::Result<Option<Vec<u8>>, TraitError> {
-		match key.0 {
-			ed25519::CRYPTO_ID => {
-				let pub_key = ed25519::Public::from_slice(key.1.as_slice()).map_err(|()| {
-					TraitError::Other("Corrupted public key - Invalid size".into())
-				})?;
-				let key_pair = self
-					.0
-					.read()
-					.key_pair_by_type::<ed25519::Pair>(&pub_key, id)
-					.map_err(TraitError::from)?;
-				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
-			},
-			sr25519::CRYPTO_ID => {
-				let pub_key = sr25519::Public::from_slice(key.1.as_slice()).map_err(|()| {
-					TraitError::Other("Corrupted public key - Invalid size".into())
-				})?;
-				let key_pair = self
-					.0
-					.read()
-					.key_pair_by_type::<sr25519::Pair>(&pub_key, id)
-					.map_err(TraitError::from)?;
-				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
-			},
-			ecdsa::CRYPTO_ID => {
-				let pub_key = ecdsa::Public::from_slice(key.1.as_slice()).map_err(|()| {
-					TraitError::Other("Corrupted public key - Invalid size".into())
-				})?;
-				let key_pair = self
-					.0
-					.read()
-					.key_pair_by_type::<ecdsa::Pair>(&pub_key, id)
-					.map_err(TraitError::from)?;
-				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
-			},
-			_ => Err(TraitError::KeyNotSupported(id)),
-		}
-	}
-
 	fn sr25519_public_keys(&self, key_type: KeyTypeId) -> Vec<sr25519::Public> {
-		self.0
-			.read()
-			.raw_public_keys(key_type)
-			.map(|v| {
-				v.into_iter()
-					.filter_map(|k| sr25519::Public::from_slice(k.as_slice()).ok())
-					.collect()
-			})
-			.unwrap_or_default()
+		self.public_keys::<sr25519::Pair>(key_type)
 	}
 
+	/// Generate a new pair compatible with the 'ed25519' signature scheme.
+	///
+	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn sr25519_generate_new(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> std::result::Result<sr25519::Public, TraitError> {
-		let pair = match seed {
-			Some(seed) =>
-				self.0.write().insert_ephemeral_from_seed_by_type::<sr25519::Pair>(seed, id),
-			None => self.0.write().generate_by_type::<sr25519::Pair>(id),
-		}
-		.map_err(|e| -> TraitError { e.into() })?;
+		self.generate_new::<sr25519::Pair>(key_type, seed)
+	}
 
-		Ok(pair.public())
+	fn sr25519_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		msg: &[u8],
+	) -> std::result::Result<Option<sr25519::Signature>, TraitError> {
+		self.sign::<sr25519::Pair>(key_type, public, msg)
+	}
+
+	fn sr25519_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		data: &sr25519::vrf::VrfSignData,
+	) -> std::result::Result<Option<sr25519::vrf::VrfSignature>, TraitError> {
+		self.vrf_sign::<sr25519::Pair>(key_type, public, data)
+	}
+
+	fn sr25519_vrf_output(
+		&self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		input: &sr25519::vrf::VrfInput,
+	) -> std::result::Result<Option<sr25519::vrf::VrfOutput>, TraitError> {
+		self.vrf_output::<sr25519::Pair>(key_type, public, input)
 	}
 
 	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public> {
-		self.0
-			.read()
-			.raw_public_keys(key_type)
-			.map(|v| {
-				v.into_iter()
-					.filter_map(|k| ed25519::Public::from_slice(k.as_slice()).ok())
-					.collect()
-			})
-			.unwrap_or_default()
+		self.public_keys::<ed25519::Pair>(key_type)
 	}
 
+	/// Generate a new pair compatible with the 'sr25519' signature scheme.
+	///
+	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn ed25519_generate_new(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> std::result::Result<ed25519::Public, TraitError> {
-		let pair = match seed {
-			Some(seed) =>
-				self.0.write().insert_ephemeral_from_seed_by_type::<ed25519::Pair>(seed, id),
-			None => self.0.write().generate_by_type::<ed25519::Pair>(id),
-		}
-		.map_err(|e| -> TraitError { e.into() })?;
+		self.generate_new::<ed25519::Pair>(key_type, seed)
+	}
 
-		Ok(pair.public())
+	fn ed25519_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &ed25519::Public,
+		msg: &[u8],
+	) -> std::result::Result<Option<ed25519::Signature>, TraitError> {
+		self.sign::<ed25519::Pair>(key_type, public, msg)
 	}
 
 	fn ecdsa_public_keys(&self, key_type: KeyTypeId) -> Vec<ecdsa::Public> {
-		self.0
-			.read()
-			.raw_public_keys(key_type)
-			.map(|v| {
-				v.into_iter()
-					.filter_map(|k| ecdsa::Public::from_slice(k.as_slice()).ok())
-					.collect()
-			})
-			.unwrap_or_default()
+		self.public_keys::<ecdsa::Pair>(key_type)
 	}
 
+	/// Generate a new pair compatible with the 'ecdsa' signature scheme.
+	///
+	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn ecdsa_generate_new(
 		&self,
-		id: KeyTypeId,
+		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> std::result::Result<ecdsa::Public, TraitError> {
-		let pair = match seed {
-			Some(seed) =>
-				self.0.write().insert_ephemeral_from_seed_by_type::<ecdsa::Pair>(seed, id),
-			None => self.0.write().generate_by_type::<ecdsa::Pair>(id),
-		}
-		.map_err(|e| -> TraitError { e.into() })?;
+		self.generate_new::<ecdsa::Pair>(key_type, seed)
+	}
 
-		Ok(pair.public())
+	fn ecdsa_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &ecdsa::Public,
+		msg: &[u8],
+	) -> std::result::Result<Option<ecdsa::Signature>, TraitError> {
+		self.sign::<ecdsa::Pair>(key_type, public, msg)
+	}
+
+	fn ecdsa_sign_prehashed(
+		&self,
+		key_type: KeyTypeId,
+		public: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> std::result::Result<Option<ecdsa::Signature>, TraitError> {
+		let sig = self
+			.0
+			.read()
+			.key_pair_by_type::<ecdsa::Pair>(public, key_type)?
+			.map(|pair| pair.sign_prehashed(msg));
+		Ok(sig)
+	}
+
+	#[cfg(feature = "bandersnatch-experimental")]
+	fn bandersnatch_public_keys(&self, key_type: KeyTypeId) -> Vec<bandersnatch::Public> {
+		self.public_keys::<bandersnatch::Pair>(key_type)
+	}
+
+	/// Generate a new pair compatible with the 'bandersnatch' signature scheme.
+	///
+	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
+	#[cfg(feature = "bandersnatch-experimental")]
+	fn bandersnatch_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<bandersnatch::Public, TraitError> {
+		self.generate_new::<bandersnatch::Pair>(key_type, seed)
+	}
+
+	#[cfg(feature = "bandersnatch-experimental")]
+	fn bandersnatch_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		msg: &[u8],
+	) -> std::result::Result<Option<bandersnatch::Signature>, TraitError> {
+		self.sign::<bandersnatch::Pair>(key_type, public, msg)
+	}
+
+	#[cfg(feature = "bandersnatch-experimental")]
+	fn bandersnatch_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		data: &bandersnatch::vrf::VrfSignData,
+	) -> std::result::Result<Option<bandersnatch::vrf::VrfSignature>, TraitError> {
+		self.vrf_sign::<bandersnatch::Pair>(key_type, public, data)
+	}
+
+	#[cfg(feature = "bandersnatch-experimental")]
+	fn bandersnatch_vrf_output(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		input: &bandersnatch::vrf::VrfInput,
+	) -> std::result::Result<Option<bandersnatch::vrf::VrfOutput>, TraitError> {
+		self.vrf_output::<bandersnatch::Pair>(key_type, public, input)
+	}
+
+	#[cfg(feature = "bandersnatch-experimental")]
+	fn bandersnatch_ring_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		data: &bandersnatch::vrf::VrfSignData,
+		prover: &bandersnatch::ring_vrf::RingProver,
+	) -> std::result::Result<Option<bandersnatch::ring_vrf::RingVrfSignature>, TraitError> {
+		let sig = self
+			.0
+			.read()
+			.key_pair_by_type::<bandersnatch::Pair>(public, key_type)?
+			.map(|pair| pair.ring_vrf_sign(data, prover));
+		Ok(sig)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_public_keys(&self, key_type: KeyTypeId) -> Vec<bls381::Public> {
+		self.public_keys::<bls381::Pair>(key_type)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	/// Generate a new pair compatible with the 'bls381' signature scheme.
+	///
+	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
+	fn bls381_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<bls381::Public, TraitError> {
+		self.generate_new::<bls381::Pair>(key_type, seed)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bls381::Public,
+		msg: &[u8],
+	) -> std::result::Result<Option<bls381::Signature>, TraitError> {
+		self.sign::<bls381::Pair>(key_type, public, msg)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_public_keys(&self, key_type: KeyTypeId) -> Vec<bls377::Public> {
+		self.public_keys::<bls377::Pair>(key_type)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	/// Generate a new pair compatible with the 'bls377' signature scheme.
+	///
+	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
+	fn bls377_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<bls377::Public, TraitError> {
+		self.generate_new::<bls377::Pair>(key_type, seed)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bls377::Public,
+		msg: &[u8],
+	) -> std::result::Result<Option<bls377::Signature>, TraitError> {
+		self.sign::<bls377::Pair>(key_type, public, msg)
 	}
 
 	fn insert(
@@ -213,38 +362,14 @@ impl Keystore for LocalKeystore {
 		self.0.write().insert(key_type, suri, public).map_err(|_| ())
 	}
 
+	fn keys(&self, key_type: KeyTypeId) -> std::result::Result<Vec<Vec<u8>>, TraitError> {
+		self.0.read().raw_public_keys(key_type).map_err(|e| e.into())
+	}
+
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
 		public_keys
 			.iter()
 			.all(|(p, t)| self.0.read().key_phrase_by_type(p, *t).ok().flatten().is_some())
-	}
-
-	fn sr25519_vrf_sign(
-		&self,
-		key_type: KeyTypeId,
-		public: &Sr25519Public,
-		transcript_data: VRFTranscriptData,
-	) -> std::result::Result<Option<VRFSignature>, TraitError> {
-		let transcript = make_transcript(transcript_data);
-		let pair = self.0.read().key_pair_by_type::<Sr25519Pair>(public, key_type)?;
-
-		if let Some(pair) = pair {
-			let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
-			Ok(Some(VRFSignature { output: inout.to_output(), proof }))
-		} else {
-			Ok(None)
-		}
-	}
-
-	fn ecdsa_sign_prehashed(
-		&self,
-		id: KeyTypeId,
-		public: &ecdsa::Public,
-		msg: &[u8; 32],
-	) -> std::result::Result<Option<ecdsa::Signature>, TraitError> {
-		let pair = self.0.read().key_pair_by_type::<ecdsa::Pair>(public, id)?;
-
-		pair.map(|k| k.sign_prehashed(msg)).map(Ok).transpose()
 	}
 }
 
@@ -296,7 +421,12 @@ impl KeystoreInner {
 	/// Insert the given public/private key pair with the given key type.
 	///
 	/// Does not place it into the file system store.
-	fn insert_ephemeral_pair<Pair: PairT>(&mut self, pair: &Pair, seed: &str, key_type: KeyTypeId) {
+	fn insert_ephemeral_pair<Pair: CorePair>(
+		&mut self,
+		pair: &Pair,
+		seed: &str,
+		key_type: KeyTypeId,
+	) {
 		let key = (key_type, pair.public().to_raw_vec());
 		self.additional.insert(key, seed.into());
 	}
@@ -316,7 +446,7 @@ impl KeystoreInner {
 	///
 	/// Places it into the file system store, if a path is configured. Otherwise insert
 	/// it into the memory cache only.
-	fn generate_by_type<Pair: PairT>(&mut self, key_type: KeyTypeId) -> Result<Pair> {
+	fn generate_by_type<Pair: CorePair>(&mut self, key_type: KeyTypeId) -> Result<Pair> {
 		let (pair, phrase, _) = Pair::generate_with_phrase(self.password());
 		if let Some(path) = self.key_file_path(pair.public().as_slice(), key_type) {
 			Self::write_to_file(path, &phrase)?;
@@ -345,7 +475,7 @@ impl KeystoreInner {
 	/// Create a new key from seed.
 	///
 	/// Does not place it into the file system store.
-	fn insert_ephemeral_from_seed_by_type<Pair: PairT>(
+	fn insert_ephemeral_from_seed_by_type<Pair: CorePair>(
 		&mut self,
 		seed: &str,
 		key_type: KeyTypeId,
@@ -377,7 +507,7 @@ impl KeystoreInner {
 	}
 
 	/// Get a key pair for the given public key and key type.
-	fn key_pair_by_type<Pair: PairT>(
+	fn key_pair_by_type<Pair: CorePair>(
 		&self,
 		public: &Pair::Public,
 		key_type: KeyTypeId,
@@ -409,12 +539,12 @@ impl KeystoreInner {
 	}
 
 	/// Returns a list of raw public keys filtered by `KeyTypeId`
-	fn raw_public_keys(&self, id: KeyTypeId) -> Result<Vec<Vec<u8>>> {
+	fn raw_public_keys(&self, key_type: KeyTypeId) -> Result<Vec<Vec<u8>>> {
 		let mut public_keys: Vec<Vec<u8>> = self
 			.additional
 			.keys()
 			.into_iter()
-			.filter_map(|k| if k.0 == id { Some(k.1.clone()) } else { None })
+			.filter_map(|k| if k.0 == key_type { Some(k.1.clone()) } else { None })
 			.collect();
 
 		if let Some(path) = &self.path {
@@ -426,7 +556,7 @@ impl KeystoreInner {
 				if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
 					match array_bytes::hex2bytes(name) {
 						Ok(ref hex) if hex.len() > 4 => {
-							if hex[0..4] != id.0 {
+							if hex[0..4] != key_type.0 {
 								continue
 							}
 							let public = hex[4..].to_vec();
@@ -447,7 +577,7 @@ impl KeystoreInner {
 	/// when something failed.
 	pub fn key_pair<Pair: AppPair>(
 		&self,
-		public: &<Pair as AppKey>::Public,
+		public: &<Pair as AppCrypto>::Public,
 	) -> Result<Option<Pair>> {
 		self.key_pair_by_type::<Pair::Generic>(IsWrappedBy::from_ref(public), Pair::ID)
 			.map(|v| v.map(Into::into))
@@ -504,17 +634,14 @@ mod tests {
 		let key: ed25519::AppPair = store.0.write().generate().unwrap();
 		let key2 = ed25519::Pair::generate().0;
 
-		assert!(!Keystore::has_keys(&store, &[(key2.public().to_vec(), ed25519::AppPublic::ID)]));
+		assert!(!store.has_keys(&[(key2.public().to_vec(), ed25519::AppPublic::ID)]));
 
-		assert!(!Keystore::has_keys(
-			&store,
-			&[
-				(key2.public().to_vec(), ed25519::AppPublic::ID),
-				(key.public().to_raw_vec(), ed25519::AppPublic::ID),
-			],
-		));
+		assert!(!store.has_keys(&[
+			(key2.public().to_vec(), ed25519::AppPublic::ID),
+			(key.public().to_raw_vec(), ed25519::AppPublic::ID),
+		],));
 
-		assert!(Keystore::has_keys(&store, &[(key.public().to_raw_vec(), ed25519::AppPublic::ID)]));
+		assert!(store.has_keys(&[(key.public().to_raw_vec(), ed25519::AppPublic::ID)]));
 	}
 
 	#[test]
@@ -626,31 +753,30 @@ mod tests {
 		let file_name = temp_dir.path().join(array_bytes::bytes2hex("", &SR25519.0[..2]));
 		fs::write(file_name, "test").expect("Invalid file is written");
 
-		assert!(Keystore::sr25519_public_keys(&store, SR25519).is_empty());
+		assert!(store.sr25519_public_keys(SR25519).is_empty());
 	}
 
 	#[test]
 	fn generate_with_seed_is_not_stored() {
 		let temp_dir = TempDir::new().unwrap();
 		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
-		let _alice_tmp_key =
-			Keystore::sr25519_generate_new(&store, TEST_KEY_TYPE, Some("//Alice")).unwrap();
+		let _alice_tmp_key = store.sr25519_generate_new(TEST_KEY_TYPE, Some("//Alice")).unwrap();
 
-		assert_eq!(Keystore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 1);
+		assert_eq!(store.sr25519_public_keys(TEST_KEY_TYPE).len(), 1);
 
 		drop(store);
 		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
-		assert_eq!(Keystore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 0);
+		assert_eq!(store.sr25519_public_keys(TEST_KEY_TYPE).len(), 0);
 	}
 
 	#[test]
 	fn generate_can_be_fetched_in_memory() {
 		let store = LocalKeystore::in_memory();
-		Keystore::sr25519_generate_new(&store, TEST_KEY_TYPE, Some("//Alice")).unwrap();
+		store.sr25519_generate_new(TEST_KEY_TYPE, Some("//Alice")).unwrap();
 
-		assert_eq!(Keystore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 1);
-		Keystore::sr25519_generate_new(&store, TEST_KEY_TYPE, None).unwrap();
-		assert_eq!(Keystore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 2);
+		assert_eq!(store.sr25519_public_keys(TEST_KEY_TYPE).len(), 1);
+		store.sr25519_generate_new(TEST_KEY_TYPE, None).unwrap();
+		assert_eq!(store.sr25519_public_keys(TEST_KEY_TYPE).len(), 2);
 	}
 
 	#[test]
@@ -661,7 +787,7 @@ mod tests {
 		let temp_dir = TempDir::new().unwrap();
 		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
 
-		let public = Keystore::sr25519_generate_new(&store, TEST_KEY_TYPE, None).unwrap();
+		let public = store.sr25519_generate_new(TEST_KEY_TYPE, None).unwrap();
 
 		let path = store.0.read().key_file_path(public.as_ref(), TEST_KEY_TYPE).unwrap();
 		let permissions = File::open(path).unwrap().metadata().unwrap().permissions();

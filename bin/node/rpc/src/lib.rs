@@ -34,10 +34,9 @@
 use std::sync::Arc;
 
 use jsonrpsee::RpcModule;
-use node_primitives::{AccountId, Balance, Block, BlockNumber, Hash, Index};
+use node_primitives::{AccountId, Balance, Block, BlockNumber, Hash, Nonce};
 use sc_client_api::AuxStore;
-use sc_consensus_babe::{BabeConfiguration, Epoch};
-use sc_consensus_epochs::SharedEpochChanges;
+use sc_consensus_babe::BabeWorkerHandle;
 use sc_consensus_grandpa::{
 	FinalityProofProvider, GrandpaJustificationStream, SharedAuthoritySet, SharedVoterState,
 };
@@ -53,10 +52,8 @@ use sp_keystore::KeystorePtr;
 
 /// Extra dependencies for BABE.
 pub struct BabeDeps {
-	/// BABE protocol config.
-	pub babe_config: BabeConfiguration,
-	/// BABE pending epoch changes.
-	pub shared_epoch_changes: SharedEpochChanges<Block, Epoch>,
+	/// A handle to the BABE worker for issuing requests.
+	pub babe_worker_handle: BabeWorkerHandle<Block>,
 	/// The keystore that manages the keys of the node.
 	pub keystore: KeystorePtr,
 }
@@ -91,12 +88,25 @@ pub struct FullDeps<C, P, SC, B> {
 	pub babe: BabeDeps,
 	/// GRANDPA specific dependencies.
 	pub grandpa: GrandpaDeps<B>,
+	/// Shared statement store reference.
+	pub statement_store: Arc<dyn sp_statement_store::StatementStore>,
+	/// The backend used by the node.
+	pub backend: Arc<B>,
 }
 
 /// Instantiate all Full RPC extensions.
 pub fn create_full<C, P, SC, B>(
-	deps: FullDeps<C, P, SC, B>,
-	backend: Arc<B>,
+	FullDeps {
+		client,
+		pool,
+		select_chain,
+		chain_spec,
+		deny_unsafe,
+		babe,
+		grandpa,
+		statement_store,
+		backend,
+	}: FullDeps<C, P, SC, B>,
 ) -> Result<RpcModule<()>, Box<dyn std::error::Error + Send + Sync>>
 where
 	C: ProvideRuntimeApi<Block>
@@ -107,7 +117,7 @@ where
 		+ Sync
 		+ Send
 		+ 'static,
-	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
+	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Nonce>,
 	C::Api: mmr_rpc::MmrRuntimeApi<Block, <Block as sp_runtime::traits::Block>::Hash, BlockNumber>,
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
 	C::Api: BabeApi<Block>,
@@ -115,22 +125,24 @@ where
 	P: TransactionPool + 'static,
 	SC: SelectChain<Block> + 'static,
 	B: sc_client_api::Backend<Block> + Send + Sync + 'static,
-	B::State: sc_client_api::backend::StateBackend<sp_runtime::traits::HashFor<Block>>,
+	B::State: sc_client_api::backend::StateBackend<sp_runtime::traits::HashingFor<Block>>,
 {
 	use mmr_rpc::{Mmr, MmrApiServer};
 	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApiServer};
 	use sc_consensus_babe_rpc::{Babe, BabeApiServer};
 	use sc_consensus_grandpa_rpc::{Grandpa, GrandpaApiServer};
-	use sc_rpc::dev::{Dev, DevApiServer};
+	use sc_rpc::{
+		dev::{Dev, DevApiServer},
+		statement::StatementApiServer,
+	};
 	use sc_rpc_spec_v2::chain_spec::{ChainSpec, ChainSpecApiServer};
 	use sc_sync_state_rpc::{SyncState, SyncStateApiServer};
 	use substrate_frame_rpc_system::{System, SystemApiServer};
 	use substrate_state_trie_migration_rpc::{StateMigration, StateMigrationApiServer};
 
 	let mut io = RpcModule::new(());
-	let FullDeps { client, pool, select_chain, chain_spec, deny_unsafe, babe, grandpa } = deps;
 
-	let BabeDeps { keystore, babe_config, shared_epoch_changes } = babe;
+	let BabeDeps { keystore, babe_worker_handle } = babe;
 	let GrandpaDeps {
 		shared_voter_state,
 		shared_authority_set,
@@ -148,18 +160,19 @@ where
 	// Making synchronous calls in light client freezes the browser currently,
 	// more context: https://github.com/paritytech/substrate/pull/3480
 	// These RPCs should use an asynchronous caller instead.
-	io.merge(Mmr::new(client.clone()).into_rpc())?;
-	io.merge(TransactionPayment::new(client.clone()).into_rpc())?;
 	io.merge(
-		Babe::new(
+		Mmr::new(
 			client.clone(),
-			shared_epoch_changes.clone(),
-			keystore,
-			babe_config,
-			select_chain,
-			deny_unsafe,
+			backend
+				.offchain_storage()
+				.ok_or_else(|| "Backend doesn't provide an offchain storage")?,
 		)
 		.into_rpc(),
+	)?;
+	io.merge(TransactionPayment::new(client.clone()).into_rpc())?;
+	io.merge(
+		Babe::new(client.clone(), babe_worker_handle.clone(), keystore, select_chain, deny_unsafe)
+			.into_rpc(),
 	)?;
 	io.merge(
 		Grandpa::new(
@@ -173,12 +186,15 @@ where
 	)?;
 
 	io.merge(
-		SyncState::new(chain_spec, client.clone(), shared_authority_set, shared_epoch_changes)?
+		SyncState::new(chain_spec, client.clone(), shared_authority_set, babe_worker_handle)?
 			.into_rpc(),
 	)?;
 
 	io.merge(StateMigration::new(client.clone(), backend, deny_unsafe).into_rpc())?;
 	io.merge(Dev::new(client, deny_unsafe).into_rpc())?;
+	let statement_store =
+		sc_rpc::statement::StatementStore::new(statement_store, deny_unsafe).into_rpc();
+	io.merge(statement_store)?;
 
 	Ok(io)
 }

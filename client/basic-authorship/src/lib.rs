@@ -26,7 +26,7 @@
 //! # use sp_runtime::generic::BlockId;
 //! # use std::{sync::Arc, time::Duration};
 //! # use substrate_test_runtime_client::{
-//! #     runtime::{Extrinsic, Transfer}, AccountKeyring,
+//! #     runtime::Transfer, AccountKeyring,
 //! #     DefaultTestClientBuilderExt, TestClientBuilderExt,
 //! # };
 //! # use sc_transaction_pool::{BasicPool, FullChainApi};

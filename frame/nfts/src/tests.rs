@@ -23,7 +23,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::Dispatchable,
 	traits::{
-		tokens::nonfungibles_v2::{Destroy, Mutate},
+		tokens::nonfungibles_v2::{Create, Destroy, Mutate},
 		Currency, Get,
 	},
 };
@@ -369,7 +369,37 @@ fn mint_should_work() {
 			MintSettings { mint_type: MintType::Public, price: Some(1), ..Default::default() }
 		));
 		Balances::make_free_balance_be(&account(2), 100);
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(2)), 0, 43, account(2), None));
+		assert_noop!(
+			Nfts::mint(RuntimeOrigin::signed(account(2)), 0, 43, account(2), None,),
+			Error::<Test>::WitnessRequired
+		);
+		assert_noop!(
+			Nfts::mint(
+				RuntimeOrigin::signed(account(2)),
+				0,
+				43,
+				account(2),
+				Some(MintWitness { ..Default::default() })
+			),
+			Error::<Test>::BadWitness
+		);
+		assert_noop!(
+			Nfts::mint(
+				RuntimeOrigin::signed(account(2)),
+				0,
+				43,
+				account(2),
+				Some(MintWitness { mint_price: Some(0), ..Default::default() })
+			),
+			Error::<Test>::BadWitness
+		);
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(account(2)),
+			0,
+			43,
+			account(2),
+			Some(MintWitness { mint_price: Some(1), ..Default::default() })
+		));
 		assert_eq!(Balances::total_balance(&account(2)), 99);
 
 		// validate types
@@ -385,11 +415,11 @@ fn mint_should_work() {
 		));
 		assert_noop!(
 			Nfts::mint(RuntimeOrigin::signed(account(3)), 1, 42, account(3), None),
-			Error::<Test>::BadWitness
+			Error::<Test>::WitnessRequired
 		);
 		assert_noop!(
 			Nfts::mint(RuntimeOrigin::signed(account(2)), 1, 42, account(2), None),
-			Error::<Test>::BadWitness
+			Error::<Test>::WitnessRequired
 		);
 		assert_noop!(
 			Nfts::mint(
@@ -397,7 +427,7 @@ fn mint_should_work() {
 				1,
 				42,
 				account(2),
-				Some(MintWitness { owned_item: 42 })
+				Some(MintWitness { owned_item: 42, ..Default::default() })
 			),
 			Error::<Test>::BadWitness
 		);
@@ -406,7 +436,7 @@ fn mint_should_work() {
 			1,
 			42,
 			account(2),
-			Some(MintWitness { owned_item: 43 })
+			Some(MintWitness { owned_item: 43, ..Default::default() })
 		));
 
 		// can't mint twice
@@ -416,7 +446,7 @@ fn mint_should_work() {
 				1,
 				46,
 				account(2),
-				Some(MintWitness { owned_item: 43 })
+				Some(MintWitness { owned_item: 43, ..Default::default() })
 			),
 			Error::<Test>::AlreadyClaimed
 		);
@@ -2700,7 +2730,11 @@ fn claim_swap_should_work() {
 		Balances::make_free_balance_be(&user_1, initial_balance);
 		Balances::make_free_balance_be(&user_2, initial_balance);
 
-		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_1.clone(), default_collection_config()));
+		assert_ok!(Nfts::force_create(
+			RuntimeOrigin::root(),
+			user_1.clone(),
+			default_collection_config()
+		));
 
 		assert_ok!(Nfts::mint(
 			RuntimeOrigin::signed(user_1.clone()),
@@ -3137,6 +3171,35 @@ fn add_remove_item_attributes_approval_should_work() {
 }
 
 #[test]
+fn validate_signature() {
+	new_test_ext().execute_with(|| {
+		let user_1_pair = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
+		let user_1_signer = MultiSigner::Sr25519(user_1_pair.public());
+		let user_1 = user_1_signer.clone().into_account();
+		let mint_data: PreSignedMint<u32, u32, AccountId, u32, u64> = PreSignedMint {
+			collection: 0,
+			item: 0,
+			attributes: vec![],
+			metadata: vec![],
+			only_account: None,
+			deadline: 100000,
+			mint_price: None,
+		};
+		let encoded_data = Encode::encode(&mint_data);
+		let signature = MultiSignature::Sr25519(user_1_pair.sign(&encoded_data));
+		assert_ok!(Nfts::validate_signature(&encoded_data, &signature, &user_1));
+
+		let mut wrapped_data: Vec<u8> = Vec::new();
+		wrapped_data.extend(b"<Bytes>");
+		wrapped_data.extend(&encoded_data);
+		wrapped_data.extend(b"</Bytes>");
+
+		let signature = MultiSignature::Sr25519(user_1_pair.sign(&wrapped_data));
+		assert_ok!(Nfts::validate_signature(&encoded_data, &signature, &user_1));
+	})
+}
+
+#[test]
 fn pre_signed_mints_should_work() {
 	new_test_ext().execute_with(|| {
 		let user_0 = account(0);
@@ -3150,6 +3213,7 @@ fn pre_signed_mints_should_work() {
 			metadata: vec![0, 1],
 			only_account: None,
 			deadline: 10000000,
+			mint_price: Some(10),
 		};
 		let message = Encode::encode(&mint_data);
 		let signature = MultiSignature::Sr25519(user_1_pair.sign(&message));
@@ -3166,7 +3230,7 @@ fn pre_signed_mints_should_work() {
 
 		assert_ok!(Nfts::mint_pre_signed(
 			RuntimeOrigin::signed(user_2.clone()),
-			mint_data.clone(),
+			Box::new(mint_data.clone()),
 			signature.clone(),
 			user_1.clone(),
 		));
@@ -3196,13 +3260,13 @@ fn pre_signed_mints_should_work() {
 		assert_eq!(deposit.account, Some(user_2.clone()));
 		assert_eq!(deposit.amount, 3);
 
-		assert_eq!(Balances::free_balance(&user_0), 100 - 2); // 2 - collection deposit
-		assert_eq!(Balances::free_balance(&user_2), 100 - 1 - 3 - 6); // 1 - item deposit, 3 - metadata, 6 - attributes
+		assert_eq!(Balances::free_balance(&user_0), 100 - 2 + 10); // 2 - collection deposit, 10 - mint price
+		assert_eq!(Balances::free_balance(&user_2), 100 - 1 - 3 - 6 - 10); // 1 - item deposit, 3 - metadata, 6 - attributes, 10 - mint price
 
 		assert_noop!(
 			Nfts::mint_pre_signed(
 				RuntimeOrigin::signed(user_2.clone()),
-				mint_data,
+				Box::new(mint_data),
 				signature.clone(),
 				user_1.clone(),
 			),
@@ -3210,7 +3274,7 @@ fn pre_signed_mints_should_work() {
 		);
 
 		assert_ok!(Nfts::burn(RuntimeOrigin::signed(user_2.clone()), 0, 0));
-		assert_eq!(Balances::free_balance(&user_2), 100 - 6);
+		assert_eq!(Balances::free_balance(&user_2), 100 - 6 - 10);
 
 		// validate the `only_account` field
 		let mint_data = PreSignedMint {
@@ -3220,13 +3284,14 @@ fn pre_signed_mints_should_work() {
 			metadata: vec![],
 			only_account: Some(account(2)),
 			deadline: 10000000,
+			mint_price: None,
 		};
 
 		// can't mint with the wrong signature
 		assert_noop!(
 			Nfts::mint_pre_signed(
 				RuntimeOrigin::signed(user_2.clone()),
-				mint_data.clone(),
+				Box::new(mint_data.clone()),
 				signature.clone(),
 				user_1.clone(),
 			),
@@ -3239,7 +3304,7 @@ fn pre_signed_mints_should_work() {
 		assert_noop!(
 			Nfts::mint_pre_signed(
 				RuntimeOrigin::signed(user_3),
-				mint_data.clone(),
+				Box::new(mint_data.clone()),
 				signature.clone(),
 				user_1.clone(),
 			),
@@ -3251,7 +3316,7 @@ fn pre_signed_mints_should_work() {
 		assert_noop!(
 			Nfts::mint_pre_signed(
 				RuntimeOrigin::signed(user_2.clone()),
-				mint_data,
+				Box::new(mint_data),
 				signature,
 				user_1.clone(),
 			),
@@ -3267,6 +3332,7 @@ fn pre_signed_mints_should_work() {
 			metadata: vec![],
 			only_account: Some(account(2)),
 			deadline: 10000000,
+			mint_price: None,
 		};
 		let message = Encode::encode(&mint_data);
 		let signature = MultiSignature::Sr25519(user_1_pair.sign(&message));
@@ -3274,7 +3340,7 @@ fn pre_signed_mints_should_work() {
 		assert_noop!(
 			Nfts::mint_pre_signed(
 				RuntimeOrigin::signed(user_2.clone()),
-				mint_data,
+				Box::new(mint_data),
 				signature,
 				user_1.clone(),
 			),
@@ -3289,13 +3355,14 @@ fn pre_signed_mints_should_work() {
 			metadata: vec![0, 1],
 			only_account: None,
 			deadline: 10000000,
+			mint_price: None,
 		};
 		let message = Encode::encode(&mint_data);
 		let signature = MultiSignature::Sr25519(user_1_pair.sign(&message));
 		assert_noop!(
 			Nfts::mint_pre_signed(
 				RuntimeOrigin::signed(user_2),
-				mint_data,
+				Box::new(mint_data),
 				signature,
 				user_1.clone(),
 			),
@@ -3610,4 +3677,42 @@ fn pre_signed_attributes_should_work() {
 			Error::<Test>::IncorrectData
 		);
 	})
+}
+
+#[test]
+fn basic_create_collection_with_id_should_work() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Nfts::create_collection_with_id(
+				0u32,
+				&account(1),
+				&account(1),
+				&default_collection_config(),
+			),
+			Error::<Test>::WrongSetting
+		);
+
+		Balances::make_free_balance_be(&account(1), 100);
+		Balances::make_free_balance_be(&account(2), 100);
+
+		assert_ok!(Nfts::create_collection_with_id(
+			0u32,
+			&account(1),
+			&account(1),
+			&collection_config_with_all_settings_enabled(),
+		));
+
+		assert_eq!(collections(), vec![(account(1), 0)]);
+
+		// CollectionId already taken.
+		assert_noop!(
+			Nfts::create_collection_with_id(
+				0u32,
+				&account(2),
+				&account(2),
+				&collection_config_with_all_settings_enabled(),
+			),
+			Error::<Test>::CollectionIdInUse
+		);
+	});
 }

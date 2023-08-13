@@ -36,13 +36,11 @@ pub struct ExportBlocksCmd {
 	pub output: Option<PathBuf>,
 
 	/// Specify starting block number.
-	///
 	/// Default is 1.
 	#[arg(long, value_name = "BLOCK")]
 	pub from: Option<GenericNumber>,
 
 	/// Specify last block number.
-	///
 	/// Default is best block.
 	#[arg(long, value_name = "BLOCK")]
 	pub to: Option<GenericNumber>,

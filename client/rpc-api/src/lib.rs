@@ -22,6 +22,7 @@
 
 #![warn(missing_docs)]
 
+mod error;
 mod policy;
 
 pub use policy::DenyUnsafe;
@@ -32,4 +33,5 @@ pub mod child_state;
 pub mod dev;
 pub mod offchain;
 pub mod state;
+pub mod statement;
 pub mod system;

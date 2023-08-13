@@ -438,6 +438,8 @@ pub mod v3 {
 		/// Schedule a dispatch to happen at the beginning of some block in the future.
 		///
 		/// - `id`: The identity of the task. This must be unique and will return an error if not.
+		///
+		/// NOTE: This will request `call` to be made available.
 		fn schedule_named(
 			id: TaskName,
 			when: DispatchTime<BlockNumber>,

@@ -22,13 +22,13 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::Serialize;
 
 use codec::{Codec, Decode, Encode, Input};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
-use sp_keystore::{Keystore, KeystorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	traits::{Header as HeaderT, NumberFor},
 	ConsensusEngineId, RuntimeDebug,
@@ -140,8 +140,8 @@ pub struct GrandpaJustification<Header: HeaderT> {
 }
 
 /// A scheduled change of authority set.
-#[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
 	pub next_authorities: AuthorityList,
@@ -150,8 +150,8 @@ pub struct ScheduledChange<N> {
 }
 
 /// An consensus log item for GRANDPA.
-#[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum ConsensusLog<N: Codec> {
 	/// Schedule an authority set change.
 	///
@@ -451,20 +451,15 @@ where
 	H: Encode,
 	N: Encode,
 {
-	use sp_application_crypto::AppKey;
-	use sp_core::crypto::Public;
+	use sp_application_crypto::AppCrypto;
 
 	let encoded = localized_payload(round, set_id, &message);
-	let signature = Keystore::sign_with(
-		&*keystore,
-		AuthorityId::ID,
-		&public.to_public_crypto_pair(),
-		&encoded[..],
-	)
-	.ok()
-	.flatten()?
-	.try_into()
-	.ok()?;
+	let signature = keystore
+		.ed25519_sign(AuthorityId::ID, public.as_ref(), &encoded[..])
+		.ok()
+		.flatten()?
+		.try_into()
+		.ok()?;
 
 	Some(grandpa::SignedMessage { message, signature, id: public })
 }

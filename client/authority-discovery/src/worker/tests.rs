@@ -31,7 +31,7 @@ use futures::{
 };
 use libp2p::{
 	core::multiaddr,
-	identity::{error::SigningError, Keypair},
+	identity::{Keypair, SigningError},
 	kad::record::Key as KademliaKey,
 	PeerId,
 };
@@ -415,7 +415,7 @@ fn dont_stop_polling_dht_event_stream_after_bogus_event() {
 		let peer_id = PeerId::random();
 		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
 
-		address.with(multiaddr::Protocol::P2p(peer_id.into()))
+		address.with(multiaddr::Protocol::P2p(peer_id))
 	};
 	let remote_key_store = MemoryKeystore::new();
 	let remote_public_key: AuthorityId = remote_key_store
@@ -526,7 +526,7 @@ impl DhtValueFoundTester {
 		let address: Multiaddr =
 			format!("/ip6/2001:db8:0:0:0:0:0:{:x}/tcp/30333", idx).parse().unwrap();
 
-		address.with(multiaddr::Protocol::P2p(peer_id.into()))
+		address.with(multiaddr::Protocol::P2p(peer_id))
 	}
 
 	fn process_value_found(
@@ -697,7 +697,7 @@ fn addresses_to_publish_adds_p2p() {
 		Arc::new(TestApi { authorities: vec![] }),
 		network.clone(),
 		Box::pin(dht_event_rx),
-		Role::PublishAndDiscover(Arc::new(MemoryKeystore::new())),
+		Role::PublishAndDiscover(MemoryKeystore::new().into()),
 		Some(prometheus_endpoint::Registry::new()),
 		Default::default(),
 	);
@@ -731,7 +731,7 @@ fn addresses_to_publish_respects_existing_p2p_protocol() {
 		Arc::new(TestApi { authorities: vec![] }),
 		network.clone(),
 		Box::pin(dht_event_rx),
-		Role::PublishAndDiscover(Arc::new(MemoryKeystore::new())),
+		Role::PublishAndDiscover(MemoryKeystore::new().into()),
 		Some(prometheus_endpoint::Registry::new()),
 		Default::default(),
 	);
@@ -749,7 +749,7 @@ fn lookup_throttling() {
 		let peer_id = PeerId::random();
 		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
 
-		address.with(multiaddr::Protocol::P2p(peer_id.into()))
+		address.with(multiaddr::Protocol::P2p(peer_id))
 	};
 	let remote_key_store = MemoryKeystore::new();
 	let remote_public_keys: Vec<AuthorityId> = (0..20)

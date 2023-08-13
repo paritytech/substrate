@@ -20,6 +20,7 @@
 use super::*;
 use crate::{unsigned::IndexAssignmentOf, Pallet as MultiPhase};
 use frame_benchmarking::account;
+use frame_election_provider_support::bounds::DataProviderBounds;
 use frame_support::{
 	assert_ok,
 	traits::{Hooks, TryCollect},
@@ -169,10 +170,12 @@ fn set_up_data_provider<T: Config>(v: u32, t: u32) {
 	let mut targets = (0..t)
 		.map(|i| {
 			let target = frame_benchmarking::account::<T::AccountId>("Target", i, SEED);
+
 			T::DataProvider::add_target(target.clone());
 			target
 		})
 		.collect::<Vec<_>>();
+
 	// we should always have enough voters to fill.
 	assert!(
 		targets.len() > <T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get() as usize
@@ -219,7 +222,7 @@ frame_benchmarking::benchmarks! {
 
 	finalize_signed_phase_accept_solution {
 		let receiver = account("receiver", 0, SEED);
-		let initial_balance = T::Currency::minimum_balance() * 10u32.into();
+		let initial_balance = T::Currency::minimum_balance() + 10u32.into();
 		T::Currency::make_free_balance_be(&receiver, initial_balance);
 		let ready = Default::default();
 		let deposit: BalanceOf<T> = 10u32.into();
@@ -228,7 +231,7 @@ frame_benchmarking::benchmarks! {
 		let call_fee: BalanceOf<T> = 30u32.into();
 
 		assert_ok!(T::Currency::reserve(&receiver, deposit));
-		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
+		assert_eq!(T::Currency::free_balance(&receiver), T::Currency::minimum_balance());
 	}: {
 		<MultiPhase<T>>::finalize_signed_phase_accept_solution(
 			ready,
@@ -246,17 +249,17 @@ frame_benchmarking::benchmarks! {
 
 	finalize_signed_phase_reject_solution {
 		let receiver = account("receiver", 0, SEED);
-		let initial_balance = T::Currency::minimum_balance().max(One::one()) * 10u32.into();
+		let initial_balance = T::Currency::minimum_balance() + 10u32.into();
 		let deposit: BalanceOf<T> = 10u32.into();
 		T::Currency::make_free_balance_be(&receiver, initial_balance);
 		assert_ok!(T::Currency::reserve(&receiver, deposit));
 
-		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
+		assert_eq!(T::Currency::free_balance(&receiver), T::Currency::minimum_balance());
 		assert_eq!(T::Currency::reserved_balance(&receiver), 10u32.into());
 	}: {
 		<MultiPhase<T>>::finalize_signed_phase_reject_solution(&receiver, deposit)
 	} verify {
-		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
+		assert_eq!(T::Currency::free_balance(&receiver), T::Currency::minimum_balance());
 		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
 	}
 
@@ -268,15 +271,16 @@ frame_benchmarking::benchmarks! {
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider::<T>(v, t);
-		let targets = T::DataProvider::electable_targets(None)?;
-		let voters = T::DataProvider::electing_voters(None)?;
+		// default bounds are unbounded.
+		let targets = T::DataProvider::electable_targets(DataProviderBounds::default())?;
+		let voters = T::DataProvider::electing_voters(DataProviderBounds::default())?;
 		let desired_targets = T::DataProvider::desired_targets()?;
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
 		<MultiPhase::<T>>::create_snapshot_internal(targets, voters, desired_targets)
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
-		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("metadata missing")?.voters, v + t);
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("metadata missing")?.voters, v);
 		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("metadata missing")?.targets, t);
 	}
 
@@ -313,7 +317,7 @@ frame_benchmarking::benchmarks! {
 		assert!(<DesiredTargets<T>>::get().is_none());
 		assert!(<Snapshot<T>>::get().is_none());
 		assert!(<SnapshotMetadata<T>>::get().is_none());
-		assert_eq!(<CurrentPhase<T>>::get(), <Phase<T::BlockNumber>>::Off);
+		assert_eq!(<CurrentPhase<T>>::get(), <Phase<frame_system::pallet_prelude::BlockNumberFor::<T>>>::Off);
 	}
 
 	submit {
@@ -450,7 +454,7 @@ frame_benchmarking::benchmarks! {
 		<MultiPhase::<T>>::create_snapshot().map_err(|_| "could not create snapshot")?;
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
-		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("snapshot missing")?.voters, v + t);
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("snapshot missing")?.voters, v);
 		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("snapshot missing")?.targets, t);
 	}
 

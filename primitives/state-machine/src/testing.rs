@@ -27,15 +27,13 @@ use crate::{
 	StorageTransactionCache, StorageValue, TrieBackendBuilder,
 };
 
-use hash_db::Hasher;
+use hash_db::{HashDB, Hasher};
 use sp_core::{
 	offchain::testing::TestPersistentOffchainDB,
 	storage::{
 		well_known_keys::{is_child_storage_key, CODE},
 		StateVersion, Storage,
 	},
-	testing::TaskExecutor,
-	traits::TaskExecutorExt,
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions};
 use sp_trie::StorageProof;
@@ -105,9 +103,6 @@ where
 
 		storage.top.insert(CODE.to_vec(), code.to_vec());
 
-		let mut extensions = Extensions::default();
-		extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
-
 		let offchain_db = TestPersistentOffchainDB::new();
 
 		let backend = (storage, state_version).into();
@@ -115,7 +110,7 @@ where
 		TestExternalities {
 			overlay: OverlayedChanges::default(),
 			offchain_db,
-			extensions,
+			extensions: Default::default(),
 			backend,
 			storage_transaction_cache: Default::default(),
 			state_version,
@@ -137,6 +132,17 @@ where
 		self.offchain_db.clone()
 	}
 
+	/// Batch insert key/values into backend
+	pub fn batch_insert<I>(&mut self, kvs: I)
+	where
+		I: IntoIterator<Item = (StorageKey, StorageValue)>,
+	{
+		self.backend.insert(
+			Some((None, kvs.into_iter().map(|(k, v)| (k, Some(v))).collect())),
+			self.state_version,
+		);
+	}
+
 	/// Insert key/value into backend
 	pub fn insert(&mut self, k: StorageKey, v: StorageValue) {
 		self.backend.insert(vec![(None, vec![(k, Some(v))])], self.state_version);
@@ -152,6 +158,41 @@ where
 	/// Registers the given extension for this instance.
 	pub fn register_extension<E: Any + Extension>(&mut self, ext: E) {
 		self.extensions.register(ext);
+	}
+
+	/// Sets raw storage key/values and a root.
+	///
+	/// This can be used as a fast way to restore the storage state from a backup because the trie
+	/// does not need to be computed.
+	pub fn from_raw_snapshot(
+		&mut self,
+		raw_storage: Vec<(H::Out, (Vec<u8>, i32))>,
+		storage_root: H::Out,
+	) {
+		for (k, (v, ref_count)) in raw_storage {
+			// Each time .emplace is called the internal MemoryDb ref count increments.
+			// Repeatedly call emplace to initialise the ref count to the correct value.
+			for _ in 0..ref_count {
+				self.backend.backend_storage_mut().emplace(k, hash_db::EMPTY_PREFIX, v.clone());
+			}
+		}
+		self.backend.set_root(storage_root);
+	}
+
+	/// Drains the underlying raw storage key/values and returns the root hash.
+	///
+	/// Useful for backing up the storage in a format that can be quickly re-loaded.
+	///
+	/// Note: This DB will be inoperable after this call.
+	pub fn into_raw_snapshot(mut self) -> (Vec<(H::Out, (Vec<u8>, i32))>, H::Out) {
+		let raw_key_values = self
+			.backend
+			.backend_storage_mut()
+			.drain()
+			.into_iter()
+			.collect::<Vec<(H::Out, (Vec<u8>, i32))>>();
+
+		(raw_key_values, *self.backend.root())
 	}
 
 	/// Return a new backend with all pending changes.
@@ -350,10 +391,81 @@ mod tests {
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		let root = array_bytes::hex_n_into_unchecked::<H256, 32>(
+		let root = array_bytes::hex_n_into_unchecked::<_, H256, 32>(
 			"ed4d8c799d996add422395a6abd7545491d40bd838d738afafa1b8a4de625489",
 		);
 		assert_eq!(H256::from_slice(ext.storage_root(Default::default()).as_slice()), root);
+	}
+
+	#[test]
+	fn raw_storage_drain_and_restore() {
+		// Create a TestExternalities with some data in it.
+		let mut original_ext =
+			TestExternalities::<BlakeTwo256>::from((Default::default(), Default::default()));
+		original_ext.insert(b"doe".to_vec(), b"reindeer".to_vec());
+		original_ext.insert(b"dog".to_vec(), b"puppy".to_vec());
+		original_ext.insert(b"dogglesworth".to_vec(), b"cat".to_vec());
+		let child_info = ChildInfo::new_default(&b"test_child"[..]);
+		original_ext.insert_child(child_info.clone(), b"cattytown".to_vec(), b"is_dark".to_vec());
+		original_ext.insert_child(child_info.clone(), b"doggytown".to_vec(), b"is_sunny".to_vec());
+
+		// Call emplace on one of the keys to increment the MemoryDb refcount, so we can check
+		// that it is intact in the recovered_ext.
+		let keys = original_ext.backend.backend_storage_mut().keys();
+		let expected_ref_count = 5;
+		let ref_count_key = keys.into_iter().next().unwrap().0;
+		for _ in 0..expected_ref_count - 1 {
+			original_ext.backend.backend_storage_mut().emplace(
+				ref_count_key,
+				hash_db::EMPTY_PREFIX,
+				// We can use anything for the 'value' because it does not affect behavior when
+				// emplacing an existing key.
+				(&[0u8; 32]).to_vec(),
+			);
+		}
+		let refcount = original_ext
+			.backend
+			.backend_storage()
+			.raw(&ref_count_key, hash_db::EMPTY_PREFIX)
+			.unwrap()
+			.1;
+		assert_eq!(refcount, expected_ref_count);
+
+		// Drain the raw storage and root.
+		let root = *original_ext.backend.root();
+		let (raw_storage, storage_root) = original_ext.into_raw_snapshot();
+
+		// Load the raw storage and root into a new TestExternalities.
+		let mut recovered_ext =
+			TestExternalities::<BlakeTwo256>::from((Default::default(), Default::default()));
+		recovered_ext.from_raw_snapshot(raw_storage, storage_root);
+
+		// Check the storage root is the same as the original
+		assert_eq!(root, *recovered_ext.backend.root());
+
+		// Check the original storage key/values were recovered correctly
+		assert_eq!(recovered_ext.backend.storage(b"doe").unwrap(), Some(b"reindeer".to_vec()));
+		assert_eq!(recovered_ext.backend.storage(b"dog").unwrap(), Some(b"puppy".to_vec()));
+		assert_eq!(recovered_ext.backend.storage(b"dogglesworth").unwrap(), Some(b"cat".to_vec()));
+
+		// Check the original child storage key/values were recovered correctly
+		assert_eq!(
+			recovered_ext.backend.child_storage(&child_info, b"cattytown").unwrap(),
+			Some(b"is_dark".to_vec())
+		);
+		assert_eq!(
+			recovered_ext.backend.child_storage(&child_info, b"doggytown").unwrap(),
+			Some(b"is_sunny".to_vec())
+		);
+
+		// Check the refcount of the key with > 1 refcount is correct.
+		let refcount = recovered_ext
+			.backend
+			.backend_storage()
+			.raw(&ref_count_key, hash_db::EMPTY_PREFIX)
+			.unwrap()
+			.1;
+		assert_eq!(refcount, expected_ref_count);
 	}
 
 	#[test]

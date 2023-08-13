@@ -17,6 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate CLI library.
+//!
+//! To see a full list of commands available, see [`commands`].
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
@@ -26,11 +28,12 @@ use clap::{CommandFactory, FromArgMatches, Parser};
 use sc_service::Configuration;
 
 pub mod arg_enums;
-mod commands;
+pub mod commands;
 mod config;
 mod error;
 mod params;
 mod runner;
+mod signals;
 
 pub use arg_enums::*;
 pub use clap;
@@ -41,6 +44,7 @@ pub use params::*;
 pub use runner::*;
 pub use sc_service::{ChainSpec, Role};
 pub use sc_tracing::logging::LoggerBuilder;
+pub use signals::Signals;
 pub use sp_version::RuntimeVersion;
 
 /// Substrate client CLI
@@ -246,6 +250,4 @@ pub trait SubstrateCli: Sized {
 		command.init(&Self::support_url(), &Self::impl_version(), logger_hook, &config)?;
 		Runner::new(config, tokio_runtime, signals)
 	}
-	/// Native runtime version.
-	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
 }

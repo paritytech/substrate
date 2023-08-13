@@ -21,7 +21,7 @@ use proc_macro2::{Span, TokenStream};
 
 use syn::{
 	parse::Parse, parse_quote, spanned::Spanned, token, Error, FnArg, Ident, ItemTrait, LitInt,
-	Pat, PatType, Result, Signature, TraitItem, TraitItemMethod, Type,
+	Pat, PatType, Result, Signature, TraitItem, TraitItemFn, Type,
 };
 
 use proc_macro_crate::{crate_name, FoundCrate};
@@ -41,23 +41,23 @@ mod attributes {
 
 /// A concrete, specific version of a runtime interface function.
 pub struct RuntimeInterfaceFunction {
-	item: TraitItemMethod,
+	item: TraitItemFn,
 	should_trap_on_return: bool,
 }
 
 impl std::ops::Deref for RuntimeInterfaceFunction {
-	type Target = TraitItemMethod;
+	type Target = TraitItemFn;
 	fn deref(&self) -> &Self::Target {
 		&self.item
 	}
 }
 
 impl RuntimeInterfaceFunction {
-	fn new(item: &TraitItemMethod) -> Result<Self> {
+	fn new(item: &TraitItemFn) -> Result<Self> {
 		let mut item = item.clone();
 		let mut should_trap_on_return = false;
 		item.attrs.retain(|attr| {
-			if attr.path.is_ident("trap_on_return") {
+			if attr.path().is_ident("trap_on_return") {
 				should_trap_on_return = true;
 				false
 			} else {
@@ -87,7 +87,7 @@ struct RuntimeInterfaceFunctionSet {
 }
 
 impl RuntimeInterfaceFunctionSet {
-	fn new(version: VersionAttribute, trait_item: &TraitItemMethod) -> Result<Self> {
+	fn new(version: VersionAttribute, trait_item: &TraitItemFn) -> Result<Self> {
 		Ok(Self {
 			latest_version_to_call: version.is_callable().then(|| version.version),
 			versions: BTreeMap::from([(
@@ -115,11 +115,7 @@ impl RuntimeInterfaceFunctionSet {
 	}
 
 	/// Add a different version of the function.
-	fn add_version(
-		&mut self,
-		version: VersionAttribute,
-		trait_item: &TraitItemMethod,
-	) -> Result<()> {
+	fn add_version(&mut self, version: VersionAttribute, trait_item: &TraitItemFn) -> Result<()> {
 		if let Some(existing_item) = self.versions.get(&version.version) {
 			let mut err = Error::new(trait_item.span(), "Duplicated version attribute");
 			err.combine(Error::new(
@@ -275,9 +271,9 @@ pub fn get_function_argument_types_ref_and_mut(
 }
 
 /// Returns an iterator over all trait methods for the given trait definition.
-fn get_trait_methods(trait_def: &ItemTrait) -> impl Iterator<Item = &TraitItemMethod> {
+fn get_trait_methods(trait_def: &ItemTrait) -> impl Iterator<Item = &TraitItemFn> {
 	trait_def.items.iter().filter_map(|i| match i {
-		TraitItem::Method(ref method) => Some(method),
+		TraitItem::Fn(ref method) => Some(method),
 		_ => None,
 	})
 }
@@ -326,10 +322,10 @@ impl Parse for VersionAttribute {
 }
 
 /// Return [`VersionAttribute`], if present.
-fn get_item_version(item: &TraitItemMethod) -> Result<Option<VersionAttribute>> {
+fn get_item_version(item: &TraitItemFn) -> Result<Option<VersionAttribute>> {
 	item.attrs
 		.iter()
-		.find(|attr| attr.path.is_ident("version"))
+		.find(|attr| attr.path().is_ident("version"))
 		.map(|attr| attr.parse_args())
 		.transpose()
 }

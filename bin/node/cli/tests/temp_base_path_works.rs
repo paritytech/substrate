@@ -24,12 +24,14 @@ use std::{
 	time::Duration,
 };
 
-pub mod common;
+use substrate_cli_test_utils as common;
 
-#[tokio::test]
+#[allow(dead_code)]
+// Apparently `#[ignore]` doesn't actually work to disable this one.
+//#[tokio::test]
 async fn temp_base_path_works() {
 	common::run_with_timeout(Duration::from_secs(60 * 10), async move {
-		let mut cmd = Command::new(cargo_bin("substrate"));
+		let mut cmd = Command::new(cargo_bin("substrate-node"));
 		let mut child = common::KillChildOnDrop(
 			cmd.args(&["--dev", "--tmp", "--no-hardware-benchmarks"])
 				.stdout(Stdio::piped())

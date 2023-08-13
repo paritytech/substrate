@@ -25,7 +25,7 @@ use super::*;
 #[derive(
 	Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default,
 )]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Weight {
 	#[codec(compact)]
 	/// The weight of computational time used based on some reference hardware.
@@ -33,12 +33,6 @@ pub struct Weight {
 	#[codec(compact)]
 	/// The weight of storage space used by proof of validity.
 	proof_size: u64,
-}
-
-impl From<OldWeight> for Weight {
-	fn from(old: OldWeight) -> Self {
-		Weight::from_parts(old.0, 0)
-	}
 }
 
 impl Weight {
@@ -74,16 +68,7 @@ impl Weight {
 		&mut self.proof_size
 	}
 
-	/// Return self but discard any reference time.
-	pub const fn without_ref_time(&self) -> Self {
-		Self { ref_time: 0, proof_size: self.proof_size }
-	}
-
-	/// Return self but discard any proof size.
-	pub const fn without_proof_size(&self) -> Self {
-		Self { ref_time: self.ref_time, proof_size: 0 }
-	}
-
+	/// The maximal weight in all dimensions.
 	pub const MAX: Self = Self { ref_time: u64::MAX, proof_size: u64::MAX };
 
 	/// Get the conservative min of `self` and `other` weight.
@@ -110,18 +95,6 @@ impl Weight {
 		} else {
 			Some(total)
 		}
-	}
-
-	/// Construct [`Weight`] with reference time weight and 0 storage size weight.
-	#[deprecated = "Will be removed soon; use `from_parts` instead."]
-	pub const fn from_ref_time(ref_time: u64) -> Self {
-		Self { ref_time, proof_size: 0 }
-	}
-
-	/// Construct [`Weight`] with storage size weight and 0 reference time weight.
-	#[deprecated = "Will be removed soon; use `from_parts` instead."]
-	pub const fn from_proof_size(proof_size: u64) -> Self {
-		Self { ref_time: 0, proof_size }
 	}
 
 	/// Construct [`Weight`] from weight parts, namely reference time and proof size weights.

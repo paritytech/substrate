@@ -128,7 +128,7 @@ pub use v1::*;
 /// as `I` in the case of an `#[instance_benchmarks]` module. You should not add these to the
 /// function signature as this will be handled automatically for you based on whether this is a
 /// `#[benchmarks]` or `#[instance_benchmarks]` module and whatever [where clause](#where-clause)
-/// you have defined for the the module. You should not manually add any generics to the
+/// you have defined for the module. You should not manually add any generics to the
 /// signature of your benchmark function.
 ///
 /// Also note that the `// setup code` and `// verification code` comments shown above are not
@@ -159,6 +159,13 @@ pub use v1::*;
 ///
 /// The underscore will be substituted with the name of the benchmark  (i.e. the name of the
 /// function in the benchmark function definition).
+///
+/// In case of a `force_origin` where you want to elevate the privileges of the provided origin,
+/// this is the general syntax:
+/// ```ignore
+/// #[extrinsic_call]
+/// _(force_origin as T::RuntimeOrigin, 0u32.into(), 0);
+/// ```
 ///
 /// Regardless of whether `#[extrinsic_call]` or `#[block]` is used, this attribute also serves
 /// the purpose of designating the boundary between the setup code portion of the benchmark
@@ -239,22 +246,21 @@ pub use v1::*;
 /// of impls and structs required by the benchmarking engine. Additionally, a benchmark
 /// function is also generated that resembles the function definition you provide, with a few
 /// modifications:
-/// 1. The function name is transformed from i.e. `original_name` to `_original_name` so as not
-///    to collide with the struct `original_name` that is created for some of the benchmarking
-///    engine impls.
-/// 2. Appropriate `T: Config` and `I` (if this is an instance benchmark) generics are added to
-///    the function automatically during expansion, so you should not add these manually on
-///    your function definition (but you may make use of `T` and `I` anywhere within your
-///    benchmark function, in any of the three sections (setup, call, verification).
+/// 1. The function name is transformed from i.e. `original_name` to `_original_name` so as not to
+///    collide with the struct `original_name` that is created for some of the benchmarking engine
+///    impls.
+/// 2. Appropriate `T: Config` and `I` (if this is an instance benchmark) generics are added to the
+///    function automatically during expansion, so you should not add these manually on your
+///    function definition (but you may make use of `T` and `I` anywhere within your benchmark
+///    function, in any of the three sections (setup, call, verification).
 /// 3. Arguments such as `u: Linear<10, 100>` are converted to `u: u32` to make the function
 ///    directly callable.
-/// 4. A `verify: bool` param is added as the last argument. Specifying `true` will result in
-///    the verification section of your function executing, while a value of `false` will skip
+/// 4. A `verify: bool` param is added as the last argument. Specifying `true` will result in the
+///    verification section of your function executing, while a value of `false` will skip
 ///    verification.
 /// 5. If you specify a return type on the function definition, it must conform to the [rules
-///    below](#support-for-result-benchmarkerror-and-the--operator), and the last statement of
-///    the function definition must resolve to something compatible with `Result<(),
-///    BenchmarkError>`.
+///    below](#support-for-result-benchmarkerror-and-the--operator), and the last statement of the
+///    function definition must resolve to something compatible with `Result<(), BenchmarkError>`.
 ///
 /// The reason we generate an actual function as part of the expansion is to allow the compiler
 /// to enforce several constraints that would otherwise be difficult to enforce and to reduce

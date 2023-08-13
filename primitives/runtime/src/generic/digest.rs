@@ -17,8 +17,10 @@
 
 //! Generic implementation of a digest.
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+#[cfg(all(not(feature = "std"), feature = "serde"))]
+use sp_std::alloc::format;
 
 use sp_std::prelude::*;
 
@@ -34,7 +36,7 @@ use sp_core::RuntimeDebug;
 
 /// Generic header digest.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, Default)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Digest {
 	/// A list of logs in the digest.
 	pub logs: Vec<DigestItem>,
@@ -106,7 +108,7 @@ pub enum DigestItem {
 	RuntimeEnvironmentUpdated,
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl serde::Serialize for DigestItem {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
 	where
@@ -116,7 +118,7 @@ impl serde::Serialize for DigestItem {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<'a> serde::Deserialize<'a> for DigestItem {
 	fn deserialize<D>(de: D) -> Result<Self, D::Error>
 	where
@@ -453,8 +455,8 @@ mod tests {
 	#[test]
 	fn digest_item_type_info() {
 		let type_info = DigestItem::type_info();
-		let variants = if let scale_info::TypeDef::Variant(variant) = type_info.type_def() {
-			variant.variants()
+		let variants = if let scale_info::TypeDef::Variant(variant) = type_info.type_def {
+			variant.variants
 		} else {
 			panic!("Should be a TypeDef::TypeDefVariant")
 		};
@@ -475,10 +477,10 @@ mod tests {
 			let encoded = digest_item.encode();
 			let variant = variants
 				.iter()
-				.find(|v| v.name() == &variant_name)
+				.find(|v| v.name == variant_name)
 				.expect(&format!("Variant {} not found", variant_name));
 
-			assert_eq!(encoded[0], variant.index())
+			assert_eq!(encoded[0], variant.index)
 		};
 
 		check(DigestItemType::Other);

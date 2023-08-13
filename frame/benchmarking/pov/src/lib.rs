@@ -32,7 +32,7 @@ pub mod pallet {
 	use sp_std::prelude::*;
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -120,14 +120,14 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn emit_event(_origin: OriginFor<T>) -> DispatchResult {
 			Self::deposit_event(Event::TestEvent);
 			Ok(())
 		}
 
 		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn noop(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())
 		}

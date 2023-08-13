@@ -22,20 +22,20 @@
 use super::*;
 use frame_support::{parameter_types, traits::ConstU32};
 use sp_runtime::{
-	testing::{Header, H256},
+	testing::H256,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
 use sp_std::prelude::*;
 use std::cell::RefCell;
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 mod pallet_test {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -45,44 +45,33 @@ mod pallet_test {
 	}
 
 	#[pallet::storage]
-	#[pallet::getter(fn value)]
 	pub(crate) type Value<T: Config> = StorageValue<_, u32, OptionQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
 		pub fn set_value(origin: OriginFor<T>, n: u32) -> DispatchResult {
 			let _sender = ensure_signed(origin)?;
 			Value::<T>::put(n);
 			Ok(())
 		}
 
-		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
 		pub fn dummy(origin: OriginFor<T>, _n: u32) -> DispatchResult {
 			let _sender = ensure_none(origin)?;
 			Ok(())
 		}
 
-		#[pallet::call_index(2)]
-		#[pallet::weight(0)]
 		pub fn always_error(_origin: OriginFor<T>) -> DispatchResult {
 			return Err("I always fail".into())
 		}
 	}
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		TestPallet: pallet_test::{Pallet, Call, Storage},
 	}
 );
@@ -93,14 +82,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type Version = ();
@@ -125,7 +113,7 @@ impl pallet_test::Config for Test {
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	GenesisConfig::default().build_storage().unwrap().into()
+	RuntimeGenesisConfig::default().build_storage().unwrap().into()
 }
 
 thread_local! {

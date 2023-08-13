@@ -37,17 +37,17 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, Header as HeaderT},
 	ConsensusEngineId, Justifications, StateVersion,
 };
-use sp_state_machine::{
-	backend::Backend as _, ExecutionStrategy, InMemoryBackend, OverlayedChanges, StateMachine,
-};
+use sp_state_machine::{backend::Backend as _, InMemoryBackend, OverlayedChanges, StateMachine};
 use sp_storage::{ChildInfo, StorageKey};
 use sp_trie::{LayoutV0, TrieConfiguration};
 use std::{collections::HashSet, sync::Arc};
 use substrate_test_runtime::TestAPI;
 use substrate_test_runtime_client::{
+	new_native_or_wasm_executor,
 	prelude::*,
 	runtime::{
-		genesismap::{insert_genesis_block, GenesisConfig},
+		currency::DOLLARS,
+		genesismap::{insert_genesis_block, GenesisStorageBuilder},
 		Block, BlockNumber, Digest, Hash, Header, RuntimeApi, Transfer,
 	},
 	AccountKeyring, BlockBuilderExt, ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt,
@@ -58,29 +58,6 @@ mod db;
 
 const TEST_ENGINE_ID: ConsensusEngineId = *b"TEST";
 
-pub struct ExecutorDispatch;
-
-impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
-	type ExtendHostFunctions = ();
-
-	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-		substrate_test_runtime_client::runtime::api::dispatch(method, data)
-	}
-
-	fn native_version() -> sc_executor::NativeVersion {
-		substrate_test_runtime_client::runtime::native_version()
-	}
-}
-
-fn executor() -> sc_executor::NativeElseWasmExecutor<ExecutorDispatch> {
-	sc_executor::NativeElseWasmExecutor::new(
-		sc_executor::WasmExecutionMethod::Interpreted,
-		None,
-		8,
-		2,
-	)
-}
-
 fn construct_block(
 	backend: &InMemoryBackend<BlakeTwo256>,
 	number: BlockNumber,
@@ -88,7 +65,7 @@ fn construct_block(
 	state_root: Hash,
 	txs: Vec<Transfer>,
 ) -> (Vec<u8>, Hash) {
-	let transactions = txs.into_iter().map(|tx| tx.into_signed_tx()).collect::<Vec<_>>();
+	let transactions = txs.into_iter().map(|tx| tx.into_unchecked_extrinsic()).collect::<Vec<_>>();
 
 	let iter = transactions.iter().map(Encode::encode);
 	let extrinsics_root = LayoutV0::<BlakeTwo256>::ordered_trie_root(iter).into();
@@ -104,50 +81,46 @@ fn construct_block(
 	let mut overlay = OverlayedChanges::default();
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
-	let task_executor = Box::new(TaskExecutor::new());
 
 	StateMachine::new(
 		backend,
 		&mut overlay,
-		&executor(),
+		&new_native_or_wasm_executor(),
 		"Core_initialize_block",
 		&header.encode(),
-		Default::default(),
+		&mut Default::default(),
 		&runtime_code,
-		task_executor.clone() as Box<_>,
 		CallContext::Onchain,
 	)
-	.execute(ExecutionStrategy::NativeElseWasm)
+	.execute()
 	.unwrap();
 
 	for tx in transactions.iter() {
 		StateMachine::new(
 			backend,
 			&mut overlay,
-			&executor(),
+			&new_native_or_wasm_executor(),
 			"BlockBuilder_apply_extrinsic",
 			&tx.encode(),
-			Default::default(),
+			&mut Default::default(),
 			&runtime_code,
-			task_executor.clone() as Box<_>,
 			CallContext::Onchain,
 		)
-		.execute(ExecutionStrategy::NativeElseWasm)
+		.execute()
 		.unwrap();
 	}
 
 	let ret_data = StateMachine::new(
 		backend,
 		&mut overlay,
-		&executor(),
+		&new_native_or_wasm_executor(),
 		"BlockBuilder_finalize_block",
 		&[],
-		Default::default(),
+		&mut Default::default(),
 		&runtime_code,
-		task_executor.clone() as Box<_>,
 		CallContext::Onchain,
 	)
-	.execute(ExecutionStrategy::NativeElseWasm)
+	.execute()
 	.unwrap();
 	header = Header::decode(&mut &ret_data[..]).unwrap();
 
@@ -163,9 +136,9 @@ fn block1(genesis_hash: Hash, backend: &InMemoryBackend<BlakeTwo256>) -> (Vec<u8
 			"25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c",
 		),
 		vec![Transfer {
-			from: AccountKeyring::One.into(),
+			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Two.into(),
-			amount: 69,
+			amount: 69 * DOLLARS,
 			nonce: 0,
 		}],
 	)
@@ -184,22 +157,21 @@ fn finality_notification_check(
 			assert_eq!(notif.hash, *finalized.last().unwrap());
 			assert_eq!(stale_heads, stale_heads_expected);
 		},
-		Err(TryRecvError::Closed) =>
-			panic!("unexpected notification result, client send channel was closed"),
+		Err(TryRecvError::Closed) => {
+			panic!("unexpected notification result, client send channel was closed")
+		},
 		Err(TryRecvError::Empty) => assert!(finalized.is_empty()),
 	}
 }
 
 #[test]
 fn construct_genesis_should_work_with_native() {
-	let mut storage = GenesisConfig::new(
+	let mut storage = GenesisStorageBuilder::new(
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
-		1000,
-		None,
-		Default::default(),
+		1000 * DOLLARS,
 	)
-	.genesis_map();
+	.build();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
 	let backend = InMemoryBackend::from((storage, StateVersion::default()));
@@ -212,28 +184,25 @@ fn construct_genesis_should_work_with_native() {
 	let _ = StateMachine::new(
 		&backend,
 		&mut overlay,
-		&executor(),
+		&new_native_or_wasm_executor(),
 		"Core_execute_block",
 		&b1data,
-		Default::default(),
+		&mut Default::default(),
 		&runtime_code,
-		TaskExecutor::new(),
 		CallContext::Onchain,
 	)
-	.execute(ExecutionStrategy::NativeElseWasm)
+	.execute()
 	.unwrap();
 }
 
 #[test]
 fn construct_genesis_should_work_with_wasm() {
-	let mut storage = GenesisConfig::new(
+	let mut storage = GenesisStorageBuilder::new(
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
-		1000,
-		None,
-		Default::default(),
+		1000 * DOLLARS,
 	)
-	.genesis_map();
+	.build();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
 	let backend = InMemoryBackend::from((storage, StateVersion::default()));
@@ -246,50 +215,15 @@ fn construct_genesis_should_work_with_wasm() {
 	let _ = StateMachine::new(
 		&backend,
 		&mut overlay,
-		&executor(),
+		&new_native_or_wasm_executor(),
 		"Core_execute_block",
 		&b1data,
-		Default::default(),
+		&mut Default::default(),
 		&runtime_code,
-		TaskExecutor::new(),
 		CallContext::Onchain,
 	)
-	.execute(ExecutionStrategy::AlwaysWasm)
+	.execute()
 	.unwrap();
-}
-
-#[test]
-fn construct_genesis_with_bad_transaction_should_panic() {
-	let mut storage = GenesisConfig::new(
-		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
-		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
-		68,
-		None,
-		Default::default(),
-	)
-	.genesis_map();
-	let genesis_hash = insert_genesis_block(&mut storage);
-
-	let backend = InMemoryBackend::from((storage, StateVersion::default()));
-	let (b1data, _b1hash) = block1(genesis_hash, &backend);
-	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
-	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
-
-	let mut overlay = OverlayedChanges::default();
-
-	let r = StateMachine::new(
-		&backend,
-		&mut overlay,
-		&executor(),
-		"Core_execute_block",
-		&b1data,
-		Default::default(),
-		&runtime_code,
-		TaskExecutor::new(),
-		CallContext::Onchain,
-	)
-	.execute(ExecutionStrategy::NativeElseWasm);
-	assert!(r.is_err());
 }
 
 #[test]
@@ -301,14 +235,14 @@ fn client_initializes_from_genesis_ok() {
 			.runtime_api()
 			.balance_of(client.chain_info().best_hash, AccountKeyring::Alice.into())
 			.unwrap(),
-		1000
+		1000 * DOLLARS
 	);
 	assert_eq!(
 		client
 			.runtime_api()
 			.balance_of(client.chain_info().best_hash, AccountKeyring::Ferdie.into())
 			.unwrap(),
-		0
+		0 * DOLLARS
 	);
 }
 
@@ -333,7 +267,7 @@ fn block_builder_works_with_transactions() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 42,
+			amount: 42 * DOLLARS,
 			nonce: 0,
 		})
 		.unwrap();
@@ -368,42 +302,43 @@ fn block_builder_works_with_transactions() {
 			.runtime_api()
 			.balance_of(client.chain_info().best_hash, AccountKeyring::Alice.into())
 			.unwrap(),
-		958
+		958 * DOLLARS
 	);
 	assert_eq!(
 		client
 			.runtime_api()
 			.balance_of(client.chain_info().best_hash, AccountKeyring::Ferdie.into())
 			.unwrap(),
-		42
+		42 * DOLLARS
 	);
 }
 
 #[test]
 fn block_builder_does_not_include_invalid() {
 	let mut client = substrate_test_runtime_client::new();
-
 	let mut builder = client.new_block(Default::default()).unwrap();
 
 	builder
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 42,
+			amount: 42 * DOLLARS,
 			nonce: 0,
 		})
 		.unwrap();
 
 	assert!(builder
 		.push_transfer(Transfer {
-			from: AccountKeyring::Eve.into(),
-			to: AccountKeyring::Alice.into(),
-			amount: 42,
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 30 * DOLLARS,
 			nonce: 0,
 		})
 		.is_err());
 
 	let block = builder.build().unwrap().block;
+	//transfer from Eve should not be included
+	assert_eq!(block.extrinsics.len(), 1);
 	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 	let hashof0 = client
@@ -519,7 +454,7 @@ fn uncles_with_multiple_forks() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 41,
+			amount: 41 * DOLLARS,
 			nonce: 0,
 		})
 		.unwrap();
@@ -551,7 +486,7 @@ fn uncles_with_multiple_forks() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 1,
+			amount: 1 * DOLLARS,
 			nonce: 1,
 		})
 		.unwrap();
@@ -565,7 +500,7 @@ fn uncles_with_multiple_forks() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 1,
+			amount: 1 * DOLLARS,
 			nonce: 0,
 		})
 		.unwrap();
@@ -674,7 +609,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 41,
+			amount: 41 * DOLLARS,
 			nonce: 0,
 		})
 		.unwrap();
@@ -706,7 +641,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 1,
+			amount: 1 * DOLLARS,
 			nonce: 1,
 		})
 		.unwrap();
@@ -720,7 +655,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 1,
+			amount: 1 * DOLLARS,
 			nonce: 0,
 		})
 		.unwrap();
@@ -896,7 +831,7 @@ fn finality_target_with_best_not_on_longest_chain() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 41,
+			amount: 41 * DOLLARS,
 			nonce: 0,
 		})
 		.unwrap();
@@ -1021,7 +956,7 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 1,
+		amount: 1 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1076,7 +1011,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 1,
+		amount: 1 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1194,7 +1129,7 @@ fn finality_notifications_content() {
 	c1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 2,
+		amount: 2 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1206,7 +1141,7 @@ fn finality_notifications_content() {
 	d3.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 2,
+		amount: 2 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1280,7 +1215,7 @@ fn state_reverted_on_reorg() {
 	a1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Bob.into(),
-		amount: 10,
+		amount: 10 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1293,7 +1228,7 @@ fn state_reverted_on_reorg() {
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 50,
+		amount: 50 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1301,19 +1236,19 @@ fn state_reverted_on_reorg() {
 	// Reorg to B1
 	block_on(client.import_as_best(BlockOrigin::Own, b1.clone())).unwrap();
 
-	assert_eq!(950, current_balance(&client));
+	assert_eq!(950 * DOLLARS, current_balance(&client));
 	let mut a2 = client.new_block_at(a1.hash(), Default::default(), false).unwrap();
 	a2.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Charlie.into(),
-		amount: 10,
+		amount: 10 * DOLLARS,
 		nonce: 1,
 	})
 	.unwrap();
 	let a2 = a2.build().unwrap().block;
 	// Re-org to A2
 	block_on(client.import_as_best(BlockOrigin::Own, a2)).unwrap();
-	assert_eq!(980, current_balance(&client));
+	assert_eq!(980 * DOLLARS, current_balance(&client));
 }
 
 #[test]
@@ -1370,7 +1305,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 1,
+		amount: 1 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1414,7 +1349,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 	c1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 2,
+		amount: 2 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1607,7 +1542,7 @@ fn returns_status_for_pruned_blocks() {
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 1,
+		amount: 1 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1733,21 +1668,21 @@ fn storage_keys_prefix_and_start_key_works() {
 
 	let block_hash = client.info().best_hash;
 
-	let child_root = b":child_storage:default:child".to_vec();
+	let child_root = array_bytes::bytes2hex("", b":child_storage:default:child");
 	let prefix = StorageKey(array_bytes::hex2bytes_unchecked("3a"));
 	let child_prefix = StorageKey(b"sec".to_vec());
 
 	let res: Vec<_> = client
 		.storage_keys(block_hash, Some(&prefix), None)
 		.unwrap()
-		.map(|x| x.0)
+		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
 	assert_eq!(
 		res,
 		[
-			child_root.clone(),
-			array_bytes::hex2bytes_unchecked("3a636f6465"),
-			array_bytes::hex2bytes_unchecked("3a686561707061676573"),
+			&child_root,
+			"3a636f6465",                       //":code"
+			"3a65787472696e7369635f696e646578", //":extrinsic_index"
 		]
 	);
 
@@ -1758,9 +1693,9 @@ fn storage_keys_prefix_and_start_key_works() {
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f6465"))),
 		)
 		.unwrap()
-		.map(|x| x.0)
+		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
-	assert_eq!(res, [array_bytes::hex2bytes_unchecked("3a686561707061676573")]);
+	assert_eq!(res, ["3a65787472696e7369635f696e646578",]);
 
 	let res: Vec<_> = client
 		.storage_keys(
@@ -1790,54 +1725,32 @@ fn storage_keys_prefix_and_start_key_works() {
 
 #[test]
 fn storage_keys_works() {
+	sp_tracing::try_init_simple();
+
+	let expected_keys =
+		substrate_test_runtime::storage_key_generator::get_expected_storage_hashed_keys(false);
+
 	let client = substrate_test_runtime_client::new();
-
 	let block_hash = client.info().best_hash;
-
 	let prefix = StorageKey(array_bytes::hex2bytes_unchecked(""));
 
 	let res: Vec<_> = client
 		.storage_keys(block_hash, Some(&prefix), None)
 		.unwrap()
-		.take(9)
+		.take(19)
 		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
-	assert_eq!(
-		res,
-		[
-			"00c232cf4e70a5e343317016dc805bf80a6a8cd8ad39958d56f99891b07851e0",
-			"085b2407916e53a86efeb8b72dbe338c4b341dab135252f96b6ed8022209b6cb",
-			"0befda6e1ca4ef40219d588a727f1271",
-			"1a560ecfd2a62c2b8521ef149d0804eb621050e3988ed97dca55f0d7c3e6aa34",
-			"1d66850d32002979d67dd29dc583af5b2ae2a1f71c1f35ad90fff122be7a3824",
-			"237498b98d8803334286e9f0483ef513098dd3c1c22ca21c4dc155b4ef6cc204",
-			"26aa394eea5630e07c48ae0c9558cef75e0621c4869aa60c02be9adcc98a0d1d",
-			"29b9db10ec5bf7907d8f74b5e60aa8140c4fbdd8127a1ee5600cb98e5ec01729",
-			"3a636f6465",
-		]
-	);
+
+	assert_eq!(res, expected_keys[0..19],);
 
 	// Starting at an empty key nothing gets skipped.
 	let res: Vec<_> = client
 		.storage_keys(block_hash, Some(&prefix), Some(&StorageKey("".into())))
 		.unwrap()
-		.take(9)
+		.take(19)
 		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
-	assert_eq!(
-		res,
-		[
-			"00c232cf4e70a5e343317016dc805bf80a6a8cd8ad39958d56f99891b07851e0",
-			"085b2407916e53a86efeb8b72dbe338c4b341dab135252f96b6ed8022209b6cb",
-			"0befda6e1ca4ef40219d588a727f1271",
-			"1a560ecfd2a62c2b8521ef149d0804eb621050e3988ed97dca55f0d7c3e6aa34",
-			"1d66850d32002979d67dd29dc583af5b2ae2a1f71c1f35ad90fff122be7a3824",
-			"237498b98d8803334286e9f0483ef513098dd3c1c22ca21c4dc155b4ef6cc204",
-			"26aa394eea5630e07c48ae0c9558cef75e0621c4869aa60c02be9adcc98a0d1d",
-			"29b9db10ec5bf7907d8f74b5e60aa8140c4fbdd8127a1ee5600cb98e5ec01729",
-			"3a636f6465",
-		]
-	);
+	assert_eq!(res, expected_keys[0..19],);
 
 	// Starting at an incomplete key nothing gets skipped.
 	let res: Vec<_> = client
@@ -1852,16 +1765,12 @@ fn storage_keys_works() {
 		.collect();
 	assert_eq!(
 		res,
-		[
-			"3a636f6465",
-			"3a686561707061676573",
-			"52008686cc27f6e5ed83a216929942f8bcd32a396f09664a5698f81371934b56",
-			"5348d72ac6cc66e5d8cbecc27b0e0677503b845fe2382d819f83001781788fd5",
-			"5c2d5fda66373dabf970e4fb13d277ce91c5233473321129d32b5a8085fa8133",
-			"6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081",
-			"66484000ed3f75c95fc7b03f39c20ca1e1011e5999278247d3b2f5e3c3273808",
-			"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",
-		]
+		expected_keys
+			.iter()
+			.filter(|&i| *i > "3a636f64")
+			.take(8)
+			.cloned()
+			.collect::<Vec<_>>()
 	);
 
 	// Starting at a complete key the first key is skipped.
@@ -1877,38 +1786,33 @@ fn storage_keys_works() {
 		.collect();
 	assert_eq!(
 		res,
-		[
-			"3a686561707061676573",
-			"52008686cc27f6e5ed83a216929942f8bcd32a396f09664a5698f81371934b56",
-			"5348d72ac6cc66e5d8cbecc27b0e0677503b845fe2382d819f83001781788fd5",
-			"5c2d5fda66373dabf970e4fb13d277ce91c5233473321129d32b5a8085fa8133",
-			"6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081",
-			"66484000ed3f75c95fc7b03f39c20ca1e1011e5999278247d3b2f5e3c3273808",
-			"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",
-		]
+		expected_keys
+			.iter()
+			.filter(|&i| *i > "3a636f6465")
+			.take(8)
+			.cloned()
+			.collect::<Vec<_>>()
 	);
 
+	const SOME_BALANCE_KEY : &str = "26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9e2c1dc507e2035edbbd8776c440d870460c57f0008067cc01c5ff9eb2e2f9b3a94299a915a91198bd1021a6c55596f57";
 	let res: Vec<_> = client
 		.storage_keys(
 			block_hash,
 			Some(&prefix),
-			Some(&StorageKey(array_bytes::hex2bytes_unchecked(
-				"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",
-			))),
+			Some(&StorageKey(array_bytes::hex2bytes_unchecked(SOME_BALANCE_KEY))),
 		)
 		.unwrap()
-		.take(5)
+		.take(8)
 		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
 	assert_eq!(
 		res,
-		[
-			"811ecfaadcf5f2ee1d67393247e2f71a1662d433e8ce7ff89fb0d4aa9561820b",
-			"a93d74caa7ec34ea1b04ce1e5c090245f867d333f0f88278a451e45299654dc5",
-			"a9ee1403384afbfc13f13be91ff70bfac057436212e53b9733914382ac942892",
-			"cf722c0832b5231d35e29f319ff27389f5032bfc7bfc3ba5ed7839f2042fb99f",
-			"e3b47b6c84c0493481f97c5197d2554f",
-		]
+		expected_keys
+			.iter()
+			.filter(|&i| *i > SOME_BALANCE_KEY)
+			.take(8)
+			.cloned()
+			.collect::<Vec<_>>()
 	);
 }
 
@@ -1917,7 +1821,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 	use substrate_test_runtime_client::GenesisInit;
 
 	let backend = Arc::new(sc_client_api::in_mem::Backend::new());
-	let executor = substrate_test_runtime_client::new_native_executor();
+	let executor = new_native_or_wasm_executor();
 	let client_config = sc_service::ClientConfig::default();
 
 	let genesis_block_builder = sc_service::GenesisBlockBuilder::new(
@@ -1935,7 +1839,6 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 		backend,
 		executor,
 		genesis_block_builder,
-		None,
 		None,
 		None,
 		Box::new(TaskExecutor::new()),
@@ -2027,7 +1930,7 @@ fn reorg_triggers_a_notification_even_for_sources_that_should_not_trigger_notifi
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 1,
+		amount: 1 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -2087,4 +1990,42 @@ fn use_dalek_ext_works() {
 		.runtime_api()
 		.verify_ed25519(a1.hash(), zero_ed_sig(), zero_ed_pub(), vec![])
 		.unwrap());
+}
+
+#[test]
+fn finalize_after_best_block_updates_best() {
+	let mut client = substrate_test_runtime_client::new();
+
+	// G -> A1
+	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
+
+	// A1 -> A2
+	let a2 = client
+		.new_block_at(a1.hash(), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
+
+	// A2 -> A3
+	let a3 = client
+		.new_block_at(a2.hash(), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+	let (header, extrinsics) = a3.clone().deconstruct();
+	let mut import_params = BlockImportParams::new(BlockOrigin::Own, header);
+	import_params.body = Some(extrinsics);
+	import_params.fork_choice = Some(ForkChoiceStrategy::Custom(false));
+	block_on(client.import_block(import_params)).unwrap();
+
+	assert_eq!(client.chain_info().best_hash, a2.hash());
+
+	client.finalize_block(a3.hash(), None).unwrap();
+
+	assert_eq!(client.chain_info().finalized_hash, a3.hash());
+	assert_eq!(client.chain_info().best_hash, a3.hash());
 }

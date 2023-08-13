@@ -55,10 +55,10 @@ use sp_runtime::{
 
 pub use self::{
 	builder::{
-		build_network, build_offchain_workers, new_client, new_db_backend, new_full_client,
-		new_full_parts, new_full_parts_with_genesis_builder, spawn_tasks, BuildNetworkParams,
-		KeystoreContainer, NetworkStarter, SpawnTasksParams, TFullBackend, TFullCallExecutor,
-		TFullClient,
+		build_network, new_client, new_db_backend, new_full_client, new_full_parts,
+		new_full_parts_with_genesis_builder, new_native_or_wasm_executor, new_wasm_executor,
+		spawn_tasks, BuildNetworkParams, KeystoreContainer, NetworkStarter, SpawnTasksParams,
+		TFullBackend, TFullCallExecutor, TFullClient,
 	},
 	client::{ClientConfig, LocalCallExecutor},
 	error::Error,
@@ -211,7 +211,7 @@ async fn build_network_future<
 }
 
 /// Builds a future that processes system RPC requests.
-async fn build_system_rpc_future<
+pub async fn build_system_rpc_future<
 	B: BlockT,
 	C: BlockchainEvents<B>
 		+ HeaderBackend<B>
@@ -237,7 +237,7 @@ async fn build_system_rpc_future<
 		// Answer incoming RPC requests.
 		let Some(req) = rpc_rx.next().await else {
 			debug!("RPC requests stream has terminated, shutting down the system RPC future.");
-			return;
+			return
 		};
 
 		match req {
@@ -255,7 +255,7 @@ async fn build_system_rpc_future<
 				let _ = sender.send(network_service.local_peer_id().to_base58());
 			},
 			sc_rpc::system::Request::LocalListenAddresses(sender) => {
-				let peer_id = (network_service.local_peer_id()).into();
+				let peer_id = network_service.local_peer_id();
 				let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
 				let addresses = network_service
 					.listen_addresses()
@@ -380,57 +380,37 @@ where
 		}
 	}
 
-	let (max_request_size, ws_max_response_size, http_max_response_size) =
-		legacy_cli_parsing(config);
-
-	let random_port = |mut addr: SocketAddr| {
+	// if binding the specified port failed then a random port is assigned by the OS.
+	let backup_port = |mut addr: SocketAddr| {
 		addr.set_port(0);
 		addr
 	};
 
-	let ws_addr = config
-		.rpc_ws
-		.unwrap_or_else(|| "127.0.0.1:9944".parse().expect("valid sockaddr; qed"));
-	let ws_addr2 = random_port(ws_addr);
-
-	let http_addr = config
-		.rpc_http
-		.unwrap_or_else(|| "127.0.0.1:9933".parse().expect("valid sockaddr; qed"));
-	let http_addr2 = random_port(http_addr);
-
+	let addr = config.rpc_addr.unwrap_or_else(|| ([127, 0, 0, 1], config.rpc_port).into());
+	let backup_addr = backup_port(addr);
 	let metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
 
-	let server_config = sc_rpc_server::WsConfig {
-		max_connections: config.rpc_ws_max_connections,
-		max_payload_in_mb: max_request_size,
-		max_payload_out_mb: ws_max_response_size,
+	let server_config = sc_rpc_server::Config {
+		addrs: [addr, backup_addr],
+		max_connections: config.rpc_max_connections,
+		max_payload_in_mb: config.rpc_max_request_size,
+		max_payload_out_mb: config.rpc_max_response_size,
 		max_subs_per_conn: config.rpc_max_subs_per_conn,
+		rpc_api: gen_rpc_module(deny_unsafe(addr, &config.rpc_methods))?,
+		metrics,
+		id_provider: rpc_id_provider,
+		cors: config.rpc_cors.as_ref(),
+		tokio_handle: config.tokio_handle.clone(),
 	};
 
-	let http_fut = sc_rpc_server::start_http(
-		[http_addr, http_addr2],
-		config.rpc_cors.as_ref(),
-		max_request_size,
-		http_max_response_size,
-		metrics.clone(),
-		gen_rpc_module(deny_unsafe(http_addr, &config.rpc_methods))?,
-		config.tokio_handle.clone(),
-	);
-
-	let ws_fut = sc_rpc_server::start(
-		[ws_addr, ws_addr2],
-		config.rpc_cors.as_ref(),
-		server_config.clone(),
-		metrics.clone(),
-		gen_rpc_module(deny_unsafe(ws_addr, &config.rpc_methods))?,
-		config.tokio_handle.clone(),
-		rpc_id_provider,
-	);
-
+	// TODO: https://github.com/paritytech/substrate/issues/13773
+	//
+	// `block_in_place` is a hack to allow callers to call `block_on` prior to
+	// calling `start_rpc_servers`.
 	match tokio::task::block_in_place(|| {
-		config.tokio_handle.block_on(futures::future::try_join(http_fut, ws_fut))
+		config.tokio_handle.block_on(sc_rpc_server::start_server(server_config))
 	}) {
-		Ok((http, ws)) => Ok(Box::new((waiting::Server(Some(http)), waiting::Server(Some(ws))))),
+		Ok(server) => Ok(Box::new(waiting::Server(Some(server)))),
 		Err(e) => Err(Error::Application(e)),
 	}
 }
@@ -439,6 +419,13 @@ where
 pub struct TransactionPoolAdapter<C, P> {
 	pool: Arc<P>,
 	client: Arc<C>,
+}
+
+impl<C, P> TransactionPoolAdapter<C, P> {
+	/// Constructs a new instance of [`TransactionPoolAdapter`].
+	pub fn new(pool: Arc<P>, client: Arc<C>) -> Self {
+		Self { pool, client }
+	}
 }
 
 /// Get transactions for propagation.
@@ -534,61 +521,15 @@ where
 	}
 }
 
-fn legacy_cli_parsing(config: &Configuration) -> (Option<usize>, Option<usize>, Option<usize>) {
-	let ws_max_response_size = match (
-		config.ws_max_out_buffer_capacity,
-		config.rpc_max_response_size,
-	) {
-		(Some(legacy_max), max) => {
-			eprintln!("DEPRECATED: `--ws_max_out_buffer_capacity` has been removed; use `rpc-max-response-size or rpc-max-request-size` instead");
-			eprintln!("Setting WS `rpc-max-response-size` to `max(ws_max_out_buffer_capacity, rpc_max_response_size)`");
-			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
-		},
-		(None, Some(m)) => Some(m),
-		(None, None) => None,
-	};
-
-	let max_request_size = match (config.rpc_max_payload, config.rpc_max_request_size) {
-		(Some(legacy_max), max) => {
-			eprintln!("DEPRECATED: `--rpc_max_payload` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
-			eprintln!(
-				"Setting `rpc-max-response-size` to `max(rpc_max_payload, rpc_max_request_size)`"
-			);
-			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
-		},
-		(None, Some(max)) => Some(max),
-		(None, None) => None,
-	};
-
-	let http_max_response_size = match (config.rpc_max_payload, config.rpc_max_response_size) {
-		(Some(legacy_max), max) => {
-			eprintln!("DEPRECATED: `--rpc_max_payload` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
-			eprintln!(
-				"Setting HTTP `rpc-max-response-size` to `max(rpc_max_payload, rpc_max_response_size)`"
-			);
-			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
-		},
-		(None, Some(max)) => Some(max),
-		(None, None) => None,
-	};
-
-	if config.rpc_ipc.is_some() {
-		eprintln!("DEPRECATED: `--ipc-path` has no effect anymore IPC support has been removed");
-	}
-
-	(max_request_size, ws_max_response_size, http_max_response_size)
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use futures::executor::block_on;
 	use sc_transaction_pool::BasicPool;
 	use sp_consensus::SelectChain;
-	use sp_runtime::traits::BlindCheckable;
 	use substrate_test_runtime_client::{
 		prelude::*,
-		runtime::{Extrinsic, Transfer},
+		runtime::{ExtrinsicBuilder, Transfer, TransferData},
 	};
 
 	#[test]
@@ -607,13 +548,13 @@ mod tests {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Bob.into(),
 		}
-		.into_signed_tx();
+		.into_unchecked_extrinsic();
 		block_on(pool.submit_one(&BlockId::hash(best.hash()), source, transaction.clone()))
 			.unwrap();
 		block_on(pool.submit_one(
 			&BlockId::hash(best.hash()),
 			source,
-			Extrinsic::IncludeData(vec![1]),
+			ExtrinsicBuilder::new_call_do_not_propagate().nonce(1).build(),
 		))
 		.unwrap();
 		assert_eq!(pool.status().ready, 2);
@@ -623,8 +564,6 @@ mod tests {
 
 		// then
 		assert_eq!(transactions.len(), 1);
-		assert!(transactions[0].1.clone().check().is_ok());
-		// this should not panic
-		let _ = transactions[0].1.transfer();
+		assert!(TransferData::try_from(&transactions[0].1).is_ok());
 	}
 }

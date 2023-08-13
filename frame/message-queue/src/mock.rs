@@ -29,21 +29,17 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 use sp_std::collections::btree_map::BTreeMap;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		MessageQueue: pallet_message_queue::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -53,14 +49,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -84,6 +79,7 @@ impl Config for Test {
 	type MessageProcessor = RecordingMessageProcessor;
 	type Size = u32;
 	type QueueChangeHandler = RecordingQueueChangeHandler;
+	type QueuePausedQuery = MockedQueuePauser;
 	type HeapSize = HeapSize;
 	type MaxStale = MaxStale;
 	type ServiceWeight = ServiceWeight;
@@ -154,7 +150,8 @@ impl crate::weights::WeightInfo for MockedWeightInfo {
 
 parameter_types! {
 	pub static MessagesProcessed: Vec<(Vec<u8>, MessageOrigin)> = vec![];
-	pub static SuspendedQueues: Vec<MessageOrigin> = vec![];
+	/// Queues that should return `Yield` upon being processed.
+	pub static YieldingQueues: Vec<MessageOrigin> = vec![];
 }
 
 /// A message processor which records all processed messages into [`MessagesProcessed`].
@@ -172,6 +169,7 @@ impl ProcessMessage for RecordingMessageProcessor {
 		message: &[u8],
 		origin: Self::Origin,
 		meter: &mut WeightMeter,
+		_id: &mut [u8; 32],
 	) -> Result<bool, ProcessMessageError> {
 		processing_message(message, &origin)?;
 
@@ -190,7 +188,7 @@ impl ProcessMessage for RecordingMessageProcessor {
 		};
 		let required = Weight::from_parts(weight, weight);
 
-		if meter.check_accrue(required) {
+		if meter.try_consume(required).is_ok() {
 			let mut m = MessagesProcessed::get();
 			m.push((message.to_vec(), origin));
 			MessagesProcessed::set(m);
@@ -204,7 +202,7 @@ impl ProcessMessage for RecordingMessageProcessor {
 /// Processed a mocked message. Messages that end with `badformat`, `corrupt`, `unsupported` or
 /// `yield` will fail with an error respectively.
 fn processing_message(msg: &[u8], origin: &MessageOrigin) -> Result<(), ProcessMessageError> {
-	if SuspendedQueues::get().contains(&origin) {
+	if YieldingQueues::get().contains(&origin) {
 		return Err(ProcessMessageError::Yield)
 	}
 
@@ -239,6 +237,7 @@ impl ProcessMessage for CountingMessageProcessor {
 		message: &[u8],
 		origin: Self::Origin,
 		meter: &mut WeightMeter,
+		_id: &mut [u8; 32],
 	) -> Result<bool, ProcessMessageError> {
 		if let Err(e) = processing_message(message, &origin) {
 			NumMessagesErrored::set(NumMessagesErrored::get() + 1);
@@ -246,7 +245,7 @@ impl ProcessMessage for CountingMessageProcessor {
 		}
 		let required = Weight::from_parts(1, 1);
 
-		if meter.check_accrue(required) {
+		if meter.try_consume(required).is_ok() {
 			NumMessagesProcessed::set(NumMessagesProcessed::get() + 1);
 			Ok(true)
 		} else {
@@ -268,21 +267,38 @@ impl OnQueueChanged<MessageOrigin> for RecordingQueueChangeHandler {
 	}
 }
 
+parameter_types! {
+	pub static PausedQueues: Vec<MessageOrigin> = vec![];
+}
+
+pub struct MockedQueuePauser;
+impl QueuePausedQuery<MessageOrigin> for MockedQueuePauser {
+	fn is_paused(id: &MessageOrigin) -> bool {
+		PausedQueues::get().contains(id)
+	}
+}
+
 /// Create new test externalities.
 ///
 /// Is generic since it is used by the unit test, integration tests and benchmarks.
 pub fn new_test_ext<T: Config>() -> sp_io::TestExternalities
 where
-	<T as frame_system::Config>::BlockNumber: From<u32>,
+	frame_system::pallet_prelude::BlockNumberFor<T>: From<u32>,
 {
 	sp_tracing::try_init_simple();
 	WeightForCall::take();
 	QueueChanges::take();
 	NumMessagesErrored::take();
-	let t = frame_system::GenesisConfig::default().build_storage::<T>().unwrap();
+	let t = frame_system::GenesisConfig::<T>::default().build_storage().unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| frame_system::Pallet::<T>::set_block_number(1.into()));
 	ext
+}
+
+/// Run this closure in test externalities.
+pub fn test_closure<R>(f: impl FnOnce() -> R) -> R {
+	let mut ext = new_test_ext::<Test>();
+	ext.execute_with(f)
 }
 
 /// Set the weight of a specific weight function.

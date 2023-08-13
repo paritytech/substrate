@@ -18,15 +18,17 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ScoreProvider,
-	SortedListProvider, VoteWeight, VoterOf,
+	bounds::{CountBound, SizeBound},
+	data_provider, BoundedSupportsOf, DataProviderBounds, ElectionDataProvider, ElectionProvider,
+	ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
+	defensive,
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, Defensive, DefensiveResult, EstimateNextNewSession, Get,
-		Imbalance, LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
+		Currency, Defensive, DefensiveResult, EstimateNextNewSession, Get, Imbalance,
+		LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -37,18 +39,25 @@ use sp_runtime::{
 	Perbill,
 };
 use sp_staking::{
+	currency_to_vote::CurrencyToVote,
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
 	EraIndex, SessionIndex, Stake, StakingInterface,
 };
 use sp_std::prelude::*;
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
-	Forcing, IndividualExposure, MaxWinnersOf, Nominations, PositiveImbalanceOf, RewardDestination,
+	election_size_tracker::StaticTracker, log, slashing, weights::WeightInfo, ActiveEraInfo,
+	BalanceOf, EraPayout, Exposure, ExposureOf, Forcing, IndividualExposure, MaxNominationsOf,
+	MaxWinnersOf, Nominations, NominationsQuota, PositiveImbalanceOf, RewardDestination,
 	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
+
+#[cfg(feature = "try-runtime")]
+use frame_support::ensure;
+#[cfg(any(test, feature = "try-runtime"))]
+use sp_runtime::TryRuntimeError;
 
 /// The maximum number of iterations that we do whilst iterating over `T::VoterList` in
 /// `get_npos_voters`.
@@ -668,12 +677,12 @@ impl<T: Config> Pallet<T> {
 
 	/// Clear all era information for given era.
 	pub(crate) fn clear_era_information(era_index: EraIndex) {
-		#[allow(deprecated)]
-		<ErasStakers<T>>::remove_prefix(era_index, None);
-		#[allow(deprecated)]
-		<ErasStakersClipped<T>>::remove_prefix(era_index, None);
-		#[allow(deprecated)]
-		<ErasValidatorPrefs<T>>::remove_prefix(era_index, None);
+		let mut cursor = <ErasStakers<T>>::clear_prefix(era_index, u32::MAX, None);
+		debug_assert!(cursor.maybe_cursor.is_none());
+		cursor = <ErasStakersClipped<T>>::clear_prefix(era_index, u32::MAX, None);
+		debug_assert!(cursor.maybe_cursor.is_none());
+		cursor = <ErasValidatorPrefs<T>>::clear_prefix(era_index, u32::MAX, None);
+		debug_assert!(cursor.maybe_cursor.is_none());
 		<ErasValidatorReward<T>>::remove(era_index);
 		<ErasRewardPoints<T>>::remove(era_index);
 		<ErasTotalStake<T>>::remove(era_index);
@@ -754,13 +763,15 @@ impl<T: Config> Pallet<T> {
 	/// nominators.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
-		let max_allowed_len = {
-			let all_voter_count = T::VoterList::count() as usize;
-			maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count)
+	pub fn get_npos_voters(bounds: DataProviderBounds) -> Vec<VoterOf<Self>> {
+		let mut voters_size_tracker: StaticTracker<Self> = StaticTracker::default();
+
+		let final_predicted_len = {
+			let all_voter_count = T::VoterList::count();
+			bounds.count.unwrap_or(all_voter_count.into()).min(all_voter_count.into()).0
 		};
 
-		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len);
+		let mut all_voters = Vec::<_>::with_capacity(final_predicted_len as usize);
 
 		// cache a few things.
 		let weight_of = Self::weight_of_fn();
@@ -771,8 +782,8 @@ impl<T: Config> Pallet<T> {
 		let mut min_active_stake = u64::MAX;
 
 		let mut sorted_voters = T::VoterList::iter();
-		while all_voters.len() < max_allowed_len &&
-			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
+		while all_voters.len() < final_predicted_len as usize &&
+			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * final_predicted_len as u32)
 		{
 			let voter = match sorted_voters.next() {
 				Some(voter) => {
@@ -782,13 +793,32 @@ impl<T: Config> Pallet<T> {
 				None => break,
 			};
 
+			let voter_weight = weight_of(&voter);
+			// if voter weight is zero, do not consider this voter for the snapshot.
+			if voter_weight.is_zero() {
+				log!(debug, "voter's active balance is 0. skip this voter.");
+				continue
+			}
+
 			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
-				let voter_weight = weight_of(&voter);
 				if !targets.is_empty() {
-					all_voters.push((voter.clone(), voter_weight, targets));
+					// Note on lazy nomination quota: we do not check the nomination quota of the
+					// voter at this point and accept all the current nominations. The nomination
+					// quota is only enforced at `nominate` time.
+
+					let voter = (voter, voter_weight, targets);
+					if voters_size_tracker.try_register_voter(&voter, &bounds).is_err() {
+						// no more space left for the election result, stop iterating.
+						Self::deposit_event(Event::<T>::SnapshotVotersSizeExceeded {
+							size: voters_size_tracker.size as u32,
+						});
+						break
+					}
+
+					all_voters.push(voter);
 					nominators_taken.saturating_inc();
 				} else {
-					// Technically should never happen, but not much we can do about it.
+					// technically should never happen, but not much we can do about it.
 				}
 				min_active_stake =
 					if voter_weight < min_active_stake { voter_weight } else { min_active_stake };
@@ -796,34 +826,41 @@ impl<T: Config> Pallet<T> {
 				// if this voter is a validator:
 				let self_vote = (
 					voter.clone(),
-					weight_of(&voter),
+					voter_weight,
 					vec![voter.clone()]
 						.try_into()
 						.expect("`MaxVotesPerVoter` must be greater than or equal to 1"),
 				);
+
+				if voters_size_tracker.try_register_voter(&self_vote, &bounds).is_err() {
+					// no more space left for the election snapshot, stop iterating.
+					Self::deposit_event(Event::<T>::SnapshotVotersSizeExceeded {
+						size: voters_size_tracker.size as u32,
+					});
+					break
+				}
 				all_voters.push(self_vote);
 				validators_taken.saturating_inc();
 			} else {
 				// this can only happen if: 1. there a bug in the bags-list (or whatever is the
 				// sorted list) logic and the state of the two pallets is no longer compatible, or
 				// because the nominators is not decodable since they have more nomination than
-				// `T::MaxNominations`. The latter can rarely happen, and is not really an emergency
-				// or bug if it does.
-				log!(
-					warn,
-					"DEFENSIVE: invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
-					voter
-				);
+				// `T::NominationsQuota::get_quota`. The latter can rarely happen, and is not
+				// really an emergency or bug if it does.
+				defensive!(
+				    "DEFENSIVE: invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
+                    voter,
+                );
 			}
 		}
 
 		// all_voters should have not re-allocated.
-		debug_assert!(all_voters.capacity() == max_allowed_len);
+		debug_assert!(all_voters.capacity() == final_predicted_len as usize);
 
 		Self::register_weight(T::WeightInfo::get_npos_voters(validators_taken, nominators_taken));
 
 		let min_active_stake: T::CurrencyBalance =
-			if all_voters.len() == 0 { 0u64.into() } else { min_active_stake.into() };
+			if all_voters.is_empty() { Zero::zero() } else { min_active_stake.into() };
 
 		MinimumActiveStake::<T>::put(min_active_stake);
 
@@ -841,14 +878,20 @@ impl<T: Config> Pallet<T> {
 	/// Get the targets for an upcoming npos election.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_targets(maybe_max_len: Option<usize>) -> Vec<T::AccountId> {
-		let max_allowed_len = maybe_max_len.unwrap_or_else(|| T::TargetList::count() as usize);
-		let mut all_targets = Vec::<T::AccountId>::with_capacity(max_allowed_len);
+	pub fn get_npos_targets(bounds: DataProviderBounds) -> Vec<T::AccountId> {
+		let mut targets_size_tracker: StaticTracker<Self> = StaticTracker::default();
+
+		let final_predicted_len = {
+			let all_target_count = T::TargetList::count();
+			bounds.count.unwrap_or(all_target_count.into()).min(all_target_count.into()).0
+		};
+
+		let mut all_targets = Vec::<T::AccountId>::with_capacity(final_predicted_len as usize);
 		let mut targets_seen = 0;
 
 		let mut targets_iter = T::TargetList::iter();
-		while all_targets.len() < max_allowed_len &&
-			targets_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
+		while all_targets.len() < final_predicted_len as usize &&
+			targets_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * final_predicted_len as u32)
 		{
 			let target = match targets_iter.next() {
 				Some(target) => {
@@ -857,6 +900,14 @@ impl<T: Config> Pallet<T> {
 				},
 				None => break,
 			};
+
+			if targets_size_tracker.try_register_target(target.clone(), &bounds).is_err() {
+				// no more space left for the election snapshot, stop iterating.
+				Self::deposit_event(Event::<T>::SnapshotTargetsSizeExceeded {
+					size: targets_size_tracker.size as u32,
+				});
+				break
+			}
 
 			if Validators::<T>::contains_key(&target) {
 				all_targets.push(target);
@@ -976,46 +1027,51 @@ impl<T: Config> Pallet<T> {
 	/// Returns the current nominations quota for nominators.
 	///
 	/// Used by the runtime API.
-	/// Note: for now, this api runtime will always return value of `T::MaxNominations` and thus it
-	/// is redundant. However, with the upcoming changes in
-	/// <https://github.com/paritytech/substrate/pull/12970>, the nominations quota will change
-	/// depending on the nominators balance. We're introducing this runtime API now to prepare the
-	/// community to use it before rolling out PR#12970.
-	pub fn api_nominations_quota(_balance: BalanceOf<T>) -> u32 {
-		T::MaxNominations::get()
+	pub fn api_nominations_quota(balance: BalanceOf<T>) -> u32 {
+		T::NominationsQuota::get_quota(balance)
 	}
 }
 
 impl<T: Config> ElectionDataProvider for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
-	type MaxVotesPerVoter = T::MaxNominations;
+	type MaxVotesPerVoter = MaxNominationsOf<T>;
 
 	fn desired_targets() -> data_provider::Result<u32> {
 		Self::register_weight(T::DbWeight::get().reads(1));
 		Ok(Self::validator_count())
 	}
 
-	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+	fn electing_voters(bounds: DataProviderBounds) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
-		let voters = Self::get_npos_voters(maybe_max_len);
-		debug_assert!(maybe_max_len.map_or(true, |max| voters.len() <= max));
+		let voters = Self::get_npos_voters(bounds);
+
+		debug_assert!(!bounds.exhausted(
+			SizeBound(voters.encoded_size() as u32).into(),
+			CountBound(voters.len() as u32).into()
+		));
 
 		Ok(voters)
 	}
 
-	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
-		let target_count = T::TargetList::count();
+	fn electable_targets(bounds: DataProviderBounds) -> data_provider::Result<Vec<T::AccountId>> {
+		let targets = Self::get_npos_targets(bounds);
 
-		// We can't handle this case yet -- return an error.
-		if maybe_max_len.map_or(false, |max_len| target_count > max_len as u32) {
+		// We can't handle this case yet -- return an error. WIP to improve handling this case in
+		// <https://github.com/paritytech/substrate/pull/13195>.
+		if bounds.exhausted(None, CountBound(T::TargetList::count() as u32).into()) {
 			return Err("Target snapshot too big")
 		}
 
-		Ok(Self::get_npos_targets(None))
+		debug_assert!(!bounds.exhausted(
+			SizeBound(targets.encoded_size() as u32).into(),
+			CountBound(targets.len() as u32).into()
+		));
+
+		Ok(targets)
 	}
 
-	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
+	fn next_election_prediction(now: BlockNumberFor<T>) -> BlockNumberFor<T> {
 		let current_era = Self::current_era().unwrap_or(0);
 		let current_session = Self::current_planned_session();
 		let current_era_start_session_index =
@@ -1032,7 +1088,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 
 		let session_length = T::NextNewSession::average_session_length();
 
-		let sessions_left: T::BlockNumber = match ForceEra::<T>::get() {
+		let sessions_left: BlockNumberFor<T> = match ForceEra::<T>::get() {
 			Forcing::ForceNone => Bounded::max_value(),
 			Forcing::ForceNew | Forcing::ForceAlways => Zero::zero(),
 			Forcing::NotForcing if era_progress >= T::SessionsPerEra::get() => Zero::zero(),
@@ -1230,8 +1286,8 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 }
 
 /// Add reward points to block authors:
-/// * 20 points to the block producer for producing a (non-uncle) block in the relay chain,
-impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Pallet<T>
+/// * 20 points to the block producer for producing a (non-uncle) block,
+impl<T> pallet_authorship::EventHandler<T::AccountId, BlockNumberFor<T>> for Pallet<T>
 where
 	T: Config + pallet_authorship::Config + pallet_session::Config,
 {
@@ -1299,8 +1355,8 @@ where
 			add_db_reads_writes(1, 0);
 
 			// Reverse because it's more likely to find reports from recent eras.
-			match eras.iter().rev().find(|&&(_, ref sesh)| sesh <= &slash_session) {
-				Some(&(ref slash_era, _)) => *slash_era,
+			match eras.iter().rev().find(|&(_, sesh)| sesh <= &slash_session) {
+				Some((slash_era, _)) => *slash_era,
 				// Before bonding period. defensive - should be filtered out.
 				None => return consumed_weight,
 			}
@@ -1466,7 +1522,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		0
 	}
 	#[cfg(feature = "try-runtime")]
-	fn try_state() -> Result<(), &'static str> {
+	fn try_state() -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 
@@ -1543,7 +1599,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn try_state() -> Result<(), &'static str> {
+	fn try_state() -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 
@@ -1562,10 +1618,10 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	}
 }
 
-// NOTE: in this entire impl block, the assumption is that `who` is a stash account.
 impl<T: Config> StakingInterface for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = BalanceOf<T>;
+	type CurrencyToVote = T::CurrencyToVote;
 
 	fn minimum_nominator_bond() -> Self::Balance {
 		MinNominatorBond::<T>::get()
@@ -1608,10 +1664,10 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::current_era().unwrap_or(Zero::zero())
 	}
 
-	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
+	fn stake(who: &Self::AccountId) -> Result<Stake<BalanceOf<T>>, DispatchError> {
 		Self::bonded(who)
 			.and_then(|c| Self::ledger(c))
-			.map(|l| Stake { stash: l.stash, total: l.total, active: l.active })
+			.map(|l| Stake { total: l.total, active: l.active })
 			.ok_or(Error::<T>::NotStash.into())
 	}
 
@@ -1650,7 +1706,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	) -> DispatchResult {
 		Self::bond(
 			RawOrigin::Signed(who.clone()).into(),
-			T::Lookup::unlookup(who.clone()),
 			value,
 			RewardDestination::Account(payee.clone()),
 		)
@@ -1662,8 +1717,33 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::nominate(RawOrigin::Signed(ctrl).into(), targets)
 	}
 
+	fn status(
+		who: &Self::AccountId,
+	) -> Result<sp_staking::StakerStatus<Self::AccountId>, DispatchError> {
+		let is_bonded = Self::bonded(who).is_some();
+		if !is_bonded {
+			return Err(Error::<T>::NotStash.into())
+		}
+
+		let is_validator = Validators::<T>::contains_key(&who);
+		let is_nominator = Nominators::<T>::get(&who);
+
+		use sp_staking::StakerStatus;
+		match (is_validator, is_nominator.is_some()) {
+			(false, false) => Ok(StakerStatus::Idle),
+			(true, false) => Ok(StakerStatus::Validator),
+			(false, true) => Ok(StakerStatus::Nominator(
+				is_nominator.expect("is checked above; qed").targets.into_inner(),
+			)),
+			(true, true) => {
+				defensive!("cannot be both validators and nominator");
+				Err(Error::<T>::BadState.into())
+			},
+		}
+	}
+
 	sp_staking::runtime_benchmarks_enabled! {
-		fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
+		fn nominations(who: &Self::AccountId) -> Option<Vec<T::AccountId>> {
 			Nominators::<T>::get(who).map(|n| n.targets.into_inner())
 		}
 
@@ -1688,7 +1768,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 
 #[cfg(any(test, feature = "try-runtime"))]
 impl<T: Config> Pallet<T> {
-	pub(crate) fn do_try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
+	pub(crate) fn do_try_state(_: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
 		ensure!(
 			T::VoterList::iter()
 				.all(|x| <Nominators<T>>::contains_key(&x) || <Validators<T>>::contains_key(&x)),
@@ -1701,7 +1781,7 @@ impl<T: Config> Pallet<T> {
 		Self::check_count()
 	}
 
-	fn check_count() -> Result<(), &'static str> {
+	fn check_count() -> Result<(), TryRuntimeError> {
 		ensure!(
 			<T as Config>::VoterList::count() ==
 				Nominators::<T>::count() + Validators::<T>::count(),
@@ -1714,18 +1794,19 @@ impl<T: Config> Pallet<T> {
 		ensure!(
 			ValidatorCount::<T>::get() <=
 				<T::ElectionProvider as frame_election_provider_support::ElectionProviderBase>::MaxWinners::get(),
-			"validator count exceeded election max winners"
+			Error::<T>::TooManyValidators
 		);
 		Ok(())
 	}
 
-	fn check_ledgers() -> Result<(), &'static str> {
+	fn check_ledgers() -> Result<(), TryRuntimeError> {
 		Bonded::<T>::iter()
 			.map(|(_, ctrl)| Self::ensure_ledger_consistent(ctrl))
-			.collect::<Result<_, _>>()
+			.collect::<Result<Vec<_>, _>>()?;
+		Ok(())
 	}
 
-	fn check_exposures() -> Result<(), &'static str> {
+	fn check_exposures() -> Result<(), TryRuntimeError> {
 		// a check per validator to ensure the exposure struct is always sane.
 		let era = Self::active_era().unwrap().index;
 		ErasStakers::<T>::iter_prefix_values(era)
@@ -1741,10 +1822,10 @@ impl<T: Config> Pallet<T> {
 				);
 				Ok(())
 			})
-			.collect::<Result<_, _>>()
+			.collect::<Result<(), TryRuntimeError>>()
 	}
 
-	fn check_nominators() -> Result<(), &'static str> {
+	fn check_nominators() -> Result<(), TryRuntimeError> {
 		// a check per nominator to ensure their entire stake is correctly distributed. Will only
 		// kick-in if the nomination was submitted before the current era.
 		let era = Self::active_era().unwrap().index;
@@ -1758,27 +1839,33 @@ impl<T: Config> Pallet<T> {
 					}
 				},
 			)
-			.map(|nominator| {
+			.map(|nominator| -> Result<(), TryRuntimeError> {
 				// must be bonded.
 				Self::ensure_is_stash(&nominator)?;
 				let mut sum = BalanceOf::<T>::zero();
 				T::SessionInterface::validators()
 					.iter()
 					.map(|v| Self::eras_stakers(era, v))
-					.map(|e| {
+					.map(|e| -> Result<(), TryRuntimeError> {
 						let individual =
 							e.others.iter().filter(|e| e.who == nominator).collect::<Vec<_>>();
 						let len = individual.len();
 						match len {
 							0 => { /* not supporting this validator at all. */ },
 							1 => sum += individual[0].value,
-							_ => return Err("nominator cannot back a validator more than once."),
+							_ =>
+								return Err(
+									"nominator cannot back a validator more than once.".into()
+								),
 						};
 						Ok(())
 					})
-					.collect::<Result<_, _>>()
+					.collect::<Result<Vec<_>, _>>()?;
+				Ok(())
 			})
-			.collect::<Result<_, _>>()
+			.collect::<Result<Vec<_>, _>>()?;
+
+		Ok(())
 	}
 
 	fn ensure_is_stash(who: &T::AccountId) -> Result<(), &'static str> {
@@ -1786,16 +1873,12 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn ensure_ledger_consistent(ctrl: T::AccountId) -> Result<(), &'static str> {
+	fn ensure_ledger_consistent(ctrl: T::AccountId) -> Result<(), TryRuntimeError> {
 		// ensures ledger.total == ledger.active + sum(ledger.unlocking).
 		let ledger = Self::ledger(ctrl.clone()).ok_or("Not a controller.")?;
 		let real_total: BalanceOf<T> =
 			ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
 		ensure!(real_total == ledger.total, "ledger.total corrupt");
-
-		if !(ledger.active >= T::Currency::minimum_balance() || ledger.active.is_zero()) {
-			log!(warn, "ledger.active less than ED: {:?}, {:?}", ctrl, ledger)
-		}
 
 		Ok(())
 	}

@@ -1,0 +1,5 @@
+error: expected one of: `generate_store`, `without_storage_info`, `storage_version`
+ --> tests/pallet_ui/pallet_struct_invalid_attr.rs:7:12
+  |
+7 |     #[pallet::generate_storage_info] // invalid
+  |               ^^^^^^^^^^^^^^^^^^^^^

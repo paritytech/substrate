@@ -182,8 +182,8 @@ mod double128 {
 	}
 }
 
-/// Returns `a * b / c` and `(a * b) % c` (wrapping to 128 bits) or `None` in the case of
-/// overflow and c = 0.
+/// Returns `a * b / c` (wrapping to 128 bits) or `None` in the case of
+/// overflow.
 pub const fn multiply_by_rational_with_rounding(
 	a: u128,
 	b: u128,

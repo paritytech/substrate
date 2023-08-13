@@ -59,14 +59,16 @@ pub mod pallet {
 	pub(super) type NextKeys<T: Config> =
 		StorageValue<_, WeakBoundedVec<AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(frame_support::DefaultNoBound)]
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
+	pub struct GenesisConfig<T: Config> {
 		pub keys: Vec<AuthorityId>,
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			Pallet::<T>::initialize_keys(&self.keys)
 		}
@@ -168,30 +170,26 @@ mod tests {
 	use crate as pallet_authority_discovery;
 	use frame_support::{
 		parameter_types,
-		traits::{ConstU32, ConstU64, GenesisBuild},
+		traits::{ConstU32, ConstU64},
 	};
 	use sp_application_crypto::Pair;
 	use sp_authority_discovery::AuthorityPair;
 	use sp_core::{crypto::key_types, H256};
 	use sp_io::TestExternalities;
 	use sp_runtime::{
-		testing::{Header, UintAuthorityId},
+		testing::UintAuthorityId,
 		traits::{ConvertInto, IdentityLookup, OpaqueKeys},
-		KeyTypeId, Perbill,
+		BuildStorage, KeyTypeId, Perbill,
 	};
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
+		pub enum Test
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-			AuthorityDiscovery: pallet_authority_discovery::{Pallet, Config},
+			AuthorityDiscovery: pallet_authority_discovery::{Pallet, Config<T>},
 		}
 	);
 
@@ -233,14 +231,13 @@ mod tests {
 		type BlockLength = ();
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
-		type Index = u64;
-		type BlockNumber = BlockNumber;
+		type Nonce = u64;
 		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = AuthorityId;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
@@ -308,13 +305,11 @@ mod tests {
 			.collect::<Vec<(&AuthorityId, AuthorityId)>>();
 
 		// Build genesis.
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
-		GenesisBuild::<Test>::assimilate_storage(
-			&pallet_authority_discovery::GenesisConfig { keys: vec![] },
-			&mut t,
-		)
-		.unwrap();
+		pallet_authority_discovery::GenesisConfig::<Test> { keys: vec![], ..Default::default() }
+			.assimilate_storage(&mut t)
+			.unwrap();
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);

@@ -231,8 +231,9 @@
 
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
-	BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ElectionProviderBase,
-	InstantElectionProvider, NposSolution,
+	bounds::{CountBound, ElectionBounds, ElectionBoundsBuilder, SizeBound},
+	BoundedSupportsOf, DataProviderBounds, ElectionDataProvider, ElectionProvider,
+	ElectionProviderBase, InstantElectionProvider, NposSolution,
 };
 use frame_support::{
 	dispatch::DispatchClass,
@@ -241,7 +242,7 @@ use frame_support::{
 	weights::Weight,
 	DefaultNoBound, EqNoBound, PartialEqNoBound,
 };
-use frame_system::{ensure_none, offchain::SendTransactionTypes};
+use frame_system::{ensure_none, offchain::SendTransactionTypes, pallet_prelude::BlockNumberFor};
 use scale_info::TypeInfo;
 use sp_arithmetic::{
 	traits::{CheckedAdd, Zero},
@@ -256,6 +257,9 @@ use sp_runtime::{
 	DispatchError, ModuleError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 };
 use sp_std::prelude::*;
+
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -502,10 +506,10 @@ where
 	fn eq(&self, other: &Self) -> bool {
 		use ElectionError::*;
 		match (self, other) {
-			(&Feasibility(ref x), &Feasibility(ref y)) if x == y => true,
-			(&Miner(ref x), &Miner(ref y)) if x == y => true,
-			(&DataProvider(ref x), &DataProvider(ref y)) if x == y => true,
-			(&Fallback(ref x), &Fallback(ref y)) if x == y => true,
+			(Feasibility(x), Feasibility(y)) if x == y => true,
+			(Miner(x), Miner(y)) if x == y => true,
+			(DataProvider(x), DataProvider(y)) if x == y => true,
+			(Fallback(x), Fallback(y)) if x == y => true,
 			_ => false,
 		}
 	}
@@ -582,10 +586,10 @@ pub mod pallet {
 
 		/// Duration of the unsigned phase.
 		#[pallet::constant]
-		type UnsignedPhase: Get<Self::BlockNumber>;
+		type UnsignedPhase: Get<BlockNumberFor<Self>>;
 		/// Duration of the signed phase.
 		#[pallet::constant]
-		type SignedPhase: Get<Self::BlockNumber>;
+		type SignedPhase: Get<BlockNumberFor<Self>>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
 		/// "better" in the Signed phase.
@@ -602,7 +606,7 @@ pub mod pallet {
 		/// For example, if it is 5, that means that at least 5 blocks will elapse between attempts
 		/// to submit the worker's solution.
 		#[pallet::constant]
-		type OffchainRepeat: Get<Self::BlockNumber>;
+		type OffchainRepeat: Get<BlockNumberFor<Self>>;
 
 		/// The priority of the unsigned transaction submitted in the unsigned-phase
 		#[pallet::constant]
@@ -656,22 +660,17 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
 
-		/// The maximum number of electing voters to put in the snapshot. At the moment, snapshots
-		/// are only over a single block, but once multi-block elections are introduced they will
-		/// take place over multiple blocks.
-		#[pallet::constant]
-		type MaxElectingVoters: Get<SolutionVoterIndexOf<Self::MinerConfig>>;
-
-		/// The maximum number of electable targets to put in the snapshot.
-		#[pallet::constant]
-		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self::MinerConfig>>;
-
 		/// The maximum number of winners that can be elected by this `ElectionProvider`
 		/// implementation.
 		///
 		/// Note: This must always be greater or equal to `T::DataProvider::desired_targets()`.
 		#[pallet::constant]
 		type MaxWinners: Get<u32>;
+
+		/// The maximum number of electing voters and electable targets to put in the snapshot.
+		/// At the moment, snapshots are only over a single block, but once multi-block elections
+		/// are introduced they will take place over multiple blocks.
+		type ElectionBounds: Get<ElectionBounds>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -682,13 +681,13 @@ pub mod pallet {
 		/// Something that will provide the election data.
 		type DataProvider: ElectionDataProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = BlockNumberFor<Self>,
 		>;
 
 		/// Configuration for the fallback.
 		type Fallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = BlockNumberFor<Self>,
 			DataProvider = Self::DataProvider,
 			MaxWinners = Self::MaxWinners,
 		>;
@@ -699,7 +698,7 @@ pub mod pallet {
 		/// BoundedExecution<_>` if the test-net is not expected to have thousands of nominators.
 		type GovernanceFallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = BlockNumberFor<Self>,
 			DataProvider = Self::DataProvider,
 			MaxWinners = Self::MaxWinners,
 		>;
@@ -744,7 +743,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(now: T::BlockNumber) -> Weight {
+		fn on_initialize(now: BlockNumberFor<T>) -> Weight {
 			let next_election = T::DataProvider::next_election_prediction(now).max(now);
 
 			let signed_deadline = T::SignedPhase::get() + T::UnsignedPhase::get();
@@ -821,7 +820,7 @@ pub mod pallet {
 			}
 		}
 
-		fn offchain_worker(now: T::BlockNumber) {
+		fn offchain_worker(now: BlockNumberFor<T>) {
 			use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
 
 			// Create a lock with the maximum deadline of number of blocks in the unsigned phase.
@@ -880,6 +879,11 @@ pub mod pallet {
 			// `SignedMaxSubmissions` is a red flag that the developer does not understand how to
 			// configure this pallet.
 			assert!(T::SignedMaxSubmissions::get() >= T::SignedMaxRefunds::get());
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
+			Self::do_try_state()
 		}
 	}
 
@@ -1089,13 +1093,19 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
 
-			let supports =
-				T::GovernanceFallback::instant_elect(maybe_max_voters, maybe_max_targets).map_err(
-					|e| {
-						log!(error, "GovernanceFallback failed: {:?}", e);
-						Error::<T>::FallbackFailed
-					},
-				)?;
+			let election_bounds = ElectionBoundsBuilder::default()
+				.voters_count(maybe_max_voters.unwrap_or(u32::MAX).into())
+				.targets_count(maybe_max_targets.unwrap_or(u32::MAX).into())
+				.build();
+
+			let supports = T::GovernanceFallback::instant_elect(
+				election_bounds.voters,
+				election_bounds.targets,
+			)
+			.map_err(|e| {
+				log!(error, "GovernanceFallback failed: {:?}", e);
+				Error::<T>::FallbackFailed
+			})?;
 
 			// transform BoundedVec<_, T::GovernanceFallback::MaxWinners> into
 			// `BoundedVec<_, T::MaxWinners>`
@@ -1147,7 +1157,11 @@ pub mod pallet {
 		/// An account has been slashed for submitting an invalid signed submission.
 		Slashed { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
 		/// There was a phase transition in a given round.
-		PhaseTransitioned { from: Phase<T::BlockNumber>, to: Phase<T::BlockNumber>, round: u32 },
+		PhaseTransitioned {
+			from: Phase<BlockNumberFor<T>>,
+			to: Phase<BlockNumberFor<T>>,
+			round: u32,
+		},
 	}
 
 	/// Error of the pallet that can be returned in response to dispatches.
@@ -1249,9 +1263,11 @@ pub mod pallet {
 	/// Current phase.
 	#[pallet::storage]
 	#[pallet::getter(fn current_phase)]
-	pub type CurrentPhase<T: Config> = StorageValue<_, Phase<T::BlockNumber>, ValueQuery>;
+	pub type CurrentPhase<T: Config> = StorageValue<_, Phase<BlockNumberFor<T>>, ValueQuery>;
 
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
+	///
+	/// Always sorted by score.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
 	pub type QueuedSolution<T: Config> =
@@ -1333,13 +1349,13 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 }
 
 impl<T: Config> Pallet<T> {
 	/// Internal logic of the offchain worker, to be executed only when the offchain lock is
 	/// acquired with success.
-	fn do_synchronized_offchain_worker(now: T::BlockNumber) {
+	fn do_synchronized_offchain_worker(now: BlockNumberFor<T>) {
 		let current_phase = Self::current_phase();
 		log!(trace, "lock for offchain worker acquired. Phase = {:?}", current_phase);
 		match current_phase {
@@ -1365,7 +1381,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Phase transition helper.
-	pub(crate) fn phase_transition(to: Phase<T::BlockNumber>) {
+	pub(crate) fn phase_transition(to: Phase<BlockNumberFor<T>>) {
 		log!(info, "Starting phase {:?}, round {}.", to, Self::round());
 		Self::deposit_event(Event::PhaseTransitioned {
 			from: <CurrentPhase<T>>::get(),
@@ -1412,18 +1428,27 @@ impl<T: Config> Pallet<T> {
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external(
 	) -> Result<(Vec<T::AccountId>, Vec<VoterOf<T>>, u32), ElectionError<T>> {
-		let target_limit = T::MaxElectableTargets::get().saturated_into::<usize>();
-		let voter_limit = T::MaxElectingVoters::get().saturated_into::<usize>();
+		let election_bounds = T::ElectionBounds::get();
 
-		let targets = T::DataProvider::electable_targets(Some(target_limit))
+		let targets = T::DataProvider::electable_targets(election_bounds.targets)
+			.and_then(|t| {
+				election_bounds.ensure_targets_limits(
+					CountBound(t.len() as u32),
+					SizeBound(t.encoded_size() as u32),
+				)?;
+				Ok(t)
+			})
 			.map_err(ElectionError::DataProvider)?;
 
-		let voters = T::DataProvider::electing_voters(Some(voter_limit))
+		let voters = T::DataProvider::electing_voters(election_bounds.voters)
+			.and_then(|v| {
+				election_bounds.ensure_voters_limits(
+					CountBound(v.len() as u32),
+					SizeBound(v.encoded_size() as u32),
+				)?;
+				Ok(v)
+			})
 			.map_err(ElectionError::DataProvider)?;
-
-		if targets.len() > target_limit || voters.len() > voter_limit {
-			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
-		}
 
 		let mut desired_targets = <Pallet<T> as ElectionProviderBase>::desired_targets_checked()
 			.map_err(|e| ElectionError::DataProvider(e))?;
@@ -1530,18 +1555,25 @@ impl<T: Config> Pallet<T> {
 		// - signed phase was complete or not started, in which case finalization is idempotent and
 		//   inexpensive (1 read of an empty vector).
 		let _ = Self::finalize_signed_phase();
+
 		<QueuedSolution<T>>::take()
 			.ok_or(ElectionError::<T>::NothingQueued)
 			.or_else(|_| {
-				T::Fallback::instant_elect(None, None)
-					.map_err(|fe| ElectionError::Fallback(fe))
-					.and_then(|supports| {
-						Ok(ReadySolution {
-							supports,
-							score: Default::default(),
-							compute: ElectionCompute::Fallback,
-						})
+				// default data provider bounds are unbounded. calling `instant_elect` with
+				// unbounded data provider bounds means that the on-chain `T:Bounds` configs will
+				// *not* be overwritten.
+				T::Fallback::instant_elect(
+					DataProviderBounds::default(),
+					DataProviderBounds::default(),
+				)
+				.map_err(|fe| ElectionError::Fallback(fe))
+				.and_then(|supports| {
+					Ok(ReadySolution {
+						supports,
+						score: Default::default(),
+						compute: ElectionCompute::Fallback,
 					})
+				})
 			})
 			.map(|ReadySolution { compute, score, supports }| {
 				Self::deposit_event(Event::ElectionFinalized { compute, score });
@@ -1570,9 +1602,99 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+#[cfg(feature = "try-runtime")]
+impl<T: Config> Pallet<T> {
+	fn do_try_state() -> Result<(), TryRuntimeError> {
+		Self::try_state_snapshot()?;
+		Self::try_state_signed_submissions_map()?;
+		Self::try_state_phase_off()
+	}
+
+	// [`Snapshot`] state check. Invariants:
+	// - [`DesiredTargets`] exists if and only if [`Snapshot`] is present.
+	// - [`SnapshotMetadata`] exist if and only if [`Snapshot`] is present.
+	fn try_state_snapshot() -> Result<(), TryRuntimeError> {
+		if <Snapshot<T>>::exists() &&
+			<SnapshotMetadata<T>>::exists() &&
+			<DesiredTargets<T>>::exists()
+		{
+			Ok(())
+		} else if !<Snapshot<T>>::exists() &&
+			!<SnapshotMetadata<T>>::exists() &&
+			!<DesiredTargets<T>>::exists()
+		{
+			Ok(())
+		} else {
+			Err("If snapshot exists, metadata and desired targets should be set too. Otherwise, none should be set.".into())
+		}
+	}
+
+	// [`SignedSubmissionsMap`] state check. Invariants:
+	// - All [`SignedSubmissionIndices`] are present in [`SignedSubmissionsMap`], and no more;
+	// - [`SignedSubmissionNextIndex`] is not present in [`SignedSubmissionsMap`];
+	// - [`SignedSubmissionIndices`] is sorted by election score.
+	fn try_state_signed_submissions_map() -> Result<(), TryRuntimeError> {
+		let mut last_score: ElectionScore = Default::default();
+		let indices = <SignedSubmissionIndices<T>>::get();
+
+		for (i, indice) in indices.iter().enumerate() {
+			let submission = <SignedSubmissionsMap<T>>::get(indice.2);
+			if submission.is_none() {
+				return Err(
+					"All signed submissions indices must be part of the submissions map".into()
+				)
+			}
+
+			if i == 0 {
+				last_score = indice.0
+			} else {
+				if last_score.strict_threshold_better(indice.0, Perbill::zero()) {
+					return Err(
+						"Signed submission indices vector must be ordered by election score".into()
+					)
+				}
+				last_score = indice.0;
+			}
+		}
+
+		if <SignedSubmissionsMap<T>>::iter().nth(indices.len()).is_some() {
+			return Err(
+				"Signed submissions map length should be the same as the indices vec length".into()
+			)
+		}
+
+		match <SignedSubmissionNextIndex<T>>::get() {
+			0 => Ok(()),
+			next =>
+				if <SignedSubmissionsMap<T>>::get(next).is_some() {
+					return Err(
+						"The next submissions index should not be in the submissions maps already"
+							.into(),
+					)
+				} else {
+					Ok(())
+				},
+		}
+	}
+
+	// [`Phase::Off`] state check. Invariants:
+	// - If phase is `Phase::Off`, [`Snapshot`] must be none.
+	fn try_state_phase_off() -> Result<(), TryRuntimeError> {
+		match Self::current_phase().is_off() {
+			false => Ok(()),
+			true =>
+				if <Snapshot<T>>::get().is_some() {
+					Err("Snapshot must be none when in Phase::Off".into())
+				} else {
+					Ok(())
+				},
+		}
+	}
+}
+
 impl<T: Config> ElectionProviderBase for Pallet<T> {
 	type AccountId = T::AccountId;
-	type BlockNumber = T::BlockNumber;
+	type BlockNumber = BlockNumberFor<T>;
 	type Error = ElectionError<T>;
 	type MaxWinners = T::MaxWinners;
 	type DataProvider = T::DataProvider;
@@ -1642,6 +1764,11 @@ mod feasibility_check {
 				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::SnapshotUnavailable
 			);
+
+			// kill also `SnapshotMetadata` and `DesiredTargets` for the storage state to be
+			// consistent for the try_state checks to pass.
+			<SnapshotMetadata<Runtime>>::kill();
+			<DesiredTargets<Runtime>>::kill();
 		})
 	}
 
@@ -1816,8 +1943,8 @@ mod tests {
 	use crate::{
 		mock::{
 			multi_phase_events, raw_solution, roll_to, roll_to_signed, roll_to_unsigned, AccountId,
-			ExtBuilder, MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin,
-			SignedMaxSubmissions, System, TargetIndex, Targets,
+			ElectionsBounds, ExtBuilder, MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime,
+			RuntimeOrigin, SignedMaxSubmissions, System, TargetIndex, Targets, Voters,
 		},
 		Phase,
 	};
@@ -2420,7 +2547,11 @@ mod tests {
 	fn snapshot_too_big_failure_onchain_fallback() {
 		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
 		ExtBuilder::default().build_and_execute(|| {
-			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
+			// sets bounds on number of targets.
+			let new_bounds = ElectionBoundsBuilder::default().targets_count(1_000.into()).build();
+			ElectionsBounds::set(new_bounds);
+
+			Targets::set((0..(1_000 as AccountId) + 1).collect::<Vec<_>>());
 
 			// Signed phase failed to open.
 			roll_to(15);
@@ -2455,9 +2586,11 @@ mod tests {
 	fn snapshot_too_big_failure_no_fallback() {
 		// and if the backup mode is nothing, we go into the emergency mode..
 		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
-			crate::mock::Targets::set(
-				(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
-			);
+			// sets bounds on number of targets.
+			let new_bounds = ElectionBoundsBuilder::default().targets_count(1_000.into()).build();
+			ElectionsBounds::set(new_bounds);
+
+			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
 
 			// Signed phase failed to open.
 			roll_to(15);
@@ -2487,9 +2620,10 @@ mod tests {
 		// but if there are too many voters, we simply truncate them.
 		ExtBuilder::default().build_and_execute(|| {
 			// we have 8 voters in total.
-			assert_eq!(crate::mock::Voters::get().len(), 8);
+			assert_eq!(Voters::get().len(), 8);
 			// but we want to take 2.
-			crate::mock::MaxElectingVoters::set(2);
+			let new_bounds = ElectionBoundsBuilder::default().voters_count(2.into()).build();
+			ElectionsBounds::set(new_bounds);
 
 			// Signed phase opens just fine.
 			roll_to_signed();

@@ -16,15 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sp_application_crypto::RuntimeAppPublic;
+use sp_application_crypto::{key_types::BEEFY as BEEFY_KEY_TYPE, RuntimeAppPublic};
 use sp_core::keccak_256;
-use sp_keystore::{Keystore, KeystorePtr};
+use sp_keystore::KeystorePtr;
 
 use log::warn;
 
 use sp_consensus_beefy::{
-	crypto::{Public, Signature},
-	BeefyAuthorityId, KEY_TYPE,
+	ecdsa_crypto::{Public, Signature},
+	BeefyAuthorityId,
 };
 
 use crate::{error, LOG_TARGET};
@@ -50,7 +50,7 @@ impl BeefyKeystore {
 		// we do check for multiple private keys as a key store sanity check.
 		let public: Vec<Public> = keys
 			.iter()
-			.filter(|k| Keystore::has_keys(&*store, &[(k.to_raw_vec(), KEY_TYPE)]))
+			.filter(|k| store.has_keys(&[(k.to_raw_vec(), BEEFY_KEY_TYPE)]))
 			.cloned()
 			.collect();
 
@@ -77,7 +77,8 @@ impl BeefyKeystore {
 		let msg = keccak_256(message);
 		let public = public.as_ref();
 
-		let sig = Keystore::ecdsa_sign_prehashed(&*store, KEY_TYPE, public, &msg)
+		let sig = store
+			.ecdsa_sign_prehashed(BEEFY_KEY_TYPE, public, &msg)
 			.map_err(|e| error::Error::Keystore(e.to_string()))?
 			.ok_or_else(|| error::Error::Signature("ecdsa_sign_prehashed() failed".to_string()))?;
 
@@ -94,10 +95,8 @@ impl BeefyKeystore {
 	pub fn public_keys(&self) -> Result<Vec<Public>, error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
-		let pk: Vec<Public> = Keystore::ecdsa_public_keys(&*store, KEY_TYPE)
-			.drain(..)
-			.map(Public::from)
-			.collect();
+		let pk: Vec<Public> =
+			store.ecdsa_public_keys(BEEFY_KEY_TYPE).drain(..).map(Public::from).collect();
 
 		Ok(pk)
 	}
@@ -118,18 +117,15 @@ impl From<Option<KeystorePtr>> for BeefyKeystore {
 
 #[cfg(test)]
 pub mod tests {
-	use std::sync::Arc;
-
-	use sc_keystore::LocalKeystore;
+	use sp_consensus_beefy::{ecdsa_crypto, Keyring};
 	use sp_core::{ecdsa, Pair};
-
-	use sp_consensus_beefy::{crypto, Keyring};
+	use sp_keystore::testing::MemoryKeystore;
 
 	use super::*;
 	use crate::error::Error;
 
 	fn keystore() -> KeystorePtr {
-		Arc::new(LocalKeystore::in_memory())
+		MemoryKeystore::new().into()
 	}
 
 	#[test]
@@ -160,35 +156,51 @@ pub mod tests {
 
 	#[test]
 	fn pair_works() {
-		let want = crypto::Pair::from_string("//Alice", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Alice", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::Alice.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Bob", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Bob", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::Bob.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Charlie", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Charlie", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::Charlie.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Dave", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Dave", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::Dave.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Eve", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Eve", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::Eve.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Ferdie", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Ferdie", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::Ferdie.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//One", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//One", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::One.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Two", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Two", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::Two.pair().to_raw_vec();
 		assert_eq!(want, got);
 	}
@@ -197,11 +209,11 @@ pub mod tests {
 	fn authority_id_works() {
 		let store = keystore();
 
-		let alice: crypto::Public =
-			Keystore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
-				.ok()
-				.unwrap()
-				.into();
+		let alice: ecdsa_crypto::Public = store
+			.ecdsa_generate_new(BEEFY_KEY_TYPE, Some(&Keyring::Alice.to_seed()))
+			.ok()
+			.unwrap()
+			.into();
 
 		let bob = Keyring::Bob.public();
 		let charlie = Keyring::Charlie.public();
@@ -223,11 +235,11 @@ pub mod tests {
 	fn sign_works() {
 		let store = keystore();
 
-		let alice: crypto::Public =
-			Keystore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
-				.ok()
-				.unwrap()
-				.into();
+		let alice: ecdsa_crypto::Public = store
+			.ecdsa_generate_new(BEEFY_KEY_TYPE, Some(&Keyring::Alice.to_seed()))
+			.ok()
+			.unwrap()
+			.into();
 
 		let store: BeefyKeystore = Some(store).into();
 
@@ -243,7 +255,8 @@ pub mod tests {
 	fn sign_error() {
 		let store = keystore();
 
-		let _ = Keystore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Bob.to_seed()))
+		store
+			.ecdsa_generate_new(BEEFY_KEY_TYPE, Some(&Keyring::Bob.to_seed()))
 			.ok()
 			.unwrap();
 
@@ -274,11 +287,11 @@ pub mod tests {
 	fn verify_works() {
 		let store = keystore();
 
-		let alice: crypto::Public =
-			Keystore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
-				.ok()
-				.unwrap()
-				.into();
+		let alice: ecdsa_crypto::Public = store
+			.ecdsa_generate_new(BEEFY_KEY_TYPE, Some(&Keyring::Alice.to_seed()))
+			.ok()
+			.unwrap()
+			.into();
 
 		let store: BeefyKeystore = Some(store).into();
 
@@ -300,9 +313,8 @@ pub mod tests {
 
 		let store = keystore();
 
-		let add_key = |key_type, seed: Option<&str>| {
-			Keystore::ecdsa_generate_new(&*store, key_type, seed).unwrap()
-		};
+		let add_key =
+			|key_type, seed: Option<&str>| store.ecdsa_generate_new(key_type, seed).unwrap();
 
 		// test keys
 		let _ = add_key(TEST_TYPE, Some(Keyring::Alice.to_seed().as_str()));
@@ -312,11 +324,11 @@ pub mod tests {
 		let _ = add_key(TEST_TYPE, None);
 
 		// BEEFY keys
-		let _ = add_key(KEY_TYPE, Some(Keyring::Dave.to_seed().as_str()));
-		let _ = add_key(KEY_TYPE, Some(Keyring::Eve.to_seed().as_str()));
+		let _ = add_key(BEEFY_KEY_TYPE, Some(Keyring::Dave.to_seed().as_str()));
+		let _ = add_key(BEEFY_KEY_TYPE, Some(Keyring::Eve.to_seed().as_str()));
 
-		let key1: crypto::Public = add_key(KEY_TYPE, None).into();
-		let key2: crypto::Public = add_key(KEY_TYPE, None).into();
+		let key1: ecdsa_crypto::Public = add_key(BEEFY_KEY_TYPE, None).into();
+		let key2: ecdsa_crypto::Public = add_key(BEEFY_KEY_TYPE, None).into();
 
 		let store: BeefyKeystore = Some(store).into();
 

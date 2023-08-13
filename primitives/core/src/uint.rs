@@ -23,7 +23,6 @@ pub use primitive_types::{U256, U512};
 mod tests {
 	use super::*;
 	use codec::{Decode, Encode};
-	use sp_serializer as ser;
 
 	macro_rules! test {
 		($name: ident, $test_name: ident) => {
@@ -43,14 +42,17 @@ mod tests {
 				];
 
 				for (number, expected) in tests {
-					assert_eq!(format!("{:?}", expected), ser::to_string_pretty(&number));
-					assert_eq!(number, ser::from_str(&format!("{:?}", expected)).unwrap());
+					assert_eq!(
+						format!("{:?}", expected),
+						serde_json::to_string_pretty(&number).expect("Json pretty print failed")
+					);
+					assert_eq!(number, serde_json::from_str(&format!("{:?}", expected)).unwrap());
 				}
 
 				// Invalid examples
-				assert!(ser::from_str::<$name>("\"0x\"").unwrap_err().is_data());
-				assert!(ser::from_str::<$name>("\"0xg\"").unwrap_err().is_data());
-				assert!(ser::from_str::<$name>("\"\"").unwrap_err().is_data());
+				assert!(serde_json::from_str::<$name>("\"0x\"").unwrap_err().is_data());
+				assert!(serde_json::from_str::<$name>("\"0xg\"").unwrap_err().is_data());
+				assert!(serde_json::from_str::<$name>("\"\"").unwrap_err().is_data());
 			}
 		};
 	}
@@ -78,10 +80,10 @@ mod tests {
 	#[test]
 	fn test_large_values() {
 		assert_eq!(
-			ser::to_string_pretty(&!U256::zero()),
+			serde_json::to_string_pretty(&!U256::zero()).expect("Json pretty print failed"),
 			"\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\""
 		);
-		assert!(ser::from_str::<U256>(
+		assert!(serde_json::from_str::<U256>(
 			"\"0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\""
 		)
 		.unwrap_err()

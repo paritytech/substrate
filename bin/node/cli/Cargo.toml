@@ -6,7 +6,7 @@ description = "Generic Substrate node implementation in Rust."
 build = "build.rs"
 edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-default-run = "substrate"
+default-run = "substrate-node"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 publish = false
@@ -25,8 +25,10 @@ maintenance = { status = "actively-developed" }
 is-it-maintained-issue-resolution = { repository = "paritytech/substrate" }
 is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 
+# The same node binary as the `substrate` (defined in the workspace `Cargo.toml`) binary,
+# but just exposed by this crate here.
 [[bin]]
-name = "substrate"
+name = "substrate-node"
 path = "bin/main.rs"
 required-features = ["cli"]
 
@@ -35,10 +37,10 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # third-party dependencies
-array-bytes = "4.1"
-clap = { version = "4.0.9", features = ["derive"], optional = true }
-codec = { package = "parity-scale-codec", version = "3.2.2" }
-serde = { version = "1.0.136", features = ["derive"] }
+array-bytes = "6.1"
+clap = { version = "4.2.5", features = ["derive"], optional = true }
+codec = { package = "parity-scale-codec", version = "3.6.1" }
+serde = { version = "1.0.163", features = ["derive"] }
 jsonrpsee = { version = "0.16.2", features = ["server"] }
 futures = "0.3.21"
 log = "0.4.17"
@@ -49,16 +51,16 @@ sp-authority-discovery = { version = "4.0.0-dev", path = "../../../primitives/au
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
 grandpa-primitives = { version = "4.0.0-dev", package = "sp-consensus-grandpa", path = "../../../primitives/consensus/grandpa" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-core = { version = "21.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
-sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
+sp-keyring = { version = "24.0.0", path = "../../../primitives/keyring" }
+sp-keystore = { version = "0.27.0", path = "../../../primitives/keystore" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sp-transaction-pool = { version = "4.0.0-dev", path = "../../../primitives/transaction-pool" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../../primitives/transaction-storage-proof" }
 sp-io = { path = "../../../primitives/io" }
+sp-statement-store = { path = "../../../primitives/statement-store" }
 
 # client dependencies
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
@@ -66,9 +68,11 @@ sc-chain-spec = { version = "4.0.0-dev", path = "../../../client/chain-spec" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
+sc-statement-store = { version = "4.0.0-dev", path = "../../../client/statement-store" }
 sc-network = { version = "0.10.0-dev", path = "../../../client/network" }
 sc-network-common = { version = "0.10.0-dev", path = "../../../client/network/common" }
 sc-network-sync = { version = "0.10.0-dev", path = "../../../client/network/sync" }
+sc-network-statement = { version = "0.10.0-dev", path = "../../../client/network/statement" }
 sc-consensus-slots = { version = "0.10.0-dev", path = "../../../client/consensus/slots" }
 sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/babe" }
 grandpa = { version = "0.10.0-dev", package = "sc-consensus-grandpa", path = "../../../client/consensus/grandpa" }
@@ -81,13 +85,14 @@ sc-authority-discovery = { version = "0.10.0-dev", path = "../../../client/autho
 sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../../../client/sysinfo" }
 sc-storage-monitor = { version = "0.1.0", path = "../../../client/storage-monitor" }
+sc-offchain = { version = "4.0.0-dev", path = "../../../client/offchain" }
 
 # frame dependencies
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../frame/system/rpc/runtime-api" }
-pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
 pallet-assets = { version = "4.0.0-dev", path = "../../../frame/assets/" }
-pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment/" }
+pallet-asset-conversion-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-conversion-tx-payment" }
+pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment" }
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
 
 # node-specific dependencies
@@ -111,7 +116,7 @@ sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../../../client/consensus/epochs" }
 sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
-sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
+sp-tracing = { version = "10.0.0", path = "../../../primitives/tracing" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 futures = "0.3.21"
 tempfile = "3.1.0"
@@ -119,7 +124,7 @@ assert_cmd = "2.0.2"
 nix = { version = "0.26.1", features = ["signal"] }
 serde_json = "1.0"
 regex = "1.6.0"
-platforms = "2.0"
+platforms = "3.0"
 soketto = "0.7.1"
 criterion = { version = "0.4.0", features = ["async_tokio"] }
 tokio = { version = "1.22.0", features = ["macros", "time", "parking_lot"] }
@@ -127,9 +132,10 @@ tokio-util = { version = "0.7.4", features = ["compat"] }
 wait-timeout = "0.2"
 substrate-rpc-client = { path = "../../../utils/frame/rpc/client" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
+substrate-cli-test-utils = { path = "../../../test-utils/cli" }
 
 [build-dependencies]
-clap = { version = "4.0.9", optional = true }
+clap = { version = "4.2.5", optional = true }
 clap_complete = { version = "4.0.2", optional = true }
 node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
@@ -155,11 +161,32 @@ cli = [
 ]
 runtime-benchmarks = [
 	"kitchensink-runtime/runtime-benchmarks",
-	"frame-benchmarking-cli/runtime-benchmarks"
+	"frame-benchmarking-cli/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"pallet-asset-tx-payment/runtime-benchmarks",
+	"pallet-assets/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
+	"pallet-im-online/runtime-benchmarks",
+	"pallet-timestamp/runtime-benchmarks",
+	"sc-client-db/runtime-benchmarks",
+	"sc-service/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks"
 ]
 # Enable features that allow the runtime to be tried and debugged. Name might be subject to change
 # in the near future.
-try-runtime = ["kitchensink-runtime/try-runtime", "try-runtime-cli/try-runtime"]
+try-runtime = [
+	"kitchensink-runtime/try-runtime",
+	"try-runtime-cli/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-asset-conversion-tx-payment/try-runtime",
+	"pallet-asset-tx-payment/try-runtime",
+	"pallet-assets/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-im-online/try-runtime",
+	"pallet-timestamp/try-runtime",
+	"sp-runtime/try-runtime",
+	"substrate-cli-test-utils/try-runtime"
+]
 
 [[bench]]
 name = "transaction_pool"

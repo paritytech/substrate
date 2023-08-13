@@ -18,22 +18,25 @@
 use super::*;
 use crate as root_offences;
 
-use frame_election_provider_support::{onchain, SequentialPhragmen};
+use frame_election_provider_support::{
+	bounds::{ElectionBounds, ElectionBoundsBuilder},
+	onchain, SequentialPhragmen,
+};
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64, GenesisBuild, Hooks, OneSessionHandler},
+	traits::{ConstU32, ConstU64, Hooks, OneSessionHandler},
 };
 use pallet_staking::StakerStatus;
 use sp_core::H256;
 use sp_runtime::{
 	curve::PiecewiseLinear,
-	testing::{Header, UintAuthorityId},
+	testing::UintAuthorityId,
 	traits::{BlakeTwo256, IdentityLookup, Zero},
+	BuildStorage,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::collections::btree_map::BTreeMap;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 type Balance = u64;
@@ -43,12 +46,9 @@ pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
@@ -90,14 +90,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -121,6 +120,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 
 pallet_staking_reward_curve::build! {
@@ -134,6 +137,10 @@ pallet_staking_reward_curve::build! {
 	);
 }
 
+parameter_types! {
+	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::default().build();
+}
+
 pub struct OnChainSeqPhragmen;
 impl onchain::Config for OnChainSeqPhragmen {
 	type System = Test;
@@ -141,19 +148,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = ConstU32<100>;
-	type VotersBound = ConstU32<{ u32::MAX }>;
-	type TargetsBound = ConstU32<{ u32::MAX }>;
-}
-
-pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
-impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashMock<T> {
-	fn on_slash(
-		_pool_account: &AccountId,
-		slashed_bonded: Balance,
-		slashed_chunks: &BTreeMap<EraIndex, Balance>,
-	) {
-		LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
-	}
+	type Bounds = ElectionsBounds;
 }
 
 parameter_types! {
@@ -168,11 +163,10 @@ parameter_types! {
 }
 
 impl pallet_staking::Config for Test {
-	type MaxNominations = ConstU32<16>;
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type UnixTime = Timestamp;
-	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+	type CurrencyToVote = ();
 	type RewardRemainder = ();
 	type RuntimeEvent = RuntimeEvent;
 	type Slash = ();
@@ -189,10 +183,11 @@ impl pallet_staking::Config for Test {
 	type ElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
+	type NominationsQuota = pallet_staking::FixedNominationsQuota<16>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = ConstU32<84>;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
-	type OnStakerSlash = OnStakerSlashMock<Test>;
+	type EventListeners = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
@@ -251,11 +246,11 @@ impl Default for ExtBuilder {
 
 impl ExtBuilder {
 	fn build(self) -> sp_io::TestExternalities {
-		let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut storage = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
 		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![
-				//controllers
+				// controllers (still used in some tests. Soon to be deprecated).
 				(10, self.balance_factor * 50),
 				(20, self.balance_factor * 50),
 				(30, self.balance_factor * 50),
@@ -273,12 +268,12 @@ impl ExtBuilder {
 		let stakers = vec![
 			// (stash, ctrl, stake, status)
 			// these two will be elected in the default test where we elect 2.
-			(11, 10, 1000, StakerStatus::<AccountId>::Validator),
-			(21, 20, 1000, StakerStatus::<AccountId>::Validator),
+			(11, 11, 1000, StakerStatus::<AccountId>::Validator),
+			(21, 21, 1000, StakerStatus::<AccountId>::Validator),
 			// a loser validator
-			(31, 30, 500, StakerStatus::<AccountId>::Validator),
+			(31, 31, 500, StakerStatus::<AccountId>::Validator),
 			// an idle validator
-			(41, 40, 1000, StakerStatus::<AccountId>::Idle),
+			(41, 41, 1000, StakerStatus::<AccountId>::Idle),
 		];
 
 		let _ = pallet_staking::GenesisConfig::<Test> {

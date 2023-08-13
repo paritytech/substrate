@@ -462,43 +462,12 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 mod test_iterators {
 	use crate::{
 		hash::StorageHasher,
-		storage::{generator::StorageNMap, unhashed, IterableStorageNMap},
+		storage::{
+			generator::{tests::*, StorageNMap},
+			unhashed,
+		},
 	};
-	use codec::{Decode, Encode};
-
-	pub trait Config: 'static {
-		type RuntimeOrigin;
-		type BlockNumber;
-		type PalletInfo: crate::traits::PalletInfo;
-		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
-	}
-
-	crate::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {}
-	}
-
-	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-	struct NoDef(u32);
-
-	crate::decl_storage! {
-		trait Store for Module<T: Config> as Test {
-			NMap: nmap hasher(blake2_128_concat) u16, hasher(twox_64_concat) u32 => u64;
-		}
-	}
-
-	fn key_before_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
-		let last = prefix.iter_mut().last().unwrap();
-		assert!(*last != 0, "mock function not implemented for this prefix");
-		*last -= 1;
-		prefix
-	}
-
-	fn key_after_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
-		let last = prefix.iter_mut().last().unwrap();
-		assert!(*last != 255, "mock function not implemented for this prefix");
-		*last += 1;
-		prefix
-	}
+	use codec::Encode;
 
 	#[test]
 	fn n_map_iter_from() {
@@ -545,22 +514,18 @@ mod test_iterators {
 	#[test]
 	fn n_map_double_map_identical_key() {
 		sp_io::TestExternalities::default().execute_with(|| {
+			use crate::hash::{Blake2_128Concat, Twox64Concat};
+
+			type NMap = self::frame_system::NMap<Runtime>;
+
 			NMap::insert((1, 2), 50);
 			let key_hash = NMap::hashed_key_for((1, 2));
 
 			{
 				#[crate::storage_alias]
-				type NMap = StorageDoubleMap<
-					Test,
-					crate::Blake2_128Concat,
-					u16,
-					crate::Twox64Concat,
-					u32,
-					u64,
-				>;
+				type NMap = StorageDoubleMap<System, Blake2_128Concat, u16, Twox64Concat, u32, u64>;
 
-				let value = NMap::get(1, 2).unwrap();
-				assert_eq!(value, 50);
+				assert_eq!(NMap::get(1, 2), Some(50));
 				assert_eq!(NMap::hashed_key_for(1, 2), key_hash);
 			}
 		});
@@ -569,6 +534,8 @@ mod test_iterators {
 	#[test]
 	fn n_map_reversible_reversible_iteration() {
 		sp_io::TestExternalities::default().execute_with(|| {
+			type NMap = self::frame_system::NMap<Runtime>;
+
 			// All map iterator
 			let prefix = NMap::prefix_hash();
 

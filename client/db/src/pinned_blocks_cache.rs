@@ -149,8 +149,9 @@ impl<Block: BlockT> PinnedBlocksCache<Block> {
 					self.cache.len()
 				);
 			},
-			None =>
-				log::warn!(target: LOG_TARGET, "Unable to bump reference count. hash = {}", hash),
+			None => {
+				log::warn!(target: LOG_TARGET, "Unable to bump reference count. hash = {}", hash)
+			},
 		};
 	}
 
@@ -167,7 +168,7 @@ impl<Block: BlockT> PinnedBlocksCache<Block> {
 	/// Attach body to an existing cache item
 	pub fn insert_body(&mut self, hash: Block::Hash, extrinsics: Option<Vec<Block::Extrinsic>>) {
 		match self.cache.peek_mut(&hash) {
-			Some(mut entry) => {
+			Some(entry) => {
 				entry.body = Some(extrinsics);
 				log::trace!(
 					target: LOG_TARGET,
@@ -191,7 +192,7 @@ impl<Block: BlockT> PinnedBlocksCache<Block> {
 		justifications: Option<Justifications>,
 	) {
 		match self.cache.peek_mut(&hash) {
-			Some(mut entry) => {
+			Some(entry) => {
 				entry.justifications = Some(justifications);
 				log::trace!(
 					target: LOG_TARGET,

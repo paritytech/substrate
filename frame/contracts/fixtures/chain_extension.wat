@@ -1,7 +1,7 @@
 ;; Call chain extension by passing through input and output of this contract
 (module
-	(import "seal0" "seal_call_chain_extension"
-		(func $seal_call_chain_extension (param i32 i32 i32 i32 i32) (result i32))
+	(import "seal0" "call_chain_extension"
+		(func $call_chain_extension (param i32 i32 i32 i32 i32) (result i32))
 	)
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
@@ -30,7 +30,7 @@
 		(call $seal_input (i32.const 4) (i32.const 0))
 
 		;; the chain extension passes through the input and returns it as output
-		(call $seal_call_chain_extension
+		(call $call_chain_extension
 			(i32.load (i32.const 4))	;; id
 			(i32.const 4)				;; input_ptr
 			(i32.load (i32.const 0))	;; input_len

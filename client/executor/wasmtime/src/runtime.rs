@@ -26,7 +26,7 @@ use crate::{
 
 use sc_allocator::{AllocationStats, FreeingBumpHeapAllocator};
 use sc_executor_common::{
-	error::{Result, WasmError},
+	error::{Error, Result, WasmError},
 	runtime_blob::{
 		self, DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob,
 	},
@@ -325,10 +325,10 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 
 	// Be clear and specific about the extensions we support. If an update brings new features
 	// they should be introduced here as well.
-	config.wasm_reference_types(false);
-	config.wasm_simd(false);
-	config.wasm_bulk_memory(false);
-	config.wasm_multi_value(false);
+	config.wasm_reference_types(semantics.wasm_reference_types);
+	config.wasm_simd(semantics.wasm_simd);
+	config.wasm_bulk_memory(semantics.wasm_bulk_memory);
+	config.wasm_multi_value(semantics.wasm_multi_value);
 	config.wasm_multi_memory(false);
 	config.wasm_threads(false);
 	config.wasm_memory64(false);
@@ -435,7 +435,7 @@ pub struct DeterministicStackLimit {
 /// All of the CoW strategies (with `CopyOnWrite` suffix) are only supported when either:
 ///   a) we're running on Linux,
 ///   b) we're running on an Unix-like system and we're precompiling
-///      our module beforehand.
+///      our module beforehand and instantiating from a file.
 ///
 /// If the CoW variant of a strategy is unsupported the executor will
 /// fall back to the non-CoW equivalent.
@@ -504,6 +504,18 @@ pub struct Semantics {
 
 	/// The heap allocation strategy to use.
 	pub heap_alloc_strategy: HeapAllocStrategy,
+
+	/// Enables WASM Multi-Value proposal
+	pub wasm_multi_value: bool,
+
+	/// Enables WASM Bulk Memory Operations proposal
+	pub wasm_bulk_memory: bool,
+
+	/// Enables WASM Reference Types proposal
+	pub wasm_reference_types: bool,
+
+	/// Enables WASM Fixed-Width SIMD proposal
+	pub wasm_simd: bool,
 }
 
 #[derive(Clone)]
@@ -525,7 +537,7 @@ enum CodeSupplyMode<'a> {
 	/// The runtime is instantiated using the given runtime blob.
 	Fresh(RuntimeBlob),
 
-	/// The runtime is instantiated using a precompiled module.
+	/// The runtime is instantiated using a precompiled module at the given path.
 	///
 	/// This assumes that the code is already prepared for execution and the same `Config` was
 	/// used.
@@ -533,6 +545,12 @@ enum CodeSupplyMode<'a> {
 	/// We use a `Path` here instead of simply passing a byte slice to allow `wasmtime` to
 	/// map the runtime's linear memory on supported platforms in a copy-on-write fashion.
 	Precompiled(&'a Path),
+
+	/// The runtime is instantiated using a precompiled module with the given bytes.
+	///
+	/// This assumes that the code is already prepared for execution and the same `Config` was
+	/// used.
+	PrecompiledBytes(&'a [u8]),
 }
 
 /// Create a new `WasmtimeRuntime` given the code. This function performs translation from Wasm to
@@ -575,6 +593,31 @@ where
 	H: HostFunctions,
 {
 	do_create_runtime::<H>(CodeSupplyMode::Precompiled(compiled_artifact_path), config)
+}
+
+/// The same as [`create_runtime`] but takes the bytes of a precompiled artifact,
+/// which makes this function considerably faster than [`create_runtime`],
+/// but slower than the more optimized [`create_runtime_from_artifact`].
+/// This is especially slow on non-Linux Unix systems. Useful in very niche cases.
+///
+/// # Safety
+///
+/// The caller must ensure that the compiled artifact passed here was:
+///   1) produced by [`prepare_runtime_artifact`],
+///   2) was not modified,
+///
+/// Failure to adhere to these requirements might lead to crashes and arbitrary code execution.
+///
+/// It is ok though if the compiled artifact was created by code of another version or with
+/// different configuration flags. In such case the caller will receive an `Err` deterministically.
+pub unsafe fn create_runtime_from_artifact_bytes<H>(
+	compiled_artifact_bytes: &[u8],
+	config: Config,
+) -> std::result::Result<WasmtimeRuntime, WasmError>
+where
+	H: HostFunctions,
+{
+	do_create_runtime::<H>(CodeSupplyMode::PrecompiledBytes(compiled_artifact_bytes), config)
 }
 
 /// # Safety
@@ -647,6 +690,22 @@ where
 			//
 			//         See [`create_runtime_from_artifact`] for more details.
 			let module = wasmtime::Module::deserialize_file(&engine, compiled_artifact_path)
+				.map_err(|e| WasmError::Other(format!("cannot deserialize module: {:#}", e)))?;
+
+			(module, InternalInstantiationStrategy::Builtin)
+		},
+		CodeSupplyMode::PrecompiledBytes(compiled_artifact_bytes) => {
+			if let InstantiationStrategy::LegacyInstanceReuse =
+				config.semantics.instantiation_strategy
+			{
+				return Err(WasmError::Other("the legacy instance reuse instantiation strategy is incompatible with precompiled modules".into()));
+			}
+
+			// SAFETY: The unsafety of `deserialize` is covered by this function. The
+			//         responsibilities to maintain the invariants are passed to the caller.
+			//
+			//         See [`create_runtime_from_artifact_bytes`] for more details.
+			let module = wasmtime::Module::deserialize(&engine, compiled_artifact_bytes)
 				.map_err(|e| WasmError::Other(format!("cannot deserialize module: {:#}", e)))?;
 
 			(module, InternalInstantiationStrategy::Builtin)
@@ -764,7 +823,7 @@ fn extract_output_data(
 	// Get the size of the WASM memory in bytes.
 	let memory_size = ctx.as_context().data().memory().data_size(ctx);
 	if checked_range(output_ptr as usize, output_len as usize, memory_size).is_none() {
-		Err(WasmError::Other("output exceeds bounds of wasm memory".into()))?
+		Err(Error::OutputExceedsBounds)?
 	}
 	let mut output = vec![0; output_len as usize];
 

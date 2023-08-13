@@ -110,10 +110,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 
 	if get_doc_literals(&error_item.attrs).is_empty() {
 		error_item.attrs.push(syn::parse_quote!(
-			#[doc = r"
-			Custom [dispatch errors](https://docs.substrate.io/main-docs/build/events-errors/)
-			of this pallet.
-			"]
+			#[doc = "The `Error` enum of this pallet."]
 		));
 	}
 

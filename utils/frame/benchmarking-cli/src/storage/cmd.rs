@@ -21,7 +21,7 @@ use sc_client_db::DbHash;
 use sc_service::Configuration;
 use sp_blockchain::HeaderBackend;
 use sp_database::{ColumnId, Database};
-use sp_runtime::traits::{Block as BlockT, HashFor};
+use sp_runtime::traits::{Block as BlockT, HashingFor};
 use sp_state_machine::Storage;
 use sp_storage::{ChildInfo, ChildType, PrefixedStorageKey, StateVersion};
 
@@ -126,7 +126,7 @@ impl StorageCmd {
 		cfg: Configuration,
 		client: Arc<C>,
 		db: (Arc<dyn Database<DbHash>>, ColumnId),
-		storage: Arc<dyn Storage<HashFor<Block>>>,
+		storage: Arc<dyn Storage<HashingFor<Block>>>,
 	) -> Result<()>
 	where
 		BA: ClientBackend<Block>,

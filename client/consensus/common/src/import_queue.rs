@@ -66,7 +66,7 @@ pub type BoxJustificationImport<B> =
 	Box<dyn JustificationImport<B, Error = ConsensusError> + Send + Sync>;
 
 /// Maps to the RuntimeOrigin used by the network.
-pub type RuntimeOrigin = libp2p::PeerId;
+pub type RuntimeOrigin = libp2p_identity::PeerId;
 
 /// Block data used by the queue.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -95,7 +95,7 @@ pub struct IncomingBlock<B: BlockT> {
 
 /// Verify a justification of a block
 #[async_trait::async_trait]
-pub trait Verifier<B: BlockT>: Send + Sync {
+pub trait Verifier<B: BlockT>: Send {
 	/// Verify the given block data and return the `BlockImportParams` to
 	/// continue the block import process.
 	async fn verify(

@@ -647,7 +647,7 @@ mod tests {
 			count: 1000,
 		};
 		let mut d = st.make();
-		d.sort_by(|&(ref a, _), &(ref b, _)| a.cmp(b));
+		d.sort_by(|(a, _), (b, _)| a.cmp(b));
 		let dr = d.iter().map(|v| (&v.0[..], &v.1[..])).collect();
 		check_input(&dr);
 	}
@@ -716,10 +716,7 @@ mod tests {
 		t
 	}
 
-	fn unpopulate_trie<'db, T: TrieConfiguration>(
-		t: &mut TrieDBMut<'db, T>,
-		v: &[(Vec<u8>, Vec<u8>)],
-	) {
+	fn unpopulate_trie<T: TrieConfiguration>(t: &mut TrieDBMut<'_, T>, v: &[(Vec<u8>, Vec<u8>)]) {
 		for i in v {
 			let key: &[u8] = &i.0;
 			t.remove(key).unwrap();

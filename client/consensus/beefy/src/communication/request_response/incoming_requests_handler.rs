@@ -16,12 +16,9 @@
 
 //! Helper for handling (i.e. answering) BEEFY justifications requests from a remote peer.
 
-use codec::Decode;
-use futures::{
-	channel::{mpsc, oneshot},
-	StreamExt,
-};
-use log::{debug, trace};
+use codec::DecodeAll;
+use futures::{channel::oneshot, StreamExt};
+use log::{debug, error, trace};
 use sc_client_api::BlockBackend;
 use sc_network::{
 	config as netconfig, config::RequestResponseConfig, types::ProtocolName, PeerId,
@@ -32,9 +29,12 @@ use sp_runtime::traits::Block;
 use std::{marker::PhantomData, sync::Arc};
 
 use crate::{
-	communication::request_response::{
-		on_demand_justifications_protocol_config, Error, JustificationRequest,
-		BEEFY_SYNC_LOG_TARGET,
+	communication::{
+		cost,
+		request_response::{
+			on_demand_justifications_protocol_config, Error, JustificationRequest,
+			BEEFY_SYNC_LOG_TARGET,
+		},
 	},
 	metric_inc,
 	metrics::{register_metrics, OnDemandIncomingRequestsMetrics},
@@ -69,17 +69,20 @@ impl<B: Block> IncomingRequest<B> {
 	/// Params:
 	/// 	- The raw request to decode
 	/// 	- Reputation changes to apply for the peer in case decoding fails.
-	pub fn try_from_raw(
+	pub fn try_from_raw<F>(
 		raw: netconfig::IncomingRequest,
-		reputation_changes: Vec<ReputationChange>,
-	) -> Result<Self, Error> {
+		reputation_changes_on_err: F,
+	) -> Result<Self, Error>
+	where
+		F: FnOnce(usize) -> Vec<ReputationChange>,
+	{
 		let netconfig::IncomingRequest { payload, peer, pending_response } = raw;
-		let payload = match JustificationRequest::decode(&mut payload.as_ref()) {
+		let payload = match JustificationRequest::decode_all(&mut payload.as_ref()) {
 			Ok(payload) => payload,
 			Err(err) => {
 				let response = netconfig::OutgoingResponse {
 					result: Err(()),
-					reputation_changes,
+					reputation_changes: reputation_changes_on_err(payload.len()),
 					sent_feedback: None,
 				};
 				if let Err(_) = pending_response.send(response) {
@@ -96,11 +99,11 @@ impl<B: Block> IncomingRequest<B> {
 ///
 /// Takes care of decoding and handling of invalid encoded requests.
 pub(crate) struct IncomingRequestReceiver {
-	raw: mpsc::Receiver<netconfig::IncomingRequest>,
+	raw: async_channel::Receiver<netconfig::IncomingRequest>,
 }
 
 impl IncomingRequestReceiver {
-	pub fn new(inner: mpsc::Receiver<netconfig::IncomingRequest>) -> Self {
+	pub fn new(inner: async_channel::Receiver<netconfig::IncomingRequest>) -> Self {
 		Self { raw: inner }
 	}
 
@@ -111,11 +114,11 @@ impl IncomingRequestReceiver {
 	pub async fn recv<B, F>(&mut self, reputation_changes: F) -> Result<IncomingRequest<B>, Error>
 	where
 		B: Block,
-		F: FnOnce() -> Vec<ReputationChange>,
+		F: FnOnce(usize) -> Vec<ReputationChange>,
 	{
 		let req = match self.raw.next().await {
 			None => return Err(Error::RequestChannelExhausted),
-			Some(raw) => IncomingRequest::<B>::try_from_raw(raw, reputation_changes())?,
+			Some(raw) => IncomingRequest::<B>::try_from_raw(raw, reputation_changes)?,
 		};
 		Ok(req)
 	}
@@ -159,26 +162,20 @@ where
 
 	// Sends back justification response if justification found in client backend.
 	fn handle_request(&self, request: IncomingRequest<B>) -> Result<(), Error> {
-		// TODO (issue #12293): validate `request` and change peer reputation for invalid requests.
-
-		let maybe_encoded_proof = if let Some(hash) =
-			self.client.block_hash(request.payload.begin).map_err(Error::Client)?
-		{
-			self.client
-				.justifications(hash)
-				.map_err(Error::Client)?
-				.and_then(|justifs| justifs.get(BEEFY_ENGINE_ID).cloned())
-				// No BEEFY justification present.
-				.ok_or(())
-		} else {
-			Err(())
-		};
-
+		let mut reputation_changes = vec![];
+		let maybe_encoded_proof = self
+			.client
+			.block_hash(request.payload.begin)
+			.ok()
+			.flatten()
+			.and_then(|hash| self.client.justifications(hash).ok().flatten())
+			.and_then(|justifs| justifs.get(BEEFY_ENGINE_ID).cloned())
+			.ok_or_else(|| reputation_changes.push(cost::UNKOWN_PROOF_REQUEST));
 		request
 			.pending_response
 			.send(netconfig::OutgoingResponse {
 				result: maybe_encoded_proof,
-				reputation_changes: Vec::new(),
+				reputation_changes,
 				sent_feedback: None,
 			})
 			.map_err(|_| Error::SendResponse)
@@ -188,7 +185,17 @@ where
 	pub async fn run(mut self) {
 		trace!(target: BEEFY_SYNC_LOG_TARGET, "🥩 Running BeefyJustifsRequestHandler");
 
-		while let Ok(request) = self.request_receiver.recv(|| vec![]).await {
+		while let Ok(request) = self
+			.request_receiver
+			.recv(|bytes| {
+				let bytes = bytes.min(i32::MAX as usize) as i32;
+				vec![ReputationChange::new(
+					bytes.saturating_mul(cost::PER_UNDECODABLE_BYTE),
+					"BEEFY: Bad request payload",
+				)]
+			})
+			.await
+		{
 			let peer = request.peer;
 			match self.handle_request(request) {
 				Ok(()) => {
@@ -199,8 +206,8 @@ where
 					)
 				},
 				Err(e) => {
+					// peer reputation changes already applied in `self.handle_request()`
 					metric_inc!(self, beefy_failed_justification_responses);
-					// TODO (issue #12293): apply reputation changes here based on error type.
 					debug!(
 						target: BEEFY_SYNC_LOG_TARGET,
 						"🥩 Failed to handle BEEFY justification request from {:?}: {}", peer, e,
@@ -208,5 +215,9 @@ where
 				},
 			}
 		}
+		error!(
+			target: crate::LOG_TARGET,
+			"🥩 On-demand requests receiver stream terminated, closing worker."
+		);
 	}
 }

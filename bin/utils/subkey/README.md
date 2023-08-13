@@ -6,11 +6,11 @@ Subkey is a commandline utility included with Substrate. It allows generating an
 
 You can see the full list of commands with `subkey --help`. Most commands have additional help available with for instance `subkey generate --help` for the `generate` command.
 
-## Satefy first
+## Safety first
 
 `subkey` does not need an internet connection to work. Indeed, for the best security, you should be using `subkey` on a machine that is **not connected** to the internet.
 
-`subkey` deals with **seeds** and **private keys**. Make sure to use `subkey` in a safe environment (ie. no one looking over your shoulder) and on a safe computer (ie. no one able to check you commands history).
+`subkey` deals with **seeds** and **private keys**. Make sure to use `subkey` in a safe environment (ie. no one looking over your shoulder) and on a safe computer (ie. no one able to check your command history).
 
 If you save any output of `subkey` into a file, make sure to apply proper permissions and/or delete the file as soon as possible.
 
@@ -25,10 +25,9 @@ You will need to have the Substrate build dependencies to install Subkey. Use th
 Command:
 
 ```bash
-# Use the `--fast` flag to get the dependencies without needing to install the Substrate and Subkey binary
-curl https://getsubstrate.io -sSf | bash -s -- --fast
 # Install only `subkey`, at a specific version of the subkey crate
 cargo install --force subkey --git https://github.com/paritytech/substrate --version <SET VERSION> --locked
+# If you run into issues building, you likely are missing deps defined in https://docs.substrate.io/install/
 ```
 
 ### Run in a container
@@ -69,7 +68,7 @@ The output above also show the **public key** and the **Account ID**. Those are 
 
 The **SS58 address** (or **Public Address**) of a new account is a reprensentation of the public keys of an account for a given network (for instance Kusama or Polkadot).
 
-You can read more about the SS58 format in the [Substrate Docs](https://docs.substrate.io/v3/advanced/ss58/) and see the list of reserved prefixes in the [SS58 Registry](https://github.com/paritytech/ss58-registry).
+You can read more about the [SS58 format in the Substrate Docs](https://docs.substrate.io/reference/address-formats/) and see the list of reserved prefixes in the [SS58 Registry](https://github.com/paritytech/ss58-registry).
 
 For instance, considering the previous seed `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d` the SS58 addresses are:
 

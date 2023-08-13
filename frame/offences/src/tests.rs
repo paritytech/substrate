@@ -21,8 +21,8 @@
 
 use super::*;
 use crate::mock::{
-	new_test_ext, offence_reports, report_id, with_on_offence_fractions, Offence, Offences,
-	RuntimeEvent, System, KIND,
+	new_test_ext, offence_reports, with_on_offence_fractions, Offence, Offences, RuntimeEvent,
+	System, KIND,
 };
 use frame_system::{EventRecord, Phase};
 use sp_runtime::Perbill;
@@ -241,51 +241,6 @@ fn should_properly_count_offences() {
 			vec![
 				OffenceDetails { offender: 5, reporters: vec![] },
 				OffenceDetails { offender: 4, reporters: vec![] },
-			]
-		);
-	});
-}
-
-/// We insert offences in sorted order using the time slot in the `same_kind_reports`.
-/// This test ensures that it works as expected.
-#[test]
-fn should_properly_sort_offences() {
-	new_test_ext().execute_with(|| {
-		// given
-		let time_slot = 42;
-		assert_eq!(offence_reports(KIND, time_slot), vec![]);
-
-		let offence1 = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
-		let offence2 = Offence { validator_set_count: 5, time_slot, offenders: vec![4] };
-		let offence3 =
-			Offence { validator_set_count: 5, time_slot: time_slot + 1, offenders: vec![6, 7] };
-		let offence4 =
-			Offence { validator_set_count: 5, time_slot: time_slot - 1, offenders: vec![3] };
-		Offences::report_offence(vec![], offence1).unwrap();
-		with_on_offence_fractions(|f| {
-			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
-			f.clear();
-		});
-
-		// when
-		// report for the second time
-		Offences::report_offence(vec![], offence2).unwrap();
-		Offences::report_offence(vec![], offence3).unwrap();
-		Offences::report_offence(vec![], offence4).unwrap();
-
-		// then
-		let same_kind_reports = Vec::<(u128, sp_core::H256)>::decode(
-			&mut &crate::ReportsByKindIndex::<crate::mock::Runtime>::get(KIND)[..],
-		)
-		.unwrap();
-		assert_eq!(
-			same_kind_reports,
-			vec![
-				(time_slot - 1, report_id(time_slot - 1, 3)),
-				(time_slot, report_id(time_slot, 5)),
-				(time_slot, report_id(time_slot, 4)),
-				(time_slot + 1, report_id(time_slot + 1, 6)),
-				(time_slot + 1, report_id(time_slot + 1, 7)),
 			]
 		);
 	});

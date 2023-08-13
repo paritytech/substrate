@@ -29,12 +29,11 @@ use std::{fmt::Debug, str::FromStr, sync::Arc};
 /// The `check-block` command used to validate blocks.
 #[derive(Debug, Clone, Parser)]
 pub struct CheckBlockCmd {
-	/// Block hash or number
+	/// Block hash or number.
 	#[arg(value_name = "HASH or NUMBER")]
 	pub input: BlockNumberOrHash,
 
 	/// The default number of 64KB pages to ever allocate for Wasm execution.
-	///
 	/// Don't alter this unless you know what you're doing.
 	#[arg(long, value_name = "COUNT")]
 	pub default_heap_pages: Option<u32>,
@@ -55,7 +54,6 @@ impl CheckBlockCmd {
 		B: BlockT + for<'de> serde::Deserialize<'de>,
 		C: BlockBackend<B> + HeaderBackend<B> + Send + Sync + 'static,
 		IQ: sc_service::ImportQueue<B> + 'static,
-		B::Hash: FromStr,
 		<B::Hash as FromStr>::Err: Debug,
 		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{

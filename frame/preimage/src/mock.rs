@@ -28,18 +28,14 @@ use frame_support::{
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		Balances: pallet_balances,
@@ -54,13 +50,12 @@ impl frame_system::Config for Test {
 	type DbWeight = RocksDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -84,6 +79,10 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ConstU32<50>;
 	type ReserveIdentifier = [u8; 8];
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 
 ord_parameter_types! {
@@ -100,7 +99,7 @@ impl Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let balances = pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 100), (2, 100), (3, 100), (4, 100), (5, 100)],
 	};

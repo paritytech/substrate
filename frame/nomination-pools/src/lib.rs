@@ -133,7 +133,7 @@
 //! * Root: can change the nominator, bouncer, or itself, manage and claim commission, and can
 //!   perform any of the actions the nominator or bouncer can.
 //!
-//! ## Commission
+//! ### Commission
 //!
 //! A pool can optionally have a commission configuration, via the `root` role, set with
 //! [`Call::set_commission`] and claimed with [`Call::claim_commission`]. A payee account must be
@@ -326,7 +326,7 @@
 //!
 //! This section assumes that the slash computation is executed by
 //! `pallet_staking::StakingLedger::slash`, which passes the information to this pallet via
-//! [`sp_staking::OnStakerSlash::on_slash`].
+//! [`sp_staking::OnStakingUpdate::on_slash`].
 //!
 //! Unbonding pools need to be slashed to ensure all nominators whom where in the bonded pool while
 //! it was backing a validator that equivocated are punished. Without these measures a member could
@@ -340,10 +340,6 @@
 //! To be fair to joiners, this implementation also need joining pools, which are actively staking,
 //! in addition to the unbonding pools. For maintenance simplicity these are not implemented.
 //! Related: <https://github.com/paritytech/substrate/issues/10860>
-//!
-//! **Relevant methods:**
-//!
-//! * [`Pallet::on_slash`]
 //!
 //! ### Limitations
 //!
@@ -366,6 +362,7 @@ use frame_support::{
 	},
 	DefaultNoBound, PalletError,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
@@ -375,8 +372,11 @@ use sp_runtime::{
 	},
 	FixedPointNumber, Perbill,
 };
-use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
+use sp_staking::{EraIndex, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
+
+#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
+use sp_runtime::TryRuntimeError;
 
 /// The log target of this pallet.
 pub const LOG_TARGET: &str = "runtime::nomination-pools";
@@ -673,10 +673,10 @@ pub struct Commission<T: Config> {
 	pub max: Option<Perbill>,
 	/// Optional configuration around how often commission can be updated, and when the last
 	/// commission update took place.
-	pub change_rate: Option<CommissionChangeRate<T::BlockNumber>>,
+	pub change_rate: Option<CommissionChangeRate<BlockNumberFor<T>>>,
 	/// The block from where throttling should be checked from. This value will be updated on all
 	/// commission updates and when setting an initial `change_rate`.
-	pub throttle_from: Option<T::BlockNumber>,
+	pub throttle_from: Option<BlockNumberFor<T>>,
 }
 
 impl<T: Config> Commission<T> {
@@ -747,6 +747,10 @@ impl<T: Config> Commission<T> {
 			Some((commission, payee)) => {
 				ensure!(!self.throttling(commission), Error::<T>::CommissionChangeThrottled);
 				ensure!(
+					commission <= &GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value()),
+					Error::<T>::CommissionExceedsGlobalMaximum
+				);
+				ensure!(
 					self.max.map_or(true, |m| commission <= &m),
 					Error::<T>::CommissionExceedsMaximum
 				);
@@ -770,6 +774,10 @@ impl<T: Config> Commission<T> {
 	/// updated to the new maximum. This will also register a `throttle_from` update.
 	/// A `PoolCommissionUpdated` event is triggered if `current.0` is updated.
 	fn try_update_max(&mut self, pool_id: PoolId, new_max: Perbill) -> DispatchResult {
+		ensure!(
+			new_max <= GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value()),
+			Error::<T>::CommissionExceedsGlobalMaximum
+		);
 		if let Some(old) = self.max.as_mut() {
 			if new_max > *old {
 				return Err(Error::<T>::MaxCommissionRestricted.into())
@@ -810,7 +818,7 @@ impl<T: Config> Commission<T> {
 	/// throttling can be checked from this block.
 	fn try_update_change_rate(
 		&mut self,
-		change_rate: CommissionChangeRate<T::BlockNumber>,
+		change_rate: CommissionChangeRate<BlockNumberFor<T>>,
 	) -> DispatchResult {
 		ensure!(!&self.less_restrictive(&change_rate), Error::<T>::CommissionChangeRateNotAllowed);
 
@@ -830,7 +838,7 @@ impl<T: Config> Commission<T> {
 	///
 	/// No change rate will always be less restrictive than some change rate, so where no
 	/// `change_rate` is currently set, `false` is returned.
-	fn less_restrictive(&self, new: &CommissionChangeRate<T::BlockNumber>) -> bool {
+	fn less_restrictive(&self, new: &CommissionChangeRate<BlockNumberFor<T>>) -> bool {
 		self.change_rate
 			.as_ref()
 			.map(|c| new.max_increase > c.max_increase || new.min_delay < c.min_delay)
@@ -1496,7 +1504,7 @@ pub mod pallet {
 	use sp_runtime::Perbill;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(5);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -1659,7 +1667,6 @@ pub mod pallet {
 		pub global_max_commission: Option<Perbill>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
@@ -1674,7 +1681,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			MinJoinBond::<T>::put(self.min_join_bond);
 			MinCreateBond::<T>::put(self.min_create_bond);
@@ -1759,7 +1766,7 @@ pub mod pallet {
 		/// A pool's commission `change_rate` has been changed.
 		PoolCommissionChangeRateUpdated {
 			pool_id: PoolId,
-			change_rate: CommissionChangeRate<T::BlockNumber>,
+			change_rate: CommissionChangeRate<BlockNumberFor<T>>,
 		},
 		/// Pool commission has been claimed.
 		PoolCommissionClaimed { pool_id: PoolId, commission: BalanceOf<T> },
@@ -1822,6 +1829,8 @@ pub mod pallet {
 		MaxCommissionRestricted,
 		/// The supplied commission exceeds the max allowed commission.
 		CommissionExceedsMaximum,
+		/// The supplied commission exceeds global maximum commission.
+		CommissionExceedsGlobalMaximum,
 		/// Not enough blocks have surpassed since the last commission update.
 		CommissionChangeThrottled,
 		/// The submitted changes to commission change rate are not allowed.
@@ -2595,7 +2604,7 @@ pub mod pallet {
 		pub fn set_commission_change_rate(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
-			change_rate: CommissionChangeRate<T::BlockNumber>,
+			change_rate: CommissionChangeRate<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
@@ -2617,7 +2626,7 @@ pub mod pallet {
 		/// commission is paid out and added to total claimed commission`. Total pending commission
 		/// is reset to zero. the current.
 		#[pallet::call_index(20)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::claim_commission())]
 		pub fn claim_commission(origin: OriginFor<T>, pool_id: PoolId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::do_claim_commission(who, pool_id)
@@ -2627,7 +2636,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
 			Self::do_try_state(u8::MAX)
 		}
 
@@ -3056,7 +3065,7 @@ impl<T: Config> Pallet<T> {
 	/// multiple `level`s, where the higher the level, the more checks we performs. So,
 	/// `try_state(255)` is the strongest sanity check, and `0` performs no checks.
 	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
-	pub fn do_try_state(level: u8) -> Result<(), &'static str> {
+	pub fn do_try_state(level: u8) -> Result<(), TryRuntimeError> {
 		if level.is_zero() {
 			return Ok(())
 		}
@@ -3064,12 +3073,24 @@ impl<T: Config> Pallet<T> {
 		// result in the same set of keys, in the same order.
 		let bonded_pools = BondedPools::<T>::iter_keys().collect::<Vec<_>>();
 		let reward_pools = RewardPools::<T>::iter_keys().collect::<Vec<_>>();
-		assert_eq!(bonded_pools, reward_pools);
+		ensure!(
+			bonded_pools == reward_pools,
+			"`BondedPools` and `RewardPools` must all have the EXACT SAME key-set."
+		);
 
-		assert!(Metadata::<T>::iter_keys().all(|k| bonded_pools.contains(&k)));
-		assert!(SubPoolsStorage::<T>::iter_keys().all(|k| bonded_pools.contains(&k)));
+		ensure!(
+			SubPoolsStorage::<T>::iter_keys().all(|k| bonded_pools.contains(&k)),
+			"`SubPoolsStorage` must be a subset of the above superset."
+		);
+		ensure!(
+			Metadata::<T>::iter_keys().all(|k| bonded_pools.contains(&k)),
+			"`Metadata` keys must be a subset of the above superset."
+		);
 
-		assert!(MaxPools::<T>::get().map_or(true, |max| bonded_pools.len() <= (max as usize)));
+		ensure!(
+			MaxPools::<T>::get().map_or(true, |max| bonded_pools.len() <= (max as usize)),
+			Error::<T>::MaxPools
+		);
 
 		for id in reward_pools {
 			let account = Self::create_reward_account(id);
@@ -3089,9 +3110,9 @@ impl<T: Config> Pallet<T> {
 		let mut pools_members = BTreeMap::<PoolId, u32>::new();
 		let mut pools_members_pending_rewards = BTreeMap::<PoolId, BalanceOf<T>>::new();
 		let mut all_members = 0u32;
-		PoolMembers::<T>::iter().for_each(|(_, d)| {
+		PoolMembers::<T>::iter().try_for_each(|(_, d)| -> Result<(), TryRuntimeError> {
 			let bonded_pool = BondedPools::<T>::get(d.pool_id).unwrap();
-			assert!(!d.total_points().is_zero(), "no member should have zero points: {d:?}");
+			ensure!(!d.total_points().is_zero(), "No member should have zero points");
 			*pools_members.entry(d.pool_id).or_default() += 1;
 			all_members += 1;
 
@@ -3104,42 +3125,56 @@ impl<T: Config> Pallet<T> {
 				let pending_rewards = d.pending_rewards(current_rc).unwrap();
 				*pools_members_pending_rewards.entry(d.pool_id).or_default() += pending_rewards;
 			} // else this pool has been heavily slashed and cannot have any rewards anymore.
-		});
 
-		RewardPools::<T>::iter_keys().for_each(|id| {
+			Ok(())
+		})?;
+
+		RewardPools::<T>::iter_keys().try_for_each(|id| -> Result<(), TryRuntimeError> {
 			// the sum of the pending rewards must be less than the leftover balance. Since the
 			// reward math rounds down, we might accumulate some dust here.
-			log!(
-				trace,
-				"pool {:?}, sum pending rewards = {:?}, remaining balance = {:?}",
-				id,
-				pools_members_pending_rewards.get(&id),
-				RewardPool::<T>::current_balance(id)
+			let pending_rewards_lt_leftover_bal = RewardPool::<T>::current_balance(id) >=
+				pools_members_pending_rewards.get(&id).copied().unwrap_or_default();
+			if !pending_rewards_lt_leftover_bal {
+				log::warn!(
+					"pool {:?}, sum pending rewards = {:?}, remaining balance = {:?}",
+					id,
+					pools_members_pending_rewards.get(&id),
+					RewardPool::<T>::current_balance(id)
+				);
+			}
+			ensure!(
+				pending_rewards_lt_leftover_bal,
+				"The sum of the pending rewards must be less than the leftover balance."
 			);
-			assert!(
-				RewardPool::<T>::current_balance(id) >=
-					pools_members_pending_rewards.get(&id).copied().unwrap_or_default()
-			)
-		});
+			Ok(())
+		})?;
 
-		BondedPools::<T>::iter().for_each(|(id, inner)| {
+		BondedPools::<T>::iter().try_for_each(|(id, inner)| -> Result<(), TryRuntimeError> {
 			let bonded_pool = BondedPool { id, inner };
-			assert_eq!(
-				pools_members.get(&id).copied().unwrap_or_default(),
-				bonded_pool.member_counter
+			ensure!(
+				pools_members.get(&id).copied().unwrap_or_default() ==
+				bonded_pool.member_counter,
+				"Each `BondedPool.member_counter` must be equal to the actual count of members of this pool"
 			);
-			assert!(MaxPoolMembersPerPool::<T>::get()
-				.map_or(true, |max| bonded_pool.member_counter <= max));
+			ensure!(
+				MaxPoolMembersPerPool::<T>::get()
+					.map_or(true, |max| bonded_pool.member_counter <= max),
+				Error::<T>::MaxPoolMembers
+			);
 
 			let depositor = PoolMembers::<T>::get(&bonded_pool.roles.depositor).unwrap();
-			assert!(
+			ensure!(
 				bonded_pool.is_destroying_and_only_depositor(depositor.active_points()) ||
 					depositor.active_points() >= MinCreateBond::<T>::get(),
 				"depositor must always have MinCreateBond stake in the pool, except for when the \
 				pool is being destroyed and the depositor is the last member",
 			);
-		});
-		assert!(MaxPoolMembers::<T>::get().map_or(true, |max| all_members <= max));
+			Ok(())
+		})?;
+		ensure!(
+			MaxPoolMembers::<T>::get().map_or(true, |max| all_members <= max),
+			Error::<T>::MaxPoolMembers
+		);
 
 		if level <= 1 {
 			return Ok(())
@@ -3227,7 +3262,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
+impl<T: Config> sp_staking::OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn on_slash(
 		pool_account: &T::AccountId,
 		// Bonded balance is always read directly from staking, therefore we don't need to update

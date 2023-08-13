@@ -109,19 +109,13 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, PeerId, BTreeSet<PeerId>, ValueQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub nodes: Vec<(PeerId, T::AccountId)>,
 	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { nodes: Vec::new() }
-		}
-	}
-
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			Pallet::<T>::initialize_nodes(&self.nodes);
 		}
@@ -175,7 +169,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Set reserved node every block. It may not be enabled depends on the offchain
 		/// worker settings when starting the node.
-		fn offchain_worker(now: T::BlockNumber) {
+		fn offchain_worker(now: frame_system::pallet_prelude::BlockNumberFor<T>) {
 			let network_state = sp_io::offchain::network_state();
 			match network_state {
 				Err(_) => log::error!(

@@ -23,7 +23,7 @@ use libp2p::{
 	PeerId,
 };
 
-pub use libp2p::identity::error::SigningError;
+pub use libp2p::identity::SigningError;
 
 /// A result of signing a message with a network identity. Since `PeerId` is potentially a hash of a
 /// `PublicKey`, you need to reveal the `PublicKey` next to the signature, so the verifier can check

@@ -20,7 +20,7 @@
 use codec::{Decode, Encode};
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_runtime::RuntimeDebug;
-use sp_std::prelude::*;
+use sp_std::{ops::Add, prelude::*};
 
 /// Provides information about the pallet itself and its setup in the runtime.
 ///
@@ -101,10 +101,18 @@ pub struct CallMetadata {
 
 /// Gets the function name of the Call.
 pub trait GetCallName {
-	/// Return all function names.
+	/// Return all function names in the same order as [`GetCallIndex`].
 	fn get_call_names() -> &'static [&'static str];
 	/// Return the function name of the Call.
 	fn get_call_name(&self) -> &'static str;
+}
+
+/// Gets the function index of the Call.
+pub trait GetCallIndex {
+	/// Return all call indices in the same order as [`GetCallName`].
+	fn get_call_indices() -> &'static [u8];
+	/// Return the index of this Call.
+	fn get_call_index(&self) -> u8;
 }
 
 /// Gets the metadata for the Call - function name and pallet name.
@@ -224,6 +232,24 @@ impl PartialOrd<u16> for StorageVersion {
 	}
 }
 
+impl Add<u16> for StorageVersion {
+	type Output = StorageVersion;
+
+	fn add(self, rhs: u16) -> Self::Output {
+		Self::new(self.0 + rhs)
+	}
+}
+
+/// Special marker struct if no storage version is set for a pallet.
+///
+/// If you (the reader) end up here, it probably means that you tried to compare
+/// [`GetStorageVersion::on_chain_storage_version`] against
+/// [`GetStorageVersion::current_storage_version`]. This basically means that the
+/// [`storage_version`](crate::pallet_macros::storage_version) is missing in the pallet where the
+/// mentioned functions are being called.
+#[derive(Debug, Default)]
+pub struct NoStorageVersionSet;
+
 /// Provides information about the storage version of a pallet.
 ///
 /// It differentiates between current and on-chain storage version. Both should be only out of sync
@@ -236,8 +262,18 @@ impl PartialOrd<u16> for StorageVersion {
 ///
 /// It is required to update the on-chain storage version manually when a migration was applied.
 pub trait GetStorageVersion {
+	/// This will be filled out by the [`pallet`](crate::pallet) macro.
+	///
+	/// If the [`storage_version`](crate::pallet_macros::storage_version) attribute isn't given
+	/// this is set to [`NoStorageVersionSet`] to inform the user that the attribute is missing.
+	/// This should prevent that the user forgets to set a storage version when required. However,
+	/// this will only work when the user actually tries to call [`Self::current_storage_version`]
+	/// to compare it against the [`Self::on_chain_storage_version`]. If the attribute is given,
+	/// this will be set to [`StorageVersion`].
+	type CurrentStorageVersion;
+
 	/// Returns the current storage version as supported by the pallet.
-	fn current_storage_version() -> StorageVersion;
+	fn current_storage_version() -> Self::CurrentStorageVersion;
 	/// Returns the on-chain storage version of the pallet as stored in the storage.
 	fn on_chain_storage_version() -> StorageVersion;
 }

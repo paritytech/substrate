@@ -43,11 +43,8 @@ pub mod migration;
 pub mod weights;
 
 use codec::{Decode, Encode};
-use frame_support::{
-	traits::{
-		tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
-	},
-	transactional,
+use frame_support::traits::{
+	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -60,8 +57,10 @@ pub use pallet::*;
 pub use types::*;
 pub use weights::WeightInfo;
 
+/// The log target for this pallet.
 const LOG_TARGET: &str = "runtime::uniques";
 
+/// A type alias for the account ID type used in the dispatchable functions of this pallet.
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
@@ -96,7 +95,7 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Identifier for the collection of item.
-		type CollectionId: Member + Parameter + MaxEncodedLen + Copy;
+		type CollectionId: Member + Parameter + MaxEncodedLen;
 
 		/// The type used to identify a unique item within a collection.
 		type ItemId: Member + Parameter + MaxEncodedLen + Copy;
@@ -461,7 +460,7 @@ pub mod pallet {
 			let admin = T::Lookup::lookup(admin)?;
 
 			Self::do_create_collection(
-				collection,
+				collection.clone(),
 				owner.clone(),
 				admin.clone(),
 				T::CollectionDeposit::get(),
@@ -499,7 +498,7 @@ pub mod pallet {
 			let owner = T::Lookup::lookup(owner)?;
 
 			Self::do_create_collection(
-				collection,
+				collection.clone(),
 				owner.clone(),
 				owner.clone(),
 				Zero::zero(),
@@ -799,7 +798,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			Collection::<T, I>::try_mutate(collection, |maybe_details| {
+			Collection::<T, I>::try_mutate(collection.clone(), |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
 				ensure!(origin == details.freezer, Error::<T, I>::NoPermission);
 
@@ -827,7 +826,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			Collection::<T, I>::try_mutate(collection, |maybe_details| {
+			Collection::<T, I>::try_mutate(collection.clone(), |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
 				ensure!(origin == details.admin, Error::<T, I>::NoPermission);
 
@@ -862,7 +861,7 @@ pub mod pallet {
 			let acceptable_collection = OwnershipAcceptance::<T, I>::get(&owner);
 			ensure!(acceptable_collection.as_ref() == Some(&collection), Error::<T, I>::Unaccepted);
 
-			Collection::<T, I>::try_mutate(collection, |maybe_details| {
+			Collection::<T, I>::try_mutate(collection.clone(), |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
 				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
 				if details.owner == owner {
@@ -912,7 +911,7 @@ pub mod pallet {
 			let admin = T::Lookup::lookup(admin)?;
 			let freezer = T::Lookup::lookup(freezer)?;
 
-			Collection::<T, I>::try_mutate(collection, |maybe_details| {
+			Collection::<T, I>::try_mutate(collection.clone(), |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
 				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
 
@@ -1060,7 +1059,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
-			Collection::<T, I>::try_mutate(collection, |maybe_item| {
+			Collection::<T, I>::try_mutate(collection.clone(), |maybe_item| {
 				let mut item = maybe_item.take().ok_or(Error::<T, I>::UnknownCollection)?;
 				let old_owner = item.owner;
 				let new_owner = T::Lookup::lookup(owner)?;
@@ -1115,12 +1114,13 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 			let maybe_is_frozen = match maybe_item {
-				None => CollectionMetadataOf::<T, I>::get(collection).map(|v| v.is_frozen),
-				Some(item) => ItemMetadataOf::<T, I>::get(collection, item).map(|v| v.is_frozen),
+				None => CollectionMetadataOf::<T, I>::get(collection.clone()).map(|v| v.is_frozen),
+				Some(item) =>
+					ItemMetadataOf::<T, I>::get(collection.clone(), item).map(|v| v.is_frozen),
 			};
 			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
 
-			let attribute = Attribute::<T, I>::get((collection, maybe_item, &key));
+			let attribute = Attribute::<T, I>::get((collection.clone(), maybe_item, &key));
 			if attribute.is_none() {
 				collection_details.attributes.saturating_inc();
 			}
@@ -1140,7 +1140,7 @@ pub mod pallet {
 			}
 
 			Attribute::<T, I>::insert((&collection, maybe_item, &key), (&value, deposit));
-			Collection::<T, I>::insert(collection, &collection_details);
+			Collection::<T, I>::insert(collection.clone(), &collection_details);
 			Self::deposit_event(Event::AttributeSet { collection, maybe_item, key, value });
 			Ok(())
 		}
@@ -1177,16 +1177,19 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 			let maybe_is_frozen = match maybe_item {
-				None => CollectionMetadataOf::<T, I>::get(collection).map(|v| v.is_frozen),
-				Some(item) => ItemMetadataOf::<T, I>::get(collection, item).map(|v| v.is_frozen),
+				None => CollectionMetadataOf::<T, I>::get(collection.clone()).map(|v| v.is_frozen),
+				Some(item) =>
+					ItemMetadataOf::<T, I>::get(collection.clone(), item).map(|v| v.is_frozen),
 			};
 			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
 
-			if let Some((_, deposit)) = Attribute::<T, I>::take((collection, maybe_item, &key)) {
+			if let Some((_, deposit)) =
+				Attribute::<T, I>::take((collection.clone(), maybe_item, &key))
+			{
 				collection_details.attributes.saturating_dec();
 				collection_details.total_deposit.saturating_reduce(deposit);
 				T::Currency::unreserve(&collection_details.owner, deposit);
-				Collection::<T, I>::insert(collection, &collection_details);
+				Collection::<T, I>::insert(collection.clone(), &collection_details);
 				Self::deposit_event(Event::AttributeCleared { collection, maybe_item, key });
 			}
 			Ok(())
@@ -1229,7 +1232,7 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
-			ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
+			ItemMetadataOf::<T, I>::try_mutate_exists(collection.clone(), item, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 
@@ -1289,7 +1292,7 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
-			ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
+			ItemMetadataOf::<T, I>::try_mutate_exists(collection.clone(), item, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 
@@ -1340,7 +1343,7 @@ pub mod pallet {
 				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
 			}
 
-			CollectionMetadataOf::<T, I>::try_mutate_exists(collection, |metadata| {
+			CollectionMetadataOf::<T, I>::try_mutate_exists(collection.clone(), |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 
@@ -1396,7 +1399,7 @@ pub mod pallet {
 				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
 			}
 
-			CollectionMetadataOf::<T, I>::try_mutate_exists(collection, |metadata| {
+			CollectionMetadataOf::<T, I>::try_mutate_exists(collection.clone(), |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 
@@ -1519,7 +1522,6 @@ pub mod pallet {
 		/// Emits `ItemBought` on success.
 		#[pallet::call_index(25)]
 		#[pallet::weight(T::WeightInfo::buy_item())]
-		#[transactional]
 		pub fn buy_item(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,

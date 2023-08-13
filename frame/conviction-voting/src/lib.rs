@@ -35,6 +35,7 @@ use frame_support::{
 		ReservableCurrency, WithdrawReasons,
 	},
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Saturating, StaticLookup, Zero},
 	ArithmeticError, Perbill,
@@ -68,16 +69,13 @@ type BalanceOf<T, I = ()> =
 type VotingOf<T, I = ()> = Voting<
 	BalanceOf<T, I>,
 	<T as frame_system::Config>::AccountId,
-	<T as frame_system::Config>::BlockNumber,
+	BlockNumberFor<T>,
 	PollIndexOf<T, I>,
 	<T as Config<I>>::MaxVotes,
 >;
 #[allow(dead_code)]
-type DelegatingOf<T, I = ()> = Delegating<
-	BalanceOf<T, I>,
-	<T as frame_system::Config>::AccountId,
-	<T as frame_system::Config>::BlockNumber,
->;
+type DelegatingOf<T, I = ()> =
+	Delegating<BalanceOf<T, I>, <T as frame_system::Config>::AccountId, BlockNumberFor<T>>;
 pub type TallyOf<T, I = ()> = Tally<BalanceOf<T, I>, <T as Config<I>>::MaxTurnout>;
 pub type VotesOf<T, I = ()> = BalanceOf<T, I>;
 type PollIndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Index;
@@ -103,14 +101,14 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 		/// Currency type with which voting happens.
 		type Currency: ReservableCurrency<Self::AccountId>
-			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>
+			+ LockableCurrency<Self::AccountId, Moment = BlockNumberFor<Self>>
 			+ fungible::Inspect<Self::AccountId>;
 
 		/// The implementation of the logic which conducts polls.
 		type Polls: Polling<
 			TallyOf<Self, I>,
 			Votes = BalanceOf<Self, I>,
-			Moment = Self::BlockNumber,
+			Moment = BlockNumberFor<Self>,
 		>;
 
 		/// The maximum amount of tokens which may be used for voting. May just be
@@ -130,7 +128,7 @@ pub mod pallet {
 		/// It should be no shorter than enactment period to ensure that in the case of an approval,
 		/// those successful voters are locked into the consequences that their votes entail.
 		#[pallet::constant]
-		type VoteLockingPeriod: Get<Self::BlockNumber>;
+		type VoteLockingPeriod: Get<BlockNumberFor<Self>>;
 	}
 
 	/// All voting for a particular voter in a particular voting class. We store the balance for the
@@ -388,7 +386,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		poll_index: PollIndexOf<T, I>,
 		vote: AccountVote<BalanceOf<T, I>>,
 	) -> DispatchResult {
-		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T, I>::InsufficientFunds);
+		ensure!(
+			vote.balance() <= T::Currency::total_balance(who),
+			Error::<T, I>::InsufficientFunds
+		);
 		T::Polls::try_access_poll(poll_index, |poll_status| {
 			let (tally, class) = poll_status.ensure_ongoing().ok_or(Error::<T, I>::NotOngoing)?;
 			VotingFor::<T, I>::try_mutate(who, &class, |voting| {
@@ -548,7 +549,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<u32, DispatchError> {
 		ensure!(who != target, Error::<T, I>::Nonsense);
 		T::Polls::classes().binary_search(&class).map_err(|_| Error::<T, I>::BadClass)?;
-		ensure!(balance <= T::Currency::free_balance(&who), Error::<T, I>::InsufficientFunds);
+		ensure!(balance <= T::Currency::total_balance(&who), Error::<T, I>::InsufficientFunds);
 		let votes =
 			VotingFor::<T, I>::try_mutate(&who, &class, |voting| -> Result<u32, DispatchError> {
 				let old = sp_std::mem::replace(
@@ -636,7 +637,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			}
 		});
-		T::Currency::extend_lock(CONVICTION_VOTING_ID, who, amount, WithdrawReasons::TRANSFER);
+		T::Currency::extend_lock(
+			CONVICTION_VOTING_ID,
+			who,
+			amount,
+			WithdrawReasons::except(WithdrawReasons::RESERVE),
+		);
 	}
 
 	/// Rejig the lock on an account. It will never get more stringent (since that would indicate
@@ -666,7 +672,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				CONVICTION_VOTING_ID,
 				who,
 				lock_needed,
-				WithdrawReasons::TRANSFER,
+				WithdrawReasons::except(WithdrawReasons::RESERVE),
 			);
 		}
 	}

@@ -12,16 +12,21 @@ description = "An externalities provided environment that can load itself from r
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.2.2" }
+jsonrpsee = { version = "0.16.2", features = ["http-client"] }
+codec = { package = "parity-scale-codec", version = "3.6.1" }
 log = "0.4.17"
-serde = "1.0.136"
+serde = "1.0.163"
 frame-support = { version = "4.0.0-dev", optional = true, path = "../../../frame/support" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-io = { version = "7.0.0", path = "../../../primitives/io" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-core = { version = "21.0.0", path = "../../../primitives/core" }
+sp-io = { version = "23.0.0", path = "../../../primitives/io" }
+sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }
 tokio = { version = "1.22.0", features = ["macros", "rt-multi-thread"] }
 substrate-rpc-client = { path = "../rpc/client" }
 futures = "0.3"
+async-recursion = "1.0.4"
+indicatif = "0.17.3"
+spinners = "4.1.0"
+tokio-retry = "0.3.0"
 
 [dev-dependencies]
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }

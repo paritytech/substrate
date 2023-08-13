@@ -65,9 +65,7 @@ impl<G, E, F, U> Drop for TestNet<G, E, F, U> {
 	}
 }
 
-pub trait TestNetNode:
-	Clone + Future<Output = Result<(), sc_service::Error>> + Send + 'static
-{
+pub trait TestNetNode: Clone + Future<Output = Result<(), Error>> + Send + 'static {
 	type Block: BlockT;
 	type Backend: Backend<Self::Block>;
 	type Executor: CallExecutor<Self::Block> + Send + Sync;
@@ -128,7 +126,7 @@ impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> Clone
 impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> Future
 	for TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool>
 {
-	type Output = Result<(), sc_service::Error>;
+	type Output = Result<(), Error>;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		Pin::new(&mut self.task_manager.lock().future()).poll(cx)
@@ -184,10 +182,7 @@ where
 			loop {
 				interval.tick().await;
 
-				if full_nodes
-					.iter()
-					.all(|&(ref id, ref service, _, _)| full_predicate(*id, service))
-				{
+				if full_nodes.iter().all(|(id, service, _, _)| full_predicate(*id, service)) {
 					break
 				}
 			}
@@ -242,40 +237,37 @@ fn node_config<
 		tokio_handle,
 		transaction_pool: Default::default(),
 		network: network_config,
-		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::Path { path: root.join("key"), password: None },
 		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
 		trie_cache_maximum_size: Some(16 * 1024 * 1024),
 		state_pruning: Default::default(),
 		blocks_pruning: BlocksPruning::KeepFinalized,
 		chain_spec: Box::new((*spec).clone()),
-		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
+		wasm_method: Default::default(),
 		wasm_runtime_overrides: Default::default(),
-		execution_strategies: Default::default(),
-		rpc_http: None,
-		rpc_ipc: None,
-		rpc_ws: None,
-		rpc_ws_max_connections: None,
+		rpc_addr: Default::default(),
+		rpc_max_connections: Default::default(),
 		rpc_cors: None,
 		rpc_methods: Default::default(),
-		rpc_max_payload: None,
-		rpc_max_request_size: None,
-		rpc_max_response_size: None,
-		rpc_id_provider: None,
-		rpc_max_subs_per_conn: None,
-		ws_max_out_buffer_capacity: None,
+		rpc_max_request_size: Default::default(),
+		rpc_max_response_size: Default::default(),
+		rpc_id_provider: Default::default(),
+		rpc_max_subs_per_conn: Default::default(),
+		rpc_port: 9944,
 		prometheus_config: None,
 		telemetry_endpoints: None,
 		default_heap_pages: None,
 		offchain_worker: Default::default(),
 		force_authoring: false,
 		disable_grandpa: false,
+		disable_beefy: false,
 		dev_key_seed: key_seed,
 		tracing_targets: None,
 		tracing_receiver: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
-		base_path: Some(BasePath::new(root)),
+		base_path: BasePath::new(root.clone()),
+		data_path: root,
 		informant_output_format: Default::default(),
 		runtime_cache_size: 2,
 	}

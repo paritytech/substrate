@@ -23,6 +23,8 @@
 //! Methods are prefixed by `chainHead`.
 
 #[cfg(test)]
+mod test_utils;
+#[cfg(test)]
 mod tests;
 
 pub mod api;
@@ -31,11 +33,19 @@ pub mod error;
 pub mod event;
 
 mod chain_head_follow;
+mod chain_head_storage;
 mod subscription;
 
 pub use api::ChainHeadApiServer;
 pub use chain_head::ChainHead;
 pub use event::{
-	BestBlockChanged, ChainHeadEvent, ChainHeadResult, ErrorEvent, Finalized, FollowEvent,
-	Initialized, NetworkConfig, NewBlock, RuntimeEvent, RuntimeVersionEvent,
+	BestBlockChanged, ErrorEvent, Finalized, FollowEvent, Initialized, NewBlock, RuntimeEvent,
+	RuntimeVersionEvent,
 };
+
+use sp_core::hexdisplay::{AsBytesRef, HexDisplay};
+
+/// Util function to print the results of `chianHead` as hex string
+pub(crate) fn hex_string<Data: AsBytesRef>(data: &Data) -> String {
+	format!("0x{:?}", HexDisplay::from(data))
+}

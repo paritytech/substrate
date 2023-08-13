@@ -68,7 +68,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 		KeyArg: EncodeLike<K>,
 	{
 		let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
-		let key_hashed = key.borrow().using_encoded(Self::Hasher::hash);
+		let key_hashed = key.using_encoded(Self::Hasher::hash);
 
 		let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.as_ref().len());
 
@@ -178,34 +178,48 @@ where
 	}
 
 	fn translate<O: Decode, F: FnMut(K, O) -> Option<V>>(mut f: F) {
-		let prefix = G::prefix_hash();
-		let mut previous_key = prefix.clone();
-		while let Some(next) =
-			sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix))
-		{
-			previous_key = next;
-			let value = match unhashed::get::<O>(&previous_key) {
-				Some(value) => value,
-				None => {
-					log::error!("Invalid translate: fail to decode old value");
-					continue
-				},
-			};
-
-			let mut key_material = G::Hasher::reverse(&previous_key[prefix.len()..]);
-			let key = match K::decode(&mut key_material) {
-				Ok(key) => key,
-				Err(_) => {
-					log::error!("Invalid translate: fail to decode key");
-					continue
-				},
-			};
-
-			match f(key, value) {
-				Some(new) => unhashed::put::<V>(&previous_key, &new),
-				None => unhashed::kill(&previous_key),
+		let mut previous_key = None;
+		loop {
+			previous_key = Self::translate_next(previous_key, &mut f);
+			if previous_key.is_none() {
+				break
 			}
 		}
+	}
+
+	fn translate_next<O: Decode, F: FnMut(K, O) -> Option<V>>(
+		previous_key: Option<Vec<u8>>,
+		mut f: F,
+	) -> Option<Vec<u8>> {
+		let prefix = G::prefix_hash();
+		let previous_key = previous_key.unwrap_or_else(|| prefix.clone());
+
+		let current_key =
+			sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix))?;
+
+		let value = match unhashed::get::<O>(&current_key) {
+			Some(value) => value,
+			None => {
+				log::error!("Invalid translate: fail to decode old value");
+				return Some(current_key)
+			},
+		};
+
+		let mut key_material = G::Hasher::reverse(&current_key[prefix.len()..]);
+		let key = match K::decode(&mut key_material) {
+			Ok(key) => key,
+			Err(_) => {
+				log::error!("Invalid translate: fail to decode key");
+				return Some(current_key)
+			},
+		};
+
+		match f(key, value) {
+			Some(new) => unhashed::put::<V>(&current_key, &new),
+			None => unhashed::kill(&current_key),
+		}
+
+		Some(current_key)
 	}
 }
 
@@ -327,7 +341,7 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 	fn migrate_key<OldHasher: StorageHasher, KeyArg: EncodeLike<K>>(key: KeyArg) -> Option<V> {
 		let old_key = {
 			let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
-			let key_hashed = key.borrow().using_encoded(OldHasher::hash);
+			let key_hashed = key.using_encoded(OldHasher::hash);
 
 			let mut final_key =
 				Vec::with_capacity(storage_prefix.len() + key_hashed.as_ref().len());
@@ -349,43 +363,12 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 mod test_iterators {
 	use crate::{
 		hash::StorageHasher,
-		storage::{generator::StorageMap, unhashed, IterableStorageMap},
+		storage::{
+			generator::{tests::*, StorageMap},
+			unhashed,
+		},
 	};
-	use codec::{Decode, Encode};
-
-	pub trait Config: 'static {
-		type RuntimeOrigin;
-		type BlockNumber;
-		type PalletInfo: crate::traits::PalletInfo;
-		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
-	}
-
-	crate::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {}
-	}
-
-	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-	struct NoDef(u32);
-
-	crate::decl_storage! {
-		trait Store for Module<T: Config> as Test {
-			Map: map hasher(blake2_128_concat) u16 => u64;
-		}
-	}
-
-	fn key_before_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
-		let last = prefix.iter_mut().last().unwrap();
-		assert!(*last != 0, "mock function not implemented for this prefix");
-		*last -= 1;
-		prefix
-	}
-
-	fn key_after_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
-		let last = prefix.iter_mut().last().unwrap();
-		assert!(*last != 255, "mock function not implemented for this prefix");
-		*last += 1;
-		prefix
-	}
+	use codec::Encode;
 
 	#[test]
 	fn map_iter_from() {
@@ -413,6 +396,8 @@ mod test_iterators {
 	#[test]
 	fn map_reversible_reversible_iteration() {
 		sp_io::TestExternalities::default().execute_with(|| {
+			type Map = self::frame_system::Map<Runtime>;
+
 			// All map iterator
 			let prefix = Map::prefix_hash();
 

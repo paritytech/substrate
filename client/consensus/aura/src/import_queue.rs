@@ -19,10 +19,10 @@
 //! Module implementing the logic for verifying and importing AuRa blocks.
 
 use crate::{
-	aura_err, authorities, find_pre_digest, slot_author, AuthorityId, CompatibilityMode, Error,
+	authorities, standalone::SealVerificationError, AuthorityId, CompatibilityMode, Error,
 	LOG_TARGET,
 };
-use codec::{Codec, Decode, Encode};
+use codec::Codec;
 use log::{debug, info, trace};
 use prometheus_endpoint::Registry;
 use sc_client_api::{backend::AuxStore, BlockOf, UsageProvider};
@@ -36,15 +36,15 @@ use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::Error as ConsensusError;
-use sp_consensus_aura::{digests::CompatibleDigestItem, inherents::AuraInherentData, AuraApi};
+use sp_consensus_aura::{inherents::AuraInherentData, AuraApi};
 use sp_consensus_slots::Slot;
-use sp_core::{crypto::Pair, ExecutionContext};
+use sp_core::crypto::Pair;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _};
 use sp_runtime::{
 	traits::{Block as BlockT, Header, NumberFor},
 	DigestItem,
 };
-use std::{fmt::Debug, hash::Hash, marker::PhantomData, sync::Arc};
+use std::{fmt::Debug, marker::PhantomData, sync::Arc};
 
 /// check a header has been signed by the right key. If the slot is too far in the future, an error
 /// will be returned. If it's successful, returns the pre-header and the digest item
@@ -54,37 +54,26 @@ use std::{fmt::Debug, hash::Hash, marker::PhantomData, sync::Arc};
 fn check_header<C, B: BlockT, P: Pair>(
 	client: &C,
 	slot_now: Slot,
-	mut header: B::Header,
+	header: B::Header,
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
 	check_for_equivocation: CheckForEquivocation,
 ) -> Result<CheckedHeader<B::Header, (Slot, DigestItem)>, Error<B>>
 where
+	P::Public: Codec,
 	P::Signature: Codec,
 	C: sc_client_api::backend::AuxStore,
-	P::Public: Encode + Decode + PartialEq + Clone,
 {
-	let seal = header.digest_mut().pop().ok_or(Error::HeaderUnsealed(hash))?;
+	let check_result =
+		crate::standalone::check_header_slot_and_seal::<B, P>(slot_now, header, authorities);
 
-	let sig = seal.as_aura_seal().ok_or_else(|| aura_err(Error::HeaderBadSeal(hash)))?;
-
-	let slot = find_pre_digest::<B, P::Signature>(&header)?;
-
-	if slot > slot_now {
-		header.digest_mut().push(seal);
-		Ok(CheckedHeader::Deferred(header, slot))
-	} else {
-		// check the signature is valid under the expected authority and
-		// chain state.
-		let expected_author =
-			slot_author::<P>(slot, authorities).ok_or(Error::SlotAuthorNotFound)?;
-
-		let pre_hash = header.hash();
-
-		if P::verify(&sig, pre_hash.as_ref(), expected_author) {
-			if check_for_equivocation.check_for_equivocation() {
+	match check_result {
+		Ok((header, slot, seal)) => {
+			let expected_author = crate::standalone::slot_author::<P>(slot, &authorities);
+			let should_equiv_check = check_for_equivocation.check_for_equivocation();
+			if let (true, Some(expected)) = (should_equiv_check, expected_author) {
 				if let Some(equivocation_proof) =
-					check_equivocation(client, slot_now, slot, &header, expected_author)
+					check_equivocation(client, slot_now, slot, &header, expected)
 						.map_err(Error::Client)?
 				{
 					info!(
@@ -98,20 +87,25 @@ where
 			}
 
 			Ok(CheckedHeader::Checked(header, (slot, seal)))
-		} else {
-			Err(Error::BadSignature(hash))
-		}
+		},
+		Err(SealVerificationError::Deferred(header, slot)) =>
+			Ok(CheckedHeader::Deferred(header, slot)),
+		Err(SealVerificationError::Unsealed) => Err(Error::HeaderUnsealed(hash)),
+		Err(SealVerificationError::BadSeal) => Err(Error::HeaderBadSeal(hash)),
+		Err(SealVerificationError::BadSignature) => Err(Error::BadSignature(hash)),
+		Err(SealVerificationError::SlotAuthorNotFound) => Err(Error::SlotAuthorNotFound),
+		Err(SealVerificationError::InvalidPreDigest(e)) => Err(Error::from(e)),
 	}
 }
 
 /// A verifier for Aura blocks.
 pub struct AuraVerifier<C, P, CIDP, N> {
 	client: Arc<C>,
-	phantom: PhantomData<P>,
 	create_inherent_data_providers: CIDP,
 	check_for_equivocation: CheckForEquivocation,
 	telemetry: Option<TelemetryHandle>,
 	compatibility_mode: CompatibilityMode<N>,
+	_phantom: PhantomData<fn() -> P>,
 }
 
 impl<C, P, CIDP, N> AuraVerifier<C, P, CIDP, N> {
@@ -128,14 +122,13 @@ impl<C, P, CIDP, N> AuraVerifier<C, P, CIDP, N> {
 			check_for_equivocation,
 			telemetry,
 			compatibility_mode,
-			phantom: PhantomData,
+			_phantom: PhantomData,
 		}
 	}
 }
 
 impl<C, P, CIDP, N> AuraVerifier<C, P, CIDP, N>
 where
-	P: Send + Sync + 'static,
 	CIDP: Send,
 {
 	async fn check_inherents<B: BlockT>(
@@ -144,7 +137,6 @@ where
 		at_hash: B::Hash,
 		inherent_data: sp_inherents::InherentData,
 		create_inherent_data_providers: CIDP::InherentDataProviders,
-		execution_context: ExecutionContext,
 	) -> Result<(), Error<B>>
 	where
 		C: ProvideRuntimeApi<B>,
@@ -154,7 +146,7 @@ where
 		let inherent_res = self
 			.client
 			.runtime_api()
-			.check_inherents_with_context(at_hash, execution_context, block, inherent_data)
+			.check_inherents(at_hash, block, inherent_data)
 			.map_err(|e| Error::Client(e.into()))?;
 
 		if !inherent_res.ok() {
@@ -175,9 +167,9 @@ impl<B: BlockT, C, P, CIDP> Verifier<B> for AuraVerifier<C, P, CIDP, NumberFor<B
 where
 	C: ProvideRuntimeApi<B> + Send + Sync + sc_client_api::backend::AuxStore,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
-	P: Pair + Send + Sync + 'static,
-	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
-	P::Signature: Encode + Decode,
+	P: Pair,
+	P::Public: Codec + Debug,
+	P::Signature: Codec,
 	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
 {
@@ -255,7 +247,6 @@ where
 							parent_hash,
 							inherent_data,
 							create_inherent_data_providers,
-							block.origin.into(),
 						)
 						.await
 						.map_err(|e| e.to_string())?;
@@ -373,9 +364,9 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	P: Pair + Send + Sync + 'static,
-	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
-	P::Signature: Encode + Decode,
+	P: Pair + 'static,
+	P::Public: Codec + Debug,
+	P::Signature: Codec,
 	S: sp_core::traits::SpawnEssentialNamed,
 	CIDP: CreateInherentDataProviders<Block, ()> + Sync + Send + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,

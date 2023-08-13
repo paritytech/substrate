@@ -19,9 +19,10 @@
 //! randomness collected from VRF outputs.
 
 use super::{
-	AuthorVrfRandomness, Config, EpochStart, NextRandomness, Randomness, VRF_OUTPUT_LENGTH,
+	AuthorVrfRandomness, Config, EpochStart, NextRandomness, Randomness, RANDOMNESS_LENGTH,
 };
 use frame_support::traits::Randomness as RandomnessT;
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::traits::{Hash, One, Saturating};
 
 /// Randomness usable by consensus protocols that **depend** upon finality and take action
@@ -129,31 +130,31 @@ pub struct ParentBlockRandomness<T>(sp_std::marker::PhantomData<T>);
 					 Please use `ParentBlockRandomness` instead.")]
 pub struct CurrentBlockRandomness<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromTwoEpochsAgo<T> {
-	fn random(subject: &[u8]) -> (T::Hash, T::BlockNumber) {
+impl<T: Config> RandomnessT<T::Hash, BlockNumberFor<T>> for RandomnessFromTwoEpochsAgo<T> {
+	fn random(subject: &[u8]) -> (T::Hash, BlockNumberFor<T>) {
 		let mut subject = subject.to_vec();
-		subject.reserve(VRF_OUTPUT_LENGTH);
+		subject.reserve(RANDOMNESS_LENGTH);
 		subject.extend_from_slice(&Randomness::<T>::get()[..]);
 
 		(T::Hashing::hash(&subject[..]), EpochStart::<T>::get().0)
 	}
 }
 
-impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromOneEpochAgo<T> {
-	fn random(subject: &[u8]) -> (T::Hash, T::BlockNumber) {
+impl<T: Config> RandomnessT<T::Hash, BlockNumberFor<T>> for RandomnessFromOneEpochAgo<T> {
+	fn random(subject: &[u8]) -> (T::Hash, BlockNumberFor<T>) {
 		let mut subject = subject.to_vec();
-		subject.reserve(VRF_OUTPUT_LENGTH);
+		subject.reserve(RANDOMNESS_LENGTH);
 		subject.extend_from_slice(&NextRandomness::<T>::get()[..]);
 
 		(T::Hashing::hash(&subject[..]), EpochStart::<T>::get().1)
 	}
 }
 
-impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for ParentBlockRandomness<T> {
-	fn random(subject: &[u8]) -> (Option<T::Hash>, T::BlockNumber) {
+impl<T: Config> RandomnessT<Option<T::Hash>, BlockNumberFor<T>> for ParentBlockRandomness<T> {
+	fn random(subject: &[u8]) -> (Option<T::Hash>, BlockNumberFor<T>) {
 		let random = AuthorVrfRandomness::<T>::get().map(|random| {
 			let mut subject = subject.to_vec();
-			subject.reserve(VRF_OUTPUT_LENGTH);
+			subject.reserve(RANDOMNESS_LENGTH);
 			subject.extend_from_slice(&random);
 
 			T::Hashing::hash(&subject[..])
@@ -164,8 +165,8 @@ impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for ParentBlockRand
 }
 
 #[allow(deprecated)]
-impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for CurrentBlockRandomness<T> {
-	fn random(subject: &[u8]) -> (Option<T::Hash>, T::BlockNumber) {
+impl<T: Config> RandomnessT<Option<T::Hash>, BlockNumberFor<T>> for CurrentBlockRandomness<T> {
+	fn random(subject: &[u8]) -> (Option<T::Hash>, BlockNumberFor<T>) {
 		let (random, _) = ParentBlockRandomness::<T>::random(subject);
 		(random, <frame_system::Pallet<T>>::block_number())
 	}

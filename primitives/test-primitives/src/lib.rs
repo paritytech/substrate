@@ -26,15 +26,16 @@ use sp_application_crypto::sr25519;
 
 pub use sp_core::{hash::H256, RuntimeDebug};
 use sp_runtime::traits::{BlakeTwo256, Extrinsic as ExtrinsicT, Verify};
+use sp_std::vec::Vec;
 
 /// Extrinsic for test-runtime.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 pub enum Extrinsic {
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl serde::Serialize for Extrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
 	where
@@ -70,7 +71,7 @@ pub type Hash = H256;
 /// The block number type used in this runtime.
 pub type BlockNumber = u64;
 /// Index of a transaction.
-pub type Index = u64;
+pub type Nonce = u64;
 /// The item of a block digest.
 pub type DigestItem = sp_runtime::generic::DigestItem;
 /// The digest of a block.

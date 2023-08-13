@@ -27,7 +27,8 @@ use sp_version::RuntimeVersion;
 pub use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
-		ConstU128, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem, Randomness, StorageInfo,
+		ConstBool, ConstU128, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem, Randomness,
+		StorageInfo,
 	},
 	weights::{
 		constants::{
@@ -62,7 +63,7 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 pub type Balance = u128;
 
 /// Index of a transaction in the chain.
-pub type Index = u32;
+pub type Nonce = u32;
 
 /// A hash of some data used by the chain.
 pub type Hash = sp_core::H256;
@@ -154,6 +155,8 @@ parameter_types! {
 impl frame_system::Config for Runtime {
 	/// The basic call filter to use in dispatchable.
 	type BaseCallFilter = frame_support::traits::Everything;
+	/// The block type for the runtime.
+	type Block = Block;
 	/// Block & extrinsics weights: base values and limits.
 	type BlockWeights = BlockWeights;
 	/// The maximum length of a block (in bytes).
@@ -164,16 +167,12 @@ impl frame_system::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 	/// The lookup mechanism to get account ID from whatever is passed in dispatchers.
 	type Lookup = AccountIdLookup<AccountId, ()>;
-	/// The index type for storing how many extrinsics an account has signed.
-	type Index = Index;
-	/// The index type for blocks.
-	type BlockNumber = BlockNumber;
+	/// The type for storing how many extrinsics an account has signed.
+	type Nonce = Nonce;
 	/// The type for hashing blocks and tries.
 	type Hash = Hash;
 	/// The hashing algorithm used.
 	type Hashing = BlakeTwo256;
-	/// The header type.
-	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	/// The ubiquitous event type.
 	type RuntimeEvent = RuntimeEvent;
 	/// The ubiquitous origin type.
@@ -207,6 +206,10 @@ impl pallet_aura::Config for Runtime {
 	type AuthorityId = AuraId;
 	type DisabledValidators = ();
 	type MaxAuthorities = ConstU32<32>;
+	type AllowMultipleBlocksPerSlot = ConstBool<false>;
+
+	#[cfg(feature = "experimental")]
+	type SlotDuration = pallet_aura::MinimumPeriodTimesTwo<Runtime>;
 }
 
 impl pallet_grandpa::Config for Runtime {
@@ -214,6 +217,7 @@ impl pallet_grandpa::Config for Runtime {
 
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<32>;
+	type MaxNominators = ConstU32<0>;
 	type MaxSetIdSessionEntries = ConstU64<0>;
 
 	type KeyOwnerProof = sp_core::Void;
@@ -243,6 +247,10 @@ impl pallet_balances::Config for Runtime {
 	type ExistentialDeposit = ConstU128<EXISTENTIAL_DEPOSIT>;
 	type AccountStore = System;
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 
 parameter_types! {
@@ -261,21 +269,18 @@ impl pallet_transaction_payment::Config for Runtime {
 impl pallet_sudo::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
+	type WeightInfo = pallet_sudo::weights::SubstrateWeight<Runtime>;
 }
 
 /// Configure the pallet-template in pallets/template.
 impl pallet_template::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_template::weights::SubstrateWeight<Runtime>;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
-	pub struct Runtime
-	where
-		Block = Block,
-		NodeBlock = opaque::Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
+	pub struct Runtime {
 		System: frame_system,
 		Timestamp: pallet_timestamp,
 		Aura: pallet_aura,
@@ -340,6 +345,7 @@ mod benches {
 		[frame_system, SystemBench::<Runtime>]
 		[pallet_balances, Balances]
 		[pallet_timestamp, Timestamp]
+		[pallet_sudo, Sudo]
 		[pallet_template, TemplateModule]
 	);
 }
@@ -462,8 +468,8 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
-		fn account_nonce(account: AccountId) -> Index {
+	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Nonce> for Runtime {
+		fn account_nonce(account: AccountId) -> Nonce {
 			System::account_nonce(account)
 		}
 	}
@@ -573,42 +579,5 @@ impl_runtime_apis! {
 			// have a backtrace here.
 			Executive::try_execute_block(block, state_root_check, signature_check, select).expect("execute-block failed")
 		}
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use frame_support::traits::WhitelistedStorageKeys;
-	use sp_core::hexdisplay::HexDisplay;
-	use std::collections::HashSet;
-
-	#[test]
-	fn check_whitelist() {
-		let whitelist: HashSet<String> = AllPalletsWithSystem::whitelisted_storage_keys()
-			.iter()
-			.map(|e| HexDisplay::from(&e.key).to_string())
-			.collect();
-
-		// Block Number
-		assert!(
-			whitelist.contains("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac")
-		);
-		// Total Issuance
-		assert!(
-			whitelist.contains("c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80")
-		);
-		// Execution Phase
-		assert!(
-			whitelist.contains("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a")
-		);
-		// Event Count
-		assert!(
-			whitelist.contains("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850")
-		);
-		// System Events
-		assert!(
-			whitelist.contains("26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7")
-		);
 	}
 }

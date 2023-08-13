@@ -34,38 +34,21 @@ use tracing::{
 
 use crate::{SpanDatum, TraceEvent, Values};
 use sc_client_api::BlockBackend;
-use sc_rpc_server::RPC_MAX_PAYLOAD_DEFAULT;
 use sp_api::{Core, Encode, Metadata, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
 use sp_core::hexdisplay::HexDisplay;
-use sp_rpc::tracing::{BlockTrace, Span, TraceBlockResponse, TraceError};
+use sp_rpc::tracing::{BlockTrace, Span, TraceBlockResponse};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header},
 };
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 
-// Heuristic for average event size in bytes.
-const AVG_EVENT: usize = 600 * 8;
-// Heuristic for average span size in bytes.
-const AVG_SPAN: usize = 100 * 8;
-// Estimate of the max base RPC payload size when the Id is bound as a u64. If strings
-// are used for the RPC Id this may need to be adjusted. Note: The base payload
-// does not include the RPC result.
-//
-// The estimate is based on the JSON-RPC response message which has the following format:
-// `{"jsonrpc":"2.0","result":[],"id":18446744073709551615}`.
-//
-// We care about the total size of the payload because jsonrpc-server will simply ignore
-// messages larger than `sc_rpc_server::MAX_PAYLOAD` and the caller will not get any
-// response.
-const BASE_PAYLOAD: usize = 100;
 // Default to only pallet, frame support and state related traces
 const DEFAULT_TARGETS: &str = "pallet,frame,state";
 const TRACE_TARGET: &str = "block_trace";
 // The name of a field required for all events.
 const REQUIRED_EVENT_FIELD: &str = "method";
-const MEGABYTE: usize = 1024 * 1024;
 
 /// Tracing Block Result type alias
 pub type TraceBlockResult<T> = Result<T, Error>;
@@ -182,7 +165,6 @@ pub struct BlockExecutor<Block: BlockT, Client> {
 	targets: Option<String>,
 	storage_keys: Option<String>,
 	methods: Option<String>,
-	rpc_max_payload: usize,
 }
 
 impl<Block, Client> BlockExecutor<Block, Client>
@@ -203,12 +185,8 @@ where
 		targets: Option<String>,
 		storage_keys: Option<String>,
 		methods: Option<String>,
-		rpc_max_payload: Option<usize>,
 	) -> Self {
-		let rpc_max_payload = rpc_max_payload
-			.map(|mb| mb.saturating_mul(MEGABYTE))
-			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
-		Self { client, block, targets, storage_keys, methods, rpc_max_payload }
+		Self { client, block, targets, storage_keys, methods }
 	}
 
 	/// Execute block, record all spans and events belonging to `Self::targets`
@@ -289,24 +267,15 @@ where
 			.collect();
 		tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
 
-		let approx_payload_size = BASE_PAYLOAD + events.len() * AVG_EVENT + spans.len() * AVG_SPAN;
-		let response = if approx_payload_size > self.rpc_max_payload {
-			TraceBlockResponse::TraceError(TraceError {
-				error: "Payload likely exceeds max payload size of RPC server.".to_string(),
-			})
-		} else {
-			TraceBlockResponse::BlockTrace(BlockTrace {
-				block_hash: block_id_as_string(BlockId::<Block>::Hash(self.block)),
-				parent_hash: block_id_as_string(BlockId::<Block>::Hash(parent_hash)),
-				tracing_targets: targets.to_string(),
-				storage_keys: self.storage_keys.clone().unwrap_or_default(),
-				methods: self.methods.clone().unwrap_or_default(),
-				spans,
-				events,
-			})
-		};
-
-		Ok(response)
+		Ok(TraceBlockResponse::BlockTrace(BlockTrace {
+			block_hash: block_id_as_string(BlockId::<Block>::Hash(self.block)),
+			parent_hash: block_id_as_string(BlockId::<Block>::Hash(parent_hash)),
+			tracing_targets: targets.to_string(),
+			storage_keys: self.storage_keys.clone().unwrap_or_default(),
+			methods: self.methods.clone().unwrap_or_default(),
+			spans,
+			events,
+		}))
 	}
 }
 

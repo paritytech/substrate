@@ -1,0 +1,115 @@
+{
+  "system": {
+    "code": "0x52"
+  },
+  "babe": {
+    "authorities": [
+      [
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        1
+      ],
+      [
+        "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        1
+      ],
+      [
+        "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+        1
+      ]
+    ],
+    "epochConfig": {
+      "c": [
+        3,
+        10
+      ],
+      "allowed_slots": "PrimaryAndSecondaryPlainSlots"
+    }
+  },
+  "substrateTest": {
+    "authorities": [
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+      "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y"
+    ]
+  },
+  "balances": {
+    "balances": [
+      [
+        "5D34dL5prEUaGNQtPPZ3yN5Y6BnkfXunKXXz6fo7ZJbLwRRH",
+        100000000000000000
+      ],
+      [
+        "5GBNeWRhZc2jXu7D55rBimKYDk8PGk8itRYFTPfC8RJLKG5o",
+        100000000000000000
+      ],
+      [
+        "5Dfis6XL8J2P6JHUnUtArnFWndn62SydeP8ee8sG2ky9nfm9",
+        100000000000000000
+      ],
+      [
+        "5F4H97f7nQovyrbiq4ZetaaviNwThSVcFobcA5aGab6167dK",
+        100000000000000000
+      ],
+      [
+        "5DiDShBWa1fQx6gLzpf3SFBhMinCoyvHM1BWjPNsmXS8hkrW",
+        100000000000000000
+      ],
+      [
+        "5EFb84yH9tpcFuiKUcsmdoF7xeeY3ajG1ZLQimxQoFt9HMKR",
+        100000000000000000
+      ],
+      [
+        "5DZLHESsfGrJ5YzT3HuRPXsSNb589xQ4Unubh1mYLodzKdVY",
+        100000000000000000
+      ],
+      [
+        "5GHJzqvG6tXnngCpG7B12qjUvbo5e4e9z8Xjidk3CQZHxTPZ",
+        100000000000000000
+      ],
+      [
+        "5CUnSsgAyLND3bxxnfNhgWXSe9Wn676JzLpGLgyJv858qhoX",
+        100000000000000000
+      ],
+      [
+        "5CVKn7HAZW1Ky4r7Vkgsr7VEW88C2sHgUNDiwHY9Ct2hjU8q",
+        100000000000000000
+      ],
+      [
+        "5H673aukQ4PeDe1U2nuv1bi32xDEziimh3PZz7hDdYUB7TNz",
+        100000000000000000
+      ],
+      [
+        "5HTe9L15LJryjUAt1jZXZCBPnzbbGnpvFwbjE3NwCWaAqovf",
+        100000000000000000
+      ],
+      [
+        "5D7LFzGpMwHPyDBavkRbWSKWTtJhCaPPZ379wWLT23bJwXJz",
+        100000000000000000
+      ],
+      [
+        "5CLepMARnEgtVR1EkUuJVUvKh97gzergpSxUU3yKGx1v6EwC",
+        100000000000000000
+      ],
+      [
+        "5Chb2UhfvZpmjjEziHbFbotM4quX32ZscRV6QJBt1rUKzz51",
+        100000000000000000
+      ],
+      [
+        "5HmRp3i3ZZk7xsAvbi8hyXVP6whSMnBJGebVC4FsiZVhx52e",
+        100000000000000000
+      ],
+      [
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        100000000000000000
+      ],
+      [
+        "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        100000000000000000
+      ],
+      [
+        "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+        100000000000000000
+      ]
+    ]
+  }
+}

@@ -23,14 +23,13 @@ pub(crate) mod outgoing_requests_engine;
 
 pub use incoming_requests_handler::BeefyJustifsRequestHandler;
 
-use futures::channel::mpsc;
 use std::time::Duration;
 
 use codec::{Decode, Encode, Error as CodecError};
 use sc_network::{config::RequestResponseConfig, PeerId};
 use sp_runtime::traits::{Block, NumberFor};
 
-use crate::communication::beefy_protocol_name::justifications_protocol_name;
+use crate::communication::{beefy_protocol_name::justifications_protocol_name, peers::PeerReport};
 use incoming_requests_handler::IncomingRequestReceiver;
 
 // 10 seems reasonable, considering justifs are explicitly requested only
@@ -54,7 +53,7 @@ pub(crate) fn on_demand_justifications_protocol_config<Hash: AsRef<[u8]>>(
 ) -> (IncomingRequestReceiver, RequestResponseConfig) {
 	let name = justifications_protocol_name(genesis_hash, fork_id);
 	let fallback_names = vec![];
-	let (tx, rx) = mpsc::channel(JUSTIF_CHANNEL_SIZE);
+	let (tx, rx) = async_channel::bounded(JUSTIF_CHANNEL_SIZE);
 	let rx = IncomingRequestReceiver::new(rx);
 	let cfg = RequestResponseConfig {
 		name,
@@ -76,7 +75,7 @@ pub struct JustificationRequest<B: Block> {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
+pub(crate) enum Error {
 	#[error(transparent)]
 	Client(#[from] sp_blockchain::Error),
 
@@ -99,5 +98,8 @@ pub enum Error {
 	SendResponse,
 
 	#[error("Received invalid response.")]
-	InvalidResponse,
+	InvalidResponse(PeerReport),
+
+	#[error("Internal error while getting response.")]
+	ResponseError,
 }

@@ -102,16 +102,15 @@ pub fn clean_type_string(input: &str) -> String {
 }
 
 /// Return all doc attributes literals found.
-pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
+pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Expr> {
 	attrs
 		.iter()
 		.filter_map(|attr| {
-			if let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() {
-				if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
-					Some(meta.lit)
-				} else {
-					None
-				}
+			if let syn::Meta::NameValue(meta) = &attr.meta {
+				meta.path
+					.get_ident()
+					.filter(|ident| *ident == "doc")
+					.map(|_| meta.value.clone())
 			} else {
 				None
 			}

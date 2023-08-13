@@ -22,17 +22,17 @@ use crate::{ConfigOp, Pallet as Staking};
 use testing_utils::*;
 
 use codec::Decode;
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::{bounds::DataProviderBounds, SortedListProvider};
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	pallet_prelude::*,
-	traits::{Currency, CurrencyToVote, Get, Imbalance},
+	traits::{Currency, Get, Imbalance},
 };
 use sp_runtime::{
 	traits::{Bounded, One, StaticLookup, TrailingZeroInput, Zero},
 	Perbill, Percent,
 };
-use sp_staking::SessionIndex;
+use sp_staking::{currency_to_vote::CurrencyToVote, SessionIndex};
 use sp_std::prelude::*;
 
 pub use frame_benchmarking::v1::{
@@ -71,7 +71,8 @@ pub fn add_slashing_spans<T: Config>(who: &T::AccountId, spans: u32) {
 pub fn create_validator_with_nominators<T: Config>(
 	n: u32,
 	upper_bound: u32,
-	dead: bool,
+	dead_controller: bool,
+	unique_controller: bool,
 	destination: RewardDestination<T::AccountId>,
 ) -> Result<(T::AccountId, Vec<(T::AccountId, T::AccountId)>), &'static str> {
 	// Clean up any existing state.
@@ -79,7 +80,12 @@ pub fn create_validator_with_nominators<T: Config>(
 	let mut points_total = 0;
 	let mut points_individual = Vec::new();
 
-	let (v_stash, v_controller) = create_stash_controller::<T>(0, 100, destination.clone())?;
+	let (v_stash, v_controller) = if unique_controller {
+		create_unique_stash_controller::<T>(0, 100, destination.clone(), false)?
+	} else {
+		create_stash_controller::<T>(0, 100, destination.clone())?
+	};
+
 	let validator_prefs =
 		ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 	Staking::<T>::validate(RawOrigin::Signed(v_controller).into(), validator_prefs)?;
@@ -93,10 +99,10 @@ pub fn create_validator_with_nominators<T: Config>(
 
 	// Give the validator n nominators, but keep total users in the system the same.
 	for i in 0..upper_bound {
-		let (n_stash, n_controller) = if !dead {
+		let (n_stash, n_controller) = if !dead_controller {
 			create_stash_controller::<T>(u32::MAX - i, 100, destination.clone())?
 		} else {
-			create_stash_and_dead_controller::<T>(u32::MAX - i, 100, destination.clone())?
+			create_unique_stash_controller::<T>(u32::MAX - i, 100, destination.clone(), true)?
 		};
 		if i < n {
 			Staking::<T>::nominate(
@@ -217,15 +223,13 @@ const USER_SEED: u32 = 999666;
 benchmarks! {
 	bond {
 		let stash = create_funded_user::<T>("stash", USER_SEED, 100);
-		let controller = create_funded_user::<T>("controller", USER_SEED, 100);
-		let controller_lookup = T::Lookup::unlookup(controller.clone());
 		let reward_destination = RewardDestination::Staked;
 		let amount = T::Currency::minimum_balance() * 10u32.into();
 		whitelist_account!(stash);
-	}: _(RawOrigin::Signed(stash.clone()), controller_lookup, amount, reward_destination)
+	}: _(RawOrigin::Signed(stash.clone()), amount, reward_destination)
 	verify {
-		assert!(Bonded::<T>::contains_key(stash));
-		assert!(Ledger::<T>::contains_key(controller));
+		assert!(Bonded::<T>::contains_key(stash.clone()));
+		assert!(Ledger::<T>::contains_key(stash));
 	}
 
 	bond_extra {
@@ -334,7 +338,7 @@ benchmarks! {
 
 	validate {
 		let (stash, controller) = create_stash_controller::<T>(
-			T::MaxNominations::get() - 1,
+			MaxNominationsOf::<T>::get() - 1,
 			100,
 			Default::default(),
 		)?;
@@ -358,11 +362,11 @@ benchmarks! {
 
 		// these are the other validators; there are `T::MaxNominations::get() - 1` of them, so
 		// there are a total of `T::MaxNominations::get()` validators in the system.
-		let rest_of_validators = create_validators_with_seed::<T>(T::MaxNominations::get() - 1, 100, 415)?;
+		let rest_of_validators = create_validators_with_seed::<T>(MaxNominationsOf::<T>::get() - 1, 100, 415)?;
 
 		// this is the validator that will be kicking.
 		let (stash, controller) = create_stash_controller::<T>(
-			T::MaxNominations::get() - 1,
+			MaxNominationsOf::<T>::get() - 1,
 			100,
 			Default::default(),
 		)?;
@@ -377,7 +381,7 @@ benchmarks! {
 		for i in 0 .. k {
 			// create a nominator stash.
 			let (n_stash, n_controller) = create_stash_controller::<T>(
-				T::MaxNominations::get() + i,
+				MaxNominationsOf::<T>::get() + i,
 				100,
 				Default::default(),
 			)?;
@@ -414,7 +418,7 @@ benchmarks! {
 
 	// Worst case scenario, T::MaxNominations::get()
 	nominate {
-		let n in 1 .. T::MaxNominations::get();
+		let n in 1 .. MaxNominationsOf::<T>::get();
 
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
@@ -425,7 +429,7 @@ benchmarks! {
 		// we are just doing an insert into the origin position.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let (stash, controller) = create_stash_controller_with_balance::<T>(
-			SEED + T::MaxNominations::get() + 1, // make sure the account does not conflict with others
+			SEED + MaxNominationsOf::<T>::get() + 1, // make sure the account does not conflict with others
 			origin_weight,
 			Default::default(),
 		).unwrap();
@@ -470,13 +474,16 @@ benchmarks! {
 	}
 
 	set_controller {
-		let (stash, _) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
-		let new_controller = create_funded_user::<T>("new_controller", USER_SEED, 100);
-		let new_controller_lookup = T::Lookup::unlookup(new_controller.clone());
+		let (stash, ctlr) = create_unique_stash_controller::<T>(9000, 100, Default::default(), false)?;
+		// ensure `ctlr` is the currently stored controller.
+		assert!(!Ledger::<T>::contains_key(&stash));
+		assert!(Ledger::<T>::contains_key(&ctlr));
+		assert_eq!(Bonded::<T>::get(&stash), Some(ctlr.clone()));
+
 		whitelist_account!(stash);
-	}: _(RawOrigin::Signed(stash), new_controller_lookup)
+	}: _(RawOrigin::Signed(stash.clone()))
 	verify {
-		assert!(Ledger::<T>::contains_key(&new_controller));
+		assert!(Ledger::<T>::contains_key(&stash));
 	}
 
 	set_validator_count {
@@ -551,6 +558,7 @@ benchmarks! {
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			true,
+			true,
 			RewardDestination::Controller,
 		)?;
 
@@ -584,6 +592,7 @@ benchmarks! {
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			false,
+			true,
 			RewardDestination::Staked,
 		)?;
 
@@ -702,7 +711,7 @@ benchmarks! {
 		create_validators_with_nominators_for_era::<T>(
 			v,
 			n,
-			<T as Config>::MaxNominations::get() as usize,
+			MaxNominationsOf::<T>::get() as usize,
 			false,
 			None,
 		)?;
@@ -720,7 +729,7 @@ benchmarks! {
 		create_validators_with_nominators_for_era::<T>(
 			v,
 			n,
-			<T as Config>::MaxNominations::get() as usize,
+			MaxNominationsOf::<T>::get() as usize,
 			false,
 			None,
 		)?;
@@ -799,7 +808,7 @@ benchmarks! {
 		let n in (MaxNominators::<T>::get() / 2) .. MaxNominators::<T>::get();
 
 		let validators = create_validators_with_nominators_for_era::<T>(
-			v, n, T::MaxNominations::get() as usize, false, None
+			v, n, MaxNominationsOf::<T>::get() as usize, false, None
 		)?
 		.into_iter()
 		.map(|v| T::Lookup::lookup(v).unwrap())
@@ -810,7 +819,8 @@ benchmarks! {
 
 		let num_voters = (v + n) as usize;
 	}: {
-		let voters = <Staking<T>>::get_npos_voters(None);
+		// default bounds are unbounded.
+		let voters = <Staking<T>>::get_npos_voters(DataProviderBounds::default());
 		assert_eq!(voters.len(), num_voters);
 	}
 
@@ -821,10 +831,11 @@ benchmarks! {
 		let n = MaxNominators::<T>::get();
 
 		let _ = create_validators_with_nominators_for_era::<T>(
-			v, n, T::MaxNominations::get() as usize, false, None
+			v, n, MaxNominationsOf::<T>::get() as usize, false, None
 		)?;
 	}: {
-		let targets = <Staking<T>>::get_npos_targets(None);
+		// default bounds are unbounded.
+		let targets = <Staking<T>>::get_npos_targets(DataProviderBounds::default());
 		assert_eq!(targets.len() as u32, v);
 	}
 
@@ -952,7 +963,7 @@ mod tests {
 			create_validators_with_nominators_for_era::<Test>(
 				v,
 				n,
-				<Test as Config>::MaxNominations::get() as usize,
+				MaxNominationsOf::<Test>::get() as usize,
 				false,
 				None,
 			)
@@ -977,6 +988,7 @@ mod tests {
 			let (validator_stash, nominators) = create_validator_with_nominators::<Test>(
 				n,
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
+				false,
 				false,
 				RewardDestination::Staked,
 			)
@@ -1006,6 +1018,7 @@ mod tests {
 			let (validator_stash, _nominators) = create_validator_with_nominators::<Test>(
 				n,
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
+				false,
 				false,
 				RewardDestination::Staked,
 			)

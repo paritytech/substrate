@@ -24,7 +24,7 @@ use crate::chain_head::{
 		BestBlockChanged, Finalized, FollowEvent, Initialized, NewBlock, RuntimeEvent,
 		RuntimeVersionEvent,
 	},
-	subscription::{SubscriptionHandle, SubscriptionManagementError},
+	subscription::{InsertedSubscriptionData, SubscriptionManagement, SubscriptionManagementError},
 };
 use futures::{
 	channel::oneshot,
@@ -40,38 +40,35 @@ use sp_api::CallApiAt;
 use sp_blockchain::{
 	Backend as BlockChainBackend, Error as BlockChainError, HeaderBackend, HeaderMetadata, Info,
 };
-use sp_runtime::{
-	traits::{Block as BlockT, Header as HeaderT, One},
-	Saturating,
-};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use std::{collections::HashSet, sync::Arc};
 
 /// Generates the events of the `chainHead_follow` method.
-pub struct ChainHeadFollower<BE, Block: BlockT, Client> {
+pub struct ChainHeadFollower<BE: Backend<Block>, Block: BlockT, Client> {
 	/// Substrate client.
 	client: Arc<Client>,
 	/// Backend of the chain.
 	backend: Arc<BE>,
-	/// Subscription handle.
-	sub_handle: SubscriptionHandle<Block>,
+	/// Subscriptions handle.
+	sub_handle: Arc<SubscriptionManagement<Block, BE>>,
 	/// Subscription was started with the runtime updates flag.
-	runtime_updates: bool,
+	with_runtime: bool,
 	/// Subscription ID.
 	sub_id: String,
 	/// The best reported block by this subscription.
 	best_block_cache: Option<Block::Hash>,
 }
 
-impl<BE, Block: BlockT, Client> ChainHeadFollower<BE, Block, Client> {
+impl<BE: Backend<Block>, Block: BlockT, Client> ChainHeadFollower<BE, Block, Client> {
 	/// Create a new [`ChainHeadFollower`].
 	pub fn new(
 		client: Arc<Client>,
 		backend: Arc<BE>,
-		sub_handle: SubscriptionHandle<Block>,
-		runtime_updates: bool,
+		sub_handle: Arc<SubscriptionManagement<Block, BE>>,
+		with_runtime: bool,
 		sub_id: String,
 	) -> Self {
-		Self { client, backend, sub_handle, runtime_updates, sub_id, best_block_cache: None }
+		Self { client, backend, sub_handle, with_runtime, sub_id, best_block_cache: None }
 	}
 }
 
@@ -83,6 +80,8 @@ enum NotificationType<Block: BlockT> {
 	NewBlock(BlockImportNotification<Block>),
 	/// The finalized block notification obtained from `finality_notification_stream`.
 	Finalized(FinalityNotification<Block>),
+	/// The response of `chainHead` method calls.
+	MethodResponse(FollowEvent<Block::Hash>),
 }
 
 /// The initial blocks that should be reported or ignored by the chainHead.
@@ -116,7 +115,7 @@ struct StartupPoint<Block: BlockT> {
 	/// The head of the finalized chain.
 	pub finalized_hash: Block::Hash,
 	/// Last finalized block number.
-	pub finalized_number: <<Block as BlockT>::Header as HeaderT>::Number,
+	pub finalized_number: NumberFor<Block>,
 }
 
 impl<Block: BlockT> From<Info<Block>> for StartupPoint<Block> {
@@ -147,7 +146,7 @@ where
 		parent: Option<Block::Hash>,
 	) -> Option<RuntimeEvent> {
 		// No runtime versions should be reported.
-		if !self.runtime_updates {
+		if !self.with_runtime {
 			return None
 		}
 
@@ -224,21 +223,21 @@ where
 
 		// The initialized event is the first one sent.
 		let finalized_block_hash = startup_point.finalized_hash;
-		self.sub_handle.pin_block(finalized_block_hash)?;
+		self.sub_handle.pin_block(&self.sub_id, finalized_block_hash)?;
 
 		let finalized_block_runtime = self.generate_runtime_event(finalized_block_hash, None);
 
 		let initialized_event = FollowEvent::Initialized(Initialized {
 			finalized_block_hash,
 			finalized_block_runtime,
-			runtime_updates: self.runtime_updates,
+			with_runtime: self.with_runtime,
 		});
 
 		let mut finalized_block_descendants = Vec::with_capacity(initial_blocks.len() + 1);
 
 		finalized_block_descendants.push(initialized_event);
 		for (child, parent) in initial_blocks.into_iter() {
-			self.sub_handle.pin_block(child)?;
+			self.sub_handle.pin_block(&self.sub_id, child)?;
 
 			let new_runtime = self.generate_runtime_event(child, Some(parent));
 
@@ -246,7 +245,7 @@ where
 				block_hash: child,
 				parent_block_hash: parent,
 				new_runtime,
-				runtime_updates: self.runtime_updates,
+				with_runtime: self.with_runtime,
 			});
 
 			finalized_block_descendants.push(event);
@@ -277,7 +276,7 @@ where
 			block_hash,
 			parent_block_hash,
 			new_runtime,
-			runtime_updates: self.runtime_updates,
+			with_runtime: self.with_runtime,
 		});
 
 		if !is_best_block {
@@ -313,15 +312,12 @@ where
 		startup_point: &StartupPoint<Block>,
 	) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError> {
 		// The block was already pinned by the initial block events or by the finalized event.
-		if !self.sub_handle.pin_block(notification.hash)? {
+		if !self.sub_handle.pin_block(&self.sub_id, notification.hash)? {
 			return Ok(Default::default())
 		}
 
 		// Ensure we are only reporting blocks after the starting point.
-		let Some(block_number) = self.client.number(notification.hash)? else {
-			return Err(SubscriptionManagementError::BlockNumberAbsent)
-		};
-		if block_number < startup_point.finalized_number {
+		if *notification.header.number() < startup_point.finalized_number {
 			return Ok(Default::default())
 		}
 
@@ -345,63 +341,50 @@ where
 		let mut events = Vec::new();
 
 		// Nothing to be done if no finalized hashes are provided.
-		let Some(first_hash) = finalized_block_hashes.get(0) else {
-			return Ok(Default::default())
+		let Some(first_hash) = finalized_block_hashes.get(0) else { return Ok(Default::default()) };
+
+		// Find the parent header.
+		let Some(first_header) = self.client.header(*first_hash)? else {
+			return Err(SubscriptionManagementError::BlockHeaderAbsent)
 		};
 
-		// Find the parent hash.
-		let Some(first_number) = self.client.number(*first_hash)? else {
-			return Err(SubscriptionManagementError::BlockNumberAbsent)
-		};
-		let Some(parent) = self.client.hash(first_number.saturating_sub(One::one()))? else {
-			return Err(SubscriptionManagementError::BlockHashAbsent)
-		};
-
-		let last_finalized = finalized_block_hashes
-			.last()
-			.expect("At least one finalized hash inserted; qed");
-		let parents = std::iter::once(&parent).chain(finalized_block_hashes.iter());
-		for (hash, parent) in finalized_block_hashes.iter().zip(parents) {
-			// This block is already reported by the import notification.
-			if !self.sub_handle.pin_block(*hash)? {
+		let parents =
+			std::iter::once(first_header.parent_hash()).chain(finalized_block_hashes.iter());
+		for (i, (hash, parent)) in finalized_block_hashes.iter().zip(parents).enumerate() {
+			// Check if the block was already reported and thus, is already pinned.
+			if !self.sub_handle.pin_block(&self.sub_id, *hash)? {
 				continue
 			}
 
-			// Generate only the `NewBlock` event for this block.
-			if hash != last_finalized {
+			// Generate `NewBlock` events for all blocks beside the last block in the list
+			if i + 1 != finalized_block_hashes.len() {
+				// Generate only the `NewBlock` event for this block.
 				events.extend(self.generate_import_events(*hash, *parent, false));
-				continue
-			}
-
-			match self.best_block_cache {
-				Some(best_block_hash) => {
-					// If the best reported block is a children of the last finalized,
-					// then we had a gap in notification.
+			} else {
+				// If we end up here and the `best_block` is a descendent of the finalized block
+				// (last block in the list), it means that there were skipped notifications.
+				// Otherwise `pin_block` would had returned `true`.
+				//
+				// When the node falls out of sync and then syncs up to the tip of the chain, it can
+				// happen that we skip notifications. Then it is better to terminate the connection
+				// instead of trying to send notifications for all missed blocks.
+				if let Some(best_block_hash) = self.best_block_cache {
 					let ancestor = sp_blockchain::lowest_common_ancestor(
 						&*self.client,
-						*last_finalized,
+						*hash,
 						best_block_hash,
 					)?;
 
-					// A descendent of the finalized block was already reported
-					// before the `NewBlock` event containing the finalized block
-					// is reported.
-					if ancestor.hash == *last_finalized {
+					if ancestor.hash == *hash {
 						return Err(SubscriptionManagementError::Custom(
 							"A descendent of the finalized block was already reported".into(),
 						))
 					}
-					self.best_block_cache = Some(*hash);
-				},
-				// This is the first best block event that we generate.
-				None => {
-					self.best_block_cache = Some(*hash);
-				},
-			};
+				}
 
-			// This is the first time we see this block. Generate the `NewBlock` event; if this is
-			// the last block, also generate the `BestBlock` event.
-			events.extend(self.generate_import_events(*hash, *parent, true))
+				// Let's generate the `NewBlock` and `NewBestBlock` events for the block.
+				events.extend(self.generate_import_events(*hash, *parent, true))
+			}
 		}
 
 		Ok(events)
@@ -448,17 +431,13 @@ where
 		let last_finalized = notification.hash;
 
 		// Ensure we are only reporting blocks after the starting point.
-		let Some(block_number) = self.client.number(last_finalized)? else {
-			return Err(SubscriptionManagementError::BlockNumberAbsent)
-		};
-		if block_number < startup_point.finalized_number {
+		if *notification.header.number() < startup_point.finalized_number {
 			return Ok(Default::default())
 		}
 
 		// The tree route contains the exclusive path from the last finalized block to the block
 		// reported by the notification. Ensure the finalized block is also reported.
-		let mut finalized_block_hashes =
-			notification.tree_route.iter().cloned().collect::<Vec<_>>();
+		let mut finalized_block_hashes = notification.tree_route.to_vec();
 		finalized_block_hashes.push(last_finalized);
 
 		// If the finalized hashes were not reported yet, generate the `NewBlock` events.
@@ -476,9 +455,8 @@ where
 
 		match self.best_block_cache {
 			Some(block_cache) => {
-				// Check if the current best block is also reported as pruned.
-				let reported_pruned = pruned_block_hashes.iter().find(|&&hash| hash == block_cache);
-				if reported_pruned.is_none() {
+				// If the best block wasn't pruned, we are done here.
+				if !pruned_block_hashes.iter().any(|hash| *hash == block_cache) {
 					events.push(finalized_event);
 					return Ok(events)
 				}
@@ -499,20 +477,6 @@ where
 					events.push(finalized_event);
 					Ok(events)
 				} else {
-					let ancestor = sp_blockchain::lowest_common_ancestor(
-						&*self.client,
-						last_finalized,
-						best_block_hash,
-					)?;
-
-					// The client's best block must be a descendent of the last finalized block.
-					// In other words, the lowest common ancestor must be the last finalized block.
-					if ancestor.hash != last_finalized {
-						return Err(SubscriptionManagementError::Custom(
-							"The finalized block is not an ancestor of the best block".into(),
-						))
-					}
-
 					// The RPC needs to also submit a new best block changed before the
 					// finalized event.
 					self.best_block_cache = Some(best_block_hash);
@@ -553,6 +517,7 @@ where
 					self.handle_import_blocks(notification, &startup_point),
 				NotificationType::Finalized(notification) =>
 					self.handle_finalized_blocks(notification, &mut to_ignore, &startup_point),
+				NotificationType::MethodResponse(notification) => Ok(vec![notification]),
 			};
 
 			let events = match events {
@@ -600,13 +565,17 @@ where
 			stream_item = stream.next();
 			stop_event = next_stop_event;
 		}
+
+		// If we got here either the substrate streams have closed
+		// or the `Stop` receiver was triggered.
+		let _ = sink.send(&FollowEvent::<String>::Stop);
 	}
 
 	/// Generate the block events for the `chainHead_follow` method.
 	pub async fn generate_events(
 		&mut self,
 		mut sink: SubscriptionSink,
-		rx_stop: oneshot::Receiver<()>,
+		sub_data: InsertedSubscriptionData<Block>,
 	) {
 		// Register for the new block and finalized notifications.
 		let stream_import = self
@@ -618,6 +587,10 @@ where
 			.client
 			.finality_notification_stream()
 			.map(|notification| NotificationType::Finalized(notification));
+
+		let stream_responses = sub_data
+			.response_receiver
+			.map(|response| NotificationType::MethodResponse(response));
 
 		let startup_point = StartupPoint::from(self.client.info());
 		let (initial_events, pruned_forks) = match self.generate_init_events(&startup_point) {
@@ -636,9 +609,10 @@ where
 
 		let initial = NotificationType::InitialEvents(initial_events);
 		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
+		let merged = tokio_stream::StreamExt::merge(merged, stream_responses);
 		let stream = stream::once(futures::future::ready(initial)).chain(merged);
 
-		self.submit_events(&startup_point, stream.boxed(), pruned_forks, sink, rx_stop)
+		self.submit_events(&startup_point, stream.boxed(), pruned_forks, sink, sub_data.rx_stop)
 			.await;
 	}
 }

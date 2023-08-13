@@ -20,12 +20,14 @@ use crate as pallet_transaction_payment;
 
 use codec::Encode;
 
-use sp_runtime::{testing::TestXt, traits::One, transaction_validity::InvalidTransaction};
+use sp_runtime::{
+	testing::TestXt, traits::One, transaction_validity::InvalidTransaction, BuildStorage,
+};
 
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
-	traits::{Currency, GenesisBuild},
+	traits::Currency,
 	weights::Weight,
 };
 use frame_system as system;
@@ -80,7 +82,7 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_constants();
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> {
 			balances: if self.balance_factor > 0 {
 				vec![
@@ -99,8 +101,9 @@ impl ExtBuilder {
 		.unwrap();
 
 		if let Some(multiplier) = self.initial_multiplier {
-			let genesis = pallet::GenesisConfig { multiplier };
-			GenesisBuild::<Runtime>::assimilate_storage(&genesis, &mut t).unwrap();
+			pallet::GenesisConfig::<Runtime> { multiplier, ..Default::default() }
+				.assimilate_storage(&mut t)
+				.unwrap();
 		}
 
 		t.into()
@@ -285,7 +288,7 @@ fn signed_ext_length_fee_is_also_updated_per_congestion() {
 
 #[test]
 fn query_info_and_fee_details_works() {
-	let call = RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+	let call = RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 2, value: 69 });
 	let origin = 111111;
 	let extra = ();
 	let xt = TestXt::new(call.clone(), Some((origin, extra)));
@@ -348,7 +351,7 @@ fn query_info_and_fee_details_works() {
 
 #[test]
 fn query_call_info_and_fee_details_works() {
-	let call = RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+	let call = RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 2, value: 69 });
 	let info = call.get_dispatch_info();
 	let encoded_call = call.encode();
 	let len = encoded_call.len() as u32;
@@ -530,7 +533,11 @@ fn refund_does_not_recreate_account() {
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 
 			// kill the account between pre and post dispatch
-			assert_ok!(Balances::transfer(Some(2).into(), 3, Balances::free_balance(2)));
+			assert_ok!(Balances::transfer_allow_death(
+				Some(2).into(),
+				3,
+				Balances::free_balance(2)
+			));
 			assert_eq!(Balances::free_balance(2), 0);
 
 			assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(

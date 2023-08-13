@@ -76,16 +76,36 @@ pub fn create_stash_controller<T: Config>(
 	balance_factor: u32,
 	destination: RewardDestination<T::AccountId>,
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
-	let stash = create_funded_user::<T>("stash", n, balance_factor);
-	let controller = create_funded_user::<T>("controller", n, balance_factor);
-	let controller_lookup = T::Lookup::unlookup(controller.clone());
+	let staker = create_funded_user::<T>("stash", n, balance_factor);
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
-	Staking::<T>::bond(
-		RawOrigin::Signed(stash.clone()).into(),
-		controller_lookup,
-		amount,
-		destination,
-	)?;
+	Staking::<T>::bond(RawOrigin::Signed(staker.clone()).into(), amount, destination)?;
+	Ok((staker.clone(), staker))
+}
+
+/// Create a unique stash and controller pair.
+pub fn create_unique_stash_controller<T: Config>(
+	n: u32,
+	balance_factor: u32,
+	destination: RewardDestination<T::AccountId>,
+	dead_controller: bool,
+) -> Result<(T::AccountId, T::AccountId), &'static str> {
+	let stash = create_funded_user::<T>("stash", n, balance_factor);
+
+	let controller = if dead_controller {
+		create_funded_user::<T>("controller", n, 0)
+	} else {
+		create_funded_user::<T>("controller", n, balance_factor)
+	};
+	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
+	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), amount, destination)?;
+
+	// update ledger to be a *different* controller to stash
+	if let Some(l) = Ledger::<T>::take(&stash) {
+		<Ledger<T>>::insert(&controller, l);
+	}
+	// update bonded account to be unique controller
+	<Bonded<T>>::insert(&stash, &controller);
+
 	Ok((stash, controller))
 }
 
@@ -95,38 +115,27 @@ pub fn create_stash_controller_with_balance<T: Config>(
 	balance: crate::BalanceOf<T>,
 	destination: RewardDestination<T::AccountId>,
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
-	let stash = create_funded_user_with_balance::<T>("stash", n, balance);
-	let controller = create_funded_user_with_balance::<T>("controller", n, balance);
-	let controller_lookup = T::Lookup::unlookup(controller.clone());
-
-	Staking::<T>::bond(
-		RawOrigin::Signed(stash.clone()).into(),
-		controller_lookup,
-		balance,
-		destination,
-	)?;
-	Ok((stash, controller))
+	let staker = create_funded_user_with_balance::<T>("stash", n, balance);
+	Staking::<T>::bond(RawOrigin::Signed(staker.clone()).into(), balance, destination)?;
+	Ok((staker.clone(), staker))
 }
 
-/// Create a stash and controller pair, where the controller is dead, and payouts go to controller.
-/// This is used to test worst case payout scenarios.
-pub fn create_stash_and_dead_controller<T: Config>(
+/// Create a stash and controller pair, where payouts go to a dead payee account. This is used to
+/// test worst case payout scenarios.
+pub fn create_stash_and_dead_payee<T: Config>(
 	n: u32,
 	balance_factor: u32,
-	destination: RewardDestination<T::AccountId>,
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
-	let stash = create_funded_user::<T>("stash", n, balance_factor);
-	// controller has no funds
-	let controller = create_funded_user::<T>("controller", n, 0);
-	let controller_lookup = T::Lookup::unlookup(controller.clone());
+	let staker = create_funded_user::<T>("stash", n, 0);
+	// payee has no funds
+	let payee = create_funded_user::<T>("payee", n, 0);
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
 	Staking::<T>::bond(
-		RawOrigin::Signed(stash.clone()).into(),
-		controller_lookup,
+		RawOrigin::Signed(staker.clone()).into(),
 		amount,
-		destination,
+		RewardDestination::Account(payee),
 	)?;
-	Ok((stash, controller))
+	Ok((staker.clone(), staker))
 }
 
 /// create `max` validators.

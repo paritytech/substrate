@@ -36,6 +36,7 @@
 //! * `clear_name` - Remove an account's associated name; the deposit is returned.
 //! * `kill_name` - Forcibly remove the associated name; the deposit is lost.
 
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::traits::{Currency, OnUnbalanced, ReservableCurrency};
@@ -86,18 +87,37 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A name was set.
-		NameSet { who: T::AccountId },
+		NameSet {
+			/// The account for which the name was set.
+			who: T::AccountId,
+		},
 		/// A name was forcibly set.
-		NameForced { target: T::AccountId },
+		NameForced {
+			/// The account whose name was forcibly set.
+			target: T::AccountId,
+		},
 		/// A name was changed.
-		NameChanged { who: T::AccountId },
+		NameChanged {
+			/// The account for which the name was changed.
+			who: T::AccountId,
+		},
 		/// A name was cleared, and the given balance returned.
-		NameCleared { who: T::AccountId, deposit: BalanceOf<T> },
+		NameCleared {
+			/// The account for which the name was cleared.
+			who: T::AccountId,
+			/// The deposit returned.
+			deposit: BalanceOf<T>,
+		},
 		/// A name was removed and the given balance slashed.
-		NameKilled { target: T::AccountId, deposit: BalanceOf<T> },
+		NameKilled {
+			/// The account for which the name was removed.
+			target: T::AccountId,
+			/// The deposit returned.
+			deposit: BalanceOf<T>,
+		},
 	}
 
-	/// Error for the nicks pallet.
+	/// Error for the Nicks pallet.
 	#[pallet::error]
 	pub enum Error<T> {
 		/// A name is too short.
@@ -131,7 +151,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - O(1).
 		#[pallet::call_index(0)]
-		#[pallet::weight(50_000_000)]
+		#[pallet::weight({50_000_000})]
 		pub fn set_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -160,7 +180,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - O(1).
 		#[pallet::call_index(1)]
-		#[pallet::weight(70_000_000)]
+		#[pallet::weight({70_000_000})]
 		pub fn clear_name(origin: OriginFor<T>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -183,7 +203,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - O(1).
 		#[pallet::call_index(2)]
-		#[pallet::weight(70_000_000)]
+		#[pallet::weight({70_000_000})]
 		pub fn kill_name(origin: OriginFor<T>, target: AccountIdLookupOf<T>) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
@@ -207,7 +227,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - O(1).
 		#[pallet::call_index(3)]
-		#[pallet::weight(70_000_000)]
+		#[pallet::weight({70_000_000})]
 		pub fn force_name(
 			origin: OriginFor<T>,
 			target: AccountIdLookupOf<T>,
@@ -239,18 +259,14 @@ mod tests {
 	use frame_system::EnsureSignedBy;
 	use sp_core::H256;
 	use sp_runtime::{
-		testing::Header,
 		traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+		BuildStorage,
 	};
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
+		pub enum Test
 		{
 			System: frame_system,
 			Balances: pallet_balances,
@@ -264,14 +280,13 @@ mod tests {
 		type BlockLength = ();
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
-		type Index = u64;
-		type BlockNumber = u64;
+		type Nonce = u64;
 		type Hash = H256;
 		type RuntimeCall = RuntimeCall;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
@@ -295,6 +310,10 @@ mod tests {
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
 		type WeightInfo = ();
+		type FreezeIdentifier = ();
+		type MaxFreezes = ();
+		type RuntimeHoldReason = ();
+		type MaxHolds = ();
 	}
 
 	ord_parameter_types! {
@@ -311,7 +330,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		pallet_balances::GenesisConfig::<Test> { balances: vec![(1, 10), (2, 10)] }
 			.assimilate_storage(&mut t)
 			.unwrap();

@@ -24,22 +24,17 @@ use crate::{
 use frame_support::traits::{ConstU16, ConstU32, ConstU64, OnFinalize, OnInitialize};
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 pub type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
 		TransactionStorage: pallet_transaction_storage::{
 			Pallet, Call, Storage, Config<T>, Inherent, Event<T>
@@ -53,13 +48,12 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
@@ -84,6 +78,10 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
 	type ReserveIdentifier = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 
 impl pallet_transaction_storage::Config for Test {
@@ -97,7 +95,7 @@ impl pallet_transaction_storage::Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = GenesisConfig {
+	let t = RuntimeGenesisConfig {
 		system: Default::default(),
 		balances: pallet_balances::GenesisConfig::<Test> {
 			balances: vec![(1, 1000000000), (2, 100), (3, 100), (4, 100)],

@@ -18,7 +18,7 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use codec::{Decode, Encode};
+use codec::Encode;
 use futures::{
 	executor::block_on,
 	future::{ready, Ready},
@@ -33,7 +33,7 @@ use sp_runtime::{
 		ValidTransaction,
 	},
 };
-use substrate_test_runtime::{AccountId, Block, Extrinsic, Transfer, H256};
+use substrate_test_runtime::{AccountId, Block, Extrinsic, ExtrinsicBuilder, TransferData, H256};
 
 #[derive(Clone, Debug, Default)]
 struct TestApi {
@@ -65,8 +65,10 @@ impl ChainApi for TestApi {
 		_source: TransactionSource,
 		uxt: <Self::Block as BlockT>::Extrinsic,
 	) -> Self::ValidationFuture {
-		let nonce = uxt.transfer().nonce;
-		let from = uxt.transfer().from;
+		let transfer = TransferData::try_from(&uxt)
+			.expect("uxt is expected to be bench_call (carrying TransferData)");
+		let nonce = transfer.nonce;
+		let from = transfer.from;
 
 		match self.block_id_to_number(at) {
 			Ok(Some(num)) if num > 5 => return ready(Ok(Err(InvalidTransaction::Stale.into()))),
@@ -131,13 +133,8 @@ impl ChainApi for TestApi {
 	}
 }
 
-fn uxt(transfer: Transfer) -> Extrinsic {
-	Extrinsic::Transfer {
-		transfer,
-		signature: Decode::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
-			.expect("infinite input; no dead input space; qed"),
-		exhaust_resources_when_not_first: false,
-	}
+fn uxt(transfer: TransferData) -> Extrinsic {
+	ExtrinsicBuilder::new_bench_call(transfer).build()
 }
 
 fn bench_configured(pool: Pool<TestApi>, number: u64) {
@@ -146,7 +143,7 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 	let mut tags = Vec::new();
 
 	for nonce in 1..=number {
-		let xt = uxt(Transfer {
+		let xt = uxt(TransferData {
 			from: AccountId::from_h256(H256::from_low_u64_be(1)),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,

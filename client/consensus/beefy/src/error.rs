@@ -18,7 +18,7 @@
 
 //! BEEFY gadget specific errors
 //!
-//! Used for BEEFY gadget interal error handling only
+//! Used for BEEFY gadget internal error handling only
 
 use std::fmt::Debug;
 
@@ -34,6 +34,8 @@ pub enum Error {
 	Signature(String),
 	#[error("Session uninitialized")]
 	UninitSession,
+	#[error("pallet-beefy was reset, please restart voter")]
+	ConsensusReset,
 }
 
 #[cfg(test)]
@@ -45,6 +47,7 @@ impl PartialEq for Error {
 			(Error::RuntimeApi(_), Error::RuntimeApi(_)) => true,
 			(Error::Signature(s1), Error::Signature(s2)) => s1 == s2,
 			(Error::UninitSession, Error::UninitSession) => true,
+			(Error::ConsensusReset, Error::ConsensusReset) => true,
 			_ => false,
 		}
 	}

@@ -18,7 +18,6 @@
 
 //! Service configuration.
 
-pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
 pub use sc_client_db::{BlocksPruning, Database, DatabaseSource, PruningMode};
 pub use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 pub use sc_network::{
@@ -61,8 +60,6 @@ pub struct Configuration {
 	pub network: NetworkConfiguration,
 	/// Configuration for the keystore.
 	pub keystore: KeystoreConfig,
-	/// Remote URI to connect to for async keystore support
-	pub keystore_remote: Option<String>,
 	/// Configuration for the database.
 	pub database: DatabaseSource,
 	/// Maximum size of internal trie cache in bytes.
@@ -83,36 +80,26 @@ pub struct Configuration {
 	/// over on-chain runtimes when the spec version matches. Set to `None` to
 	/// disable overrides (default).
 	pub wasm_runtime_overrides: Option<PathBuf>,
-	/// Execution strategies.
-	pub execution_strategies: ExecutionStrategies,
-	/// RPC over HTTP binding address. `None` if disabled.
-	pub rpc_http: Option<SocketAddr>,
-	/// RPC over Websockets binding address. `None` if disabled.
-	pub rpc_ws: Option<SocketAddr>,
-	/// RPC over IPC binding path. `None` if disabled.
-	pub rpc_ipc: Option<String>,
-	/// Maximum number of connections for WebSockets RPC server. `None` if default.
-	pub rpc_ws_max_connections: Option<usize>,
+	/// JSON-RPC server binding address.
+	pub rpc_addr: Option<SocketAddr>,
+	/// Maximum number of connections for JSON-RPC server.
+	pub rpc_max_connections: u32,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
 	/// RPC methods to expose (by default only a safe subset or all of them).
 	pub rpc_methods: RpcMethods,
-	/// Maximum payload of rpc request/responses.
-	pub rpc_max_payload: Option<usize>,
 	/// Maximum payload of a rpc request
-	pub rpc_max_request_size: Option<usize>,
-	/// Maximum payload of a rpc request
-	pub rpc_max_response_size: Option<usize>,
+	pub rpc_max_request_size: u32,
+	/// Maximum payload of a rpc response.
+	pub rpc_max_response_size: u32,
 	/// Custom JSON-RPC subscription ID provider.
 	///
 	/// Default: [`crate::RandomStringSubscriptionId`].
 	pub rpc_id_provider: Option<Box<dyn crate::RpcSubscriptionIdProvider>>,
 	/// Maximum allowed subscriptions per rpc connection
-	///
-	/// Default: 1024.
-	pub rpc_max_subs_per_conn: Option<usize>,
-	/// Maximum size of the output buffer capacity for websocket connections.
-	pub ws_max_out_buffer_capacity: Option<usize>,
+	pub rpc_max_subs_per_conn: u32,
+	/// JSON-RPC server default port.
+	pub rpc_port: u16,
 	/// Prometheus endpoint configuration. `None` if disabled.
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.
@@ -125,6 +112,8 @@ pub struct Configuration {
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
 	pub disable_grandpa: bool,
+	/// Disable BEEFY when running in validator mode
+	pub disable_beefy: bool,
 	/// Development key seed.
 	///
 	/// When running in development mode, the seed will be used to generate authority keys by the
@@ -142,8 +131,10 @@ pub struct Configuration {
 	pub max_runtime_instances: usize,
 	/// Announce block automatically after they have been imported
 	pub announce_block: bool,
-	/// Base path of the configuration
-	pub base_path: Option<BasePath>,
+	/// Data path root for the configured chain.
+	pub data_path: PathBuf,
+	/// Base path of the configuration. This is shared between chains.
+	pub base_path: BasePath,
 	/// Configuration of the output format that the informant uses.
 	pub informant_output_format: sc_informant::OutputFormat,
 	/// Maximum number of different runtime versions that can be cached.
@@ -242,7 +233,7 @@ impl Configuration {
 	/// Returns true if the genesis state writting will be skipped while initializing the genesis
 	/// block.
 	pub fn no_genesis(&self) -> bool {
-		matches!(self.network.sync_mode, SyncMode::Fast { .. } | SyncMode::Warp { .. })
+		matches!(self.network.sync_mode, SyncMode::LightState { .. } | SyncMode::Warp { .. })
 	}
 
 	/// Returns the database config for creating the backend.

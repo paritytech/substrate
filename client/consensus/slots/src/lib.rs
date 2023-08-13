@@ -41,7 +41,7 @@ use sp_arithmetic::traits::BaseArithmetic;
 use sp_consensus::{Proposal, Proposer, SelectChain, SyncOracle};
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::CreateInherentDataProviders;
-use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT};
+use sp_runtime::traits::{Block as BlockT, HashingFor, Header as HeaderT};
 use std::{
 	fmt::Debug,
 	ops::Deref,
@@ -54,7 +54,7 @@ const LOG_TARGET: &str = "slots";
 ///
 /// See [`sp_state_machine::StorageChanges`] for more information.
 pub type StorageChanges<Transaction, Block> =
-	sp_state_machine::StorageChanges<Transaction, HashFor<Block>>;
+	sp_state_machine::StorageChanges<Transaction, HashingFor<Block>>;
 
 /// The result of [`SlotWorker::on_slot`].
 #[derive(Debug, Clone)]
@@ -150,7 +150,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		body: Vec<B::Extrinsic>,
 		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 		public: Self::Claim,
-		epoch: Self::AuxData,
+		aux_data: Self::AuxData,
 	) -> Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
 		sp_consensus::Error,
@@ -217,7 +217,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				inherent_data,
 				sp_runtime::generic::Digest { logs },
 				proposing_remaining_duration.mul_f32(0.98),
-				None,
+				slot_info.block_size_limit,
 			)
 			.map_err(|e| sp_consensus::Error::ClientImport(e.to_string()));
 

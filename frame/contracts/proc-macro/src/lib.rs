@@ -209,13 +209,13 @@ impl HostFn {
 			"only #[version(<u8>)], #[unstable], #[prefixed_alias] and #[deprecated] attributes are allowed.";
 		let span = item.span();
 		let mut attrs = item.attrs.clone();
-		attrs.retain(|a| !a.path.is_ident("doc"));
+		attrs.retain(|a| !a.path().is_ident("doc"));
 		let mut maybe_version = None;
 		let mut is_stable = true;
 		let mut alias_to = None;
 		let mut not_deprecated = true;
 		while let Some(attr) = attrs.pop() {
-			let ident = attr.path.get_ident().ok_or(err(span, msg))?.to_string();
+			let ident = attr.path().get_ident().ok_or(err(span, msg))?.to_string();
 			match ident.as_str() {
 				"version" => {
 					if maybe_version.is_some() {
@@ -377,7 +377,7 @@ impl EnvDef {
 			_ => None,
 		};
 
-		let selector = |a: &syn::Attribute| a.path.is_ident("prefixed_alias");
+		let selector = |a: &syn::Attribute| a.path().is_ident("prefixed_alias");
 
 		let aliases = items
 			.iter()
@@ -401,7 +401,7 @@ impl EnvDef {
 }
 
 fn is_valid_special_arg(idx: usize, arg: &FnArg) -> bool {
-	let pat = if let FnArg::Typed(pat) = arg { pat } else { return false };
+	let FnArg::Typed(pat) = arg else { return false };
 	let ident = if let syn::Pat::Ident(ref ident) = *pat.pat { &ident.ident } else { return false };
 	let name_ok = match idx {
 		0 => ident == "ctx" || ident == "_ctx",
@@ -434,7 +434,7 @@ fn expand_func_doc(func: &HostFn) -> TokenStream2 {
 			);
 			quote! { #[doc = #alias_doc] }
 		} else {
-			let docs = func.item.attrs.iter().filter(|a| a.path.is_ident("doc")).map(|d| {
+			let docs = func.item.attrs.iter().filter(|a| a.path().is_ident("doc")).map(|d| {
 				let docs = d.to_token_stream();
 				quote! { #docs }
 			});
@@ -596,6 +596,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 	let impls = def.host_funcs.iter().map(|f| {
 		// skip the context and memory argument
 		let params = f.item.sig.inputs.iter().skip(2);
+
 		let (module, name, body, wasm_output, output) = (
 			f.module(),
 			&f.name,
@@ -606,6 +607,35 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		let is_stable = f.is_stable;
 		let not_deprecated = f.not_deprecated;
 
+		// wrapped host function body call with host function traces
+		// see https://github.com/paritytech/substrate/tree/master/frame/contracts#host-function-tracing
+		let wrapped_body_with_trace = {
+			let trace_fmt_args = params.clone().filter_map(|arg| match arg {
+				syn::FnArg::Receiver(_) => None,
+				syn::FnArg::Typed(p) => {
+					match *p.pat.clone() {
+						syn::Pat::Ident(ref pat_ident) => Some(pat_ident.ident.clone()),
+						_ => None,
+					}
+				},
+			});
+
+			let params_fmt_str = trace_fmt_args.clone().map(|s| format!("{s}: {{:?}}")).collect::<Vec<_>>().join(", ");
+			let trace_fmt_str = format!("{}::{}({}) = {{:?}}\n", module, name, params_fmt_str);
+
+			quote! {
+				let result = #body;
+				if ::log::log_enabled!(target: "runtime::contracts::strace", ::log::Level::Trace) {
+						use sp_std::fmt::Write;
+						let mut w = sp_std::Writer::default();
+						let _ = core::write!(&mut w, #trace_fmt_str, #( #trace_fmt_args, )* result);
+						let msg = core::str::from_utf8(&w.inner()).unwrap_or_default();
+						ctx.ext().append_debug_buffer(msg);
+				}
+				result
+			}
+		};
+
 		// If we don't expand blocks (implementing for `()`) we change a few things:
 		// - We replace any code by unreachable!
 		// - Allow unused variables as the code that uses is not expanded
@@ -613,11 +643,11 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		let inner = if expand_blocks {
 			quote! { || #output {
 				let (memory, ctx) = __caller__
-					.host_data()
+					.data()
 					.memory()
 					.expect("Memory must be set when setting up host data; qed")
 					.data_and_store_mut(&mut __caller__);
-				#body
+				#wrapped_body_with_trace
 			} }
 		} else {
 			quote! { || -> #wasm_output {
@@ -627,10 +657,10 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 				::core::unreachable!()
 			} }
 		};
-		let map_err = if expand_blocks {
+		let into_host = if expand_blocks {
 			quote! {
 				|reason| {
-					::wasmi::core::Trap::host(reason)
+					::wasmi::core::Trap::from(reason)
 				}
 			}
 		} else {
@@ -643,6 +673,43 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		} else {
 			quote! { #[allow(unused_variables)] }
 		};
+		let sync_gas_before = if expand_blocks {
+			quote! {
+				// Gas left in the gas meter right before switching to engine execution.
+				let __gas_before__ = {
+					let engine_consumed_total =
+						__caller__.fuel_consumed().expect("Fuel metering is enabled; qed");
+					let gas_meter = __caller__.data_mut().ext().gas_meter_mut();
+					gas_meter
+						.charge_fuel(engine_consumed_total)
+						.map_err(TrapReason::from)
+						.map_err(#into_host)?
+						.ref_time()
+				};
+			}
+		} else {
+			quote! { }
+		};
+		// Gas left in the gas meter right after returning from engine execution.
+		let sync_gas_after = if expand_blocks {
+			quote! {
+				let mut gas_after = __caller__.data_mut().ext().gas_meter().gas_left().ref_time();
+				let mut host_consumed = __gas_before__.saturating_sub(gas_after);
+				// Possible undercharge of at max 1 fuel here, if host consumed less than `instruction_weights.base`
+				// Not a problem though, as soon as host accounts its spent gas properly.
+				let fuel_consumed = host_consumed
+					.checked_div(__caller__.data_mut().ext().schedule().instruction_weights.base as u64)
+					.ok_or(Error::<E::T>::InvalidSchedule)
+					.map_err(TrapReason::from)
+					.map_err(#into_host)?;
+				 __caller__
+					 .consume_fuel(fuel_consumed)
+					 .map_err(|_| TrapReason::from(Error::<E::T>::OutOfGas))
+					 .map_err(#into_host)?;
+			}
+		} else {
+			quote! { }
+		};
 
 		quote! {
 			// We need to allow all interfaces when runtime benchmarks are performed because
@@ -654,10 +721,11 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 			{
 				#allow_unused
 				linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
+ 					#sync_gas_before
 					let mut func = #inner;
-					func()
-						.map_err(#map_err)
-						.map(::core::convert::Into::into)
+					let result = func().map_err(#into_host).map(::core::convert::Into::into);
+					#sync_gas_after
+					result
 				}))?;
 			}
 		}

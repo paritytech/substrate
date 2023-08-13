@@ -18,12 +18,8 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-mod code_cache;
 mod prepare;
 mod runtime;
-
-#[cfg(feature = "runtime-benchmarks")]
-pub use crate::wasm::code_cache::reinstrument;
 
 #[cfg(doc)]
 pub use crate::wasm::runtime::api_doc;
@@ -31,91 +27,73 @@ pub use crate::wasm::runtime::api_doc;
 #[cfg(test)]
 pub use tests::MockExt;
 
-pub use crate::wasm::{
-	prepare::TryInstantiate,
-	runtime::{
-		AllowDeprecatedInterface, AllowUnstableInterface, CallFlags, Environment, ReturnCode,
-		Runtime, RuntimeCosts,
-	},
+pub use crate::wasm::runtime::{
+	AllowDeprecatedInterface, AllowUnstableInterface, CallFlags, Environment, ReturnCode, Runtime,
+	RuntimeCosts,
 };
 
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
-	gas::GasMeter,
-	AccountIdOf, BalanceOf, CodeHash, CodeVec, Config, Error, OwnerInfoOf, RelaxedCodeVec,
-	Schedule,
+	gas::{GasMeter, Token},
+	wasm::prepare::LoadedModule,
+	weights::WeightInfo,
+	AccountIdOf, BadOrigin, BalanceOf, CodeHash, CodeInfoOf, CodeVec, Config, Error, Event,
+	HoldReason, Pallet, PristineCode, Schedule, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::dispatch::{DispatchError, DispatchResult};
+use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
+	ensure,
+	traits::{fungible::MutateHold, tokens::Precision::BestEffort},
+};
 use sp_core::Get;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
-use wasmi::{
-	Config as WasmiConfig, Engine, Instance, Linker, Memory, MemoryType, Module, StackLimits, Store,
-};
+use wasmi::{Instance, Linker, Memory, MemoryType, StackLimits, Store};
 
-/// A prepared wasm module ready for execution.
-///
-/// # Note
-///
-/// This data structure is mostly immutable once created and stored. The exceptions that
-/// can be changed by calling a contract are `instruction_weights_version` and `code`.
-/// `instruction_weights_version` and `code` change when a contract with an outdated instrumentation
-/// is called. Therefore one must be careful when holding any in-memory representation of this
-/// type while calling into a contract as those fields can get out of date.
-#[derive(Clone, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
+const BYTES_PER_PAGE: usize = 64 * 1024;
+
+/// Validated Wasm module ready for execution.
+/// This data structure is immutable once created and stored.
+#[derive(Encode, Decode, scale_info::TypeInfo)]
 #[codec(mel_bound())]
 #[scale_info(skip_type_params(T))]
-pub struct PrefabWasmModule<T: Config> {
-	/// Version of the instruction weights with which the code was instrumented.
-	#[codec(compact)]
-	instruction_weights_version: u32,
-	/// Initial memory size of a contract's sandbox.
-	#[codec(compact)]
-	initial: u32,
-	/// The maximum memory size of a contract's sandbox.
-	#[codec(compact)]
-	maximum: u32,
-	/// Code instrumented with the latest schedule.
-	code: RelaxedCodeVec<T>,
-	/// A code that might contain non deterministic features and is therefore never allowed
-	/// to be run on chain. Specifically this code can never be instantiated into a contract
-	/// and can just be used through a delegate call.
-	determinism: Determinism,
-	/// The uninstrumented, pristine version of the code.
-	///
-	/// It is not stored because the pristine code has its own storage item. The value
-	/// is only `Some` when this module was created from an `original_code` and `None` if
-	/// it was loaded from storage.
+pub struct WasmBlob<T: Config> {
+	code: CodeVec<T>,
+	// This isn't needed for contract execution and is not stored alongside it.
 	#[codec(skip)]
-	original_code: Option<CodeVec<T>>,
-	/// The code hash of the stored code which is defined as the hash over the `original_code`.
-	///
-	/// As the map key there is no need to store the hash in the value, too. It is set manually
-	/// when loading the module from storage.
+	code_info: CodeInfo<T>,
+	// This is for not calculating the hash every time we need it.
 	#[codec(skip)]
 	code_hash: CodeHash<T>,
-	// This isn't needed for contract execution and does not get loaded from storage by default.
-	// It is `Some` if and only if this struct was generated from code.
-	#[codec(skip)]
-	owner_info: Option<OwnerInfo<T>>,
 }
 
-/// Information that belongs to a [`PrefabWasmModule`] but is stored separately.
+/// Contract code related data, such as:
+///
+/// - owner of the contract, i.e. account uploaded its code,
+/// - storage deposit amount,
+/// - reference count,
+/// - determinism marker.
 ///
 /// It is stored in a separate storage entry to avoid loading the code when not necessary.
 #[derive(Clone, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
 #[codec(mel_bound())]
 #[scale_info(skip_type_params(T))]
-pub struct OwnerInfo<T: Config> {
-	/// The account that has deployed the contract and hence is allowed to remove it.
+pub struct CodeInfo<T: Config> {
+	/// The account that has uploaded the contract code and hence is allowed to remove it.
 	owner: AccountIdOf<T>,
-	/// The amount of balance that was deposited by the owner in order to deploy it.
+	/// The amount of balance that was deposited by the owner in order to store it on-chain.
 	#[codec(compact)]
 	deposit: BalanceOf<T>,
-	/// The number of contracts that use this as their code.
+	/// The number of instantiated contracts that use this as their code.
 	#[codec(compact)]
 	refcount: u64,
+	/// Marks if the code might contain non-deterministic features and is therefore never allowed
+	/// to be run on-chain. Specifically, such a code can never be instantiated into a contract
+	/// and can just be used through a delegate call.
+	determinism: Determinism,
+	/// length of the code in bytes.
+	code_len: u32,
 }
 
 /// Defines the required determinism level of a wasm blob when either running or uploading code.
@@ -127,7 +105,7 @@ pub enum Determinism {
 	/// allowed.
 	///
 	/// Dispatchables always use this mode in order to make on-chain execution deterministic.
-	Deterministic,
+	Enforced,
 	/// Allow calling or uploading an indeterministic code.
 	///
 	/// This is only possible when calling into `pallet-contracts` directly via
@@ -136,7 +114,7 @@ pub enum Determinism {
 	/// # Note
 	///
 	/// **Never** use this mode for on-chain execution.
-	AllowIndeterminism,
+	Relaxed,
 }
 
 impl ExportedFunction {
@@ -149,83 +127,65 @@ impl ExportedFunction {
 	}
 }
 
-impl<T: Config> PrefabWasmModule<T> {
-	/// Create the module by checking and instrumenting `original_code`.
-	///
-	/// This does **not** store the module. For this one need to either call [`Self::store`]
-	/// or [`<Self as Executable>::execute`][`Executable::execute`].
+/// Cost of code loading from storage.
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+#[derive(Clone, Copy)]
+struct CodeLoadToken(u32);
+
+impl<T: Config> Token<T> for CodeLoadToken {
+	fn weight(&self) -> Weight {
+		// When loading the contract, we already covered the general costs of
+		// calling the storage but still need to account for the actual size of the
+		// contract code. This is why we subtract `T::*::(0)`. We need to do this at this
+		// point because when charging the general weight for calling the contract we don't know the
+		// size of the contract.
+		T::WeightInfo::call_with_code_per_byte(self.0)
+			.saturating_sub(T::WeightInfo::call_with_code_per_byte(0))
+	}
+}
+
+impl<T: Config> WasmBlob<T> {
+	/// Create the module by checking the `code`.
 	pub fn from_code(
-		original_code: Vec<u8>,
+		code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
 		determinism: Determinism,
-		try_instantiate: TryInstantiate,
 	) -> Result<Self, (DispatchError, &'static str)> {
-		let module = prepare::prepare::<runtime::Env, T>(
-			original_code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
+		prepare::prepare::<runtime::Env, T>(
+			code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
 			schedule,
 			owner,
 			determinism,
-			try_instantiate,
-		)?;
-		Ok(module)
-	}
-
-	/// Store the code without instantiating it.
-	///
-	/// Otherwise the code is stored when [`<Self as Executable>::execute`][`Executable::execute`]
-	/// is called.
-	pub fn store(self) -> DispatchResult {
-		code_cache::store(self, false)
+		)
 	}
 
 	/// Remove the code from storage and refund the deposit to its owner.
 	///
 	/// Applies all necessary checks before removing the code.
 	pub fn remove(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult {
-		code_cache::try_remove::<T>(origin, code_hash)
-	}
-
-	/// Returns whether there is a deposit to be paid for this module.
-	///
-	/// Returns `0` if the module is already in storage and hence no deposit will
-	/// be charged when storing it.
-	pub fn open_deposit(&self) -> BalanceOf<T> {
-		if <OwnerInfoOf<T>>::contains_key(&self.code_hash) {
-			0u32.into()
-		} else {
-			// Only already in-storage contracts have their `owner_info` set to `None`.
-			// Therefore it is correct to return `0` in this case.
-			self.owner_info.as_ref().map(|i| i.deposit).unwrap_or_default()
-		}
+		Self::try_remove_code(origin, code_hash)
 	}
 
 	/// Creates and returns an instance of the supplied code.
 	///
 	/// This is either used for later executing a contract or for validation of a contract.
 	/// When validating we pass `()` as `host_state`. Please note that such a dummy instance must
-	/// **never** be called/executed since it will panic the executor.
+	/// **never** be called/executed, since it will panic the executor.
 	pub fn instantiate<E, H>(
 		code: &[u8],
 		host_state: H,
-		memory: (u32, u32),
+		schedule: &Schedule<T>,
+		determinism: Determinism,
 		stack_limits: StackLimits,
 		allow_deprecated: AllowDeprecatedInterface,
-	) -> Result<(Store<H>, Memory, Instance), wasmi::Error>
+	) -> Result<(Store<H>, Memory, Instance), &'static str>
 	where
 		E: Environment<H>,
 	{
-		let mut config = WasmiConfig::default();
-		config
-			.set_stack_limits(stack_limits)
-			.wasm_multi_value(false)
-			.wasm_mutable_global(false)
-			.wasm_sign_extension(false)
-			.wasm_saturating_float_to_int(false);
-		let engine = Engine::new(&config);
-		let module = Module::new(&engine, code)?;
-		let mut store = Store::new(&engine, host_state);
-		let mut linker = Linker::new();
+		let contract = LoadedModule::new::<T>(&code, determinism, Some(stack_limits))?;
+		let mut store = Store::new(&contract.engine, host_state);
+		let mut linker = Linker::new(&contract.engine);
 		E::define(
 			&mut store,
 			&mut linker,
@@ -235,77 +195,178 @@ impl<T: Config> PrefabWasmModule<T> {
 				AllowUnstableInterface::No
 			},
 			allow_deprecated,
-		)?;
-		let memory = Memory::new(&mut store, MemoryType::new(memory.0, Some(memory.1))?).expect(
-			"The limits defined in our `Schedule` limit the amount of memory well below u32::MAX; qed",
-		);
+		)
+		.map_err(|_| "can't define host functions to Linker")?;
+
+		// Query wasmi for memory limits specified in the module's import entry.
+		let memory_limits = contract.scan_imports::<T>(schedule)?;
+		// Here we allocate this memory in the _store_. It allocates _inital_ value, but allows it
+		// to grow up to maximum number of memory pages, if necessary.
+		let qed = "We checked the limits versus our Schedule,
+					 which specifies the max amount of memory pages
+					 well below u16::MAX; qed";
+		let memory = Memory::new(
+			&mut store,
+			MemoryType::new(memory_limits.0, Some(memory_limits.1)).expect(qed),
+		)
+		.expect(qed);
+
 		linker
 			.define("env", "memory", memory)
-			.expect("We just created the linker. It has no define with this name attached; qed");
+			.expect("We just created the Linker. It has no definitions with this name; qed");
 
-		let instance = linker.instantiate(&mut store, &module)?.ensure_no_start(&mut store)?;
+		let instance = linker
+			.instantiate(&mut store, &contract.module)
+			.map_err(|_| "can't instantiate module with provided definitions")?
+			.ensure_no_start(&mut store)
+			.map_err(|_| "start function is forbidden but found in the module")?;
 
 		Ok((store, memory, instance))
 	}
 
-	/// See [`Self::from_code_unchecked`].
-	#[cfg(feature = "runtime-benchmarks")]
-	pub fn store_code_unchecked(
-		original_code: Vec<u8>,
-		schedule: &Schedule<T>,
-		owner: T::AccountId,
-	) -> DispatchResult {
-		let executable = Self::from_code_unchecked(original_code, schedule, owner)?;
-		code_cache::store(executable, false)
+	/// Puts the module blob into storage, and returns the deposit collected for the storage.
+	pub fn store_code(&mut self) -> Result<BalanceOf<T>, Error<T>> {
+		let code_hash = *self.code_hash();
+		<CodeInfoOf<T>>::mutate(code_hash, |stored_code_info| {
+			match stored_code_info {
+				// Contract code is already stored in storage. Nothing to be done here.
+				Some(_) => Ok(Default::default()),
+				// Upload a new contract code.
+				// We need to store the code and its code_info, and collect the deposit.
+				// This `None` case happens only with freshly uploaded modules. This means that
+				// the `owner` is always the origin of the current transaction.
+				None => {
+					let deposit = self.code_info.deposit;
+					T::Currency::hold(
+						&HoldReason::CodeUploadDepositReserve.into(),
+						&self.code_info.owner,
+						deposit,
+					)
+					.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
+
+					self.code_info.refcount = 0;
+					<PristineCode<T>>::insert(code_hash, &self.code);
+					*stored_code_info = Some(self.code_info.clone());
+					<Pallet<T>>::deposit_event(
+						vec![code_hash],
+						Event::CodeStored {
+							code_hash,
+							deposit_held: deposit,
+							uploader: self.code_info.owner.clone(),
+						},
+					);
+					Ok(deposit)
+				},
+			}
+		})
 	}
 
-	/// Decrement instruction_weights_version by 1. Panics if it is already 0.
-	#[cfg(test)]
-	pub fn decrement_version(&mut self) {
-		self.instruction_weights_version = self.instruction_weights_version.checked_sub(1).unwrap();
+	/// Try to remove code together with all associated information.
+	fn try_remove_code(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult {
+		<CodeInfoOf<T>>::try_mutate_exists(&code_hash, |existing| {
+			if let Some(code_info) = existing {
+				ensure!(code_info.refcount == 0, <Error<T>>::CodeInUse);
+				ensure!(&code_info.owner == origin, BadOrigin);
+				let _ = T::Currency::release(
+					&HoldReason::CodeUploadDepositReserve.into(),
+					&code_info.owner,
+					code_info.deposit,
+					BestEffort,
+				);
+				let deposit_released = code_info.deposit;
+				let remover = code_info.owner.clone();
+
+				*existing = None;
+				<PristineCode<T>>::remove(&code_hash);
+				<Pallet<T>>::deposit_event(
+					vec![code_hash],
+					Event::CodeRemoved { code_hash, deposit_released, remover },
+				);
+				Ok(())
+			} else {
+				Err(<Error<T>>::CodeNotFound.into())
+			}
+		})
 	}
 
-	/// Create the module without checking nor instrumenting the passed code.
+	/// Load code with the given code hash.
+	fn load_code(
+		code_hash: CodeHash<T>,
+		gas_meter: &mut GasMeter<T>,
+	) -> Result<(CodeVec<T>, CodeInfo<T>), DispatchError> {
+		let code_info = <CodeInfoOf<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
+		gas_meter.charge(CodeLoadToken(code_info.code_len))?;
+		let code = <PristineCode<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
+		Ok((code, code_info))
+	}
+
+	/// Create the module without checking the passed code.
 	///
 	/// # Note
 	///
-	/// This is useful for benchmarking where we don't want instrumentation to skew
+	/// This is useful for benchmarking where we don't want validation of the module to skew
 	/// our results. This also does not collect any deposit from the `owner`. Also useful
 	/// during testing when we want to deploy codes that do not pass the instantiation checks.
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
-	fn from_code_unchecked(
-		original_code: Vec<u8>,
+	pub fn from_code_unchecked(
+		code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: T::AccountId,
 	) -> Result<Self, DispatchError> {
-		prepare::benchmarking::prepare(original_code, schedule, owner)
-			.map_err::<DispatchError, _>(Into::into)
+		prepare::benchmarking::prepare(code, schedule, owner)
 	}
 }
 
-impl<T: Config> OwnerInfo<T> {
+impl<T: Config> CodeInfo<T> {
 	/// Return the refcount of the module.
 	#[cfg(test)]
 	pub fn refcount(&self) -> u64 {
 		self.refcount
 	}
+
+	#[cfg(test)]
+	pub fn new(owner: T::AccountId) -> Self {
+		CodeInfo {
+			owner,
+			deposit: Default::default(),
+			refcount: 0,
+			code_len: 0,
+			determinism: Determinism::Enforced,
+		}
+	}
+
+	/// Returns the deposit of the module.
+	pub fn deposit(&self) -> BalanceOf<T> {
+		self.deposit
+	}
 }
 
-impl<T: Config> Executable<T> for PrefabWasmModule<T> {
+impl<T: Config> Executable<T> for WasmBlob<T> {
 	fn from_storage(
 		code_hash: CodeHash<T>,
-		schedule: &Schedule<T>,
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError> {
-		code_cache::load(code_hash, schedule, gas_meter)
+		let (code, code_info) = Self::load_code(code_hash, gas_meter)?;
+		Ok(Self { code, code_info, code_hash })
 	}
 
-	fn add_user(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
-		code_cache::increment_refcount::<T>(code_hash)
+	fn increment_refcount(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+		<CodeInfoOf<T>>::mutate(code_hash, |existing| -> Result<(), DispatchError> {
+			if let Some(info) = existing {
+				info.refcount = info.refcount.saturating_add(1);
+				Ok(())
+			} else {
+				Err(Error::<T>::CodeNotFound.into())
+			}
+		})
 	}
 
-	fn remove_user(code_hash: CodeHash<T>) {
-		code_cache::decrement_refcount::<T>(code_hash)
+	fn decrement_refcount(code_hash: CodeHash<T>) {
+		<CodeInfoOf<T>>::mutate(code_hash, |existing| {
+			if let Some(info) = existing {
+				info.refcount = info.refcount.saturating_sub(1);
+			}
+		});
 	}
 
 	fn execute<E: Ext<T = T>>(
@@ -314,43 +375,68 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
 	) -> ExecResult {
+		let code = self.code.as_slice();
+		// Instantiate the Wasm module to the engine.
 		let runtime = Runtime::new(ext, input_data);
+		let schedule = <T>::Schedule::get();
 		let (mut store, memory, instance) = Self::instantiate::<crate::wasm::runtime::Env, _>(
-			self.code.as_slice(),
+			code,
 			runtime,
-			(self.initial, self.maximum),
+			&schedule,
+			self.code_info.determinism,
 			StackLimits::default(),
 			match function {
-				ExportedFunction::Constructor => AllowDeprecatedInterface::No,
 				ExportedFunction::Call => AllowDeprecatedInterface::Yes,
+				ExportedFunction::Constructor => AllowDeprecatedInterface::No,
 			},
 		)
 		.map_err(|msg| {
-			log::debug!(target: "runtime::contracts", "failed to instantiate code: {}", msg);
+			log::debug!(target: LOG_TARGET, "failed to instantiate code to wasmi: {}", msg);
 			Error::<T>::CodeRejected
 		})?;
-		store.state_mut().set_memory(memory);
+		store.data_mut().set_memory(memory);
+
+		// Set fuel limit for the wasmi execution.
+		// We normalize it by the base instruction weight, as its cost in wasmi engine is `1`.
+		let fuel_limit = store
+			.data_mut()
+			.ext()
+			.gas_meter_mut()
+			.gas_left()
+			.ref_time()
+			.checked_div(T::Schedule::get().instruction_weights.base as u64)
+			.ok_or(Error::<T>::InvalidSchedule)?;
+		store
+			.add_fuel(fuel_limit)
+			.expect("We've set up engine to fuel consuming mode; qed");
 
 		let exported_func = instance
 			.get_export(&store, function.identifier())
 			.and_then(|export| export.into_func())
 			.ok_or_else(|| {
-				log::error!(target: "runtime::contracts", "failed to find entry point");
+				log::error!(target: LOG_TARGET, "failed to find entry point");
 				Error::<T>::CodeRejected
 			})?;
 
-		// We store before executing so that the code hash is available in the constructor.
 		if let &ExportedFunction::Constructor = function {
-			code_cache::store(self, true)?;
+			WasmBlob::<T>::increment_refcount(self.code_hash)?;
 		}
 
 		let result = exported_func.call(&mut store, &[], &mut []);
+		let engine_consumed_total = store.fuel_consumed().expect("Fuel metering is enabled; qed");
+		// Sync this frame's gas meter with the engine's one.
+		let gas_meter = store.data_mut().ext().gas_meter_mut();
+		gas_meter.charge_fuel(engine_consumed_total)?;
 
-		store.into_state().to_execution_result(result)
+		store.into_data().to_execution_result(result)
 	}
 
 	fn code_hash(&self) -> &CodeHash<T> {
 		&self.code_hash
+	}
+
+	fn code_info(&self) -> &CodeInfo<T> {
+		&self.code_info
 	}
 
 	fn code_len(&self) -> u32 {
@@ -358,7 +444,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 	}
 
 	fn is_deterministic(&self) -> bool {
-		matches!(self.determinism, Determinism::Deterministic)
+		matches!(self.code_info.determinism, Determinism::Enforced)
 	}
 }
 
@@ -366,21 +452,17 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 mod tests {
 	use super::*;
 	use crate::{
-		exec::{
-			AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, FixSizedKey,
-			SeedOf, VarSizedKey,
-		},
+		exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Ext, Key, SeedOf},
 		gas::GasMeter,
 		storage::WriteOutcome,
 		tests::{RuntimeCall, Test, ALICE, BOB},
-		BalanceOf, CodeHash, Error, Pallet as Contracts,
+		BalanceOf, CodeHash, Error, Origin, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
 	use frame_support::{
-		assert_err, assert_ok,
-		dispatch::DispatchResultWithPostInfo,
-		weights::{OldWeight, Weight},
+		assert_err, assert_ok, dispatch::DispatchResultWithPostInfo, weights::Weight,
 	};
+	use frame_system::pallet_prelude::BlockNumberFor;
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
 	use sp_core::H256;
@@ -388,7 +470,10 @@ mod tests {
 	use std::{
 		borrow::BorrowMut,
 		cell::RefCell,
-		collections::hash_map::{Entry, HashMap},
+		collections::{
+			hash_map::{Entry, HashMap},
+			HashSet,
+		},
 	};
 
 	#[derive(Debug, PartialEq, Eq)]
@@ -439,7 +524,10 @@ mod tests {
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
 		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
+		sr25519_verify: RefCell<Vec<([u8; 64], Vec<u8>, [u8; 32])>>,
 		code_hashes: Vec<CodeHash<Test>>,
+		caller: Origin<Test>,
+		delegate_dependencies: RefCell<HashSet<CodeHash<Test>>>,
 	}
 
 	/// The call is mocked and just returns this hardcoded value.
@@ -463,6 +551,9 @@ mod tests {
 				gas_meter: GasMeter::new(Weight::from_parts(10_000_000_000, 10 * 1024 * 1024)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
+				caller: Default::default(),
+				sr25519_verify: Default::default(),
+				delegate_dependencies: Default::default(),
 			}
 		}
 	}
@@ -473,6 +564,7 @@ mod tests {
 		fn call(
 			&mut self,
 			_gas_limit: Weight,
+			_deposit_limit: BalanceOf<Self::T>,
 			to: AccountIdOf<Self::T>,
 			value: u64,
 			data: Vec<u8>,
@@ -492,6 +584,7 @@ mod tests {
 		fn instantiate(
 			&mut self,
 			gas_limit: Weight,
+			_deposit_limit: BalanceOf<Self::T>,
 			code_hash: CodeHash<Test>,
 			value: u64,
 			data: Vec<u8>,
@@ -521,21 +614,15 @@ mod tests {
 			self.terminations.push(TerminationEntry { beneficiary: beneficiary.clone() });
 			Ok(())
 		}
-		fn get_storage(&mut self, key: &FixSizedKey) -> Option<Vec<u8>> {
+		fn get_storage(&mut self, key: &Key<Self::T>) -> Option<Vec<u8>> {
 			self.storage.get(&key.to_vec()).cloned()
 		}
-		fn get_storage_transparent(&mut self, key: &VarSizedKey<Self::T>) -> Option<Vec<u8>> {
-			self.storage.get(&key.to_vec()).cloned()
-		}
-		fn get_storage_size(&mut self, key: &FixSizedKey) -> Option<u32> {
-			self.storage.get(&key.to_vec()).map(|val| val.len() as u32)
-		}
-		fn get_storage_size_transparent(&mut self, key: &VarSizedKey<Self::T>) -> Option<u32> {
+		fn get_storage_size(&mut self, key: &Key<Self::T>) -> Option<u32> {
 			self.storage.get(&key.to_vec()).map(|val| val.len() as u32)
 		}
 		fn set_storage(
 			&mut self,
-			key: &FixSizedKey,
+			key: &Key<Self::T>,
 			value: Option<Vec<u8>>,
 			take_old: bool,
 		) -> Result<WriteOutcome, DispatchError> {
@@ -552,27 +639,8 @@ mod tests {
 			}
 			Ok(result)
 		}
-		fn set_storage_transparent(
-			&mut self,
-			key: &VarSizedKey<Self::T>,
-			value: Option<Vec<u8>>,
-			take_old: bool,
-		) -> Result<WriteOutcome, DispatchError> {
-			let key = key.to_vec();
-			let entry = self.storage.entry(key.clone());
-			let result = match (entry, take_old) {
-				(Entry::Vacant(_), _) => WriteOutcome::New,
-				(Entry::Occupied(entry), false) =>
-					WriteOutcome::Overwritten(entry.remove().len() as u32),
-				(Entry::Occupied(entry), true) => WriteOutcome::Taken(entry.remove()),
-			};
-			if let Some(value) = value {
-				self.storage.insert(key, value);
-			}
-			Ok(result)
-		}
-		fn caller(&self) -> &AccountIdOf<Self::T> {
-			&ALICE
+		fn caller(&self) -> Origin<Self::T> {
+			self.caller.clone()
 		}
 		fn is_contract(&self, _address: &AccountIdOf<Self::T>) -> bool {
 			true
@@ -586,6 +654,9 @@ mod tests {
 		}
 		fn caller_is_origin(&self) -> bool {
 			false
+		}
+		fn caller_is_root(&self) -> bool {
+			&self.caller == &Origin::Root
 		}
 		fn address(&self) -> &AccountIdOf<Self::T> {
 			&BOB
@@ -602,7 +673,7 @@ mod tests {
 		fn minimum_balance(&self) -> u64 {
 			666
 		}
-		fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>) {
+		fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberFor<Self::T>) {
 			(H256::from_slice(subject), 42)
 		}
 		fn deposit_event(&mut self, topics: Vec<H256>, data: Vec<u8>) {
@@ -615,12 +686,19 @@ mod tests {
 			16_384
 		}
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
-			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.ref_time().into())
+			BalanceOf::<Self::T>::from(1312_u32)
+				.saturating_mul(weight.ref_time().into())
+				.saturating_add(
+					BalanceOf::<Self::T>::from(103_u32).saturating_mul(weight.proof_size()),
+				)
 		}
 		fn schedule(&self) -> &Schedule<Self::T> {
 			&self.schedule
 		}
-		fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
+		fn gas_meter(&self) -> &GasMeter<Self::T> {
+			&self.gas_meter
+		}
+		fn gas_meter_mut(&mut self) -> &mut GasMeter<Self::T> {
 			&mut self.gas_meter
 		}
 		fn append_debug_buffer(&mut self, msg: &str) -> bool {
@@ -642,6 +720,10 @@ mod tests {
 			self.ecdsa_recover.borrow_mut().push((*signature, *message_hash));
 			Ok([3; 33])
 		}
+		fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool {
+			self.sr25519_verify.borrow_mut().push((*signature, message.to_vec(), *pub_key));
+			true
+		}
 		fn contract_info(&mut self) -> &mut crate::ContractInfo<Self::T> {
 			unimplemented!()
 		}
@@ -656,6 +738,22 @@ mod tests {
 		}
 		fn nonce(&mut self) -> u64 {
 			995
+		}
+
+		fn add_delegate_dependency(
+			&mut self,
+			code: CodeHash<Self::T>,
+		) -> Result<(), DispatchError> {
+			self.delegate_dependencies.borrow_mut().insert(code);
+			Ok(())
+		}
+
+		fn remove_delegate_dependency(
+			&mut self,
+			code: &CodeHash<Self::T>,
+		) -> Result<(), DispatchError> {
+			self.delegate_dependencies.borrow_mut().remove(code);
+			Ok(())
 		}
 	}
 
@@ -673,16 +771,18 @@ mod tests {
 		type RuntimeConfig = <MockExt as Ext>::T;
 		RuntimeConfig::set_unstable_interface(unstable_interface);
 		let wasm = wat::parse_str(wat).unwrap();
-		let schedule = crate::Schedule::default();
 		let executable = if skip_checks {
-			PrefabWasmModule::<RuntimeConfig>::from_code_unchecked(wasm, &schedule, ALICE)?
-		} else {
-			PrefabWasmModule::<RuntimeConfig>::from_code(
+			WasmBlob::<RuntimeConfig>::from_code_unchecked(
 				wasm,
-				&schedule,
+				ext.borrow_mut().schedule(),
 				ALICE,
-				Determinism::Deterministic,
-				TryInstantiate::Instantiate,
+			)?
+		} else {
+			WasmBlob::<RuntimeConfig>::from_code(
+				wasm,
+				ext.borrow_mut().schedule(),
+				ALICE,
+				Determinism::Enforced,
 			)
 			.map_err(|err| err.0)?
 		};
@@ -1071,14 +1171,14 @@ mod tests {
 "#;
 
 		let mut ext = MockExt::default();
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -1349,6 +1449,49 @@ mod tests {
 		);
 	}
 
+	#[test]
+	fn contract_sr25519() {
+		const CODE_SR25519: &str = r#"
+(module
+	(import "seal0" "sr25519_verify" (func $sr25519_verify (param i32 i32 i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(drop
+			(call $sr25519_verify
+				(i32.const 0) ;; Pointer to signature.
+				(i32.const 64) ;; Pointer to public key.
+				(i32.const 16) ;; message length.
+				(i32.const 96) ;; Pointer to message.
+			)
+		)
+	)
+	(func (export "deploy"))
+
+	;; Signature (64 bytes)
+	(data (i32.const 0)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+
+	;;  public key (32 bytes)
+	(data (i32.const 64)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+
+	;;  message. (16 bytes)
+	(data (i32.const 96)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+)
+"#;
+		let mut mock_ext = MockExt::default();
+		assert_ok!(execute(&CODE_SR25519, vec![], &mut mock_ext));
+		assert_eq!(mock_ext.sr25519_verify.into_inner(), [([1; 64], [1; 16].to_vec(), [1; 32])]);
+	}
+
 	const CODE_GET_STORAGE: &str = r#"
 (module
 	(import "seal0" "seal_get_storage" (func $seal_get_storage (param i32 i32 i32) (result i32)))
@@ -1474,6 +1617,16 @@ mod tests {
 		assert_ok!(execute(CODE_CALLER, vec![], MockExt::default()));
 	}
 
+	#[test]
+	fn caller_traps_when_no_account_id() {
+		let mut ext = MockExt::default();
+		ext.caller = Origin::Root;
+		assert_eq!(
+			execute(CODE_CALLER, vec![], ext),
+			Err(ExecError { error: DispatchError::RootNotAllowed, origin: ErrorOrigin::Caller })
+		);
+	}
+
 	/// calls `seal_address` and compares the result with the constant (BOB's address part).
 	const CODE_ADDRESS: &str = r#"
 (module
@@ -1570,7 +1723,7 @@ mod tests {
 
 	const CODE_GAS_PRICE: &str = r#"
 (module
-	(import "seal0" "seal_weight_to_fee" (func $seal_weight_to_fee (param i64 i32 i32)))
+	(import "seal1" "weight_to_fee" (func $seal_weight_to_fee (param i64 i64 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1587,7 +1740,7 @@ mod tests {
 
 	(func (export "call")
 		;; This stores the gas price in the buffer
-		(call $seal_weight_to_fee (i64.const 2) (i32.const 0) (i32.const 32))
+		(call $seal_weight_to_fee (i64.const 2) (i64.const 1) (i32.const 0) (i32.const 32))
 
 		;; assert len == 8
 		(call $assert
@@ -1597,11 +1750,11 @@ mod tests {
 			)
 		)
 
-		;; assert that contents of the buffer is equal to the i64 value of 2 * 1312.
+		;; assert that contents of the buffer is equal to the i64 value of 2 * 1312 + 103 = 2727.
 		(call $assert
 			(i64.eq
 				(i64.load (i32.const 0))
-				(i64.const 2624)
+				(i64.const 2727)
 			)
 		)
 	)
@@ -1616,12 +1769,12 @@ mod tests {
 
 	const CODE_GAS_LEFT: &str = r#"
 (module
-	(import "seal0" "seal_gas_left" (func $seal_gas_left (param i32 i32)))
+	(import "seal1" "gas_left" (func $seal_gas_left (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; size of our buffer is 32 bytes
-	(data (i32.const 32) "\20")
+	;; Make output buffer size 20 bytes
+	(data (i32.const 20) "\14")
 
 	(func $assert (param i32)
 		(block $ok
@@ -1633,19 +1786,19 @@ mod tests {
 	)
 
 	(func (export "call")
-		;; This stores the gas left in the buffer
-		(call $seal_gas_left (i32.const 0) (i32.const 32))
+		;; This stores the weight left to the buffer
+		(call $seal_gas_left (i32.const 0) (i32.const 20))
 
-		;; assert len == 8
+		;; Assert len <= 16 (max encoded Weight len)
 		(call $assert
-			(i32.eq
-				(i32.load (i32.const 32))
-				(i32.const 8)
+			(i32.le_u
+				(i32.load (i32.const 20))
+				(i32.const 16)
 			)
 		)
 
-		;; return gas left
-		(call $seal_return (i32.const 0) (i32.const 0) (i32.const 8))
+		;; Return weight left and its encoded value len
+		(call $seal_return (i32.const 0) (i32.const 0) (i32.load (i32.const 20)))
 
 		(unreachable)
 	)
@@ -1660,11 +1813,22 @@ mod tests {
 
 		let output = execute(CODE_GAS_LEFT, vec![], &mut ext).unwrap();
 
-		let OldWeight(gas_left) = OldWeight::decode(&mut &*output.data).unwrap();
+		let weight_left = Weight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
-		// TODO: account for proof size weight
-		assert!(gas_left < gas_limit.ref_time(), "gas_left must be less than initial");
-		assert!(gas_left > actual_left.ref_time(), "gas_left must be greater than final");
+
+		assert!(weight_left.all_lt(gas_limit), "gas_left must be less than initial");
+		assert!(weight_left.all_gt(actual_left), "gas_left must be greater than final");
+	}
+
+	/// Test that [`frame_support::weights::OldWeight`] en/decodes the same as our
+	/// [`crate::OldWeight`].
+	#[test]
+	fn old_weight_decode() {
+		#![allow(deprecated)]
+		let sp = frame_support::weights::OldWeight(42).encode();
+		let our = crate::OldWeight::decode(&mut &*sp).unwrap();
+
+		assert_eq!(our, 42);
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
@@ -2008,7 +2172,7 @@ mod tests {
 			ExecReturnValue {
 				flags: ReturnFlags::empty(),
 				data: (
-					array_bytes::hex2array_unchecked::<32>(
+					array_bytes::hex2array_unchecked::<_, 32>(
 						"000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"
 					),
 					42u64,
@@ -2547,15 +2711,15 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2631,14 +2795,14 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2728,15 +2892,15 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2942,6 +3106,45 @@ mod tests {
 	}
 
 	#[test]
+	fn caller_is_root_works() {
+		const CODE_CALLER_IS_ROOT: &str = r#"
+;; This runs `caller_is_root` check on zero account address
+(module
+	(import "seal0" "caller_is_root" (func $caller_is_root (result i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; [0, 4) here the return code of the `caller_is_root` will be stored
+	;; we initialize it with non-zero value to be sure that it's being overwritten below
+	(data (i32.const 0) "\10\10\10\10")
+
+	(func (export "deploy"))
+
+	(func (export "call")
+		(i32.store
+			(i32.const 0)
+			(call $caller_is_root)
+		)
+		;; exit with success and take `caller_is_root` return code to the output buffer
+		(call $seal_return (i32.const 0) (i32.const 0) (i32.const 4))
+	)
+)
+"#;
+		// The default `caller` is ALICE. Therefore not root.
+		let output = execute(CODE_CALLER_IS_ROOT, vec![], MockExt::default()).unwrap();
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: 0u32.encode() },);
+
+		// The caller is forced to be root instead of using the default ALICE.
+		let output = execute(
+			CODE_CALLER_IS_ROOT,
+			vec![],
+			MockExt { caller: Origin::Root, ..MockExt::default() },
+		)
+		.unwrap();
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: 1u32.encode() },);
+	}
+
+	#[test]
 	fn set_code_hash() {
 		const CODE: &str = r#"
 (module
@@ -3050,6 +3253,8 @@ mod tests {
 		const CODE: &str = r#"
 (module
 	(import "seal0" "instantiation_nonce" (func $nonce (result i64)))
+	(import "env" "memory" (memory 1 1))
+
 	(func $assert (param i32)
 		(block $ok
 			(br_if $ok
@@ -3071,29 +3276,6 @@ mod tests {
 		execute(CODE, vec![], &mut mock_ext).unwrap();
 	}
 
-	/// Code with deprecated functions cannot be uploaded or instantiated. However, we
-	/// need to make sure that it still can be re-instrumented.
-	#[test]
-	fn can_reinstrument_deprecated() {
-		const CODE_RANDOM: &str = r#"
-(module
-	(import "seal0" "random" (func $seal_random (param i32 i32 i32 i32)))
-	(func (export "call"))
-	(func (export "deploy"))
-)
-	"#;
-		let wasm = wat::parse_str(CODE_RANDOM).unwrap();
-		let schedule = crate::Schedule::<Test>::default();
-		#[cfg(not(feature = "runtime-benchmarks"))]
-		assert_err!(execute(CODE_RANDOM, vec![], MockExt::default()), <Error<Test>>::CodeRejected);
-		self::prepare::reinstrument::<runtime::Env, Test>(
-			&wasm,
-			&schedule,
-			Determinism::Deterministic,
-		)
-		.unwrap();
-	}
-
 	/// This test check that an unstable interface cannot be deployed. In case of runtime
 	/// benchmarks we always allow unstable interfaces. This is why this test does not
 	/// work when this feature is enabled.
@@ -3103,6 +3285,8 @@ mod tests {
 		const CANNOT_DEPLOY_UNSTABLE: &str = r#"
 (module
 	(import "seal0" "reentrance_count" (func $reentrance_count (result i32)))
+	(import "env" "memory" (memory 1 1))
+
 	(func (export "call"))
 	(func (export "deploy"))
 )
@@ -3123,6 +3307,8 @@ mod tests {
 		const CODE_RANDOM_0: &str = r#"
 (module
 	(import "seal0" "seal_random" (func $seal_random (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
 	(func (export "call"))
 	(func (export "deploy"))
 )
@@ -3130,6 +3316,8 @@ mod tests {
 		const CODE_RANDOM_1: &str = r#"
 (module
 	(import "seal1" "seal_random" (func $seal_random (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
 	(func (export "call"))
 	(func (export "deploy"))
 )
@@ -3137,6 +3325,8 @@ mod tests {
 		const CODE_RANDOM_2: &str = r#"
 (module
 	(import "seal0" "random" (func $seal_random (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
 	(func (export "call"))
 	(func (export "deploy"))
 )
@@ -3144,6 +3334,8 @@ mod tests {
 		const CODE_RANDOM_3: &str = r#"
 (module
 	(import "seal1" "random" (func $seal_random (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
 	(func (export "call"))
 	(func (export "deploy"))
 )
@@ -3188,5 +3380,40 @@ mod tests {
 			execute(CODE_RANDOM_3, vec![], MockExt::default()),
 			<Error<Test>>::CodeRejected,
 		);
+	}
+
+	#[test]
+	fn add_remove_delegate_dependency() {
+		const CODE_ADD_REMOVE_DELEGATE_DEPENDENCY: &str = r#"
+(module
+	(import "seal0" "add_delegate_dependency" (func $add_delegate_dependency (param i32)))
+	(import "seal0" "remove_delegate_dependency" (func $remove_delegate_dependency (param i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(call $add_delegate_dependency (i32.const 0))
+		(call $add_delegate_dependency (i32.const 32))
+		(call $remove_delegate_dependency (i32.const 32))
+	)
+	(func (export "deploy"))
+
+	;;  hash1 (32 bytes)
+	(data (i32.const 0)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+
+	;;  hash2 (32 bytes)
+	(data (i32.const 32)
+		"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
+		"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
+	)
+)
+"#;
+		let mut mock_ext = MockExt::default();
+		assert_ok!(execute(&CODE_ADD_REMOVE_DELEGATE_DEPENDENCY, vec![], &mut mock_ext));
+		let delegate_dependencies: Vec<_> =
+			mock_ext.delegate_dependencies.into_inner().into_iter().collect();
+		assert_eq!(delegate_dependencies.len(), 1);
+		assert_eq!(delegate_dependencies[0].as_bytes(), [1; 32]);
 	}
 }

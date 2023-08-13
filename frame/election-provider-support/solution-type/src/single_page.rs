@@ -40,7 +40,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		let name = vote_field(1);
 		// NOTE: we use the visibility of the struct for the fields as well.. could be made better.
 		quote!(
-			#vis #name: _feps::sp_std::prelude::Vec<(#voter_type, #target_type)>,
+			#vis #name: _fepsp::sp_std::prelude::Vec<(#voter_type, #target_type)>,
 		)
 	};
 
@@ -49,7 +49,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 			let field_name = vote_field(c);
 			let array_len = c - 1;
 			quote!(
-				#vis #field_name: _feps::sp_std::prelude::Vec<(
+				#vis #field_name: _fepsp::sp_std::prelude::Vec<(
 					#voter_type,
 					[(#target_type, #weight_type); #array_len],
 					#target_type
@@ -84,9 +84,9 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 			Eq,
 			Clone,
 			Debug,
-			_feps::codec::Encode,
-			_feps::codec::Decode,
-			_feps::scale_info::TypeInfo,
+			_fepsp::codec::Encode,
+			_fepsp::codec::Decode,
+			_fepsp::scale_info::TypeInfo,
 		)])
 	};
 
@@ -102,7 +102,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		#derives_and_maybe_compact_encoding
 		#vis struct #ident { #single #rest }
 
-		use _feps::__OrInvalidIndex;
+		use _fepsp::__OrInvalidIndex;
 		impl _feps::NposSolution for #ident {
 			const LIMIT: usize = #count;
 			type VoterIndex = #voter_type;
@@ -147,8 +147,8 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 				self,
 				voter_at: impl Fn(Self::VoterIndex) -> Option<A>,
 				target_at: impl Fn(Self::TargetIndex) -> Option<A>,
-			) -> Result<_feps::sp_std::prelude::Vec<_feps::Assignment<A, #weight_type>>, _feps::Error> {
-				let mut #assignment_name: _feps::sp_std::prelude::Vec<_feps::Assignment<A, #weight_type>> = Default::default();
+			) -> Result<_fepsp::sp_std::prelude::Vec<_feps::Assignment<A, #weight_type>>, _feps::Error> {
+				let mut #assignment_name: _fepsp::sp_std::prelude::Vec<_feps::Assignment<A, #weight_type>> = Default::default();
 				#into_impl
 				Ok(#assignment_name)
 			}
@@ -165,10 +165,10 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 				all_edges
 			}
 
-			fn unique_targets(&self) -> _feps::sp_std::prelude::Vec<Self::TargetIndex> {
+			fn unique_targets(&self) -> _fepsp::sp_std::prelude::Vec<Self::TargetIndex> {
 				// NOTE: this implementation returns the targets sorted, but we don't use it yet per
 				// se, nor is the API enforcing it.
-				use _feps::sp_std::collections::btree_set::BTreeSet;
+				use _fepsp::sp_std::collections::btree_set::BTreeSet;
 				let mut all_targets: BTreeSet<Self::TargetIndex> = BTreeSet::new();
 				let mut maybe_insert_target = |t: Self::TargetIndex| {
 					all_targets.insert(t);
@@ -185,10 +185,10 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 			<#ident as _feps::NposSolution>::TargetIndex,
 			<#ident as _feps::NposSolution>::Accuracy,
 		>;
-		impl _feps::codec::MaxEncodedLen for #ident {
+		impl _fepsp::codec::MaxEncodedLen for #ident {
 			fn max_encoded_len() -> usize {
 				use frame_support::traits::Get;
-				use _feps::codec::Encode;
+				use _fepsp::codec::Encode;
 				let s: u32 = #max_voters::get();
 				let max_element_size =
 					// the first voter..
@@ -202,11 +202,11 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 				// The assumption is that it contains #count-1 empty elements
 				// and then last element with full size
 				#count
-					.saturating_mul(_feps::codec::Compact(0u32).encoded_size())
+					.saturating_mul(_fepsp::codec::Compact(0u32).encoded_size())
 					.saturating_add((s as usize).saturating_mul(max_element_size))
 			}
 		}
-		impl<'a> _feps::sp_std::convert::TryFrom<&'a [__IndexAssignment]> for #ident {
+		impl<'a> _fepsp::sp_std::convert::TryFrom<&'a [__IndexAssignment]> for #ident {
 			type Error = _feps::Error;
 			fn try_from(index_assignments: &'a [__IndexAssignment]) -> Result<Self, Self::Error> {
 				let mut #struct_name =  #ident::default();
@@ -357,18 +357,18 @@ pub(crate) fn into_impl(
 					let mut inners_parsed = inners
 						.iter()
 						.map(|(ref t_idx, p)| {
-							sum = _feps::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
+							sum = _fepsp::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
 							let target = target_at(*t_idx).or_invalid_index()?;
 							Ok((target, *p))
 						})
-						.collect::<Result<_feps::sp_std::prelude::Vec<(A, #per_thing)>, _feps::Error>>()?;
+						.collect::<Result<_fepsp::sp_std::prelude::Vec<(A, #per_thing)>, _feps::Error>>()?;
 
 					if sum >= #per_thing::one() {
 						return Err(_feps::Error::SolutionWeightOverflow);
 					}
 
 					// defensive only. Since Percent doesn't have `Sub`.
-					let p_last = _feps::sp_arithmetic::traits::Saturating::saturating_sub(
+					let p_last = _fepsp::sp_arithmetic::traits::Saturating::saturating_sub(
 						#per_thing::one(),
 						sum,
 					);

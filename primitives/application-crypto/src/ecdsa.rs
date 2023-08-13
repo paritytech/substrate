@@ -24,13 +24,7 @@ use sp_std::vec::Vec;
 pub use sp_core::ecdsa::*;
 
 mod app {
-	use sp_core::testing::ECDSA;
-
-	crate::app_crypto!(super, ECDSA);
-
-	impl crate::traits::BoundToRuntimeAppPublic for Public {
-		type Public = Self;
-	}
+	crate::app_crypto!(super, sp_core::testing::ECDSA);
 }
 
 #[cfg(feature = "full_crypto")]

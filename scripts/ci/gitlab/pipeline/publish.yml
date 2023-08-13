@@ -19,7 +19,7 @@
   script:
     - test "$DOCKER_USER" -a "$DOCKER_PASS" ||
       ( echo "no docker credentials provided"; exit 1 )
-    - buildah bud
+    - $BUILDAH_COMMAND build
       --format=docker
       --build-arg VCS_REF="${CI_COMMIT_SHA}"
       --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
@@ -29,9 +29,9 @@
       --file "$DOCKERFILE" .
     - echo "$DOCKER_PASS" |
       buildah login --username "$DOCKER_USER" --password-stdin docker.io
-    - buildah info
-    - buildah push --format=v2s2 "$IMAGE_NAME:$VERSION"
-    - buildah push --format=v2s2 "$IMAGE_NAME:latest"
+    - $BUILDAH_COMMAND info
+    - $BUILDAH_COMMAND push --format=v2s2 "$IMAGE_NAME:$VERSION"
+    - $BUILDAH_COMMAND push --format=v2s2 "$IMAGE_NAME:latest"
   after_script:
     - buildah logout --all
     - echo "SUBSTRATE_IMAGE_NAME=${IMAGE_NAME}" | tee -a ./artifacts/$PRODUCT/build.env
@@ -52,7 +52,6 @@
   stage: publish
   extends:
     - .kubernetes-env
-    - .publish-refs
   variables:
     CI_IMAGE: paritytech/dockerhub-description
     DOCKERHUB_REPOSITORY: parity/$PRODUCT
@@ -60,9 +59,11 @@
     DOCKER_PASSWORD: $Docker_Hub_Pass_Parity
     README_FILEPATH: $CI_PROJECT_DIR/scripts/ci/docker/$PRODUCT.Dockerfile.README.md
   rules:
-    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
       changes:
         - scripts/ci/docker/$PRODUCT.Dockerfile.README.md
+  before_script:
+    - echo
   script:
     - cd / && sh entrypoint.sh
 
@@ -253,8 +254,8 @@ publish-crates-manual:
 check-crate-publishing:
   stage: publish
   extends:
-    - .test-refs
     - .crates-publishing-template
+    - .crates-publishing-pipeline
   # When lots of crates are taken into account (for example on master where all crates are tested)
   # the job might take a long time, as evidenced by:
   # https://gitlab.parity.io/parity/mirrors/substrate/-/jobs/2269364

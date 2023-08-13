@@ -38,7 +38,6 @@ pub struct BuildSpecCmd {
 	pub raw: bool,
 
 	/// Disable adding the default bootnode to the specification.
-	///
 	/// By default the `/ip4/127.0.0.1/tcp/30333/p2p/NODE_PEER_ID` bootnode is added to the
 	/// specification when no bootnode exists.
 	#[arg(long)]

@@ -24,16 +24,15 @@ use crate::{
 	request_responses::{IfDisconnected, RequestFailure},
 	service::signature::Signature,
 	types::ProtocolName,
+	ReputationChange,
 };
 
 use futures::{channel::oneshot, Stream};
 use libp2p::{Multiaddr, PeerId};
 
-use sc_peerset::ReputationChange;
-
 use std::{collections::HashSet, future::Future, pin::Pin, sync::Arc};
 
-pub use libp2p::{identity::error::SigningError, kad::record::Key as KademliaKey};
+pub use libp2p::{identity::SigningError, kad::record::Key as KademliaKey};
 
 /// Signer with network identity
 pub trait NetworkSigner {
@@ -156,10 +155,6 @@ pub trait NetworkPeers {
 	/// Disconnect from a node as soon as possible.
 	///
 	/// This triggers the same effects as if the connection had closed itself spontaneously.
-	///
-	/// See also [`NetworkPeers::remove_from_peers_set`], which has the same effect but also
-	/// prevents the local node from re-establishing an outgoing substream to this peer until it
-	/// is added again.
 	fn disconnect_peer(&self, who: PeerId, protocol: ProtocolName);
 
 	/// Connect to unreserved peers and allow unreserved peers to connect for syncing purposes.
@@ -193,7 +188,8 @@ pub trait NetworkPeers {
 	/// this step if the peer set is in reserved only mode.
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
-	/// invalid peer ID (which includes the local peer ID).
+	/// invalid peer ID (which includes the local peer ID), or if `protocol` does not
+	/// refer to a known protocol.
 	fn set_reserved_peers(
 		&self,
 		protocol: ProtocolName,
@@ -206,7 +202,8 @@ pub trait NetworkPeers {
 	/// consist of only `/p2p/<peerid>`.
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
-	/// invalid peer ID (which includes the local peer ID).
+	/// invalid peer ID (which includes the local peer ID), or if `protocol` does not
+	/// refer to a know protocol.
 	fn add_peers_to_reserved_set(
 		&self,
 		protocol: ProtocolName,
@@ -214,27 +211,13 @@ pub trait NetworkPeers {
 	) -> Result<(), String>;
 
 	/// Remove peers from a peer set.
-	fn remove_peers_from_reserved_set(&self, protocol: ProtocolName, peers: Vec<PeerId>);
-
-	/// Add a peer to a set of peers.
 	///
-	/// If the set has slots available, it will try to open a substream with this peer.
-	///
-	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
-	/// consist of only `/p2p/<peerid>`.
-	///
-	/// Returns an `Err` if one of the given addresses is invalid or contains an
-	/// invalid peer ID (which includes the local peer ID).
-	fn add_to_peers_set(
+	/// Returns `Err` if `protocol` does not refer to a known protocol.
+	fn remove_peers_from_reserved_set(
 		&self,
 		protocol: ProtocolName,
-		peers: HashSet<Multiaddr>,
+		peers: Vec<PeerId>,
 	) -> Result<(), String>;
-
-	/// Remove peers from a peer set.
-	///
-	/// If we currently have an open substream with this peer, it will soon be closed.
-	fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>);
 
 	/// Returns the number of peers in the sync peer set we're connected to.
 	fn sync_num_connected(&self) -> usize;
@@ -259,6 +242,10 @@ where
 	}
 
 	fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
+		// TODO: when we get rid of `Peerset`, we'll likely need to add some kind of async
+		// interface to `PeerStore`, otherwise we'll have trouble calling functions accepting
+		// `&mut self` via `Arc`.
+		// See https://github.com/paritytech/substrate/issues/14170.
 		T::report_peer(self, who, cost_benefit)
 	}
 
@@ -298,20 +285,12 @@ where
 		T::add_peers_to_reserved_set(self, protocol, peers)
 	}
 
-	fn remove_peers_from_reserved_set(&self, protocol: ProtocolName, peers: Vec<PeerId>) {
-		T::remove_peers_from_reserved_set(self, protocol, peers)
-	}
-
-	fn add_to_peers_set(
+	fn remove_peers_from_reserved_set(
 		&self,
 		protocol: ProtocolName,
-		peers: HashSet<Multiaddr>,
+		peers: Vec<PeerId>,
 	) -> Result<(), String> {
-		T::add_to_peers_set(self, protocol, peers)
-	}
-
-	fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>) {
-		T::remove_from_peers_set(self, protocol, peers)
+		T::remove_peers_from_reserved_set(self, protocol, peers)
 	}
 
 	fn sync_num_connected(&self) -> usize {
@@ -435,9 +414,9 @@ pub trait NetworkNotification {
 	/// a receiver. With a `NotificationSender` at hand, sending a notification is done in two
 	/// steps:
 	///
-	/// 1.  [`NotificationSender::ready`] is used to wait for the sender to become ready
+	/// 1. [`NotificationSender::ready`] is used to wait for the sender to become ready
 	/// for another notification, yielding a [`NotificationSenderReady`] token.
-	/// 2.  [`NotificationSenderReady::send`] enqueues the notification for sending. This operation
+	/// 2. [`NotificationSenderReady::send`] enqueues the notification for sending. This operation
 	/// can only fail if the underlying notification substream or connection has suddenly closed.
 	///
 	/// An error is returned by [`NotificationSenderReady::send`] if there exists no open

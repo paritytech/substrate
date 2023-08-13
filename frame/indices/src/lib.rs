@@ -75,7 +75,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -263,19 +263,13 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, T::AccountIndex, (T::AccountId, BalanceOf<T>, bool)>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub indices: Vec<(T::AccountIndex, T::AccountId)>,
 	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { indices: Default::default() }
-		}
-	}
-
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			for (a, b) in &self.indices {
 				<Accounts<T>>::insert(a, (b, <BalanceOf<T>>::zero(), false))

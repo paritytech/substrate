@@ -18,8 +18,9 @@
 
 use crate::{
 	communication::{
-		gossip::{topic, GossipValidator, GossipVoteFilter},
-		request_response::outgoing_requests_engine::OnDemandJustificationsEngine,
+		gossip::{proofs_topic, votes_topic, GossipFilterCfg, GossipMessage, GossipValidator},
+		peers::PeerReport,
+		request_response::outgoing_requests_engine::{OnDemandJustificationsEngine, ResponseInfo},
 	},
 	error::Error,
 	justification::BeefyVersionedFinalityProof,
@@ -29,20 +30,20 @@ use crate::{
 	round::{Rounds, VoteImportResult},
 	BeefyVoterLinks, LOG_TARGET,
 };
-use codec::{Codec, Decode, Encode};
+use codec::{Codec, Decode, DecodeAll, Encode};
 use futures::{stream::Fuse, FutureExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn};
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, HeaderBackend};
 use sc_network_gossip::GossipEngine;
-use sc_utils::notification::NotificationReceiver;
+use sc_utils::{mpsc::TracingUnboundedReceiver, notification::NotificationReceiver};
 use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_consensus::SyncOracle;
 use sp_consensus_beefy::{
 	check_equivocation_proof,
-	crypto::{AuthorityId, Signature},
+	ecdsa_crypto::{AuthorityId, Signature},
 	BeefyApi, Commitment, ConsensusLog, EquivocationProof, PayloadProvider, ValidatorSet,
-	ValidatorSetId, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
+	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
@@ -68,17 +69,20 @@ pub(crate) enum RoundAction {
 /// Responsible for the voting strategy.
 /// It chooses which incoming votes to accept and which votes to generate.
 /// Keeps track of voting seen for current and future rounds.
+///
+/// Note: this is part of `PersistedState` so any changes here should also bump
+/// aux-db schema version.
 #[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct VoterOracle<B: Block> {
 	/// Queue of known sessions. Keeps track of voting rounds (block numbers) within each session.
 	///
 	/// There are three voter states coresponding to three queue states:
 	/// 1. voter uninitialized: queue empty,
-	/// 2. up-to-date - all mandatory blocks leading up to current GRANDPA finalized:
-	///    queue has ONE element, the 'current session' where `mandatory_done == true`,
+	/// 2. up-to-date - all mandatory blocks leading up to current GRANDPA finalized: queue has ONE
+	///    element, the 'current session' where `mandatory_done == true`,
 	/// 3. lagging behind GRANDPA: queue has [1, N] elements, where all `mandatory_done == false`.
-	///    In this state, everytime a session gets its mandatory block BEEFY finalized, it's
-	///    popped off the queue, eventually getting to state `2. up-to-date`.
+	///    In this state, everytime a session gets its mandatory block BEEFY finalized, it's popped
+	///    off the queue, eventually getting to state `2. up-to-date`.
 	sessions: VecDeque<Rounds<B>>,
 	/// Min delta in block numbers between two blocks, BEEFY should vote on.
 	min_block_delta: u32,
@@ -158,8 +162,8 @@ impl<B: Block> VoterOracle<B> {
 		self.sessions.front_mut().ok_or(Error::UninitSession)
 	}
 
-	fn current_validator_set_id(&self) -> Result<ValidatorSetId, Error> {
-		self.active_rounds().map(|r| r.validator_set_id())
+	fn current_validator_set(&self) -> Result<&ValidatorSet<AuthorityId>, Error> {
+		self.active_rounds().map(|r| r.validator_set())
 	}
 
 	// Prune the sessions queue to keep the Oracle in one of the expected three states.
@@ -255,20 +259,9 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, P, R, S> {
-	pub backend: Arc<BE>,
-	pub payload_provider: P,
-	pub runtime: Arc<R>,
-	pub sync: Arc<S>,
-	pub key_store: BeefyKeystore,
-	pub gossip_engine: GossipEngine<B>,
-	pub gossip_validator: Arc<GossipValidator<B>>,
-	pub on_demand_justifications: OnDemandJustificationsEngine<B>,
-	pub links: BeefyVoterLinks<B>,
-	pub metrics: Option<VoterMetrics>,
-	pub persisted_state: PersistedState<B>,
-}
-
+/// BEEFY voter state persisted in aux DB.
+///
+/// Note: Any changes here should also bump aux-db schema version.
 #[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct PersistedState<B: Block> {
 	/// Best block we voted on.
@@ -276,6 +269,8 @@ pub(crate) struct PersistedState<B: Block> {
 	/// Chooses which incoming votes to accept and which votes to generate.
 	/// Keeps track of voting seen for current and future rounds.
 	voting_oracle: VoterOracle<B>,
+	/// Pallet-beefy genesis block - block number when BEEFY consensus started for this chain.
+	pallet_genesis: NumberFor<B>,
 }
 
 impl<B: Block> PersistedState<B> {
@@ -284,9 +279,19 @@ impl<B: Block> PersistedState<B> {
 		best_beefy: NumberFor<B>,
 		sessions: VecDeque<Rounds<B>>,
 		min_block_delta: u32,
+		pallet_genesis: NumberFor<B>,
 	) -> Option<Self> {
-		VoterOracle::checked_new(sessions, min_block_delta, grandpa_header, best_beefy)
-			.map(|voting_oracle| PersistedState { best_voted: Zero::zero(), voting_oracle })
+		VoterOracle::checked_new(sessions, min_block_delta, grandpa_header, best_beefy).map(
+			|voting_oracle| PersistedState {
+				best_voted: Zero::zero(),
+				voting_oracle,
+				pallet_genesis,
+			},
+		)
+	}
+
+	pub fn pallet_genesis(&self) -> NumberFor<B> {
+		self.pallet_genesis
 	}
 
 	pub(crate) fn set_min_block_delta(&mut self, min_block_delta: u32) {
@@ -301,38 +306,39 @@ impl<B: Block> PersistedState<B> {
 		self.voting_oracle.best_grandpa_block_header = best_grandpa;
 	}
 
-	pub(crate) fn current_gossip_filter(&self) -> Result<GossipVoteFilter<B>, Error> {
+	pub(crate) fn gossip_filter_config(&self) -> Result<GossipFilterCfg<B>, Error> {
 		let (start, end) = self.voting_oracle.accepted_interval()?;
-		let validator_set_id = self.voting_oracle.current_validator_set_id()?;
-		Ok(GossipVoteFilter { start, end, validator_set_id })
+		let validator_set = self.voting_oracle.current_validator_set()?;
+		Ok(GossipFilterCfg { start, end, validator_set })
 	}
 }
 
 /// A BEEFY worker plays the BEEFY protocol
 pub(crate) struct BeefyWorker<B: Block, BE, P, RuntimeApi, S> {
 	// utilities
-	backend: Arc<BE>,
-	payload_provider: P,
-	runtime: Arc<RuntimeApi>,
-	sync: Arc<S>,
-	key_store: BeefyKeystore,
+	pub backend: Arc<BE>,
+	pub payload_provider: P,
+	pub runtime: Arc<RuntimeApi>,
+	pub sync: Arc<S>,
+	pub key_store: BeefyKeystore,
 
 	// communication
-	gossip_engine: GossipEngine<B>,
-	gossip_validator: Arc<GossipValidator<B>>,
-	on_demand_justifications: OnDemandJustificationsEngine<B>,
+	pub gossip_engine: GossipEngine<B>,
+	pub gossip_validator: Arc<GossipValidator<B>>,
+	pub gossip_report_stream: TracingUnboundedReceiver<PeerReport>,
+	pub on_demand_justifications: OnDemandJustificationsEngine<B>,
 
 	// channels
 	/// Links between the block importer, the background voter and the RPC layer.
-	links: BeefyVoterLinks<B>,
+	pub links: BeefyVoterLinks<B>,
 
 	// voter state
 	/// BEEFY client metrics.
-	metrics: Option<VoterMetrics>,
+	pub metrics: Option<VoterMetrics>,
 	/// Buffer holding justifications for future processing.
-	pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>>,
+	pub pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>>,
 	/// Persisted voter state.
-	persisted_state: PersistedState<B>,
+	pub persisted_state: PersistedState<B>,
 }
 
 impl<B, BE, P, R, S> BeefyWorker<B, BE, P, R, S>
@@ -342,45 +348,8 @@ where
 	P: PayloadProvider<B>,
 	S: SyncOracle,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+	R::Api: BeefyApi<B, AuthorityId>,
 {
-	/// Return a new BEEFY worker instance.
-	///
-	/// Note that a BEEFY worker is only fully functional if a corresponding
-	/// BEEFY pallet has been deployed on-chain.
-	///
-	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, R, S>) -> Self {
-		let WorkerParams {
-			backend,
-			payload_provider,
-			runtime,
-			key_store,
-			sync,
-			gossip_engine,
-			gossip_validator,
-			on_demand_justifications,
-			links,
-			metrics,
-			persisted_state,
-		} = worker_params;
-
-		BeefyWorker {
-			backend,
-			payload_provider,
-			runtime,
-			sync,
-			key_store,
-			gossip_engine,
-			gossip_validator,
-			on_demand_justifications,
-			links,
-			metrics,
-			pending_justifications: BTreeMap::new(),
-			persisted_state,
-		}
-	}
-
 	fn best_grandpa_block(&self) -> NumberFor<B> {
 		*self.persisted_state.voting_oracle.best_grandpa_block_header.number()
 	}
@@ -460,7 +429,10 @@ where
 		);
 	}
 
-	fn handle_finality_notification(&mut self, notification: &FinalityNotification<B>) {
+	fn handle_finality_notification(
+		&mut self,
+		notification: &FinalityNotification<B>,
+	) -> Result<(), Error> {
 		debug!(
 			target: LOG_TARGET,
 			"🥩 Finality notification: header {:?} tree_route {:?}",
@@ -468,6 +440,18 @@ where
 			notification.tree_route,
 		);
 		let header = &notification.header;
+
+		self.runtime
+			.runtime_api()
+			.beefy_genesis(header.hash())
+			.ok()
+			.flatten()
+			.filter(|genesis| *genesis == self.persisted_state.pallet_genesis)
+			.ok_or_else(|| {
+				let err = Error::ConsensusReset;
+				error!(target: LOG_TARGET, "🥩 Error: {}", err);
+				err
+			})?;
 
 		if *header.number() > self.best_grandpa_block() {
 			// update best GRANDPA finalized block we have seen
@@ -494,12 +478,14 @@ where
 			// Update gossip validator votes filter.
 			if let Err(e) = self
 				.persisted_state
-				.current_gossip_filter()
+				.gossip_filter_config()
 				.map(|filter| self.gossip_validator.update_filter(filter))
 			{
 				error!(target: LOG_TARGET, "🥩 Voter error: {:?}", e);
 			}
 		}
+
+		Ok(())
 	}
 
 	/// Based on [VoterOracle] this vote is either processed here or discarded.
@@ -509,7 +495,12 @@ where
 	) -> Result<(), Error> {
 		let block_num = vote.commitment.block_number;
 		match self.voting_oracle().triage_round(block_num)? {
-			RoundAction::Process => self.handle_vote(vote)?,
+			RoundAction::Process =>
+				if let Some(finality_proof) = self.handle_vote(vote)? {
+					let gossip_proof = GossipMessage::<B>::FinalityProof(finality_proof);
+					let encoded_proof = gossip_proof.encode();
+					self.gossip_engine.gossip_message(proofs_topic::<B>(), encoded_proof, true);
+				},
 			RoundAction::Drop => metric_inc!(self, beefy_stale_votes),
 			RoundAction::Enqueue => error!(target: LOG_TARGET, "🥩 unexpected vote: {:?}.", vote),
 		};
@@ -554,7 +545,7 @@ where
 	fn handle_vote(
 		&mut self,
 		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
-	) -> Result<(), Error> {
+	) -> Result<Option<BeefyVersionedFinalityProof<B>>, Error> {
 		let rounds = self.persisted_state.voting_oracle.active_rounds_mut()?;
 
 		let block_number = vote.commitment.block_number;
@@ -567,8 +558,9 @@ where
 				);
 				// We created the `finality_proof` and know to be valid.
 				// New state is persisted after finalization.
-				self.finalize(finality_proof)?;
+				self.finalize(finality_proof.clone())?;
 				metric_inc!(self, beefy_good_votes_processed);
+				return Ok(Some(finality_proof))
 			},
 			VoteImportResult::Ok => {
 				// Persist state after handling mandatory block vote.
@@ -590,7 +582,7 @@ where
 			VoteImportResult::Invalid => metric_inc!(self, beefy_invalid_votes),
 			VoteImportResult::Stale => metric_inc!(self, beefy_stale_votes),
 		};
-		Ok(())
+		Ok(None)
 	}
 
 	/// Provide BEEFY finality for block based on `finality_proof`:
@@ -643,7 +635,7 @@ where
 
 		// Update gossip validator votes filter.
 		self.persisted_state
-			.current_gossip_filter()
+			.gossip_filter_config()
 			.map(|filter| self.gossip_validator.update_filter(filter))?;
 		Ok(())
 	}
@@ -758,19 +750,19 @@ where
 			BeefyKeystore::verify(&authority_id, &signature, &encoded_commitment)
 		);
 
-		let message = VoteMessage { commitment, id: authority_id, signature };
-
-		let encoded_message = message.encode();
-
-		metric_inc!(self, beefy_votes_sent);
-
-		debug!(target: LOG_TARGET, "🥩 Sent vote message: {:?}", message);
-
-		if let Err(err) = self.handle_vote(message) {
+		let vote = VoteMessage { commitment, id: authority_id, signature };
+		if let Some(finality_proof) = self.handle_vote(vote.clone()).map_err(|err| {
 			error!(target: LOG_TARGET, "🥩 Error handling self vote: {}", err);
+			err
+		})? {
+			let encoded_proof = GossipMessage::<B>::FinalityProof(finality_proof).encode();
+			self.gossip_engine.gossip_message(proofs_topic::<B>(), encoded_proof, true);
+		} else {
+			metric_inc!(self, beefy_votes_sent);
+			debug!(target: LOG_TARGET, "🥩 Sent vote message: {:?}", vote);
+			let encoded_vote = GossipMessage::<B>::Vote(vote).encode();
+			self.gossip_engine.gossip_message(votes_topic::<B>(), encoded_vote, false);
 		}
-
-		self.gossip_engine.gossip_message(topic::<B>(), encoded_message, false);
 
 		// Persist state after vote to avoid double voting in case of voter restarts.
 		self.persisted_state.best_voted = target_number;
@@ -816,14 +808,25 @@ where
 
 		let mut votes = Box::pin(
 			self.gossip_engine
-				.messages_for(topic::<B>())
+				.messages_for(votes_topic::<B>())
 				.filter_map(|notification| async move {
-					let vote = VoteMessage::<NumberFor<B>, AuthorityId, Signature>::decode(
-						&mut &notification.message[..],
-					)
-					.ok();
+					let vote = GossipMessage::<B>::decode_all(&mut &notification.message[..])
+						.ok()
+						.and_then(|message| message.unwrap_vote());
 					trace!(target: LOG_TARGET, "🥩 Got vote message: {:?}", vote);
 					vote
+				})
+				.fuse(),
+		);
+		let mut gossip_proofs = Box::pin(
+			self.gossip_engine
+				.messages_for(proofs_topic::<B>())
+				.filter_map(|notification| async move {
+					let proof = GossipMessage::<B>::decode_all(&mut &notification.message[..])
+						.ok()
+						.and_then(|message| message.unwrap_finality_proof());
+					trace!(target: LOG_TARGET, "🥩 Got gossip proof message: {:?}", proof);
+					proof
 				})
 				.fuse(),
 		);
@@ -832,7 +835,12 @@ where
 			// Act on changed 'state'.
 			self.process_new_state();
 
+			// Mutable reference used to drive the gossip engine.
 			let mut gossip_engine = &mut self.gossip_engine;
+			// Use temp val and report after async section,
+			// to avoid having to Mutex-wrap `gossip_engine`.
+			let mut gossip_report: Option<PeerReport> = None;
+
 			// Wait for, and handle external events.
 			// The branches below only change 'state', actual voting happens afterwards,
 			// based on the new resulting 'state'.
@@ -840,9 +848,9 @@ where
 				// Use `select_biased!` to prioritize order below.
 				// Process finality notifications first since these drive the voter.
 				notification = finality_notifications.next() => {
-					if let Some(notification) = notification {
-						self.handle_finality_notification(&notification);
-					} else {
+					if notification.and_then(|notif| {
+						self.handle_finality_notification(&notif).ok()
+					}).is_none() {
 						error!(target: LOG_TARGET, "🥩 Finality stream terminated, closing worker.");
 						return;
 					}
@@ -853,11 +861,16 @@ where
 					return;
 				},
 				// Process incoming justifications as these can make some in-flight votes obsolete.
-				justif = self.on_demand_justifications.next().fuse() => {
-					if let Some(justif) = justif {
-						if let Err(err) = self.triage_incoming_justif(justif) {
-							debug!(target: LOG_TARGET, "🥩 {}", err);
-						}
+				response_info = self.on_demand_justifications.next().fuse() => {
+					match response_info {
+						ResponseInfo::ValidProof(justif, peer_report) => {
+							if let Err(err) = self.triage_incoming_justif(justif) {
+								debug!(target: LOG_TARGET, "🥩 {}", err);
+							}
+							gossip_report = Some(peer_report);
+						},
+						ResponseInfo::PeerReport(peer_report) => gossip_report = Some(peer_report),
+						ResponseInfo::Pending => (),
 					}
 				},
 				justif = block_import_justif.next() => {
@@ -872,6 +885,20 @@ where
 						return;
 					}
 				},
+				justif = gossip_proofs.next() => {
+					if let Some(justif) = justif {
+						// Gossiped justifications have already been verified by `GossipValidator`.
+						if let Err(err) = self.triage_incoming_justif(justif) {
+							debug!(target: LOG_TARGET, "🥩 {}", err);
+						}
+					} else {
+						error!(
+							target: LOG_TARGET,
+							"🥩 Finality proofs gossiping stream terminated, closing worker."
+						);
+						return;
+					}
+				},
 				// Finally process incoming votes.
 				vote = votes.next() => {
 					if let Some(vote) = vote {
@@ -880,10 +907,20 @@ where
 							debug!(target: LOG_TARGET, "🥩 {}", err);
 						}
 					} else {
-						error!(target: LOG_TARGET, "🥩 Votes gossiping stream terminated, closing worker.");
+						error!(
+							target: LOG_TARGET,
+							"🥩 Votes gossiping stream terminated, closing worker."
+						);
 						return;
 					}
 				},
+				// Process peer reports.
+				report = self.gossip_report_stream.next() => {
+					gossip_report = report;
+				},
+			}
+			if let Some(PeerReport { who, cost_benefit }) = gossip_report {
+				self.gossip_engine.report(who, cost_benefit);
 			}
 		}
 	}
@@ -1084,11 +1121,13 @@ pub(crate) mod tests {
 		};
 
 		let backend = peer.client().as_backend();
+		let beefy_genesis = 1;
 		let api = Arc::new(TestApi::with_validator_set(&genesis_validator_set));
 		let network = peer.network_service().clone();
 		let sync = peer.sync_service().clone();
 		let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
-		let gossip_validator = Arc::new(GossipValidator::new(known_peers.clone()));
+		let (gossip_validator, gossip_report_stream) = GossipValidator::new(known_peers.clone());
+		let gossip_validator = Arc::new(gossip_validator);
 		let gossip_engine = GossipEngine::new(
 			network.clone(),
 			sync.clone(),
@@ -1115,10 +1154,11 @@ pub(crate) mod tests {
 			Zero::zero(),
 			vec![Rounds::new(One::one(), genesis_validator_set)].into(),
 			min_block_delta,
+			beefy_genesis,
 		)
 		.unwrap();
 		let payload_provider = MmrRootProvider::new(api.clone());
-		let worker_params = crate::worker::WorkerParams {
+		BeefyWorker {
 			backend,
 			payload_provider,
 			runtime: api,
@@ -1126,12 +1166,13 @@ pub(crate) mod tests {
 			links,
 			gossip_engine,
 			gossip_validator,
+			gossip_report_stream,
 			metrics,
 			sync: Arc::new(sync),
 			on_demand_justifications,
+			pending_justifications: BTreeMap::new(),
 			persisted_state,
-		};
-		BeefyWorker::<_, _, _, _, _>::new(worker_params)
+		}
 	}
 
 	#[test]

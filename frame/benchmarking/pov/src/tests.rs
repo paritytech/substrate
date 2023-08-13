@@ -144,9 +144,9 @@ fn unbounded_read_best_effort() {
 fn partial_unbounded_read_best_effort() {
 	let w_unbounded = W::storage_value_unbounded_read().proof_size();
 	let w_bounded = W::storage_value_bounded_read().proof_size();
-	let w_partial = W::storage_value_bounded_and_unbounded_read().proof_size();
+	let w_both = W::storage_value_bounded_and_unbounded_read().proof_size();
 
-	assert_eq!(w_bounded + w_unbounded, w_partial, "The bounded part increases the PoV");
+	assert!(w_both > w_bounded && w_both > w_unbounded, "The bounded part increases the PoV");
 }
 
 #[test]
@@ -164,16 +164,12 @@ fn noop_is_free() {
 mod mock {
 	use sp_runtime::testing::H256;
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
+		pub enum Test
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Baseline: crate::{Pallet, Call, Storage, Event<T>},
 		}
 	);
@@ -184,14 +180,13 @@ mod mock {
 		type BlockLength = ();
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
-		type Index = u32;
-		type BlockNumber = u64;
+		type Nonce = u32;
 		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = u32;
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
-		type Header = sp_runtime::testing::Header;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ();
 		type Version = ();

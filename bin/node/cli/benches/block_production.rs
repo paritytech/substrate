@@ -21,7 +21,6 @@ use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughpu
 use kitchensink_runtime::{constants::currency::*, BalancesCall};
 use node_cli::service::{create_extrinsic, FullClient};
 use sc_block_builder::{BlockBuilderProvider, BuiltBlock, RecordProof};
-use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_consensus::{
 	block_import::{BlockImportParams, ForkChoiceStrategy},
 	BlockImport, StateAction,
@@ -56,9 +55,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 
 	let spec = Box::new(node_cli::chain_spec::development_config());
 
-	// NOTE: We enforce the use of the WASM runtime to benchmark block production using WASM.
-	let execution_strategy = sc_client_api::ExecutionStrategy::AlwaysWasm;
-
 	let config = Configuration {
 		impl_name: "BenchmarkImpl".into(),
 		impl_version: "1.0".into(),
@@ -69,7 +65,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore: KeystoreConfig::InMemory,
-		keystore_remote: Default::default(),
 		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
 		trie_cache_maximum_size: Some(64 * 1024 * 1024),
 		state_pruning: Some(PruningMode::ArchiveAll),
@@ -78,38 +73,30 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		wasm_method: WasmExecutionMethod::Compiled {
 			instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
 		},
-		execution_strategies: ExecutionStrategies {
-			syncing: execution_strategy,
-			importing: execution_strategy,
-			block_construction: execution_strategy,
-			offchain_worker: execution_strategy,
-			other: execution_strategy,
-		},
-		rpc_http: None,
-		rpc_ws: None,
-		rpc_ipc: None,
-		rpc_ws_max_connections: None,
+		rpc_addr: None,
+		rpc_max_connections: Default::default(),
 		rpc_cors: None,
 		rpc_methods: Default::default(),
-		rpc_max_payload: None,
-		rpc_max_request_size: None,
-		rpc_max_response_size: None,
-		rpc_id_provider: None,
-		rpc_max_subs_per_conn: None,
-		ws_max_out_buffer_capacity: None,
+		rpc_max_request_size: Default::default(),
+		rpc_max_response_size: Default::default(),
+		rpc_id_provider: Default::default(),
+		rpc_max_subs_per_conn: Default::default(),
+		rpc_port: 9944,
 		prometheus_config: None,
 		telemetry_endpoints: None,
 		default_heap_pages: None,
 		offchain_worker: OffchainWorkerConfig { enabled: true, indexing_enabled: false },
 		force_authoring: false,
 		disable_grandpa: false,
+		disable_beefy: false,
 		dev_key_seed: Some(Sr25519Keyring::Alice.to_seed()),
 		tracing_targets: None,
 		tracing_receiver: Default::default(),
 		max_runtime_instances: 8,
 		runtime_cache_size: 2,
 		announce_block: true,
-		base_path: Some(base_path),
+		data_path: base_path.path().into(),
+		base_path,
 		informant_output_format: Default::default(),
 		wasm_runtime_overrides: None,
 	};
@@ -162,7 +149,7 @@ fn prepare_benchmark(client: &FullClient) -> (usize, Vec<OpaqueExtrinsic>) {
 		let extrinsic: OpaqueExtrinsic = create_extrinsic(
 			client,
 			src.clone(),
-			BalancesCall::transfer { dest: dst.clone(), value: 1 * DOLLARS },
+			BalancesCall::transfer_allow_death { dest: dst.clone(), value: 1 * DOLLARS },
 			Some(nonce),
 		)
 		.into();

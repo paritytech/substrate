@@ -1,0 +1,19 @@
+error: expected one of: `for`, parentheses, `fn`, `unsafe`, `extern`, identifier, `::`, `<`, `dyn`, square brackets, `*`, `&`, `!`, `impl`, `_`, lifetime
+  --> tests/pallet_ui/call_weight_inherited_invalid3.rs:22:24
+   |
+22 |     #[pallet::call(weight(123))]
+   |                           ^^^
+
+error: expected one of: `for`, parentheses, `fn`, `unsafe`, `extern`, identifier, `::`, `<`, `dyn`, square brackets, `*`, `&`, `!`, `impl`, `_`, lifetime
+  --> tests/pallet_ui/call_weight_inherited_invalid3.rs:43:26
+   |
+43 |     #[pallet::call(weight = 123)]
+   |                             ^^^
+
+error: unused import: `frame_system::pallet_prelude::*`
+ --> tests/pallet_ui/call_weight_inherited_invalid3.rs:4:5
+  |
+4 | use frame_system::pallet_prelude::*;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `-D unused-imports` implied by `-D warnings`
