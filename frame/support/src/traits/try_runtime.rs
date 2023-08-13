@@ -19,11 +19,14 @@
 
 use super::StorageInstance;
 use crate::{
-	storage::types::{CountedStorageMapInstance, KeyGenerator, QueryKindTrait, Counter},
+	storage::types::{
+		CountedStorageMapInstance, CountedStorageNMapInstance, Counter, KeyGenerator,
+		QueryKindTrait,
+	},
 	traits::{PartialStorageInfoTrait, StorageInfo},
 	StorageHasher,
 };
-use codec::{Decode, FullCodec};
+use codec::{Decode, DecodeAll, FullCodec};
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_arithmetic::traits::AtLeast32BitUnsigned;
 use sp_core::Get;
@@ -87,7 +90,7 @@ fn decode_storage_info<V: Decode>(info: StorageInfo) -> Result<usize, &'static s
 		None => Ok(0),
 		Some(bytes) => {
 			let len = bytes.len();
-			let _ = <V as Decode>::decode(&mut bytes.as_ref()).map_err(|_| {
+			let _ = <V as DecodeAll>::decode_all(&mut bytes.as_ref()).map_err(|_| {
 				log::error!(target: crate::LOG_TARGET, "failed to decoded {:?}", info,);
 				"failed to decode value under existing key"
 			})?;
@@ -166,7 +169,7 @@ impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> TryDecodeEntireS
 {
 	fn try_decode_entire_state() -> Result<usize, &'static str> {
 		let (map_info, counter_info) = match &Self::partial_storage_info()[..] {
-			[a, b] => (a.clone(), b.clone()), // TODO better way?
+			[a, b] => (a.clone(), b.clone()),
 			_ => panic!("Counted map has two storage info items; qed"),
 		};
 		let mut decoded = decode_storage_info::<Counter>(counter_info)?;
@@ -220,9 +223,31 @@ where
 	fn try_decode_entire_state() -> Result<usize, &'static str> {
 		let info = Self::partial_storage_info()
 			.first()
-			.cloned() // TODO better way?
+			.cloned()
 			.expect("N-map has only one storage info; qed");
 		decode_storage_info::<Value>(info)
+	}
+}
+
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> TryDecodeEntireStorage
+	for crate::storage::types::CountedStorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+where
+	Prefix: CountedStorageNMapInstance,
+	Key: KeyGenerator,
+	Value: FullCodec,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn try_decode_entire_state() -> Result<usize, &'static str> {
+		let (map_info, counter_info) = match &Self::partial_storage_info()[..] {
+			[a, b] => (a.clone(), b.clone()),
+			_ => panic!("Counted NMap has two storage info items; qed"),
+		};
+
+		let mut decoded = decode_storage_info::<Counter>(counter_info)?;
+		decoded += decode_storage_info::<Value>(map_info)?;
+		Ok(decoded)
 	}
 }
 
@@ -374,9 +399,13 @@ impl<BlockNumber: Clone + sp_std::fmt::Debug + AtLeast32BitUnsigned> TryState<Bl
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{storage::types, Blake2_128Concat};
+	use crate::{
+		storage::types::{self, Key},
+		Blake2_128Concat,
+	};
 
-	// TODO reuse?
+	type H = Blake2_128Concat;
+
 	macro_rules! build_prefix {
 		($name:ident) => {
 			struct $name;
@@ -393,18 +422,27 @@ mod tests {
 	type Value = types::StorageValue<ValuePrefix, u32>;
 
 	build_prefix!(MapPrefix);
-	type Map = types::StorageMap<MapPrefix, Blake2_128Concat, u32, u32>;
+	type Map = types::StorageMap<MapPrefix, H, u32, u32>;
 
 	build_prefix!(CMapCounterPrefix);
 	build_prefix!(CMapPrefix);
 	impl CountedStorageMapInstance for CMapPrefix {
 		type CounterPrefix = CMapCounterPrefix;
 	}
-	type CMap = types::CountedStorageMap<CMapPrefix, Blake2_128Concat, u32, u32>;
+	type CMap = types::CountedStorageMap<CMapPrefix, H, u8, u16>;
 
 	build_prefix!(DMapPrefix);
-	type DMap =
-		types::StorageDoubleMap<DMapPrefix, Blake2_128Concat, u32, Blake2_128Concat, u32, u32>;
+	type DMap = types::StorageDoubleMap<DMapPrefix, H, u32, H, u32, u32>;
+
+	build_prefix!(NMapPrefix);
+	type NMap = types::StorageNMap<NMapPrefix, (Key<H, u8>, Key<H, u8>), u128>;
+
+	build_prefix!(CountedNMapCounterPrefix);
+	build_prefix!(CountedNMapPrefix);
+	impl CountedStorageNMapInstance for CountedNMapPrefix {
+		type CounterPrefix = CountedNMapCounterPrefix;
+	}
+	type CNMap = types::CountedStorageNMap<CountedNMapPrefix, (Key<H, u8>, Key<H, u8>), u128>;
 
 	#[test]
 	fn try_decode_entire_state_value_works() {
@@ -453,25 +491,26 @@ mod tests {
 			assert_eq!(CMap::try_decode_entire_state(), Ok(0 + 0));
 
 			let counter = 4;
+			let value_size = std::mem::size_of::<u16>();
 
 			CMap::insert(0, 42);
-			assert_eq!(CMap::try_decode_entire_state(), Ok(4 + counter));
+			assert_eq!(CMap::try_decode_entire_state(), Ok(value_size + counter));
 
 			CMap::insert(0, 42);
-			assert_eq!(CMap::try_decode_entire_state(), Ok(4 + counter));
+			assert_eq!(CMap::try_decode_entire_state(), Ok(value_size + counter));
 
 			CMap::insert(1, 42);
-			assert_eq!(CMap::try_decode_entire_state(), Ok(8 + counter));
+			assert_eq!(CMap::try_decode_entire_state(), Ok(value_size * 2 + counter));
 
 			CMap::remove(0);
-			assert_eq!(CMap::try_decode_entire_state(), Ok(4 + counter));
+			assert_eq!(CMap::try_decode_entire_state(), Ok(value_size + counter));
 
 			// counter is cleared again.
 			let _ = CMap::clear(u32::MAX, None);
 			assert_eq!(CMap::try_decode_entire_state(), Ok(0 + 0));
 
-			// two bytes, cannot be decoded into u32.
-			sp_io::storage::set(&CMap::hashed_key_for(2), &[0u8, 1]);
+			// 1 bytes, cannot be decoded into u16.
+			sp_io::storage::set(&CMap::hashed_key_for(2), &[0u8]);
 			assert!(CMap::try_decode_entire_state().is_err());
 		})
 	}
@@ -499,6 +538,76 @@ mod tests {
 			// two bytes, cannot be decoded into u32.
 			sp_io::storage::set(&DMap::hashed_key_for(1, 1), &[0u8, 1]);
 			assert!(DMap::try_decode_entire_state().is_err());
+		})
+	}
+
+	#[test]
+	fn try_decode_entire_state_n_map_works() {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
+			assert_eq!(NMap::try_decode_entire_state(), Ok(0));
+
+			let value_size = std::mem::size_of::<u128>();
+
+			NMap::insert((0u8, 0), 42);
+			assert_eq!(NMap::try_decode_entire_state(), Ok(value_size));
+
+			NMap::insert((0, 0), 42);
+			assert_eq!(NMap::try_decode_entire_state(), Ok(value_size));
+
+			NMap::insert((0, 1), 42);
+			assert_eq!(NMap::try_decode_entire_state(), Ok(value_size * 2));
+
+			NMap::insert((1, 0), 42);
+			assert_eq!(NMap::try_decode_entire_state(), Ok(value_size * 3));
+
+			NMap::remove((0, 0));
+			assert_eq!(NMap::try_decode_entire_state(), Ok(value_size * 2));
+
+			// two bytes, cannot be decoded into u128.
+			sp_io::storage::set(&NMap::hashed_key_for((1, 1)), &[0u8, 1]);
+			assert!(NMap::try_decode_entire_state().is_err());
+		})
+	}
+
+	#[test]
+	fn try_decode_entire_state_counted_n_map_works() {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
+			sp_io::TestExternalities::new_empty().execute_with(|| {
+				assert_eq!(NMap::try_decode_entire_state(), Ok(0));
+
+				let value_size = std::mem::size_of::<u128>();
+				let counter = 4;
+
+				CNMap::insert((0u8, 0), 42);
+				assert_eq!(CNMap::try_decode_entire_state(), Ok(value_size + counter));
+
+				CNMap::insert((0, 0), 42);
+				assert_eq!(CNMap::try_decode_entire_state(), Ok(value_size + counter));
+
+				CNMap::insert((0, 1), 42);
+				assert_eq!(CNMap::try_decode_entire_state(), Ok(value_size * 2 + counter));
+
+				CNMap::insert((1, 0), 42);
+				assert_eq!(CNMap::try_decode_entire_state(), Ok(value_size * 3 + counter));
+
+				CNMap::remove((0, 0));
+				assert_eq!(CNMap::try_decode_entire_state(), Ok(value_size * 2 + counter));
+
+				// two bytes, cannot be decoded into u128.
+				sp_io::storage::set(&CNMap::hashed_key_for((1, 1)), &[0u8, 1]);
+				assert!(CNMap::try_decode_entire_state().is_err());
+			})
+		})
+	}
+
+	#[test]
+	fn extra_bytes_are_rejected() {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
+			assert_eq!(Map::try_decode_entire_state(), Ok(0));
+
+			// 6bytes, too many to fit in u32, should be rejected.
+			sp_io::storage::set(&Map::hashed_key_for(2), &[0u8, 1, 3, 4, 5, 6]);
+			assert!(Map::try_decode_entire_state().is_err());
 		})
 	}
 

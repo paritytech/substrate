@@ -71,8 +71,10 @@ impl<P: CountedStorageNMapInstance, K, V, Q, O, M> MapWrapper
 	type Map = StorageNMap<P, K, V, Q, O, M>;
 }
 
+type Counter = super::counted_map::Counter;
+
 type CounterFor<P> =
-	StorageValue<<P as CountedStorageNMapInstance>::CounterPrefix, u32, ValueQuery>;
+	StorageValue<<P as CountedStorageNMapInstance>::CounterPrefix, Counter, ValueQuery>;
 
 /// On removal logic for updating counter while draining upon some prefix with
 /// [`crate::storage::PrefixIterator`].
@@ -429,7 +431,7 @@ where
 	}
 
 	/// Return the count.
-	pub fn count() -> u32 {
+	pub fn count() -> Counter {
 		CounterFor::<Prefix>::get()
 	}
 }

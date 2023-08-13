@@ -23,6 +23,7 @@ use crate::{
 	StorageHasher, Twox128,
 };
 use codec::{Decode, Encode};
+use sp_runtime::TryRuntimeError;
 use sp_std::prelude::*;
 
 use super::PrefixIterator;
@@ -407,7 +408,7 @@ impl<AllPallets: crate::traits::TryDecodeEntireStorage> crate::traits::OnRuntime
 		Default::default()
 	}
 
-	fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_: Vec<u8>) -> Result<(), TryRuntimeError> {
 		let decoded = AllPallets::try_decode_entire_state()?;
 		crate::log::info!(
 			target: crate::LOG_TARGET,
