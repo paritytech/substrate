@@ -131,13 +131,14 @@ fn combine_impls(
 			}
 			if let ImplItem::Type(item) = item.clone() {
 				let mut item = item.clone();
-				if let Ok(Some(PalletAttr { typ: PalletAttrType::Verbatim(_) })) = take_first_item_pallet_attr::<PalletAttr>(&mut item)
+				if let Ok(Some(PalletAttr { typ: PalletAttrType::Verbatim(_), .. })) =
+					take_first_item_pallet_attr::<PalletAttr>(&mut item)
 				{
 					let modified_item: ImplItem = parse_quote! {
 						type #ident = #ident;
 					};
 					return Some(modified_item)
-				},
+				}
 				// modify and insert uncolliding type items
 				let modified_item: ImplItem = parse_quote! {
 					type #ident = <#default_impl_path as #disambiguation_path>::#ident;
