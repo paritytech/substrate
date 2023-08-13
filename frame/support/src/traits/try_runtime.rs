@@ -19,7 +19,7 @@
 
 use super::StorageInstance;
 use crate::{
-	storage::types::{CountedStorageMapInstance, KeyGenerator, QueryKindTrait},
+	storage::types::{CountedStorageMapInstance, KeyGenerator, QueryKindTrait, Counter},
 	traits::{PartialStorageInfoTrait, StorageInfo},
 	StorageHasher,
 };
@@ -169,7 +169,7 @@ impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> TryDecodeEntireS
 			[a, b] => (a.clone(), b.clone()), // TODO better way?
 			_ => panic!("Counted map has two storage info items; qed"),
 		};
-		let mut decoded = decode_storage_info::<Value>(counter_info)?;
+		let mut decoded = decode_storage_info::<Counter>(counter_info)?;
 		decoded += decode_storage_info::<Value>(map_info)?;
 		Ok(decoded)
 	}
