@@ -21,12 +21,15 @@ use crate::{Randomness, RingVrfSignature, VrfInput, VrfOutput, VrfSignData, SASS
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_consensus_slots::Slot;
+use sp_core::ed25519::{Public as EphemeralPublic, Signature as EphemeralSignature};
 use sp_std::vec::Vec;
 
 /// Ticket identifier.
 ///
-/// Within the algorithm this is also used as a ticket score applied to bound
-/// the ticket to a epoch's slot.
+/// Its value is the output of a VRF whose inputs cannot be controlled by the
+/// creator of the ticket (refer to [`ticket_id_vrf_input`] parameters).
+/// Because of this, it is also used as the ticket score to compare against
+/// the epoch ticket's threshold.
 pub type TicketId = u128;
 
 /// Ticket data persisted on-chain.
@@ -34,12 +37,13 @@ pub type TicketId = u128;
 pub struct TicketBody {
 	/// Attempt index.
 	pub attempt_idx: u32,
-	/// Ed25519 public key which gets erased when claiming the ticket.
-	pub erased_public: [u8; 32],
+	/// Ed25519 ephemeral public key representing ticket ownersip.
+	/// (i.e. whoever has the secret, is the owner)
+	pub erased_public: EphemeralPublic,
 }
 
 /// Ticket ring vrf signature.
-pub type TicketRingSignature = RingVrfSignature;
+pub type TicketSignature = RingVrfSignature;
 
 /// Ticket envelope used on during submission.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -47,22 +51,14 @@ pub struct TicketEnvelope {
 	/// Ticket body.
 	pub body: TicketBody,
 	/// Ring signature.
-	pub ring_signature: TicketRingSignature,
-}
-
-/// Ticket auxiliary information used to claim the ticket ownership.
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct TicketSecret {
-	/// Attempt index.
-	pub attempt_idx: u32,
-	/// Ed25519 used to claim ticket ownership.
-	pub erased_secret: [u8; 32],
+	pub signature: TicketSignature,
 }
 
 /// Ticket claim information filled by the block author.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct TicketClaim {
-	pub erased_signature: [u8; 64],
+	/// Signature to claim ownership of `TicketBody::erased_public`.
+	pub erased_signature: EphemeralSignature,
 }
 
 fn vrf_input_from_data(

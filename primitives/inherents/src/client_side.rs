@@ -99,9 +99,11 @@ pub trait InherentDataProvider: Send + Sync {
 	/// If the given error could not be decoded, `None` should be returned.
 	async fn try_handle_error(
 		&self,
-		identifier: &InherentIdentifier,
-		error: &[u8],
-	) -> Option<Result<(), Error>>;
+		_identifier: &InherentIdentifier,
+		_error: &[u8],
+	) -> Option<Result<(), Error>> {
+		None
+	}
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(30)]

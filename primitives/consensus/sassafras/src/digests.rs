@@ -15,11 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Private implementation details of Sassafras digests.
+//! Sassafras digests structures and helpers.
 
 use crate::{
-	ticket::TicketClaim, AuthorityId, AuthorityIndex, AuthoritySignature, Randomness,
-	SassafrasEpochConfiguration, Slot, VrfSignature, SASSAFRAS_ENGINE_ID,
+	ticket::TicketClaim, AuthorityId, AuthorityIndex, AuthoritySignature, EpochConfiguration,
+	Randomness, Slot, VrfSignature, SASSAFRAS_ENGINE_ID,
 };
 
 use scale_codec::{Decode, Encode, MaxEncodedLen};
@@ -51,7 +51,7 @@ pub struct NextEpochDescriptor {
 	/// Epoch randomness.
 	pub randomness: Randomness,
 	/// Mutable protocol parameters. If not present previous epoch parameters are used.
-	pub config: Option<SassafrasEpochConfiguration>,
+	pub config: Option<EpochConfiguration>,
 }
 
 /// Consensus log item.
