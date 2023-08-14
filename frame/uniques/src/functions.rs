@@ -29,7 +29,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	/// This function returns a dispatch error in the following cases:
-	/// - The collection or item does not exist ([`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - The collection or item does not exist
+	///   ([`UnknownCollection`](crate::Error::UnknownCollection)).
 	/// - The collection is frozen, and no transfers are allowed ([`Frozen`](crate::Error::Frozen)).
 	/// - The item is locked, and transfers are not permitted ([`Locked`](crate::Error::Locked)).
 	/// - The `with_details` closure returns an error.
@@ -118,8 +119,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// # Errors
 	/// This function returns a dispatch error in the following cases:
 	/// - The collection does not exist ([`UnknownCollection`](crate::Error::UnknownCollection)).
-	/// - The provided witness does not match the actual counts ([`BadWitness`](crate::Error::BadWitness)).
-	/// - The caller is not the owner of the collection ([`NoPermission`](crate::Error::NoPermission)).
+	/// - The provided witness does not match the actual counts
+	///   ([`BadWitness`](crate::Error::BadWitness)).
+	/// - The caller is not the owner of the collection
+	///   ([`NoPermission`](crate::Error::NoPermission)).
 	pub fn do_destroy_collection(
 		collection: T::CollectionId,
 		witness: DestroyWitness,
@@ -166,10 +169,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	/// This function returns a dispatch error in the following cases:
-	/// - The item already exists in the collection ([`AlreadyExists`](crate::Error::AlreadyExists)).
+	/// - The item already exists in the collection
+	///   ([`AlreadyExists`](crate::Error::AlreadyExists)).
 	/// - The collection does not exist ([`UnknownCollection`](crate::Error::UnknownCollection)).
 	/// - The provided closure `with_details` returns an error.
-	/// - The collection has reached its maximum supply ([`MaxSupplyReached`](crate::Error::MaxSupplyReached)).
+	/// - The collection has reached its maximum supply
+	///   ([`MaxSupplyReached`](crate::Error::MaxSupplyReached)).
 	/// - An arithmetic overflow occurs when incrementing the number of items in the collection.
 	/// - The currency reserve operation for the item deposit fails for any reason.
 	pub fn do_mint(
@@ -223,7 +228,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// # Errors
 	/// This function returns a `Dispatch` error in the following cases:
 	/// - The item is locked and burns are not permitted ([`Locked`](crate::Error::Locked)).
-	/// - The collection or item does not exist ([`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - The collection or item does not exist
+	///   ([`UnknownCollection`](crate::Error::UnknownCollection)).
 	/// - The `with_details` closure returns an error.
 	pub fn do_burn(
 		collection: T::CollectionId,
@@ -260,7 +266,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	/// This function returns a dispatch error in the following cases:
-	/// - The item or collection does not exist ([`UnknownItem`](crate::Error::UnknownItem) or [`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - The item or collection does not exist ([`UnknownItem`](crate::Error::UnknownItem) or
+	///   [`UnknownCollection`](crate::Error::UnknownCollection)).
 	/// - The sender is not the owner of the item ([`NoPermission`](crate::Error::NoPermission)).
 	pub fn do_set_price(
 		collection: T::CollectionId,
@@ -292,10 +299,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	/// This function returns a dispatch error in the following cases:
-	/// - The item or collection does not exist ([`UnknownItem`](crate::Error::UnknownItem) or [`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - The item or collection does not exist ([`UnknownItem`](crate::Error::UnknownItem) or
+	///   [`UnknownCollection`](crate::Error::UnknownCollection)).
 	/// - The buyer is the current owner of the item ([`NoPermission`](crate::Error::NoPermission)).
 	/// - The item is not for sale ([`NotForSale`](crate::Error::NotForSale)).
-	/// - The bid price is lower than the item's sale price ([`BidTooLow`](crate::Error::BidTooLow)).
+	/// - The bid price is lower than the item's sale price
+	///   ([`BidTooLow`](crate::Error::BidTooLow)).
 	/// - The item is set to be sold only to a specific buyer, and the provided buyer is not the
 	///   whitelisted buyer ([`NoPermission`](crate::Error::NoPermission)).
 	/// - The currency transfer between the buyer and the owner fails for any reason.
