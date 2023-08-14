@@ -22,7 +22,7 @@ use crate::{
 	storage::{self, WriteOutcome},
 	BalanceOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo, ContractInfoOf,
 	DebugBufferVec, Determinism, Error, Event, Nonce, Origin, Pallet as Contracts, Schedule,
-	WasmBlob, LOG_TARGET,
+	System, WasmBlob, LOG_TARGET,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
@@ -1281,7 +1281,7 @@ where
 		// We need a provider so that the `reducible_balance` calculation includes the `ed` and the
 		// `transfer` succeeds while keeping the account alive. The provider is removed once the
 		// storage deposit process is finished.
-		crate::System::<T>::inc_providers(&frame.account_id);
+		System::<T>::inc_providers(&frame.account_id);
 		Self::transfer(
 			Preservation::Expendable,
 			&frame.account_id,
