@@ -99,8 +99,8 @@ pub trait InherentDataProvider: Send + Sync {
 	/// If the given error could not be decoded, `None` should be returned.
 	async fn try_handle_error(
 		&self,
-		_identifier: &InherentIdentifier,
-		_error: &[u8],
+		identifier: &InherentIdentifier,
+		error: &[u8],
 	) -> Option<Result<(), Error>>;
 }
 
