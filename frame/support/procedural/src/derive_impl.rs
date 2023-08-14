@@ -136,8 +136,8 @@ fn combine_impls(
 				// do not copy colliding items that have an ident
 				return None
 			}
-			if replace_verbatim {
-				if let ImplItem::Type(item) = item.clone() {
+			if let ImplItem::Type(item) = item.clone() {
+				if replace_verbatim {
 					let mut item = item.clone();
 					if let Ok(Some(PalletAttr { typ: PalletAttrType::Verbatim(_), .. })) =
 						take_first_item_pallet_attr::<PalletAttr>(&mut item)
@@ -147,12 +147,12 @@ fn combine_impls(
 						};
 						return Some(modified_item)
 					}
-					// modify and insert uncolliding type items
-					let modified_item: ImplItem = parse_quote! {
-						type #ident = <#default_impl_path as #disambiguation_path>::#ident;
-					};
-					return Some(modified_item)
 				}
+				// modify and insert uncolliding type items
+				let modified_item: ImplItem = parse_quote! {
+					type #ident = <#default_impl_path as #disambiguation_path>::#ident;
+				};
+				return Some(modified_item)
 			}
 			// copy uncolliding non-type items that have an ident
 			Some(item)
