@@ -41,7 +41,7 @@ fn basic_scheduling_works() {
 		// implemented for `BaseFilter` in the mock runtime
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 
-		// Schedule call to be executed at the the 4th block
+		// Schedule call to be executed at the 4th block
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
