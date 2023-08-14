@@ -41,9 +41,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///   defined by `T::ValueLimit`.
 	/// - `depositor`: The account that is paying the deposit for the attribute.
 	///
-	/// Note: For the `CollectionOwner` namespace, the collection must have the `UnlockedAttributes`
-	/// setting enabled. For the `ItemOwner` namespace, the item must not be locked for attributes.
-	/// For the `Account` namespace, the deposit is required based on the `T::DepositPerByte` and
+	/// Note: For the `CollectionOwner` namespace, the collection/item must have the `UnlockedAttributes`
+	/// setting enabled.
+	/// The deposit for setting an attribute is based on the `T::DepositPerByte` and
 	/// `T::AttributeDepositBase` configuration.
 	pub(crate) fn do_set_attribute(
 		origin: T::AccountId,
@@ -271,9 +271,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// This function allows clearing an attribute from an item or a collection. It verifies the
 	/// permission of the caller to perform the action based on the provided `namespace` and
-	/// `depositor` account. The deposit associated with the attribute, if any, will be unreserved
-	/// or moved to the collection owner's deposit based on the deposit settings and the attribute
-	/// namespace.
+	/// `depositor` account. The deposit associated with the attribute, if any, will be unreserved.
 	///
 	/// - `maybe_check_origin`: An optional account that acts as an additional security check when
 	/// clearing the attribute. This can be `None` if no additional check is required.
@@ -282,7 +280,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - `maybe_item`: The identifier of the item to which the attribute belongs, or `None` if
 	///   clearing a collection attribute.
 	/// - `namespace`: The namespace in which the attribute is being cleared. It can be either
-	///   `CollectionOwner`, `ItemOwner`, or `Account` (for off-chain mints).
+	///   `CollectionOwner`, `ItemOwner`, or `Account`.
 	/// - `key`: The key of the attribute to be cleared. It should be a vector of bytes within the
 	///   limits defined by `T::KeyLimit`.
 	pub(crate) fn do_clear_attribute(
@@ -363,10 +361,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Approves a delegate to set attributes on behalf of the item's owner.
 	///
-	/// This function allows the owner of an item to approve a delegate to set attributes on their
-	/// behalf. The delegate must have the account namespace permission, and the item must belong to
-	/// the specified `collection`. The maximum number of approvals is determined by the
-	/// configuration `T::MaxAttributesApprovals`.
+	/// This function allows the owner of an item to approve a delegate to set attributes in the
+	/// `Account(delegate)` namespace. The maximum number of approvals is determined by
+	/// the configuration `T::MaxAttributesApprovals`.
 	///
 	/// - `check_origin`: The account of the item's owner attempting to approve the delegate.
 	/// - `collection`: The identifier of the collection to which the item belongs.
@@ -400,10 +397,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Cancels the approval of an item's attributes by a delegate.
 	///
 	/// This function allows the owner of an item to cancel the approval of a delegate to set
-	/// attributes on their behalf. The delegate's approval is removed, and any unreserved deposit
-	/// associated with their approved attributes is returned to them. The number of attributes that
-	/// the delegate has set for the item must not exceed the `account_attributes` provided in the
-	/// `witness`. This function is used to prevent unintended or malicious cancellations.
+	/// attributes in the `Account(delegate)` namespace. The delegate's approval is removed, in
+	/// addition to attributes the `delegate` previously created, and any unreserved deposit
+	/// is returned. The number of attributes that the delegate has set for the item must
+	/// not exceed the `account_attributes` provided in the `witness`.
+	/// This function is used to prevent unintended or malicious cancellations.
 	///
 	/// - `check_origin`: The account of the item's owner attempting to cancel the delegate's
 	///   approval.
@@ -455,7 +453,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	/// A helper method to check whether a attribute namespace is valid.
+	/// A helper method to check whether an attribute namespace is valid.
 	fn is_valid_namespace(
 		origin: &T::AccountId,
 		namespace: &AttributeNamespace<T::AccountId>,

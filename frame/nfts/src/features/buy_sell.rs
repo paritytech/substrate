@@ -53,11 +53,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	/// Sets the price and whitelist information for an item in the specified collection.
+	/// Sets the price and whitelists a buyer for an item in the specified collection.
 	///
-	/// This function is used to set the price and whitelist information for an item in the
+	/// This function is used to set the price and whitelist a buyer for an item in the
 	/// specified `collection`. The `sender` account must be the owner of the item. The item's price
-	/// and whitelist information can be set to allow trading the item. If `price` is `None`, the
+	/// and the whitelisted buyer can be set to allow trading the item. If `price` is `None`, the
 	/// item will be marked as not for sale.
 	///
 	/// - `collection`: The identifier of the collection containing the item.

@@ -26,7 +26,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// This function is used to mint a new item in the specified `collection` and assign it to the
 	/// `mint_to` account. The minting process involves creating the item, setting its attributes
-	/// and metadata, and reserving the required deposit amount from the `mint_to` account. The
+	/// and metadata, and reserving the required deposit amount from the `maybe_depositor` account. The
 	/// minting process is configurable through the provided `item_config` parameter. The
 	/// `with_details_and_config` closure is called to validate the provided `collection_details`
 	/// and `collection_config` before minting the item.

@@ -103,7 +103,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// This function is used to cancel the specified swap offer created by the `caller` account. If
 	/// the swap offer's deadline has not yet passed, the `caller` must be the owner of the offered
-	/// item. After canceling the swap offer, the function emits the `SwapCancelled` event.
+	/// item; otherwise, anyone can cancel an expired offer.
+	/// After canceling the swap offer, the function emits the `SwapCancelled` event.
 	///
 	/// - `caller`: The account canceling the swap offer.
 	/// - `offered_collection_id`: The collection ID containing the offered item.
