@@ -41,8 +41,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///   defined by `T::ValueLimit`.
 	/// - `depositor`: The account that is paying the deposit for the attribute.
 	///
-	/// Note: For the `CollectionOwner` namespace, the collection/item must have the `UnlockedAttributes`
-	/// setting enabled.
+	/// Note: For the `CollectionOwner` namespace, the collection/item must have the
+	/// `UnlockedAttributes` setting enabled.
 	/// The deposit for setting an attribute is based on the `T::DepositPerByte` and
 	/// `T::AttributeDepositBase` configuration.
 	pub(crate) fn do_set_attribute(
