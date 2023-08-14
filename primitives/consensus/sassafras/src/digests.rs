@@ -50,7 +50,7 @@ pub struct NextEpochDescriptor {
 	pub authorities: Vec<AuthorityId>,
 	/// Epoch randomness.
 	pub randomness: Randomness,
-	/// Configurable parameters. If not present previous epoch parameters are used.
+	/// Mutable epoch parameters. If not present previous epoch parameters are used.
 	pub config: Option<EpochConfiguration>,
 }
 
