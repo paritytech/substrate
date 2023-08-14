@@ -127,11 +127,12 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 		let trait_use_gen = &def.trait_use_generics(event.attr_span);
 		let type_impl_gen = &def.type_impl_generics(event.attr_span);
 		let type_use_gen = &def.type_use_generics(event.attr_span);
+		let pallet_ident = &def.pallet_struct.pallet;
 
 		let PalletEventDepositAttr { fn_vis, fn_span, .. } = deposit_event;
 
 		quote::quote_spanned!(*fn_span =>
-			impl<#type_impl_gen> Pallet<#type_use_gen> #completed_where_clause {
+			impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
 				#fn_vis fn deposit_event(event: Event<#event_use_gen>) {
 					let event = <
 						<T as Config #trait_use_gen>::RuntimeEvent as

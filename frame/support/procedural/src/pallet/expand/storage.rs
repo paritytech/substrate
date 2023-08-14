@@ -791,12 +791,17 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 		let storage_names = def
 			.storages
 			.iter()
-			.map(|storage| {
-				let ident = &storage.ident;
-				let gen = &def.type_use_generics(storage.attr_span);
-				quote::quote_spanned!(storage.attr_span => #ident<#gen> )
+			.filter_map(|storage| {
+				if storage.cfg_attrs.is_empty() {
+					let ident = &storage.ident;
+					let gen = &def.type_use_generics(storage.attr_span);
+					Some(quote::quote_spanned!(storage.attr_span => #ident<#gen> ))
+				} else {
+					None
+				}
 			})
 			.collect::<Vec<_>>();
+
 		quote::quote!(
 			#[cfg(feature = "try-runtime")]
 			impl<#type_impl_gen> #frame_support::traits::TryDecodeEntireStorage
@@ -804,6 +809,8 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			{
 				fn try_decode_entire_state() -> Result<usize, &'static str> {
 					// simply delegate impl to a tuple of all storage items we have.
+					//
+					// NOTE: for now, we have to exclude storage items that are feature gated.
 					<( #( #storage_names ),*) as frame_support::traits::TryDecodeEntireStorage>::try_decode_entire_state()
 				}
 			}
