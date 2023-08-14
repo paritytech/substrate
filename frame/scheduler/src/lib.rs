@@ -33,7 +33,7 @@
 //! number or at a specified period. These scheduled runtime calls may be named or anonymous and may
 //! be canceled.
 //!
-//! **NOTE:** Instead of the filter contained in the origin used to call `fn schedule`, scheduled
+//! __NOTE:__ Instead of the filter contained in the origin used to call `fn schedule`, scheduled
 //! runtime calls will be dispatched with the default filter for the origin: namely
 //! `frame_system::Config::BaseCallFilter` for all origin types (except root which will get no
 //! filter).
@@ -56,22 +56,10 @@
 //! See the [`pallet`] module for more information about the interfaces this pallet exposes,
 //! including its configuration trait, dispatchables, storage items, events and errors.
 //!
-//!
 //! ## Warning
 //!
-//! This Pallet executes all scheduled runtime calls in the
-//! [`frame_support::traits::Hooks::on_initialize`] hook.
-//!
-//! **Do NOT schedule runtime calls if they satisfy any of the following points:**
-//!
-//! * [ ] Runtime call does not need to be executed at a specific block (not a hard requirement).
-//! 	Use [`frame_support::traits::Hooks::on_idle`] hook for runtime calls that can be executed
-//!   after some block but do not need to be executed at a specific block.
-//! * [ ] No unbounded iterations.
-//! * [ ] Runtime call weight exceeds configured [`Config::MaximumWeight`].
-//! 	If you are scheduling a heavy weight runtime call, make sure to set the `MaximumWeight` type
-//! according to your chain's needs. You can find the weight conversions to real time from these
-//! [`sp_weights::constants`].
+//! This Pallet executes all scheduled runtime calls in the [`on_initialize`] hook. Do not execute
+//! any runtime calls which should not be considered mandatory.
 //!
 //! Please be aware that any scheduled runtime calls executed in a future block may __fail__ or may
 //! result in __undefined behavior__ since the runtime could have upgraded between the time of
@@ -83,6 +71,8 @@
 //!     * Could fail due to the runtime call index not being part of the `Call`.
 //!     * Could lead to undefined behavior, such as executing another runtime call with the same
 //!       index.
+//!
+//! [`on_initialize`]: frame_support::traits::Hooks::on_initialize
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
