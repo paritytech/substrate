@@ -583,7 +583,7 @@ pub mod pallet {
 			Self::do_try_state()
 		}
 
-		/// Check all assumptions about [`crate::Config`].
+		/// Check all compile-time assumptions about [`crate::Config`].
 		fn integrity_test() {
 			assert!(!MaxMessageLenOf::<T>::get().is_zero(), "HeapSize too low");
 		}
@@ -1132,16 +1132,13 @@ impl<T: Config> Pallet<T> {
 
 	pub fn do_try_state() -> Result<(), &'static str> {
 		// Checking memory corruption for BookStateFor
-		assert_eq!(
-			BookStateFor::<T>::iter_keys().count(),
-			BookStateFor::<T>::iter_values().count(),
+		ensure!(
+			BookStateFor::<T>::iter_keys().count() == BookStateFor::<T>::iter_values().count(),
 			"Memory Corruption in BookStateFor"
 		);
-
 		// Checking memory corruption for Pages
-		assert_eq!(
-			Pages::<T>::iter_keys().count(),
-			Pages::<T>::iter_values().count(),
+		ensure!(
+			Pages::<T>::iter_keys().count() == Pages::<T>::iter_values().count(),
 			"Memory Corruption in Pages"
 		);
 
@@ -1175,9 +1172,8 @@ impl<T: Config> Pallet<T> {
 			);
 
 			if head_book_state.ready_neighbours.as_ref().unwrap().next == head {
-				assert_eq!(
-					head_book_state.ready_neighbours.as_ref().unwrap().prev,
-					head,
+				ensure!(
+					head_book_state.ready_neighbours.as_ref().unwrap().prev == head,
 					"Can only happen if only queue in ReadyRing"
 				);
 			}
@@ -1186,7 +1182,7 @@ impl<T: Config> Pallet<T> {
 				let page = Pages::<T>::get(&head, page_index).unwrap();
 				let remaining_messages = page.remaining;
 				let mut counted_remaining_messages = 0;
-				assert!(
+				ensure!(
 					remaining_messages > 0.into(),
 					"These must be some messages that have not been processed yet!"
 				);
@@ -1201,9 +1197,8 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 
-				assert_eq!(
-					remaining_messages,
-					counted_remaining_messages.into(),
+				ensure!(
+					remaining_messages == counted_remaining_messages.into(),
 					"Memory Corruption"
 				);
 			}
