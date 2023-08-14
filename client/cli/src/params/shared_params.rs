@@ -56,6 +56,10 @@ pub struct SharedParams {
 	#[arg(long)]
 	pub disable_log_color: bool,
 
+	/// Use UTC time in log output.
+	#[arg(long)]
+	pub use_utc_log_time: bool,
+
 	/// Enable feature to dynamically update and reload the log filter.
 	/// Be aware that enabling this feature can lead to a performance decrease up to factor six or
 	/// more. Depending on the global logging level the performance decrease changes.
@@ -115,6 +119,11 @@ impl SharedParams {
 	/// Should the log color output be disabled?
 	pub fn disable_log_color(&self) -> bool {
 		std::env::var("NO_COLOR").map_or(self.disable_log_color, |no_color| no_color == "1")
+	}
+
+	/// Should use UTC time in log output?
+	pub fn use_utc_log_time(&self) -> bool {
+		self.use_utc_log_time
 	}
 
 	/// Is log reloading enabled

@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::logging::fast_local_time::FastLocalTime;
 use ansi_term::Colour;
 use regex::Regex;
 use std::fmt::{self, Write};
@@ -30,9 +29,9 @@ use tracing_subscriber::{
 };
 
 /// A pre-configured event formatter.
-pub struct EventFormat<T = FastLocalTime> {
+pub struct EventFormat {
 	/// Use the given timer for log message timestamps.
-	pub timer: T,
+	pub timer: Box<dyn FormatTime + Send + Sync + 'static>,
 	/// Sets whether or not an event's target is displayed.
 	pub display_target: bool,
 	/// Sets whether or not an event's level is displayed.
@@ -45,17 +44,14 @@ pub struct EventFormat<T = FastLocalTime> {
 	pub dup_to_stdout: bool,
 }
 
-impl<T> EventFormat<T>
-where
-	T: FormatTime,
-{
+impl EventFormat {
 	// NOTE: the following code took inspiration from tracing-subscriber
 	//
 	//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L449
 	pub(crate) fn format_event_custom<'b, S, N>(
 		&self,
 		ctx: CustomFmtContext<'b, S, N>,
-		writer: &mut dyn fmt::Write,
+		writer: &mut dyn Write,
 		event: &Event,
 	) -> fmt::Result
 	where
@@ -65,7 +61,7 @@ where
 		let writer = &mut ControlCodeSanitizer::new(!self.enable_color, writer);
 		let normalized_meta = event.normalized_metadata();
 		let meta = normalized_meta.as_ref().unwrap_or_else(|| event.metadata());
-		time::write(&self.timer, writer, self.enable_color)?;
+		time::write(&*self.timer, writer, self.enable_color)?;
 
 		if self.display_level {
 			let fmt_level = { FmtLevel::new(meta.level(), self.enable_color) };
@@ -118,16 +114,15 @@ where
 // NOTE: the following code took inspiration from tracing-subscriber
 //
 //       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L449
-impl<S, N, T> FormatEvent<S, N> for EventFormat<T>
+impl<S, N> FormatEvent<S, N> for EventFormat
 where
 	S: Subscriber + for<'a> LookupSpan<'a>,
 	N: for<'a> FormatFields<'a> + 'static,
-	T: FormatTime,
 {
 	fn format_event(
 		&self,
 		ctx: &FmtContext<S, N>,
-		writer: &mut dyn fmt::Write,
+		writer: &mut dyn Write,
 		event: &Event,
 	) -> fmt::Result {
 		if self.dup_to_stdout &&
@@ -239,9 +234,9 @@ mod time {
 	use std::fmt;
 	use tracing_subscriber::fmt::time::FormatTime;
 
-	pub(crate) fn write<T>(timer: T, writer: &mut dyn fmt::Write, with_ansi: bool) -> fmt::Result
+	pub(crate) fn write<T>(timer: &T, writer: &mut dyn fmt::Write, with_ansi: bool) -> fmt::Result
 	where
-		T: FormatTime,
+		T: FormatTime + ?Sized,
 	{
 		if with_ansi {
 			let style = Style::new().dimmed();
