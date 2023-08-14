@@ -481,22 +481,21 @@ pub mod pallet {
 				} else {
 					(amount2_desired, amount1_desired, amount2_min, amount1_min)
 				};
-			let (asset1, asset2) = pool_id.clone();
-
 			ensure!(
 				amount1_desired > Zero::zero() && amount2_desired > Zero::zero(),
 				Error::<T>::WrongDesiredAmount
 			);
 
-			let maybe_pool = Pools::<T>::get(pool_id.clone());
+			let maybe_pool = Pools::<T>::get(&pool_id);
 			let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
+			let pool_account = Self::get_pool_account(&pool_id);
+
+			let (asset1, asset2) = &pool_id;
+			let reserve1 = Self::get_balance(&pool_account, asset1)?;
+			let reserve2 = Self::get_balance(&pool_account, asset2)?;
 
 			let amount1: T::AssetBalance;
 			let amount2: T::AssetBalance;
-			let pool_account = Self::get_pool_account(&pool_id);
-			let reserve1 = Self::get_balance(&pool_account, &asset1)?;
-			let reserve2 = Self::get_balance(&pool_account, &asset2)?;
-
 			if reserve1.is_zero() || reserve2.is_zero() {
 				amount1 = amount1_desired;
 				amount2 = amount2_desired;
@@ -525,13 +524,13 @@ pub mod pallet {
 				}
 			}
 
-			Self::validate_minimal_amount(amount1.saturating_add(reserve1), &asset1)
+			Self::validate_minimal_amount(amount1.saturating_add(reserve1), asset1)
 				.map_err(|_| Error::<T>::AmountOneLessThanMinimal)?;
-			Self::validate_minimal_amount(amount2.saturating_add(reserve2), &asset2)
+			Self::validate_minimal_amount(amount2.saturating_add(reserve2), asset2)
 				.map_err(|_| Error::<T>::AmountTwoLessThanMinimal)?;
 
-			Self::transfer(&asset1, &sender, &pool_account, amount1, true)?;
-			Self::transfer(&asset2, &sender, &pool_account, amount2, true)?;
+			Self::transfer(asset1, &sender, &pool_account, amount1, true)?;
+			Self::transfer(asset2, &sender, &pool_account, amount2, true)?;
 
 			let total_supply = T::PoolAssets::total_issuance(pool.lp_token.clone());
 
@@ -596,7 +595,7 @@ pub mod pallet {
 
 			ensure!(lp_token_burn > Zero::zero(), Error::<T>::ZeroLiquidity);
 
-			let maybe_pool = Pools::<T>::get(pool_id.clone());
+			let maybe_pool = Pools::<T>::get(&pool_id);
 			let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
 
 			let pool_account = Self::get_pool_account(&pool_id);

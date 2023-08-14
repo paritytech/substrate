@@ -292,6 +292,7 @@ pub(crate) mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod election_size_tracker;
 pub mod inflation;
 pub mod migrations;
 pub mod slashing;
@@ -301,7 +302,7 @@ mod pallet;
 
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use frame_support::{
-	traits::{Currency, Defensive, Get},
+	traits::{ConstU32, Currency, Defensive, Get},
 	weights::Weight,
 	BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
@@ -337,6 +338,10 @@ macro_rules! log {
 /// Maximum number of winners (aka. active validators), as defined in the election provider of this
 /// pallet.
 pub type MaxWinnersOf<T> = <<T as Config>::ElectionProvider as frame_election_provider_support::ElectionProviderBase>::MaxWinners;
+
+/// Maximum number of nominations per nominator.
+pub type MaxNominationsOf<T> =
+	<<T as Config>::NominationsQuota as NominationsQuota<BalanceOf<T>>>::MaxNominations;
 
 /// Counter for the number of "reward" points earned by a given validator.
 pub type RewardPoint = u32;
@@ -679,7 +684,7 @@ impl<T: Config> StakingLedger<T> {
 #[scale_info(skip_type_params(T))]
 pub struct Nominations<T: Config> {
 	/// The targets of nomination.
-	pub targets: BoundedVec<T::AccountId, T::MaxNominations>,
+	pub targets: BoundedVec<T::AccountId, MaxNominationsOf<T>>,
 	/// The era the nominations were submitted.
 	///
 	/// Except for initial nominations which are considered submitted at era 0.
@@ -746,6 +751,36 @@ impl<AccountId, Balance: HasCompact + Zero> UnappliedSlash<AccountId, Balance> {
 			reporters: vec![],
 			payout: Zero::zero(),
 		}
+	}
+}
+
+/// Something that defines the maximum number of nominations per nominator based on a curve.
+///
+/// The method `curve` implements the nomination quota curve and should not be used directly.
+/// However, `get_quota` returns the bounded maximum number of nominations based on `fn curve` and
+/// the nominator's balance.
+pub trait NominationsQuota<Balance> {
+	/// Strict maximum number of nominations that caps the nominations curve. This value can be
+	/// used as the upper bound of the number of votes per nominator.
+	type MaxNominations: Get<u32>;
+
+	/// Returns the voter's nomination quota within reasonable bounds [`min`, `max`], where `min`
+	/// is 1 and `max` is `Self::MaxNominations`.
+	fn get_quota(balance: Balance) -> u32 {
+		Self::curve(balance).clamp(1, Self::MaxNominations::get())
+	}
+
+	/// Returns the voter's nomination quota based on its balance and a curve.
+	fn curve(balance: Balance) -> u32;
+}
+
+/// A nomination quota that allows up to MAX nominations for all validators.
+pub struct FixedNominationsQuota<const MAX: u32>;
+impl<Balance, const MAX: u32> NominationsQuota<Balance> for FixedNominationsQuota<MAX> {
+	type MaxNominations = ConstU32<MAX>;
+
+	fn curve(_: Balance) -> u32 {
+		MAX
 	}
 }
 

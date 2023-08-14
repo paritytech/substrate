@@ -346,7 +346,17 @@ pub trait Ext: sealing::Sealed {
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	sp_core::RuntimeDebug,
+	codec::Decode,
+	codec::Encode,
+	codec::MaxEncodedLen,
+	scale_info::TypeInfo,
+)]
 pub enum ExportedFunction {
 	/// The constructor function which is executed on deployment of a contract.
 	Constructor,

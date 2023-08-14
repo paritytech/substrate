@@ -22,6 +22,62 @@ use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use list::Bag;
 use mock::{test_utils::*, *};
 
+#[docify::export]
+#[test]
+fn examples_work() {
+	ExtBuilder::default()
+		.skip_genesis_ids()
+		// initially set the score of 11 for 22 to push it next to 12
+		.add_ids(vec![(25, 25), (21, 21), (12, 12), (22, 11), (5, 5), (7, 7), (3, 3)])
+		.build_and_execute(|| {
+			// initial bags
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![
+					// bag 0 -> 10
+					(10, vec![5, 7, 3]),
+					// bag 10 -> 20
+					(20, vec![12, 22]),
+					// bag 20 -> 30
+					(30, vec![25, 21])
+				]
+			);
+
+			// set score of 22 to 22
+			StakingMock::set_score_of(&22, 22);
+
+			// now we rebag 22 to the first bag
+			assert_ok!(BagsList::rebag(RuntimeOrigin::signed(42), 22));
+
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![
+					// bag 0 -> 10
+					(10, vec![5, 7, 3]),
+					// bag 10 -> 20
+					(20, vec![12]),
+					// bag 20 -> 30
+					(30, vec![25, 21, 22])
+				]
+			);
+
+			// now we put 7 at the front of bag 0
+			assert_ok!(BagsList::put_in_front_of(RuntimeOrigin::signed(7), 5));
+
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![
+					// bag 0 -> 10
+					(10, vec![7, 5, 3]),
+					// bag 10 -> 20
+					(20, vec![12]),
+					// bag 20 -> 30
+					(30, vec![25, 21, 22])
+				]
+			);
+		})
+}
+
 mod pallet {
 	use super::*;
 
@@ -208,6 +264,25 @@ mod pallet {
 	}
 
 	#[test]
+	fn put_in_front_of_other_can_be_permissionless() {
+		ExtBuilder::default()
+			.skip_genesis_ids()
+			.add_ids(vec![(10, 15), (11, 16), (12, 19)])
+			.build_and_execute(|| {
+				// given
+				assert_eq!(List::<Runtime>::get_bags(), vec![(20, vec![10, 11, 12])]);
+				// 11 now has more weight than 10 and can be moved before it.
+				StakingMock::set_score_of(&11u32, 17);
+
+				// when
+				assert_ok!(BagsList::put_in_front_of_other(RuntimeOrigin::signed(42), 11u32, 10));
+
+				// then
+				assert_eq!(List::<Runtime>::get_bags(), vec![(20, vec![11, 10, 12])]);
+			});
+	}
+
+	#[test]
 	fn put_in_front_of_two_node_bag_heavier_is_tail() {
 		ExtBuilder::default()
 			.skip_genesis_ids()
@@ -368,7 +443,7 @@ mod pallet {
 			StakingMock::set_score_of(&4, 999);
 
 			// when
-			BagsList::put_in_front_of(RuntimeOrigin::signed(2), 4).unwrap();
+			assert_ok!(BagsList::put_in_front_of(RuntimeOrigin::signed(2), 4));
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![3, 2, 4])]);
