@@ -525,8 +525,9 @@ mod tests {
 
 	use sp_core::H256;
 	use sp_runtime::{
+		bounded_vec,
 		traits::{BadOrigin, BlakeTwo256, IdentityLookup},
-		bounded_vec, BuildStorage,
+		BuildStorage,
 	};
 
 	use frame_support::{
