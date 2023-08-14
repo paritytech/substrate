@@ -231,8 +231,9 @@
 
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
-	BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ElectionProviderBase,
-	InstantElectionProvider, NposSolution,
+	bounds::{CountBound, ElectionBounds, ElectionBoundsBuilder, SizeBound},
+	BoundedSupportsOf, DataProviderBounds, ElectionDataProvider, ElectionProvider,
+	ElectionProviderBase, InstantElectionProvider, NposSolution,
 };
 use frame_support::{
 	dispatch::DispatchClass,
@@ -659,22 +660,17 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
 
-		/// The maximum number of electing voters to put in the snapshot. At the moment, snapshots
-		/// are only over a single block, but once multi-block elections are introduced they will
-		/// take place over multiple blocks.
-		#[pallet::constant]
-		type MaxElectingVoters: Get<SolutionVoterIndexOf<Self::MinerConfig>>;
-
-		/// The maximum number of electable targets to put in the snapshot.
-		#[pallet::constant]
-		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self::MinerConfig>>;
-
 		/// The maximum number of winners that can be elected by this `ElectionProvider`
 		/// implementation.
 		///
 		/// Note: This must always be greater or equal to `T::DataProvider::desired_targets()`.
 		#[pallet::constant]
 		type MaxWinners: Get<u32>;
+
+		/// The maximum number of electing voters and electable targets to put in the snapshot.
+		/// At the moment, snapshots are only over a single block, but once multi-block elections
+		/// are introduced they will take place over multiple blocks.
+		type ElectionBounds: Get<ElectionBounds>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -1097,13 +1093,19 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
 
-			let supports =
-				T::GovernanceFallback::instant_elect(maybe_max_voters, maybe_max_targets).map_err(
-					|e| {
-						log!(error, "GovernanceFallback failed: {:?}", e);
-						Error::<T>::FallbackFailed
-					},
-				)?;
+			let election_bounds = ElectionBoundsBuilder::default()
+				.voters_count(maybe_max_voters.unwrap_or(u32::MAX).into())
+				.targets_count(maybe_max_targets.unwrap_or(u32::MAX).into())
+				.build();
+
+			let supports = T::GovernanceFallback::instant_elect(
+				election_bounds.voters,
+				election_bounds.targets,
+			)
+			.map_err(|e| {
+				log!(error, "GovernanceFallback failed: {:?}", e);
+				Error::<T>::FallbackFailed
+			})?;
 
 			// transform BoundedVec<_, T::GovernanceFallback::MaxWinners> into
 			// `BoundedVec<_, T::MaxWinners>`
@@ -1426,18 +1428,27 @@ impl<T: Config> Pallet<T> {
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external(
 	) -> Result<(Vec<T::AccountId>, Vec<VoterOf<T>>, u32), ElectionError<T>> {
-		let target_limit = T::MaxElectableTargets::get().saturated_into::<usize>();
-		let voter_limit = T::MaxElectingVoters::get().saturated_into::<usize>();
+		let election_bounds = T::ElectionBounds::get();
 
-		let targets = T::DataProvider::electable_targets(Some(target_limit))
+		let targets = T::DataProvider::electable_targets(election_bounds.targets)
+			.and_then(|t| {
+				election_bounds.ensure_targets_limits(
+					CountBound(t.len() as u32),
+					SizeBound(t.encoded_size() as u32),
+				)?;
+				Ok(t)
+			})
 			.map_err(ElectionError::DataProvider)?;
 
-		let voters = T::DataProvider::electing_voters(Some(voter_limit))
+		let voters = T::DataProvider::electing_voters(election_bounds.voters)
+			.and_then(|v| {
+				election_bounds.ensure_voters_limits(
+					CountBound(v.len() as u32),
+					SizeBound(v.encoded_size() as u32),
+				)?;
+				Ok(v)
+			})
 			.map_err(ElectionError::DataProvider)?;
-
-		if targets.len() > target_limit || voters.len() > voter_limit {
-			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
-		}
 
 		let mut desired_targets = <Pallet<T> as ElectionProviderBase>::desired_targets_checked()
 			.map_err(|e| ElectionError::DataProvider(e))?;
@@ -1544,18 +1555,25 @@ impl<T: Config> Pallet<T> {
 		// - signed phase was complete or not started, in which case finalization is idempotent and
 		//   inexpensive (1 read of an empty vector).
 		let _ = Self::finalize_signed_phase();
+
 		<QueuedSolution<T>>::take()
 			.ok_or(ElectionError::<T>::NothingQueued)
 			.or_else(|_| {
-				T::Fallback::instant_elect(None, None)
-					.map_err(|fe| ElectionError::Fallback(fe))
-					.and_then(|supports| {
-						Ok(ReadySolution {
-							supports,
-							score: Default::default(),
-							compute: ElectionCompute::Fallback,
-						})
+				// default data provider bounds are unbounded. calling `instant_elect` with
+				// unbounded data provider bounds means that the on-chain `T:Bounds` configs will
+				// *not* be overwritten.
+				T::Fallback::instant_elect(
+					DataProviderBounds::default(),
+					DataProviderBounds::default(),
+				)
+				.map_err(|fe| ElectionError::Fallback(fe))
+				.and_then(|supports| {
+					Ok(ReadySolution {
+						supports,
+						score: Default::default(),
+						compute: ElectionCompute::Fallback,
 					})
+				})
 			})
 			.map(|ReadySolution { compute, score, supports }| {
 				Self::deposit_event(Event::ElectionFinalized { compute, score });
@@ -1925,8 +1943,8 @@ mod tests {
 	use crate::{
 		mock::{
 			multi_phase_events, raw_solution, roll_to, roll_to_signed, roll_to_unsigned, AccountId,
-			ExtBuilder, MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin,
-			SignedMaxSubmissions, System, TargetIndex, Targets,
+			ElectionsBounds, ExtBuilder, MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime,
+			RuntimeOrigin, SignedMaxSubmissions, System, TargetIndex, Targets, Voters,
 		},
 		Phase,
 	};
@@ -2529,7 +2547,11 @@ mod tests {
 	fn snapshot_too_big_failure_onchain_fallback() {
 		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
 		ExtBuilder::default().build_and_execute(|| {
-			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
+			// sets bounds on number of targets.
+			let new_bounds = ElectionBoundsBuilder::default().targets_count(1_000.into()).build();
+			ElectionsBounds::set(new_bounds);
+
+			Targets::set((0..(1_000 as AccountId) + 1).collect::<Vec<_>>());
 
 			// Signed phase failed to open.
 			roll_to(15);
@@ -2564,9 +2586,11 @@ mod tests {
 	fn snapshot_too_big_failure_no_fallback() {
 		// and if the backup mode is nothing, we go into the emergency mode..
 		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
-			crate::mock::Targets::set(
-				(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
-			);
+			// sets bounds on number of targets.
+			let new_bounds = ElectionBoundsBuilder::default().targets_count(1_000.into()).build();
+			ElectionsBounds::set(new_bounds);
+
+			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
 
 			// Signed phase failed to open.
 			roll_to(15);
@@ -2596,9 +2620,10 @@ mod tests {
 		// but if there are too many voters, we simply truncate them.
 		ExtBuilder::default().build_and_execute(|| {
 			// we have 8 voters in total.
-			assert_eq!(crate::mock::Voters::get().len(), 8);
+			assert_eq!(Voters::get().len(), 8);
 			// but we want to take 2.
-			crate::mock::MaxElectingVoters::set(2);
+			let new_bounds = ElectionBoundsBuilder::default().voters_count(2.into()).build();
+			ElectionsBounds::set(new_bounds);
 
 			// Signed phase opens just fine.
 			roll_to_signed();
