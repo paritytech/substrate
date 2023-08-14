@@ -560,10 +560,7 @@ fn service_page_suspension_works() {
 fn bump_service_head_works() {
 	use MessageOrigin::*;
 	build_and_execute::<Test>(|| {
-		// Create a ready ring with three queues.
-		MessageQueue::enqueue_message(msg(";)"), Here);
-		MessageQueue::enqueue_message(msg(";)"), There);
-		MessageQueue::enqueue_message(msg(";)"), Everywhere(0));
+		build_triple_ring();
 
 		// Bump 99 times.
 		for i in 0..99 {
@@ -612,15 +609,8 @@ fn bump_service_head_trivial_works() {
 
 #[test]
 fn bump_service_head_no_head_noops() {
-	use MessageOrigin::*;
 	build_and_execute::<Test>(|| {
-		// Create a ready ring with three queues.
-		BookStateFor::<Test>::insert(Here, empty_book::<Test>());
-		knit(&Here);
-		BookStateFor::<Test>::insert(There, empty_book::<Test>());
-		knit(&There);
-		BookStateFor::<Test>::insert(Everywhere(0), empty_book::<Test>());
-		knit(&Everywhere(0));
+		build_triple_ring();
 
 		// But remove the service head.
 		ServiceHead::<Test>::kill();
@@ -933,6 +923,7 @@ fn sweep_queue_works() {
 	use MessageOrigin::*;
 	build_and_execute::<Test>(|| {
 		build_triple_ring();
+		QueueChanges::take();
 
 		let book = BookStateFor::<Test>::get(Here);
 		assert!(book.begin != book.end);
@@ -968,8 +959,7 @@ fn sweep_queue_works() {
 fn sweep_queue_wraps_works() {
 	use MessageOrigin::*;
 	build_and_execute::<Test>(|| {
-		BookStateFor::<Test>::insert(Here, empty_book::<Test>());
-		knit(&Here);
+		build_ring::<Test>(&[Here]);
 
 		MessageQueue::sweep_queue(Here);
 		let book = BookStateFor::<Test>::get(Here);

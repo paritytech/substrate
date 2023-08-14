@@ -162,11 +162,8 @@ pub fn unknit<T: Config>(o: &<<T as Config>::MessageProcessor as ProcessMessage>
 pub fn build_ring<T: Config>(
 	queues: &[<<T as Config>::MessageProcessor as ProcessMessage>::Origin],
 ) {
-	for queue in queues {
-		BookStateFor::<T>::insert(queue, empty_book::<T>());
-	}
-	for queue in queues {
-		knit::<T>(queue);
+	for queue in queues.iter() {
+		crate::Pallet::<T>::enqueue_message(msg("1"), queue.clone());
 	}
 	assert_ring::<T>(queues);
 }
