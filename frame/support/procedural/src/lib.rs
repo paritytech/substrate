@@ -759,6 +759,7 @@ pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> TokenStream {
 		attrs.into(),
 		input.into(),
 		custom_attrs.disambiguation_path,
+		custom_attrs.replace_verbatim,
 	)
 	.unwrap_or_else(|r| r.into_compile_error())
 	.into()

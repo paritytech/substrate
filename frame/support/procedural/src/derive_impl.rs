@@ -23,7 +23,8 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use std::collections::HashSet;
 use syn::{
-	parse2, parse_quote, spanned::Spanned, token, Ident, ImplItem, ItemImpl, Path, Result, Token,
+	parse2, parse_quote, spanned::Spanned, token, Ident, ImplItem, ItemImpl, LitBool, Path, Result,
+	Token,
 };
 
 mod keyword {
@@ -57,12 +58,15 @@ where
 	}
 }
 
-#[derive(Parse)]
+#[derive(Parse, Debug)]
 pub struct DeriveImplAttrArgs {
 	pub default_impl_path: Path,
 	_as: Option<Token![as]>,
 	#[parse_if(_as.is_some())]
 	pub disambiguation_path: Option<Path>,
+	_comma: Option<Token![,]>,
+	#[parse_if(_comma.is_some())]
+	pub replace_verbatim: Option<LitBool>,
 }
 
 impl ForeignPath for DeriveImplAttrArgs {
@@ -76,6 +80,8 @@ impl ToTokens for DeriveImplAttrArgs {
 		tokens.extend(self.default_impl_path.to_token_stream());
 		tokens.extend(self._as.to_token_stream());
 		tokens.extend(self.disambiguation_path.to_token_stream());
+		tokens.extend(self._comma.to_token_stream());
+		tokens.extend(self.replace_verbatim.to_token_stream());
 	}
 }
 
@@ -111,6 +117,7 @@ fn combine_impls(
 	foreign_impl: ItemImpl,
 	default_impl_path: Path,
 	disambiguation_path: Path,
+	replace_verbatim: bool,
 ) -> ItemImpl {
 	let (existing_local_keys, existing_unsupported_items): (HashSet<ImplItem>, HashSet<ImplItem>) =
 		local_impl
@@ -129,21 +136,23 @@ fn combine_impls(
 				// do not copy colliding items that have an ident
 				return None
 			}
-			if let ImplItem::Type(item) = item.clone() {
-				let mut item = item.clone();
-				if let Ok(Some(PalletAttr { typ: PalletAttrType::Verbatim(_), .. })) =
-					take_first_item_pallet_attr::<PalletAttr>(&mut item)
-				{
+			if replace_verbatim {
+				if let ImplItem::Type(item) = item.clone() {
+					let mut item = item.clone();
+					if let Ok(Some(PalletAttr { typ: PalletAttrType::Verbatim(_), .. })) =
+						take_first_item_pallet_attr::<PalletAttr>(&mut item)
+					{
+						let modified_item: ImplItem = parse_quote! {
+							type #ident = #ident;
+						};
+						return Some(modified_item)
+					}
+					// modify and insert uncolliding type items
 					let modified_item: ImplItem = parse_quote! {
-						type #ident = #ident;
+						type #ident = <#default_impl_path as #disambiguation_path>::#ident;
 					};
 					return Some(modified_item)
 				}
-				// modify and insert uncolliding type items
-				let modified_item: ImplItem = parse_quote! {
-					type #ident = <#default_impl_path as #disambiguation_path>::#ident;
-				};
-				return Some(modified_item)
 			}
 			// copy uncolliding non-type items that have an ident
 			Some(item)
@@ -174,6 +183,7 @@ pub fn derive_impl(
 	foreign_tokens: TokenStream2,
 	local_tokens: TokenStream2,
 	disambiguation_path: Option<Path>,
+	replace_verbatim: Option<LitBool>,
 ) -> Result<TokenStream2> {
 	let local_impl = parse2::<ItemImpl>(local_tokens)?;
 	let foreign_impl = parse2::<ItemImpl>(foreign_tokens)?;
@@ -192,9 +202,18 @@ pub fn derive_impl(
 			)),
 	};
 
+	let replace_verbatim = match replace_verbatim {
+		Some(LitBool { value, .. }) => value,
+		_ => true,
+	};
 	// generate the combined impl
-	let combined_impl =
-		combine_impls(local_impl, foreign_impl, default_impl_path, disambiguation_path);
+	let combined_impl = combine_impls(
+		local_impl,
+		foreign_impl,
+		default_impl_path,
+		disambiguation_path,
+		replace_verbatim,
+	);
 
 	Ok(quote!(#combined_impl))
 }
