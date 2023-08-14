@@ -149,7 +149,6 @@ And update the overall definition for weights on frame and a few related types a
 +	type DbWeight = RocksDbWeight;
  	type RuntimeOrigin = RuntimeOrigin;
  	type RuntimeCall = RuntimeCall;
-type RuntimeTask = RuntimeTask;
  	type Index = Index;
 @@ -171,25 +198,19 @@ impl frame_system::Trait for Runtime {
  	type Header = generic::Header<BlockNumber, BlakeTwo256>;

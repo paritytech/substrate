@@ -20,7 +20,7 @@
 
 /// Contain's re-exports of all the supporting types for the [`Task`] trait. Used in the macro
 /// expansion of `RuntimeTask`.
-pub mod task_prelude {
+pub mod prelude {
 	pub use codec::FullCodec;
 	pub use scale_info::TypeInfo;
 	pub use sp_runtime::DispatchError;
@@ -28,7 +28,7 @@ pub mod task_prelude {
 	pub use sp_weights::Weight;
 }
 
-use task_prelude::*;
+use prelude::*;
 
 /// A general-purpose trait which defines a type of service work (i.e., work to performed by an
 /// off-chain worker) including methods for enumerating, validating, indexing, and running

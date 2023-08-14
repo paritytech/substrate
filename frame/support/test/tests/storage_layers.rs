@@ -70,7 +70,6 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeTask = RuntimeTask;
 	type Nonce = Nonce;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;

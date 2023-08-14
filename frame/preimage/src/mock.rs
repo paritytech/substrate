@@ -50,7 +50,6 @@ impl frame_system::Config for Test {
 	type DbWeight = RocksDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeTask = RuntimeTask;
 	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;

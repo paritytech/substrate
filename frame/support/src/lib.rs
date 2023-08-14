@@ -849,6 +849,7 @@ pub mod tests {
 			type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;
 			type RuntimeOrigin;
 			type RuntimeCall;
+			type RuntimeTask;
 			type PalletInfo: crate::traits::PalletInfo;
 			type DbWeight: Get<crate::weights::RuntimeDbWeight>;
 		}
@@ -978,7 +979,6 @@ pub mod tests {
 		type BaseCallFilter = crate::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
-		type RuntimeTask = RuntimeTask;
 		type PalletInfo = PalletInfo;
 		type DbWeight = ();
 	}
@@ -1552,8 +1552,9 @@ pub mod pallet_prelude {
 			StorageList,
 		},
 		traits::{
-			BuildGenesisConfig, ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks,
-			IsType, PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
+			AggregatedTask, BuildGenesisConfig, ConstU32, EnsureOrigin, Get, GetDefault,
+			GetStorageVersion, Hooks, IsType, PalletInfoAccess, StorageInfoTrait, StorageVersion,
+			Task, TypedGet,
 		},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,
 		PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,

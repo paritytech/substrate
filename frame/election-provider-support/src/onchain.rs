@@ -210,7 +210,6 @@ mod tests {
 		type RuntimeOrigin = RuntimeOrigin;
 		type Nonce = Nonce;
 		type RuntimeCall = RuntimeCall;
-		type RuntimeTask = RuntimeTask;
 		type Hash = sp_core::H256;
 		type Hashing = sp_runtime::traits::BlakeTwo256;
 		type AccountId = AccountId;

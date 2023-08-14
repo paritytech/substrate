@@ -86,7 +86,7 @@ use sp_version::RuntimeVersion;
 
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 #[cfg(feature = "std")]
-use frame_support::traits::{BuildGenesisConfig, Task};
+use frame_support::traits::BuildGenesisConfig;
 use frame_support::{
 	dispatch::{
 		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
@@ -201,7 +201,7 @@ impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, 
 #[frame_support::pallet]
 pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
-	use frame_support::{pallet_prelude::*, traits::Task};
+	use frame_support::{pallet_prelude::*, traits::AggregatedTask};
 
 	/// Contains default types suitable for various environments
 	pub mod config_preludes {
@@ -273,8 +273,9 @@ pub mod pallet {
 			+ Debug
 			+ From<Call<Self>>;
 
+		/// The aggregated `RuntimeTask` type.
 		#[pallet::no_default]
-		type RuntimeTask: Sized + FullCodec + TypeInfo + Clone + Debug + PartialEq + Eq;
+		type RuntimeTask: AggregatedTask;
 
 		/// This stores the number of previous transactions associated with a sender account.
 		type Nonce: Parameter

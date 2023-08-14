@@ -37,7 +37,6 @@ error[E0412]: cannot find type `RuntimeCall` in this scope
   --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:26:21
    |
 26 |     type RuntimeCall = RuntimeCall;
-type RuntimeTask = RuntimeTask;
    |                        ^^^^^^^^^^^ help: you might have meant to use the associated type: `Self::RuntimeCall`
 
 error[E0412]: cannot find type `RuntimeEvent` in this scope

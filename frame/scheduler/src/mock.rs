@@ -125,7 +125,6 @@ impl system::Config for Test {
 	type DbWeight = RocksDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeTask = RuntimeTask;
 	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
@@ -209,7 +208,6 @@ impl Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type PalletsOrigin = OriginCaller;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeTask = RuntimeTask;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 	type MaxScheduledPerBlock = ConstU32<10>;

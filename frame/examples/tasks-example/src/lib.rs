@@ -66,12 +66,12 @@ pub mod pallet {
 	where
 		T: TypeInfo,
 	{
-		type Enumeration = std::vec::IntoIter<Task<T>>;
+		type Enumeration = sp_std::vec::IntoIter<Task<T>>;
 
 		const TASK_INDEX: u64 = 0;
 
 		fn enumerate() -> Self::Enumeration {
-			vec![Task::Increment, Task::Decrement].into_iter()
+			sp_std::vec![Task::Increment, Task::Decrement].into_iter()
 		}
 
 		fn is_valid(&self) -> bool {
@@ -165,36 +165,6 @@ pub mod pallet {
 				task.run()
 			} else {
 				Err(Error::<T>::InvalidTask.into())
-			}
-		}
-	}
-
-	// I think we can actually auto-impl this in the macros if an existing `ValidateUnsigned`
-	// impl is not present. If one is present, we just wouldn't emit an impl for this. An
-	// existing impl will be easy to find using a simple visitor pattern in the macros.
-	impl<T: Config + TypeInfo> frame_support::unsigned::ValidateUnsigned for Pallet<T> {
-		type Call = Call<T>;
-
-		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			// TODO: verify `source` ?
-			use frame_support::traits::Task;
-			match call {
-				Call::do_task { task } => {
-					if task.is_valid() {
-						Ok(ValidTransaction {
-							priority: 0, // TODO: make configurable on Task?
-							requires: vec![],
-							provides: vec![task.encode()],
-							longevity: TransactionLongevity::max_value(),
-							propagate: true,
-						})
-					} else {
-						InvalidTransaction::Custom(1u8).into()
-						// TODO: custom error enum for this? Maybe we can put it in some
-						// globally accessible place? Or just always generate the same enum?
-					}
-				},
-				_ => InvalidTransaction::Call.into(),
 			}
 		}
 	}

@@ -52,7 +52,6 @@ impl frame_system::Config for Test {
 	type Nonce = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeTask = RuntimeTask;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -100,7 +99,6 @@ impl Contains<RuntimeCall> for TestBaseCallFilter {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeTask = RuntimeTask;
 	type Currency = Balances;
 	type DepositBase = ConstU64<1>;
 	type DepositFactor = ConstU64<1>;

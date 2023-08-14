@@ -55,7 +55,6 @@ impl frame_system::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeTask = RuntimeTask;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
@@ -97,7 +96,6 @@ parameter_types! {
 impl Config for Test {
 	type PalletId = LotteryPalletId;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeTask = RuntimeTask;
 	type Currency = Balances;
 	type Randomness = TestRandomness<Self>;
 	type RuntimeEvent = RuntimeEvent;

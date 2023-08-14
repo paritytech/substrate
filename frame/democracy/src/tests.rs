@@ -85,7 +85,6 @@ impl frame_system::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeTask = RuntimeTask;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
@@ -121,7 +120,6 @@ impl pallet_scheduler::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type PalletsOrigin = OriginCaller;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeTask = RuntimeTask;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EnsureRoot<u64>;
 	type MaxScheduledPerBlock = ConstU32<100>;

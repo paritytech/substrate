@@ -165,6 +165,7 @@ impl frame_system::Config for Runtime {
 	type AccountId = AccountId;
 	/// The aggregated dispatch type that is available for extrinsics.
 	type RuntimeCall = RuntimeCall;
+	/// The aggregated task type that is available for extrinsics.
 	type RuntimeTask = RuntimeTask;
 	/// The lookup mechanism to get account ID from whatever is passed in dispatchers.
 	type Lookup = AccountIdLookup<AccountId, ()>;
@@ -270,7 +271,6 @@ impl pallet_transaction_payment::Config for Runtime {
 impl pallet_sudo::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeTask = RuntimeTask;
 	type WeightInfo = pallet_sudo::weights::SubstrateWeight<Runtime>;
 }
 

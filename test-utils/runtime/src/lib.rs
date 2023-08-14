@@ -349,7 +349,6 @@ impl frame_system::pallet::Config for Runtime {
 	type BlockLength = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeTask = RuntimeTask;
 	type Nonce = Nonce;
 	type Hash = H256;
 	type Hashing = Hashing;

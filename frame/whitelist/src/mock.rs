@@ -53,7 +53,6 @@ impl frame_system::Config for Test {
 	type Nonce = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeTask = RuntimeTask;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -99,7 +98,6 @@ impl pallet_preimage::Config for Test {
 impl pallet_whitelist::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeTask = RuntimeTask;
 	type WhitelistOrigin = EnsureRoot<Self::AccountId>;
 	type DispatchWhitelistedOrigin = EnsureRoot<Self::AccountId>;
 	type Preimages = Preimage;
