@@ -117,7 +117,7 @@ pub use messages::{
 };
 
 pub mod tasks;
-pub use tasks::*;
+pub use tasks::{AggregatedTask, Task};
 
 #[cfg(feature = "try-runtime")]
 mod try_runtime;

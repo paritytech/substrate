@@ -201,10 +201,7 @@ impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, 
 #[frame_support::pallet]
 pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
-	use frame_support::pallet_prelude::*;
-
-	#[cfg(doc)]
-	use frame_support::traits::Task;
+	use frame_support::{pallet_prelude::*, traits::Task};
 
 	/// Contains default types suitable for various environments
 	pub mod config_preludes {
@@ -277,7 +274,7 @@ pub mod pallet {
 			+ From<Call<Self>>;
 
 		#[pallet::no_default]
-		type RuntimeTask: Task;
+		type RuntimeTask: Sized + FullCodec + TypeInfo + Clone + Debug + PartialEq + Eq;
 
 		/// This stores the number of previous transactions associated with a sender account.
 		type Nonce: Parameter
