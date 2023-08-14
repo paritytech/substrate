@@ -1600,15 +1600,6 @@ fn self_destruct_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: addr.clone(),
-						to: DJANGO,
-						amount: 100_000 + min_balance,
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Terminated {
 						contract: addr.clone(),
 						beneficiary: DJANGO
@@ -1638,6 +1629,15 @@ fn self_destruct_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::System(frame_system::Event::KilledAccount {
 						account: addr.clone()
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
+						from: addr.clone(),
+						to: DJANGO,
+						amount: 100_000 + min_balance,
 					}),
 					topics: vec![],
 				},

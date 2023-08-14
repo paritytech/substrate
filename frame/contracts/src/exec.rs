@@ -22,7 +22,7 @@ use crate::{
 	storage::{self, WriteOutcome},
 	BalanceOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo, ContractInfoOf,
 	DebugBufferVec, Determinism, Error, Event, Nonce, Origin, Pallet as Contracts, Schedule,
-	System, WasmBlob, LOG_TARGET,
+	WasmBlob, LOG_TARGET,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
@@ -33,7 +33,7 @@ use frame_support::{
 	storage::{with_transaction, TransactionOutcome},
 	traits::{
 		fungible::{Inspect, Mutate},
-		tokens::{Fortitude::Polite, Preservation},
+		tokens::Preservation,
 		Contains, OriginTrait, Randomness, Time,
 	},
 	weights::Weight,
@@ -1283,21 +1283,8 @@ where
 		}
 		let frame = self.top_frame_mut();
 		let info = frame.terminate();
-		frame.nested_storage.terminate(&info);
+		frame.nested_storage.terminate(&info, beneficiary);
 
-		// During the termination process we first transfer all the free balance of the contract to
-		// the beneficiary. And then we release the held balance under the `StorageDepositReserve`
-		// reason to be transferred back.
-		// We need a provider so that the `reducible_balance` calculation includes the `ed` and the
-		// `transfer` succeeds while keeping the account alive. The provider is removed once the
-		// storage deposit process is finished.
-		System::<T>::inc_providers(&frame.account_id);
-		Self::transfer(
-			Preservation::Expendable,
-			&frame.account_id,
-			beneficiary,
-			T::Currency::reducible_balance(&frame.account_id, Preservation::Expendable, Polite),
-		)?;
 		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::decrement_refcount(info.code_hash);
