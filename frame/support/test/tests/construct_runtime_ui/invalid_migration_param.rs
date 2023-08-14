@@ -17,7 +17,8 @@ impl frame_system::Config for Runtime {
 struct Dummy;
 
 construct_runtime! {
-	pub struct Runtime<Dummy>
+	type Migrations = (Dummy);
+	pub struct Runtime
 	{
 		System: frame_system
 	}

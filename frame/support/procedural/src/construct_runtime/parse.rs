@@ -24,7 +24,7 @@ use syn::{
 	parse::{Parse, ParseStream},
 	punctuated::Punctuated,
 	spanned::Spanned,
-	token, Attribute, Error, Ident, Path, Result, Token,
+	token, Attribute, Error, Ident, Path, Result, Token, Type,
 };
 
 mod keyword {
@@ -82,6 +82,8 @@ pub struct ExplicitRuntimeDeclaration {
 
 impl Parse for RuntimeDeclaration {
 	fn parse(input: ParseStream) -> Result<Self> {
+		let executive_section = if input.peek(Token![type]) { Some(input.parse()?) } else { None };
+
 		input.parse::<Token![pub]>()?;
 
 		// Support either `enum` or `struct`.
@@ -92,8 +94,6 @@ impl Parse for RuntimeDeclaration {
 		}
 
 		let name = input.parse::<syn::Ident>()?;
-
-		let executive_section = if input.peek(Token![<]) { Some(input.parse()?) } else { None };
 
 		let where_section = if input.peek(token::Where) { Some(input.parse()?) } else { None };
 		let pallets =
@@ -131,20 +131,65 @@ impl Parse for RuntimeDeclaration {
 #[derive(Debug)]
 pub struct ExecutiveSection {
 	pub span: Span,
-	pub custom_on_runtime_upgrade: Option<Ident>,
+	pub migration_section: Option<Migrations>,
 }
 
 impl Parse for ExecutiveSection {
 	fn parse(input: ParseStream) -> Result<Self> {
-		let _ = input.parse::<Token![<]>()?;
-		let custom_on_runtime_upgrade = if input.peek(Token![_]) {
-			let _ = input.parse::<Token![_]>()?;
-			None
+		let _ = input.parse::<Token![type]>()?;
+		let name = input.parse::<syn::Ident>()?;
+
+		let migration_section = if name.to_string() == "Migrations" {
+			Some(input.parse::<Migrations>()?)
 		} else {
-			Some(input.parse::<syn::Ident>()?)
+			None
 		};
-		let _ = input.parse::<Token![>]>()?;
-		Ok(Self { span: input.span(), custom_on_runtime_upgrade })
+
+		Ok(Self { span: input.span(), migration_section })
+	}
+}
+
+#[derive(Debug)]
+pub struct Migrations {
+	pub span: Span,
+	pub migrations: Punctuated<Migration, token::Comma>,
+}
+
+impl Parse for Migrations {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let _ = input.parse::<Token![=]>()?;
+
+		let content;
+		syn::parenthesized!(content in input);
+
+		let migrations = content.parse_terminated(Migration::parse, Token![,])?;
+		let _ = input.parse::<Token![;]>()?;
+		Ok(Self { span: input.span(), migrations })
+	}
+}
+
+impl ToTokens for Migrations {
+	fn to_tokens(&self, tokens: &mut TokenStream) {
+		self.migrations.to_tokens(tokens);
+	}
+}
+
+#[derive(Debug)]
+pub struct Migration {
+	pub span: Span,
+	pub ident: Type,
+}
+
+impl Parse for Migration {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let name = input.parse::<Type>()?;
+		Ok(Self { span: input.span(), ident: name })
+	}
+}
+
+impl ToTokens for Migration {
+	fn to_tokens(&self, tokens: &mut TokenStream) {
+		self.ident.to_tokens(tokens);
 	}
 }
 

@@ -8,11 +8,12 @@ error[E0599]: the function or associated item `execute_block` exists for struct 
    |  __^
    | | _|
    | ||
-20 | ||     pub struct Runtime<Dummy>
-21 | ||     {
-22 | ||         System: frame_system
-23 | ||     }
-24 | || }
+20 | ||     type Migrations = (Dummy);
+21 | ||     pub struct Runtime
+22 | ||     {
+23 | ||         System: frame_system
+24 | ||     }
+25 | || }
    | ||_- in this macro invocation
 ...  |
    |
@@ -41,11 +42,12 @@ error[E0599]: the function or associated item `initialize_block` exists for stru
    |  __^
    | | _|
    | ||
-20 | ||     pub struct Runtime<Dummy>
-21 | ||     {
-22 | ||         System: frame_system
-23 | ||     }
-24 | || }
+20 | ||     type Migrations = (Dummy);
+21 | ||     pub struct Runtime
+22 | ||     {
+23 | ||         System: frame_system
+24 | ||     }
+25 | || }
    | ||_- in this macro invocation
 ...  |
    |
@@ -74,11 +76,12 @@ error[E0599]: the function or associated item `apply_extrinsic` exists for struc
    |  __^
    | | _|
    | ||
-20 | ||     pub struct Runtime<Dummy>
-21 | ||     {
-22 | ||         System: frame_system
-23 | ||     }
-24 | || }
+20 | ||     type Migrations = (Dummy);
+21 | ||     pub struct Runtime
+22 | ||     {
+23 | ||         System: frame_system
+24 | ||     }
+25 | || }
    | ||_- in this macro invocation
 ...  |
    |
@@ -107,11 +110,12 @@ error[E0599]: the function or associated item `finalize_block` exists for struct
    |  __^
    | | _|
    | ||
-20 | ||     pub struct Runtime<Dummy>
-21 | ||     {
-22 | ||         System: frame_system
-23 | ||     }
-24 | || }
+20 | ||     type Migrations = (Dummy);
+21 | ||     pub struct Runtime
+22 | ||     {
+23 | ||         System: frame_system
+24 | ||     }
+25 | || }
    | ||_- in this macro invocation
 ...  |
    |
@@ -140,11 +144,12 @@ error[E0599]: the function or associated item `validate_transaction` exists for 
    |  __^
    | | _|
    | ||
-20 | ||     pub struct Runtime<Dummy>
-21 | ||     {
-22 | ||         System: frame_system
-23 | ||     }
-24 | || }
+20 | ||     type Migrations = (Dummy);
+21 | ||     pub struct Runtime
+22 | ||     {
+23 | ||         System: frame_system
+24 | ||     }
+25 | || }
    | ||_- in this macro invocation
 ...  |
    |
@@ -173,11 +178,12 @@ error[E0599]: the function or associated item `offchain_worker` exists for struc
    |  __^
    | | _|
    | ||
-20 | ||     pub struct Runtime<Dummy>
-21 | ||     {
-22 | ||         System: frame_system
-23 | ||     }
-24 | || }
+20 | ||     type Migrations = (Dummy);
+21 | ||     pub struct Runtime
+22 | ||     {
+23 | ||         System: frame_system
+24 | ||     }
+25 | || }
    | ||_- in this macro invocation
 ...  |
    |

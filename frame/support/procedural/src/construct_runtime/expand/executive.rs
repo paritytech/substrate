@@ -30,8 +30,8 @@ pub fn expand_executive(
 ) -> Result<TokenStream> {
 	let executive = generate_crate_access_2018("frame-executive")?;
 
-	let on_runtime_upgrade = match executive_section.custom_on_runtime_upgrade {
-		Some(custom) => quote!(#custom),
+	let migrations = match executive_section.migration_section {
+		Some(migrations) => quote!(#migrations),
 		None => quote!(()),
 	};
 
@@ -67,7 +67,7 @@ pub fn expand_executive(
 			#system::ChainContext<#runtime>,
 			#runtime,
 			AllPalletsWithSystem,
-			#on_runtime_upgrade
+			(#migrations)
 		>;
 
 		impl #runtime {

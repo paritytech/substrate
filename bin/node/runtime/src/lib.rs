@@ -1874,7 +1874,14 @@ impl pallet_statement::Config for Runtime {
 }
 
 construct_runtime!(
-	pub struct Runtime<Migrations>
+	// All migrations executed on runtime upgrade as a nested tuple of types implementing
+	// `OnRuntimeUpgrade`.
+	type Migrations = (
+		pallet_nomination_pools::migration::v2::MigrateToV2<Runtime>,
+		pallet_alliance::migration::Migration<Runtime>,
+		pallet_contracts::Migration<Runtime>,
+	);
+	pub struct Runtime
 	{
 		System: frame_system,
 		Utility: pallet_utility,
@@ -1982,14 +1989,6 @@ pub type UncheckedExtrinsic =
 pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, RuntimeCall, SignedExtra>;
-
-// All migrations executed on runtime upgrade as a nested tuple of types implementing
-// `OnRuntimeUpgrade`.
-type Migrations = (
-	pallet_nomination_pools::migration::v2::MigrateToV2<Runtime>,
-	pallet_alliance::migration::Migration<Runtime>,
-	pallet_contracts::Migration<Runtime>,
-);
 
 type EventRecord = frame_system::EventRecord<
 	<Runtime as frame_system::Config>::RuntimeEvent,
