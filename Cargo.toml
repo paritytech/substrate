@@ -29,14 +29,15 @@ frame-support = { path = "frame/support" }
 
 node-cli = { path = "bin/node/cli" }
 
-# This list of dependencies is necessary to build sassafras primitives
-# `bandersnatch-experimental` is transitifely passed between:
+# This list of dependencies is necessary to build sassafras primitives.
+# `bandersnatch-experimental` is transitively passed between:
 # sp-consensus-sassafras → sp-application-crypto → sp-io → sp-keystore
-#   This last thus defines the bandersnatch functions for its trait `Keystore`.
-# We end up requiring bandersnatch implementations in the client keystore as well.
+# Thus we end up having the bandersnatch functions "unlocked" in the `Keystore` trait.
+# Follow that we require bandersnatch implementations in the client keystore as well.
 sp-consensus-sassafras = { path = "primitives/consensus/sassafras", optional = true }
 sc-keystore = { path = "client/keystore" }
 
+# Feature to unlock "Sassafras" experimental crates
 [features]
 sassafras-experimental = [ 
 	"sp-consensus-sassafras",

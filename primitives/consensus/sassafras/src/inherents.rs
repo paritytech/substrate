@@ -26,7 +26,7 @@ pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"sassslot";
 /// The type of inherent.
 pub type InherentType = sp_consensus_slots::Slot;
 
-/// Auxiliary trait to extract inherent data.
+/// Convenience trait to manipulate protocol-specific inherent data.
 pub trait SassafrasInherentData {
 	/// Get inherent data.
 	fn sassafras_get_inherent_data(&self) -> Result<Option<InherentType>, Error>;
