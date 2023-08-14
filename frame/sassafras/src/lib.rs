@@ -373,6 +373,7 @@ pub mod pallet {
 			log::debug!(target: LOG_TARGET, "... Loaded");
 
 			// TODO @davxy this should be done once per epoch and with the NEXT EPOCH AUTHORITIES!!!
+			// For this we need the `ProofVerifier` to be serializable @svasilyev
 			let pks: Vec<_> = Self::authorities().iter().map(|auth| *auth.as_ref()).collect();
 			log::debug!(target: LOG_TARGET, "Building verifier. Ring size {}", pks.len());
 			let verifier = ring_ctx.verifier(pks.as_slice()).unwrap();
