@@ -17,7 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use futures::channel::oneshot;
-use parking_lot::Mutex;
 use sc_client_api::Backend;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
@@ -109,18 +108,15 @@ impl BlockStateMachine {
 }
 
 /// Limit the number of ongoing operations across methods.
-#[derive(Clone)]
 struct LimitOperations {
-	/// Maximum number of operations that can be executed at the same time.
-	max_operations: usize,
-	/// The number of ongoing operations for this subscription.
-	ongoing: Arc<Mutex<usize>>,
+	/// Limit the number of ongoing operations for this subscription.
+	semaphore: Arc<tokio::sync::Semaphore>,
 }
 
 impl LimitOperations {
 	/// Constructs a new [`LimitOperations`].
 	fn new(max_operations: usize) -> Self {
-		LimitOperations { max_operations, ongoing: Default::default() }
+		LimitOperations { semaphore: Arc::new(tokio::sync::Semaphore::new(max_operations)) }
 	}
 
 	/// Reserves capacity to execute at least one operation and at most the requested items.
@@ -131,20 +127,20 @@ impl LimitOperations {
 	/// Returns nothing if there's no space available, else returns a permit
 	/// that guarantees that at least one operation can be executed.
 	fn reserve_at_most(&self, to_reserve: usize) -> Option<PermitOperations> {
-		let mut ongoing = self.ongoing.lock();
-
-		// The maximum capacity.
-		let capacity = self.max_operations.saturating_sub(*ongoing);
-		// The number of operations we can reserve.
-		let reserved = capacity.min(to_reserve);
-
-		if reserved == 0 {
-			None
-		} else {
-			// Update the ongoing operations.
-			*ongoing = ongoing.saturating_add(reserved);
-			Some(PermitOperations { num_ops: reserved, ongoing: self.ongoing.clone() })
+		if to_reserve == 0 {
+			return None
 		}
+
+		let mut permit = Arc::clone(&self.semaphore).try_acquire_owned().ok()?;
+		let mut num_ops = 1;
+
+		while num_ops < to_reserve {
+			let Ok(new_permit) = Arc::clone(&self.semaphore).try_acquire_owned() else { break };
+			permit.merge(new_permit);
+			num_ops += 1;
+		}
+
+		Some(PermitOperations { num_ops, _permit: permit })
 	}
 }
 
@@ -157,8 +153,8 @@ impl LimitOperations {
 struct PermitOperations {
 	/// The number of operations permitted (reserved).
 	num_ops: usize,
-	/// The number of ongoing operations for this subscription.
-	ongoing: Arc<Mutex<usize>>,
+	/// The permit for these operations.
+	_permit: tokio::sync::OwnedSemaphorePermit,
 }
 
 impl PermitOperations {
@@ -167,13 +163,6 @@ impl PermitOperations {
 	/// This can be smaller than the number of items requested via [`LimitOperations::reserve()`].
 	fn num_reserved(&self) -> usize {
 		self.num_ops
-	}
-}
-
-impl Drop for PermitOperations {
-	fn drop(&mut self) {
-		let mut ongoing = self.ongoing.lock();
-		*ongoing = ongoing.saturating_sub(self.num_ops);
 	}
 }
 
