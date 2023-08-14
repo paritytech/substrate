@@ -18,11 +18,17 @@
 //! Contains the [`Task`] trait, which defines a general-purpose way for defining and executing
 //! service work, and supporting types.
 
-use codec::FullCodec;
-use scale_info::TypeInfo;
-use sp_runtime::DispatchError;
-use sp_std::{fmt::Debug, iter::Iterator};
-use sp_weights::Weight;
+/// Contain's re-exports of all the supporting types for the [`Task`] trait. Used in the macro
+/// expansion of `RuntimeTask`.
+pub mod task_prelude {
+	pub use codec::FullCodec;
+	pub use scale_info::TypeInfo;
+	pub use sp_runtime::DispatchError;
+	pub use sp_std::{fmt::Debug, iter::Iterator};
+	pub use sp_weights::Weight;
+}
+
+use task_prelude::*;
 
 /// A general-purpose trait which defines a type of service work (i.e., work to performed by an
 /// off-chain worker) including methods for enumerating, validating, indexing, and running
@@ -45,7 +51,24 @@ pub trait Task: Sized + FullCodec + TypeInfo + Clone + Debug + PartialEq + Eq {
 	/// Returns the weight of executing this `Task`.
 	fn weight(&self) -> Weight;
 
+	/// A unique value representing this `Task`. Analogous to `call_index`, but for tasks.
 	fn task_index(&self) -> u64 {
 		Self::TASK_INDEX
 	}
+}
+
+/// Contains a subset of [`Task`] that can be generalized over the aggregated `RuntimeTask`
+/// enum.
+pub trait AggregatedTask: Sized + FullCodec + TypeInfo + Clone + Debug + PartialEq + Eq {
+	/// Checks if a particular instance of this `Task` variant is a valid piece of work.
+	fn is_valid(&self) -> bool;
+
+	/// Performs the work for this particular `Task` variant.
+	fn run(&self) -> Result<(), DispatchError>;
+
+	/// Returns the weight of executing this `Task`.
+	fn weight(&self) -> Weight;
+
+	/// A unique value representing this `Task`. Analogous to `call_index`, but for tasks.
+	fn task_index(&self) -> u64;
 }
