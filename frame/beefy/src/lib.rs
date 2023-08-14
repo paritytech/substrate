@@ -299,6 +299,30 @@ pub mod pallet {
 			Self::validate_unsigned(source, call)
 		}
 	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
+			// weight used by `on_finalize()` hook
+			frame_support::weights::constants::RocksDbWeight::get().reads(1)
+		}
+
+		fn on_finalize(n: BlockNumberFor<T>) {
+			// this check is only true when consensus is reset, so we can safely
+			// estimate the average weight is just one Db read.
+			if GenesisBlock::<T>::get() == Some(n) {
+				let validators = Authorities::<T>::get();
+				let set_id = ValidatorSetId::<T>::get();
+				if let Some(validator_set) = ValidatorSet::<T::BeefyId>::new(validators, set_id) {
+					let log = DigestItem::Consensus(
+						BEEFY_ENGINE_ID,
+						ConsensusLog::ConsensusReset(validator_set).encode(),
+					);
+					<frame_system::Pallet<T>>::deposit_log(log);
+				}
+			}
+		}
+	}
 }
 
 impl<T: Config> Pallet<T> {

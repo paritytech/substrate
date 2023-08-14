@@ -17,7 +17,7 @@
 
 use std::vec;
 
-use codec::Encode;
+use codec::{Decode, Encode};
 use sp_consensus_beefy::{
 	check_equivocation_proof, generate_equivocation_proof, known_payloads::MMR_ROOT_ID,
 	Keyring as BeefyKeyring, Payload, ValidatorSet, KEY_TYPE as BEEFY_KEY_TYPE,
@@ -28,7 +28,7 @@ use sp_runtime::DigestItem;
 use frame_support::{
 	assert_err, assert_ok,
 	dispatch::{GetDispatchInfo, Pays},
-	traits::{Currency, KeyOwnerProofSystem, OnInitialize},
+	traits::{Currency, KeyOwnerProofSystem, OnFinalize, OnInitialize},
 };
 
 use crate::{mock::*, Call, Config, Error, Weight, WeightInfo};
@@ -801,14 +801,67 @@ fn set_new_genesis_works() {
 
 		let new_genesis = 10u64;
 		// the call for setting new genesis should work
-		assert_ok!(Beefy::set_new_genesis(RuntimeOrigin::root(), new_genesis,));
+		assert_ok!(Beefy::set_new_genesis(RuntimeOrigin::root(), new_genesis));
 		// verify new genesis was set
 		assert_eq!(Beefy::genesis_block(), Some(new_genesis));
 
 		// setting to old block should fail
 		assert_err!(
-			Beefy::set_new_genesis(RuntimeOrigin::root(), 1u64,),
+			Beefy::set_new_genesis(RuntimeOrigin::root(), 1u64),
 			Error::<Test>::InvalidConfiguration,
 		);
+	});
+}
+
+#[test]
+fn deposit_consensus_reset_log_works() {
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		fn find_consensus_reset_log() -> Option<ConsensusLog<BeefyId>> {
+			for log in System::digest().logs.iter_mut() {
+				if let DigestItem::Consensus(BEEFY_ENGINE_ID, inner_log) = log {
+					let inner_decoded =
+						ConsensusLog::<BeefyId>::decode(&mut &inner_log[..]).unwrap();
+					if matches!(inner_decoded, ConsensusLog::ConsensusReset(_)) {
+						return Some(inner_decoded)
+					}
+				}
+			}
+			None
+		}
+
+		start_era(1);
+		push_block(4);
+
+		// no consensus reset log
+		assert!(find_consensus_reset_log().is_none());
+
+		let new_genesis = 6u64;
+		// the call for setting new genesis should work
+		assert_ok!(Beefy::set_new_genesis(RuntimeOrigin::root(), new_genesis));
+		// verify new genesis was set
+		assert_eq!(Beefy::genesis_block(), Some(new_genesis));
+
+		// there should still be no digest (yet)
+		assert!(find_consensus_reset_log().is_none());
+
+		push_block(5);
+
+		// there should still be no digest (yet)
+		assert!(find_consensus_reset_log().is_none());
+
+		assert_eq!(System::block_number(), new_genesis);
+		Beefy::on_finalize(System::block_number());
+
+		// consensus reset log should be there now
+		let log = find_consensus_reset_log().unwrap();
+
+		// validate logged authorities
+		let validators = Beefy::authorities();
+		let set_id = Beefy::validator_set_id();
+		let want_validator_set = ValidatorSet::<BeefyId>::new(validators, set_id).unwrap();
+		let want = ConsensusLog::ConsensusReset(want_validator_set);
+		assert_eq!(want.encode(), log.encode());
 	});
 }
