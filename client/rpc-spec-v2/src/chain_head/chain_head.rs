@@ -72,7 +72,7 @@ const MAX_PINNED_BLOCKS: usize = 512;
 /// this constant. When a subscription contains a block older than this,
 /// the subscription becomes subject to termination.
 /// Note: This should be enough for immediate blocks.
-const MAX_PINNED_SECONDS: u64 = 60;
+const MAX_PINNED_DURATION: Duration = Duration::from_secs(60);
 
 /// The maximum number of ongoing operations per subscription.
 /// Note: The lower limit imposed by the spec is 16.
@@ -82,7 +82,7 @@ impl Default for ChainHeadConfig {
 	fn default() -> Self {
 		ChainHeadConfig {
 			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
-			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECONDS),
+			subscription_max_pinned_duration: MAX_PINNED_DURATION,
 			subscription_max_ongoing_operations: MAX_ONGOING_OPERATIONS,
 		}
 	}
