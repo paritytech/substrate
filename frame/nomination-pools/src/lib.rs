@@ -691,6 +691,7 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	/// Issue points to [`Self`] for `new_funds`.
+	/// Increase the TVL by the amount of funds.
 	fn issue(&mut self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
 		let points_to_issue = self.balance_to_point(new_funds);
 		self.points = self.points.saturating_add(points_to_issue);
@@ -1098,7 +1099,7 @@ impl<T: Config> UnbondPool<T> {
 		new_points
 	}
 
-	/// Dissolve some points from the unbonding pool, reducing the balance of the pool
+	/// Dissolve some points from the unbonding pool, reducing the balance of the pool and the TVL
 	/// proportionally.
 	///
 	/// This is the opposite of `issue`.
