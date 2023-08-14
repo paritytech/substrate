@@ -385,8 +385,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	///
-	/// This function returns an [`IncorrectData`](crate::Error::IncorrectData) error if the provided attribute `key` is
-	/// incorrectly formatted.
+	/// This function returns an [`IncorrectData`](crate::Error::IncorrectData) error if the
+	/// provided attribute `key` is incorrectly formatted.
 	pub fn construct_attribute_key(
 		key: Vec<u8>,
 	) -> Result<BoundedVec<u8, T::KeyLimit>, DispatchError> {
@@ -397,8 +397,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	///
-	/// This function returns an [`IncorrectData`](crate::Error::IncorrectData) error if the provided `value` is incorrectly
-	/// formatted.
+	/// This function returns an [`IncorrectData`](crate::Error::IncorrectData) error if the
+	/// provided `value` is incorrectly formatted.
 	pub fn construct_attribute_value(
 		value: Vec<u8>,
 	) -> Result<BoundedVec<u8, T::ValueLimit>, DispatchError> {
@@ -409,8 +409,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	///
-	/// This function returns an [`IncorrectData`](crate::Error::IncorrectData) error if the provided pallet attribute is
-	/// incorrectly formatted.
+	/// This function returns an [`IncorrectData`](crate::Error::IncorrectData) error if the
+	/// provided pallet attribute is incorrectly formatted.
 	pub fn has_system_attribute(
 		collection: &T::CollectionId,
 		item: &T::ItemId,

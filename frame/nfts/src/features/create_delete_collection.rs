@@ -28,7 +28,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	///
-	/// This function returns a [`CollectionIdInUse`](crate::Error::CollectionIdInUse) error if the collection ID is already in use.
+	/// This function returns a [`CollectionIdInUse`](crate::Error::CollectionIdInUse) error if the
+	/// collection ID is already in use.
 	pub fn do_create_collection(
 		collection: T::CollectionId,
 		owner: T::AccountId,
@@ -79,10 +80,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// # Errors
 	///
 	/// This function returns a dispatch error in the following cases:
-	/// - If the collection ID is not found ([`UnknownCollection`](crate::Error::UnknownCollection)).
-	/// - If the provided `maybe_check_owner` does not match the actual owner ([`NoPermission`](crate::Error::NoPermission)).
-	/// - If the collection is not empty (contains items) ([`CollectionNotEmpty`](crate::Error::CollectionNotEmpty)).
-	/// - If the `witness` does not match the actual collection details ([`BadWitness`](crate::Error::BadWitness)).
+	/// - If the collection ID is not found
+	///   ([`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - If the provided `maybe_check_owner` does not match the actual owner
+	///   ([`NoPermission`](crate::Error::NoPermission)).
+	/// - If the collection is not empty (contains items)
+	///   ([`CollectionNotEmpty`](crate::Error::CollectionNotEmpty)).
+	/// - If the `witness` does not match the actual collection details
+	///   ([`BadWitness`](crate::Error::BadWitness)).
 	pub fn do_destroy_collection(
 		collection: T::CollectionId,
 		witness: DestroyWitness,

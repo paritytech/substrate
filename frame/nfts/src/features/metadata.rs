@@ -212,8 +212,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	///
-	/// This function returns an [`IncorrectMetadata`](crate::Error::IncorrectMetadata) dispatch error if the provided metadata is incorrectly
-	/// formatted.
+	/// This function returns an [`IncorrectMetadata`](crate::Error::IncorrectMetadata) dispatch
+	/// error if the provided metadata is incorrectly formatted.
 	pub fn construct_metadata(
 		metadata: Vec<u8>,
 	) -> Result<BoundedVec<u8, T::StringLimit>, DispatchError> {
