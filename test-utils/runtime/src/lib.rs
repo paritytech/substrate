@@ -289,7 +289,8 @@ impl sp_runtime::traits::SignedExtension for CheckSubstrateCall {
 }
 
 construct_runtime!(
-	pub enum Runtime<_>
+	type Migrations = ();
+	pub enum Runtime
 	{
 		System: frame_system,
 		Babe: pallet_babe,
