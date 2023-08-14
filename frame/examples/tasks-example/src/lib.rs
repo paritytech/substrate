@@ -29,7 +29,7 @@ use sp_runtime::DispatchError;
 pub mod pallet {
 
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits::AggregatedTask};
 	use frame_system::pallet_prelude::*;
 
 	// this can be auto-generated from the macros
@@ -121,6 +121,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeTask: AggregatedTask;
 	}
 
 	#[pallet::pallet]

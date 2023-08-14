@@ -249,6 +249,7 @@ impl pallet_insecure_randomness_collective_flip::Config for Runtime {}
 
 impl tasks_example::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type RuntimeTask = RuntimeTask;
 }
 
 impl pallet_utility::Config for Runtime {
