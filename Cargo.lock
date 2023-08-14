@@ -5985,6 +5985,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-staking",
+ "sp-state-machine",
  "sp-std",
 ]
 
@@ -6824,6 +6825,7 @@ dependencies = [
  "frame-system",
  "parity-scale-codec",
  "scale-info",
+ "sp-api",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -7048,6 +7050,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-staking",
+ "sp-state-machine",
  "sp-std",
  "sp-trie",
 ]

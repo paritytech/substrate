@@ -27,12 +27,11 @@ use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::DispatchError,
 	traits::{ConstU32, ConstU64, Contains},
-	RuntimeDebug,
 };
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
+	BuildStorage, RuntimeDebug,
 };
 
 type Block = frame_system::mocking::MockBlock<Test>;

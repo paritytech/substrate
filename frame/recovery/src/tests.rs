@@ -18,12 +18,12 @@
 //! Tests for the module.
 
 use super::*;
-use frame_support::{assert_noop, assert_ok, bounded_vec, traits::Currency};
+use frame_support::{assert_noop, assert_ok, traits::Currency};
 use mock::{
 	new_test_ext, run_to_block, Balances, BalancesCall, MaxFriends, Recovery, RecoveryCall,
 	RuntimeCall, RuntimeOrigin, Test,
 };
-use sp_runtime::traits::BadOrigin;
+use sp_runtime::{bounded_vec, traits::BadOrigin};
 
 #[test]
 fn basic_setup_works() {

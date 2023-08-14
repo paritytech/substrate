@@ -985,11 +985,10 @@ mod tests {
 	use codec::Decode;
 	use frame_benchmarking::Zero;
 	use frame_election_provider_support::IndexAssignment;
-	use frame_support::{
-		assert_noop, assert_ok, bounded_vec, dispatch::Dispatchable, traits::OffchainWorker,
-	};
+	use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};
 	use sp_npos_elections::ElectionScore;
 	use sp_runtime::{
+		bounded_vec,
 		offchain::storage_lock::{BlockAndTime, StorageLock},
 		traits::ValidateUnsigned,
 		ModuleError, PerU16, Perbill,

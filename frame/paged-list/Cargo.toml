@@ -20,6 +20,7 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-core = { version = "21.0.0", path = "../../primitives/core", default-features = false }
@@ -28,7 +29,7 @@ sp-io = { version = "23.0.0", path = "../../primitives/io", default-features = f
 [features]
 default = ["std"]
 
-std = ["codec/std", "frame-benchmarking?/std", "frame-support/std", "frame-system/std", "scale-info/std", "sp-core/std", "sp-io/std", "sp-runtime/std", "sp-std/std"]
+std = ["codec/std", "frame-benchmarking?/std", "frame-support/std", "frame-system/std", "scale-info/std", "sp-api/std", "sp-core/std", "sp-io/std", "sp-runtime/std", "sp-std/std"]
 
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "frame-support/runtime-benchmarks", "frame-system/runtime-benchmarks", "sp-runtime/runtime-benchmarks"]
 
