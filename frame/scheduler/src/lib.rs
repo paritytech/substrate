@@ -38,7 +38,7 @@
 //! `frame_system::Config::BaseCallFilter` for all origin types (except root which will get no
 //! filter).
 //!
-//! If a call is scheduled using proxy or whatever mecanism which adds filter, then those filter
+//! If a call is scheduled using proxy or whatever mechanism which adds filter, then those filter
 //! will not be used when dispatching the schedule runtime call.
 //!
 //! ### Examples
