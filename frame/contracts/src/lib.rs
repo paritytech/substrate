@@ -108,7 +108,7 @@ use crate::{
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
 	wasm::{CodeInfo, WasmBlob},
 };
-use codec::{Codec, Decode, Encode, HasCompact};
+use codec::{Codec, Decode, Encode, HasCompact, MaxEncodedLen};
 use environmental::*;
 use frame_support::{
 	dispatch::{
@@ -122,7 +122,7 @@ use frame_support::{
 		ConstU32, Contains, Get, Randomness, Time,
 	},
 	weights::Weight,
-	BoundedVec, RuntimeDebugNoBound,
+	BoundedVec, RuntimeDebug, RuntimeDebugNoBound,
 };
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, EventRecord, Pallet as System};
 use pallet_contracts_primitives::{
@@ -1119,7 +1119,9 @@ struct InstantiateInput<T: Config> {
 }
 
 /// Determines whether events should be collected during execution.
-#[derive(PartialEq)]
+#[derive(
+	Copy, Clone, PartialEq, Eq, RuntimeDebug, Decode, Encode, MaxEncodedLen, scale_info::TypeInfo,
+)]
 pub enum CollectEvents {
 	/// Collect events.
 	///
@@ -1135,7 +1137,9 @@ pub enum CollectEvents {
 }
 
 /// Determines whether debug messages will be collected.
-#[derive(PartialEq)]
+#[derive(
+	Copy, Clone, PartialEq, Eq, RuntimeDebug, Decode, Encode, MaxEncodedLen, scale_info::TypeInfo,
+)]
 pub enum DebugInfo {
 	/// Collect debug messages.
 	/// # Note
