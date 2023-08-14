@@ -283,6 +283,7 @@ mod tests {
 		type Nonce = u64;
 		type Hash = H256;
 		type RuntimeCall = RuntimeCall;
+		type RuntimeTask = RuntimeTask;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;

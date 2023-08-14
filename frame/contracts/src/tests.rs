@@ -323,6 +323,7 @@ impl frame_system::Config for Test {
 	type Nonce = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
+	type RuntimeTask = RuntimeTask;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId32;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -365,6 +366,7 @@ impl pallet_timestamp::Config for Test {
 impl pallet_utility::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
+	type RuntimeTask = RuntimeTask;
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
 }
@@ -372,6 +374,7 @@ impl pallet_utility::Config for Test {
 impl pallet_proxy::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
+	type RuntimeTask = RuntimeTask;
 	type Currency = Balances;
 	type ProxyType = ();
 	type ProxyDepositBase = ConstU64<1>;
@@ -446,6 +449,7 @@ impl Config for Test {
 	type Currency = Balances;
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
+	type RuntimeTask = RuntimeTask;
 	type CallFilter = TestFilter;
 	type CallStack = [Frame<Self>; 5];
 	type WeightPrice = Self;

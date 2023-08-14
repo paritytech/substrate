@@ -129,6 +129,7 @@ mod tests {
 		type BaseCallFilter = crate::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
+		type RuntimeTask = RuntimeTask;
 		type PalletInfo = PalletInfo;
 		type DbWeight = ();
 	}
