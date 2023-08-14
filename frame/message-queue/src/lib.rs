@@ -579,7 +579,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
+		fn try_state(_: BlockNumberFor<T>) -> Result<(), sp_runtime::TryRuntimeError> {
 			Self::do_try_state()
 		}
 
@@ -1129,8 +1129,8 @@ impl<T: Config> Pallet<T> {
 	/// * `remaining_size` > 0
 	/// * `first` <= `last`
 	/// * Every page can be decoded into peek_* functions
-
-	pub fn do_try_state() -> Result<(), &'static str> {
+	#[cfg(any(test, feature = "try-runtime"))]
+	pub fn do_try_state() -> Result<(), sp_runtime::TryRuntimeError> {
 		// Checking memory corruption for BookStateFor
 		ensure!(
 			BookStateFor::<T>::iter_keys().count() == BookStateFor::<T>::iter_values().count(),
