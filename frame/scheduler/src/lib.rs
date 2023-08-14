@@ -48,8 +48,7 @@
 //!
 //! 2. Scheduling a preimage hash of a runtime call at a specifc block
 #![doc = docify::embed!("src/tests.rs", scheduling_with_preimages_works)]
-// Ensure we're `no_std` when compiling for Wasm.
-#![cfg_attr(not(feature = "std"), no_std)]
+
 //!
 //! ## Pallet API
 //!
@@ -73,6 +72,9 @@
 //!       index.
 //!
 //! [`on_initialize`]: frame_support::traits::Hooks::on_initialize
+
+// Ensure we're `no_std` when compiling for Wasm.
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
