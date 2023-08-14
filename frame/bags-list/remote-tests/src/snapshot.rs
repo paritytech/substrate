@@ -16,7 +16,10 @@
 
 //! Test to execute the snapshot using the voter bag.
 
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::{
+	bounds::{CountBound, DataProviderBounds},
+	SortedListProvider,
+};
 use frame_support::traits::PalletInfoAccess;
 use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
@@ -62,8 +65,13 @@ where
 			<Runtime as pallet_staking::Config>::VoterList::count(),
 		);
 
+		let bounds = match voter_limit {
+			None => DataProviderBounds::default(),
+			Some(v) => DataProviderBounds { count: Some(CountBound(v as u32)), size: None },
+		};
+
 		let voters =
-			<pallet_staking::Pallet<Runtime> as ElectionDataProvider>::electing_voters(voter_limit)
+			<pallet_staking::Pallet<Runtime> as ElectionDataProvider>::electing_voters(bounds)
 				.unwrap();
 
 		let mut voters_nominator_only = voters

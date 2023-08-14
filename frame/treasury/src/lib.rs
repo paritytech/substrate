@@ -175,7 +175,7 @@ pub mod pallet {
 
 		/// Period between successive spends.
 		#[pallet::constant]
-		type SpendPeriod: Get<Self::BlockNumber>;
+		type SpendPeriod: Get<BlockNumberFor<Self>>;
 
 		/// Percentage of spare funds (if any) that are burnt per spend period.
 		#[pallet::constant]
@@ -299,7 +299,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		/// ## Complexity
 		/// - `O(A)` where `A` is the number of approvals
-		fn on_initialize(n: T::BlockNumber) -> Weight {
+		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
 			let pot = Self::pot();
 			let deactivated = Deactivated::<T, I>::get();
 			if pot != deactivated {
@@ -336,6 +336,10 @@ pub mod pallet {
 		/// - O(1)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::propose_spend())]
+		#[allow(deprecated)]
+		#[deprecated(
+			note = "`propose_spend` will be removed in February 2024. Use `spend` instead."
+		)]
 		pub fn propose_spend(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T, I>,
@@ -364,6 +368,10 @@ pub mod pallet {
 		/// - O(1)
 		#[pallet::call_index(1)]
 		#[pallet::weight((T::WeightInfo::reject_proposal(), DispatchClass::Operational))]
+		#[allow(deprecated)]
+		#[deprecated(
+			note = "`reject_proposal` will be removed in February 2024. Use `spend` instead."
+		)]
 		pub fn reject_proposal(
 			origin: OriginFor<T>,
 			#[pallet::compact] proposal_id: ProposalIndex,
@@ -392,6 +400,10 @@ pub mod pallet {
 		///  - O(1).
 		#[pallet::call_index(2)]
 		#[pallet::weight((T::WeightInfo::approve_proposal(T::MaxApprovals::get()), DispatchClass::Operational))]
+		#[allow(deprecated)]
+		#[deprecated(
+			note = "`approve_proposal` will be removed in February 2024. Use `spend` instead."
+		)]
 		pub fn approve_proposal(
 			origin: OriginFor<T>,
 			#[pallet::compact] proposal_id: ProposalIndex,

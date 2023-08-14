@@ -201,7 +201,7 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The time-out for council motions.
-		type MotionDuration: Get<Self::BlockNumber>;
+		type MotionDuration: Get<BlockNumberFor<Self>>;
 
 		/// Maximum number of proposals allowed to be active in parallel.
 		type MaxProposals: Get<ProposalIndex>;
@@ -274,7 +274,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn voting)]
 	pub type Voting<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, T::Hash, Votes<T::AccountId, T::BlockNumber>, OptionQuery>;
+		StorageMap<_, Identity, T::Hash, Votes<T::AccountId, BlockNumberFor<T>>, OptionQuery>;
 
 	/// Proposals so far.
 	#[pallet::storage]
@@ -346,6 +346,8 @@ pub mod pallet {
 		WrongProposalWeight,
 		/// The given length bound for the proposal was too low.
 		WrongProposalLength,
+		/// Prime account is not a member
+		PrimeAccountNotMember,
 	}
 
 	#[pallet::hooks]
@@ -416,6 +418,9 @@ pub mod pallet {
 					old_count,
 					old.len(),
 				);
+			}
+			if let Some(p) = &prime {
+				ensure!(new_members.contains(p), Error::<T, I>::PrimeAccountNotMember);
 			}
 			let mut new_members = new_members;
 			new_members.sort();

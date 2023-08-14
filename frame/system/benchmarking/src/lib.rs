@@ -18,6 +18,7 @@
 // Benchmarks for Utility Pallet
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg(feature = "runtime-benchmarks")]
 
 use codec::Encode;
 use frame_benchmarking::{

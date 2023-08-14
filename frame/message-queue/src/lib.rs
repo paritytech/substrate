@@ -742,7 +742,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns the current head if it got be bumped and `None` otherwise.
 	fn bump_service_head(weight: &mut WeightMeter) -> Option<MessageOriginOf<T>> {
-		if !weight.check_accrue(T::WeightInfo::bump_service_head()) {
+		if weight.try_consume(T::WeightInfo::bump_service_head()).is_err() {
 			return None
 		}
 
@@ -870,7 +870,7 @@ impl<T: Config> Pallet<T> {
 					book_state.message_count,
 					book_state.size,
 				);
-				Ok(weight_counter.consumed.saturating_add(page_weight))
+				Ok(weight_counter.consumed().saturating_add(page_weight))
 			},
 		}
 	}
@@ -953,9 +953,13 @@ impl<T: Config> Pallet<T> {
 		overweight_limit: Weight,
 	) -> (bool, Option<MessageOriginOf<T>>) {
 		use PageExecutionStatus::*;
-		if !weight.check_accrue(
-			T::WeightInfo::service_queue_base().saturating_add(T::WeightInfo::ready_ring_unknit()),
-		) {
+		if weight
+			.try_consume(
+				T::WeightInfo::service_queue_base()
+					.saturating_add(T::WeightInfo::ready_ring_unknit()),
+			)
+			.is_err()
+		{
 			return (false, None)
 		}
 
@@ -1008,10 +1012,13 @@ impl<T: Config> Pallet<T> {
 		overweight_limit: Weight,
 	) -> (u32, PageExecutionStatus) {
 		use PageExecutionStatus::*;
-		if !weight.check_accrue(
-			T::WeightInfo::service_page_base_completion()
-				.max(T::WeightInfo::service_page_base_no_completion()),
-		) {
+		if weight
+			.try_consume(
+				T::WeightInfo::service_page_base_completion()
+					.max(T::WeightInfo::service_page_base_no_completion()),
+			)
+			.is_err()
+		{
 			return (0, Bailed)
 		}
 
@@ -1071,7 +1078,7 @@ impl<T: Config> Pallet<T> {
 		if page.is_complete() {
 			return ItemExecutionStatus::NoItem
 		}
-		if !weight.check_accrue(T::WeightInfo::service_page_item()) {
+		if weight.try_consume(T::WeightInfo::service_page_item()).is_err() {
 			return ItemExecutionStatus::Bailed
 		}
 
@@ -1273,7 +1280,7 @@ impl<T: Config> Pallet<T> {
 	) -> MessageExecutionStatus {
 		let hash = sp_io::hashing::blake2_256(message);
 		use ProcessMessageError::*;
-		let prev_consumed = meter.consumed;
+		let prev_consumed = meter.consumed();
 		let mut id = hash;
 
 		match T::MessageProcessor::process_message(message, origin.clone(), meter, &mut id) {
@@ -1303,7 +1310,7 @@ impl<T: Config> Pallet<T> {
 			},
 			Ok(success) => {
 				// Success
-				let weight_used = meter.consumed.saturating_sub(prev_consumed);
+				let weight_used = meter.consumed().saturating_sub(prev_consumed);
 				Self::deposit_event(Event::<T>::Processed { id, origin, weight_used, success });
 				MessageExecutionStatus::Processed
 			},
@@ -1364,7 +1371,7 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 
 		let mut next = match Self::bump_service_head(&mut weight) {
 			Some(h) => h,
-			None => return weight.consumed,
+			None => return weight.consumed(),
 		};
 		// The last queue that did not make any progress.
 		// The loop aborts as soon as it arrives at this queue again without making any progress
@@ -1390,7 +1397,7 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 				None => break,
 			}
 		}
-		weight.consumed
+		weight.consumed()
 	}
 
 	/// Execute a single overweight message.
@@ -1401,10 +1408,13 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		(message_origin, page, index): Self::OverweightMessageAddress,
 	) -> Result<Weight, ExecuteOverweightError> {
 		let mut weight = WeightMeter::from_limit(weight_limit);
-		if !weight.check_accrue(
-			T::WeightInfo::execute_overweight_page_removed()
-				.max(T::WeightInfo::execute_overweight_page_updated()),
-		) {
+		if weight
+			.try_consume(
+				T::WeightInfo::execute_overweight_page_removed()
+					.max(T::WeightInfo::execute_overweight_page_updated()),
+			)
+			.is_err()
+		{
 			return Err(ExecuteOverweightError::InsufficientWeight)
 		}
 

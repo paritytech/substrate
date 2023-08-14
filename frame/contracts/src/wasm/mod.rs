@@ -37,14 +37,14 @@ use crate::{
 	gas::{GasMeter, Token},
 	wasm::prepare::LoadedModule,
 	weights::WeightInfo,
-	AccountIdOf, BadOrigin, BalanceOf, CodeHash, CodeInfoOf, CodeVec, Config, Error, Event, Pallet,
-	PristineCode, Schedule, Weight, LOG_TARGET,
+	AccountIdOf, BadOrigin, BalanceOf, CodeHash, CodeInfoOf, CodeVec, Config, Error, Event,
+	HoldReason, Pallet, PristineCode, Schedule, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
-	traits::ReservableCurrency,
+	traits::{fungible::MutateHold, tokens::Precision::BestEffort},
 };
 use sp_core::Get;
 use sp_runtime::RuntimeDebug;
@@ -92,6 +92,8 @@ pub struct CodeInfo<T: Config> {
 	/// to be run on-chain. Specifically, such a code can never be instantiated into a contract
 	/// and can just be used through a delegate call.
 	determinism: Determinism,
+	/// length of the code in bytes.
+	code_len: u32,
 }
 
 /// Defines the required determinism level of a wasm blob when either running or uploading code.
@@ -235,12 +237,24 @@ impl<T: Config> WasmBlob<T> {
 				// the `owner` is always the origin of the current transaction.
 				None => {
 					let deposit = self.code_info.deposit;
-					T::Currency::reserve(&self.code_info.owner, deposit)
-						.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
+					T::Currency::hold(
+						&HoldReason::CodeUploadDepositReserve.into(),
+						&self.code_info.owner,
+						deposit,
+					)
+					.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
+
 					self.code_info.refcount = 0;
 					<PristineCode<T>>::insert(code_hash, &self.code);
 					*stored_code_info = Some(self.code_info.clone());
-					<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeStored { code_hash });
+					<Pallet<T>>::deposit_event(
+						vec![code_hash],
+						Event::CodeStored {
+							code_hash,
+							deposit_held: deposit,
+							uploader: self.code_info.owner.clone(),
+						},
+					);
 					Ok(deposit)
 				},
 			}
@@ -253,10 +267,21 @@ impl<T: Config> WasmBlob<T> {
 			if let Some(code_info) = existing {
 				ensure!(code_info.refcount == 0, <Error<T>>::CodeInUse);
 				ensure!(&code_info.owner == origin, BadOrigin);
-				T::Currency::unreserve(&code_info.owner, code_info.deposit);
+				let _ = T::Currency::release(
+					&HoldReason::CodeUploadDepositReserve.into(),
+					&code_info.owner,
+					code_info.deposit,
+					BestEffort,
+				);
+				let deposit_released = code_info.deposit;
+				let remover = code_info.owner.clone();
+
 				*existing = None;
 				<PristineCode<T>>::remove(&code_hash);
-				<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeRemoved { code_hash });
+				<Pallet<T>>::deposit_event(
+					vec![code_hash],
+					Event::CodeRemoved { code_hash, deposit_released, remover },
+				);
 				Ok(())
 			} else {
 				Err(<Error<T>>::CodeNotFound.into())
@@ -268,15 +293,11 @@ impl<T: Config> WasmBlob<T> {
 	fn load_code(
 		code_hash: CodeHash<T>,
 		gas_meter: &mut GasMeter<T>,
-	) -> Result<CodeVec<T>, DispatchError> {
-		let max_code_len = T::MaxCodeLen::get();
-		let charged = gas_meter.charge(CodeLoadToken(max_code_len))?;
-
+	) -> Result<(CodeVec<T>, CodeInfo<T>), DispatchError> {
+		let code_info = <CodeInfoOf<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
+		gas_meter.charge(CodeLoadToken(code_info.code_len))?;
 		let code = <PristineCode<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
-		let code_len = code.len() as u32;
-		gas_meter.adjust_gas(charged, CodeLoadToken(code_len));
-
-		Ok(code)
+		Ok((code, code_info))
 	}
 
 	/// Create the module without checking the passed code.
@@ -302,6 +323,22 @@ impl<T: Config> CodeInfo<T> {
 	pub fn refcount(&self) -> u64 {
 		self.refcount
 	}
+
+	#[cfg(test)]
+	pub fn new(owner: T::AccountId) -> Self {
+		CodeInfo {
+			owner,
+			deposit: Default::default(),
+			refcount: 0,
+			code_len: 0,
+			determinism: Determinism::Enforced,
+		}
+	}
+
+	/// Returns the deposit of the module.
+	pub fn deposit(&self) -> BalanceOf<T> {
+		self.deposit
+	}
 }
 
 impl<T: Config> Executable<T> for WasmBlob<T> {
@@ -309,13 +346,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		code_hash: CodeHash<T>,
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError> {
-		let code = Self::load_code(code_hash, gas_meter)?;
-		// We store `code_info` at the same time as contract code,
-		// therefore this query shouldn't really fail.
-		// We consider its failure equal to `CodeNotFound`, as contract code without
-		// `code_info` is unusable in this pallet.
-		let code_info = <CodeInfoOf<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
-
+		let (code, code_info) = Self::load_code(code_hash, gas_meter)?;
 		Ok(Self { code, code_info, code_hash })
 	}
 
@@ -404,6 +435,10 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		&self.code_hash
 	}
 
+	fn code_info(&self) -> &CodeInfo<T> {
+		&self.code_info
+	}
+
 	fn code_len(&self) -> u32 {
 		self.code.len() as u32
 	}
@@ -417,7 +452,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 mod tests {
 	use super::*;
 	use crate::{
-		exec::{AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, Key, SeedOf},
+		exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Ext, Key, SeedOf},
 		gas::GasMeter,
 		storage::WriteOutcome,
 		tests::{RuntimeCall, Test, ALICE, BOB},
@@ -427,6 +462,7 @@ mod tests {
 	use frame_support::{
 		assert_err, assert_ok, dispatch::DispatchResultWithPostInfo, weights::Weight,
 	};
+	use frame_system::pallet_prelude::BlockNumberFor;
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
 	use sp_core::H256;
@@ -434,7 +470,10 @@ mod tests {
 	use std::{
 		borrow::BorrowMut,
 		cell::RefCell,
-		collections::hash_map::{Entry, HashMap},
+		collections::{
+			hash_map::{Entry, HashMap},
+			HashSet,
+		},
 	};
 
 	#[derive(Debug, PartialEq, Eq)]
@@ -488,6 +527,7 @@ mod tests {
 		sr25519_verify: RefCell<Vec<([u8; 64], Vec<u8>, [u8; 32])>>,
 		code_hashes: Vec<CodeHash<Test>>,
 		caller: Origin<Test>,
+		delegate_dependencies: RefCell<HashSet<CodeHash<Test>>>,
 	}
 
 	/// The call is mocked and just returns this hardcoded value.
@@ -513,6 +553,7 @@ mod tests {
 				ecdsa_recover: Default::default(),
 				caller: Default::default(),
 				sr25519_verify: Default::default(),
+				delegate_dependencies: Default::default(),
 			}
 		}
 	}
@@ -632,7 +673,7 @@ mod tests {
 		fn minimum_balance(&self) -> u64 {
 			666
 		}
-		fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>) {
+		fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberFor<Self::T>) {
 			(H256::from_slice(subject), 42)
 		}
 		fn deposit_event(&mut self, topics: Vec<H256>, data: Vec<u8>) {
@@ -697,6 +738,22 @@ mod tests {
 		}
 		fn nonce(&mut self) -> u64 {
 			995
+		}
+
+		fn add_delegate_dependency(
+			&mut self,
+			code: CodeHash<Self::T>,
+		) -> Result<(), DispatchError> {
+			self.delegate_dependencies.borrow_mut().insert(code);
+			Ok(())
+		}
+
+		fn remove_delegate_dependency(
+			&mut self,
+			code: &CodeHash<Self::T>,
+		) -> Result<(), DispatchError> {
+			self.delegate_dependencies.borrow_mut().remove(code);
+			Ok(())
 		}
 	}
 
@@ -3323,5 +3380,40 @@ mod tests {
 			execute(CODE_RANDOM_3, vec![], MockExt::default()),
 			<Error<Test>>::CodeRejected,
 		);
+	}
+
+	#[test]
+	fn add_remove_delegate_dependency() {
+		const CODE_ADD_REMOVE_DELEGATE_DEPENDENCY: &str = r#"
+(module
+	(import "seal0" "add_delegate_dependency" (func $add_delegate_dependency (param i32)))
+	(import "seal0" "remove_delegate_dependency" (func $remove_delegate_dependency (param i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(call $add_delegate_dependency (i32.const 0))
+		(call $add_delegate_dependency (i32.const 32))
+		(call $remove_delegate_dependency (i32.const 32))
+	)
+	(func (export "deploy"))
+
+	;;  hash1 (32 bytes)
+	(data (i32.const 0)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+
+	;;  hash2 (32 bytes)
+	(data (i32.const 32)
+		"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
+		"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
+	)
+)
+"#;
+		let mut mock_ext = MockExt::default();
+		assert_ok!(execute(&CODE_ADD_REMOVE_DELEGATE_DEPENDENCY, vec![], &mut mock_ext));
+		let delegate_dependencies: Vec<_> =
+			mock_ext.delegate_dependencies.into_inner().into_iter().collect();
+		assert_eq!(delegate_dependencies.len(), 1);
+		assert_eq!(delegate_dependencies[0].as_bytes(), [1; 32]);
 	}
 }
