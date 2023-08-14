@@ -101,9 +101,7 @@ pub trait InherentDataProvider: Send + Sync {
 		&self,
 		_identifier: &InherentIdentifier,
 		_error: &[u8],
-	) -> Option<Result<(), Error>> {
-		None
-	}
+	) -> Option<Result<(), Error>>;
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(30)]
