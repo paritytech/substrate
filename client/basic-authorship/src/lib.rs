@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@
 //! # use sp_runtime::generic::BlockId;
 //! # use std::{sync::Arc, time::Duration};
 //! # use substrate_test_runtime_client::{
-//! #     runtime::{Extrinsic, Transfer}, AccountKeyring,
+//! #     runtime::Transfer, AccountKeyring,
 //! #     DefaultTestClientBuilderExt, TestClientBuilderExt,
 //! # };
 //! # use sc_transaction_pool::{BasicPool, FullChainApi};

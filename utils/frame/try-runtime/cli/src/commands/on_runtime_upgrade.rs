@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,16 +32,17 @@ pub struct OnRuntimeUpgradeCmd {
 
 	/// Select which optional checks to perform. Selects all when no value is given.
 	///
-	/// - `none`: Perform no checks (default when the arg is not present).
-	/// - `all`: Perform all checks (default when the arg is present).
-	/// - `pre-and-post`: Perform pre- and post-upgrade checks.
+	/// - `none`: Perform no checks.
+	/// - `all`: Perform all checks (default when --checks is present with no value).
+	/// - `pre-and-post`: Perform pre- and post-upgrade checks (default when the arg is not
+	///   present).
 	/// - `try-state`: Perform the try-state checks.
 	///
 	/// Performing any checks will potentially invalidate the measured PoV/Weight.
 	// NOTE: The clap attributes make it backwards compatible with the previous `--checks` flag.
 	#[clap(long,
-		default_value = "None",
-		default_missing_value = "All",
+		default_value = "pre-and-post",
+		default_missing_value = "all",
 		num_args = 0..=1,
 		require_equals = true,
 		verbatim_doc_comment)]
@@ -54,7 +55,6 @@ pub(crate) async fn on_runtime_upgrade<Block, HostFns>(
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
-	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
 	Block::Header: serde::de::DeserializeOwned,
 	NumberFor<Block>: FromStr,

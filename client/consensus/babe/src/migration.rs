@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 
 use crate::{
 	AuthorityId, BabeAuthorityWeight, BabeConfiguration, BabeEpochConfiguration, Epoch,
-	NextEpochDescriptor, VRF_OUTPUT_LENGTH,
+	NextEpochDescriptor, Randomness,
 };
 use codec::{Decode, Encode};
 use sc_consensus_epochs::Epoch as EpochT;
@@ -36,7 +36,7 @@ pub struct EpochV0 {
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch.
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	pub randomness: Randomness,
 }
 
 impl EpochT for EpochV0 {

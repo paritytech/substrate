@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -29,7 +29,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	#[method(name = "chain_getHeader", blocking)]
 	fn header(&self, hash: Option<Hash>) -> RpcResult<Option<Header>>;
 
-	/// Get header and body of a relay chain block.
+	/// Get header and body of a block.
 	#[method(name = "chain_getBlock", blocking)]
 	fn block(&self, hash: Option<Hash>) -> RpcResult<Option<SignedBlock>>;
 

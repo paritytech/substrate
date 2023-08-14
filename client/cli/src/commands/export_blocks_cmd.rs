@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -36,13 +36,11 @@ pub struct ExportBlocksCmd {
 	pub output: Option<PathBuf>,
 
 	/// Specify starting block number.
-	///
 	/// Default is 1.
 	#[arg(long, value_name = "BLOCK")]
 	pub from: Option<GenericNumber>,
 
 	/// Specify last block number.
-	///
 	/// Default is best block.
 	#[arg(long, value_name = "BLOCK")]
 	pub to: Option<GenericNumber>,

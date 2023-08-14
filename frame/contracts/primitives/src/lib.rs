@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,11 +29,18 @@ use sp_runtime::{
 use sp_std::prelude::*;
 use sp_weights::Weight;
 
-/// Result type of a `bare_call` or `bare_instantiate` call.
+/// Result type of a `bare_call` or `bare_instantiate` call as well as `ContractsApi::call` and
+/// `ContractsApi::instantiate`.
 ///
 /// It contains the execution result together with some auxiliary information.
+///
+/// #Note
+///
+/// It has been extended to include `events` at the end of the struct while not bumping the
+/// `ContractsApi` version. Therefore when SCALE decoding a `ContractResult` its trailing data
+/// should be ignored to avoid any potential compatibility issues.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct ContractResult<R, Balance> {
+pub struct ContractResult<R, Balance, EventRecord> {
 	/// How much weight was consumed during execution.
 	pub gas_consumed: Weight,
 	/// How much weight is required as gas limit in order to execute this call.
@@ -47,10 +54,12 @@ pub struct ContractResult<R, Balance> {
 	/// Additionally, any `seal_call` or `seal_instantiate` makes use of pre-charging
 	/// when a non-zero `gas_limit` argument is supplied.
 	pub gas_required: Weight,
-	/// How much balance was deposited and reserved during execution in order to pay for storage.
+	/// How much balance was paid by the origin into the contract's deposit account in order to
+	/// pay for storage.
 	///
-	/// The storage deposit is never actually charged from the caller in case of [`Self::result`]
-	/// is `Err`. This is because on error all storage changes are rolled back.
+	/// The storage deposit is never actually charged from the origin in case of [`Self::result`]
+	/// is `Err`. This is because on error all storage changes are rolled back including the
+	/// payment of the deposit.
 	pub storage_deposit: StorageDeposit<Balance>,
 	/// An optional debug message. This message is only filled when explicitly requested
 	/// by the code that calls into the contract. Otherwise it is empty.
@@ -69,15 +78,18 @@ pub struct ContractResult<R, Balance> {
 	pub debug_message: Vec<u8>,
 	/// The execution result of the wasm code.
 	pub result: R,
+	/// The events that were emitted during execution. It is an option as event collection is
+	/// optional.
+	pub events: Option<Vec<EventRecord>>,
 }
 
-/// Result type of a `bare_call` call.
-pub type ContractExecResult<Balance> =
-	ContractResult<Result<ExecReturnValue, DispatchError>, Balance>;
+/// Result type of a `bare_call` call as well as `ContractsApi::call`.
+pub type ContractExecResult<Balance, EventRecord> =
+	ContractResult<Result<ExecReturnValue, DispatchError>, Balance, EventRecord>;
 
-/// Result type of a `bare_instantiate` call.
-pub type ContractInstantiateResult<AccountId, Balance> =
-	ContractResult<Result<InstantiateReturnValue<AccountId>, DispatchError>, Balance>;
+/// Result type of a `bare_instantiate` call as well as `ContractsApi::instantiate`.
+pub type ContractInstantiateResult<AccountId, Balance, EventRecord> =
+	ContractResult<Result<InstantiateReturnValue<AccountId>, DispatchError>, Balance, EventRecord>;
 
 /// Result type of a `bare_code_upload` call.
 pub type CodeUploadResult<CodeHash, Balance> =
@@ -93,6 +105,8 @@ pub enum ContractAccessError {
 	DoesntExist,
 	/// Storage key cannot be decoded from the provided input data.
 	KeyDecodingFailed,
+	/// Storage is migrating. Try again later.
+	MigrationInProgress,
 }
 
 bitflags! {
@@ -129,7 +143,7 @@ pub struct InstantiateReturnValue<AccountId> {
 	pub account_id: AccountId,
 }
 
-/// The result of succesfully uploading a contract.
+/// The result of successfully uploading a contract.
 #[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct CodeUploadReturnValue<CodeHash, Balance> {
 	/// The key under which the new code is stored.
@@ -147,24 +161,18 @@ pub enum Code<Hash> {
 	Existing(Hash),
 }
 
-impl<T: Into<Vec<u8>>, Hash> From<T> for Code<Hash> {
-	fn from(from: T) -> Self {
-		Code::Upload(from.into())
-	}
-}
-
 /// The amount of balance that was either charged or refunded in order to pay for storage.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, Clone, TypeInfo)]
 pub enum StorageDeposit<Balance> {
 	/// The transaction reduced storage consumption.
 	///
 	/// This means that the specified amount of balance was transferred from the involved
-	/// contracts to the call origin.
+	/// deposit accounts to the origin.
 	Refund(Balance),
-	/// The transaction increased overall storage usage.
+	/// The transaction increased storage consumption.
 	///
-	/// This means that the specified amount of balance was transferred from the call origin
-	/// to the contracts involved.
+	/// This means that the specified amount of balance was transferred from the origin
+	/// to the involved deposit accounts.
 	Charge(Balance),
 }
 
@@ -237,7 +245,7 @@ where
 		}
 	}
 
-	/// If the amount of deposit (this type) is constrained by a `limit` this calcuates how
+	/// If the amount of deposit (this type) is constrained by a `limit` this calculates how
 	/// much balance (if any) is still available from this limit.
 	///
 	/// # Note

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -35,25 +35,26 @@
 
 #![warn(missing_docs)]
 
-use std::{fmt, marker::PhantomData, sync::Arc};
+use std::{fmt, sync::Arc};
 
 use futures::{
 	future::{ready, Future},
 	prelude::*,
 };
 use parking_lot::Mutex;
-use sc_network_common::service::{NetworkPeers, NetworkStateInfo};
+use sc_client_api::BlockchainEvents;
+use sc_network::{NetworkPeers, NetworkStateInfo};
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_api::{ApiExt, ProvideRuntimeApi};
-use sp_core::{offchain, traits::SpawnNamed, ExecutionContext};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{self, Header},
-};
+use sp_core::{offchain, traits::SpawnNamed};
+use sp_externalities::Extension;
+use sp_keystore::{KeystoreExt, KeystorePtr};
+use sp_runtime::traits::{self, Header};
 use threadpool::ThreadPool;
 
 mod api;
 
-pub use api::Db as OffchainDb;
+pub use sp_core::offchain::storage::OffchainDb;
 pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
 
 const LOG_TARGET: &str = "offchain-worker";
@@ -64,68 +65,163 @@ pub trait NetworkProvider: NetworkStateInfo + NetworkPeers {}
 
 impl<T> NetworkProvider for T where T: NetworkStateInfo + NetworkPeers {}
 
+/// Special type that implements [`OffchainStorage`](offchain::OffchainStorage).
+///
+/// This type can not be constructed and should only be used when passing `None` as `offchain_db` to
+/// [`OffchainWorkerOptions`] to make the compiler happy.
+#[derive(Clone)]
+pub enum NoOffchainStorage {}
+
+impl offchain::OffchainStorage for NoOffchainStorage {
+	fn set(&mut self, _: &[u8], _: &[u8], _: &[u8]) {
+		unimplemented!("`NoOffchainStorage` can not be constructed!")
+	}
+
+	fn remove(&mut self, _: &[u8], _: &[u8]) {
+		unimplemented!("`NoOffchainStorage` can not be constructed!")
+	}
+
+	fn get(&self, _: &[u8], _: &[u8]) -> Option<Vec<u8>> {
+		unimplemented!("`NoOffchainStorage` can not be constructed!")
+	}
+
+	fn compare_and_set(&mut self, _: &[u8], _: &[u8], _: Option<&[u8]>, _: &[u8]) -> bool {
+		unimplemented!("`NoOffchainStorage` can not be constructed!")
+	}
+}
+
 /// Options for [`OffchainWorkers`]
-pub struct OffchainWorkerOptions {
+pub struct OffchainWorkerOptions<RA, Block: traits::Block, Storage, CE> {
+	/// Provides access to the runtime api.
+	pub runtime_api_provider: Arc<RA>,
+	/// Provides access to the keystore.
+	pub keystore: Option<KeystorePtr>,
+	/// Provides access to the offchain database.
+	///
+	/// Use [`NoOffchainStorage`] as type when passing `None` to have some type that works.
+	pub offchain_db: Option<Storage>,
+	/// Provides access to the transaction pool.
+	pub transaction_pool: Option<OffchainTransactionPoolFactory<Block>>,
+	/// Provides access to network information.
+	pub network_provider: Arc<dyn NetworkProvider + Send + Sync>,
+	/// Is the node running as validator?
+	pub is_validator: bool,
 	/// Enable http requests from offchain workers?
 	///
 	/// If not enabled, any http request will panic.
 	pub enable_http_requests: bool,
+	/// Callback to create custom [`Extension`]s that should be registered for the
+	/// `offchain_worker` runtime call.
+	///
+	/// These [`Extension`]s are registered along-side the default extensions and are accessible in
+	/// the host functions.
+	///
+	/// # Example:
+	///
+	/// ```nocompile
+	/// custom_extensions: |block_hash| {
+	///     vec![MyCustomExtension::new()]
+	/// }
+	/// ```
+	pub custom_extensions: CE,
 }
 
 /// An offchain workers manager.
-pub struct OffchainWorkers<Client, Block: traits::Block> {
-	client: Arc<Client>,
-	_block: PhantomData<Block>,
+pub struct OffchainWorkers<RA, Block: traits::Block, Storage> {
+	runtime_api_provider: Arc<RA>,
 	thread_pool: Mutex<ThreadPool>,
 	shared_http_client: api::SharedClient,
-	enable_http: bool,
+	enable_http_requests: bool,
+	keystore: Option<KeystorePtr>,
+	offchain_db: Option<OffchainDb<Storage>>,
+	transaction_pool: Option<OffchainTransactionPoolFactory<Block>>,
+	network_provider: Arc<dyn NetworkProvider + Send + Sync>,
+	is_validator: bool,
+	custom_extensions: Box<dyn Fn(Block::Hash) -> Vec<Box<dyn Extension>> + Send>,
 }
 
-impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
+impl<RA, Block: traits::Block, Storage> OffchainWorkers<RA, Block, Storage> {
 	/// Creates new [`OffchainWorkers`].
-	pub fn new(client: Arc<Client>) -> Self {
-		Self::new_with_options(client, OffchainWorkerOptions { enable_http_requests: true })
-	}
-
-	/// Creates new [`OffchainWorkers`] using the given `options`.
-	pub fn new_with_options(client: Arc<Client>, options: OffchainWorkerOptions) -> Self {
+	pub fn new<CE: Fn(Block::Hash) -> Vec<Box<dyn Extension>> + Send + 'static>(
+		OffchainWorkerOptions {
+			runtime_api_provider,
+			keystore,
+			offchain_db,
+			transaction_pool,
+			network_provider,
+			is_validator,
+			enable_http_requests,
+			custom_extensions,
+		}: OffchainWorkerOptions<RA, Block, Storage, CE>,
+	) -> Self {
 		Self {
-			client,
-			_block: PhantomData,
+			runtime_api_provider,
 			thread_pool: Mutex::new(ThreadPool::with_name(
 				"offchain-worker".into(),
 				num_cpus::get(),
 			)),
 			shared_http_client: api::SharedClient::new(),
-			enable_http: options.enable_http_requests,
+			enable_http_requests,
+			keystore,
+			offchain_db: offchain_db.map(OffchainDb::new),
+			transaction_pool,
+			is_validator,
+			network_provider,
+			custom_extensions: Box::new(custom_extensions),
 		}
 	}
 }
 
-impl<Client, Block: traits::Block> fmt::Debug for OffchainWorkers<Client, Block> {
+impl<RA, Block: traits::Block, Storage: offchain::OffchainStorage> fmt::Debug
+	for OffchainWorkers<RA, Block, Storage>
+{
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		f.debug_tuple("OffchainWorkers").finish()
 	}
 }
 
-impl<Client, Block> OffchainWorkers<Client, Block>
+impl<RA, Block, Storage> OffchainWorkers<RA, Block, Storage>
 where
 	Block: traits::Block,
-	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static,
-	Client::Api: OffchainWorkerApi<Block>,
+	RA: ProvideRuntimeApi<Block> + Send + Sync + 'static,
+	RA::Api: OffchainWorkerApi<Block>,
+	Storage: offchain::OffchainStorage + 'static,
 {
+	/// Run the offchain workers on every block import.
+	pub async fn run<BE: BlockchainEvents<Block>>(
+		self,
+		import_events: Arc<BE>,
+		spawner: impl SpawnNamed,
+	) {
+		import_events
+			.import_notification_stream()
+			.for_each(move |n| {
+				if n.is_new_best {
+					spawner.spawn(
+						"offchain-on-block",
+						Some("offchain-worker"),
+						self.on_block_imported(&n.header).boxed(),
+					);
+				} else {
+					tracing::debug!(
+						target: LOG_TARGET,
+						"Skipping offchain workers for non-canon block: {:?}",
+						n.header,
+					)
+				}
+
+				ready(())
+			})
+			.await;
+	}
+
 	/// Start the offchain workers after given block.
 	#[must_use]
-	pub fn on_block_imported(
-		&self,
-		header: &Block::Header,
-		network_provider: Arc<dyn NetworkProvider + Send + Sync>,
-		is_validator: bool,
-	) -> impl Future<Output = ()> {
-		let runtime = self.client.runtime_api();
-		let at = BlockId::hash(header.hash());
-		let has_api_v1 = runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(&at, |v| v == 1);
-		let has_api_v2 = runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(&at, |v| v == 2);
+	fn on_block_imported(&self, header: &Block::Header) -> impl Future<Output = ()> {
+		let runtime = self.runtime_api_provider.runtime_api();
+		let hash = header.hash();
+		let has_api_v1 = runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(hash, |v| v == 1);
+		let has_api_v2 = runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(hash, |v| v == 2);
 		let version = match (has_api_v1, has_api_v2) {
 			(_, Ok(true)) => 2,
 			(Ok(true), _) => 1,
@@ -143,41 +239,64 @@ where
 		};
 		tracing::debug!(
 			target: LOG_TARGET,
-			"Checking offchain workers at {:?}: version:{}",
-			at,
-			version
+			"Checking offchain workers at {hash:?}: version: {version}",
 		);
+
 		let process = (version > 0).then(|| {
-			let (api, runner) =
-				api::AsyncApi::new(network_provider, is_validator, self.shared_http_client.clone());
-			tracing::debug!(target: LOG_TARGET, "Spawning offchain workers at {:?}", at);
+			let (api, runner) = api::AsyncApi::new(
+				self.network_provider.clone(),
+				self.is_validator,
+				self.shared_http_client.clone(),
+			);
+			tracing::debug!(target: LOG_TARGET, "Spawning offchain workers at {hash:?}");
 			let header = header.clone();
-			let client = self.client.clone();
+			let client = self.runtime_api_provider.clone();
 
 			let mut capabilities = offchain::Capabilities::all();
+			capabilities.set(offchain::Capabilities::HTTP, self.enable_http_requests);
 
-			capabilities.set(offchain::Capabilities::HTTP, self.enable_http);
+			let keystore = self.keystore.clone();
+			let db = self.offchain_db.clone();
+			let tx_pool = self.transaction_pool.clone();
+			let custom_extensions = (*self.custom_extensions)(hash);
+
 			self.spawn_worker(move || {
-				let runtime = client.runtime_api();
+				let mut runtime = client.runtime_api();
 				let api = Box::new(api);
-				tracing::debug!(target: LOG_TARGET, "Running offchain workers at {:?}", at);
+				tracing::debug!(target: LOG_TARGET, "Running offchain workers at {hash:?}");
 
-				let context = ExecutionContext::OffchainCall(Some((api, capabilities)));
+				if let Some(keystore) = keystore {
+					runtime.register_extension(KeystoreExt(keystore.clone()));
+				}
+
+				if let Some(pool) = tx_pool {
+					runtime.register_extension(pool.offchain_transaction_pool(hash));
+				}
+
+				if let Some(offchain_db) = db {
+					runtime.register_extension(offchain::OffchainDbExt::new(
+						offchain::LimitedExternalities::new(capabilities, offchain_db.clone()),
+					));
+				}
+
+				runtime.register_extension(offchain::OffchainWorkerExt::new(
+					offchain::LimitedExternalities::new(capabilities, api),
+				));
+
+				custom_extensions.into_iter().for_each(|ext| runtime.register_extension(ext));
+
 				let run = if version == 2 {
-					runtime.offchain_worker_with_context(&at, context, &header)
+					runtime.offchain_worker(hash, &header)
 				} else {
 					#[allow(deprecated)]
-					runtime.offchain_worker_before_version_2_with_context(
-						&at,
-						context,
-						*header.number(),
-					)
+					runtime.offchain_worker_before_version_2(hash, *header.number())
 				};
+
 				if let Err(e) = run {
 					tracing::error!(
 						target: LOG_TARGET,
 						"Error running offchain workers at {:?}: {}",
-						at,
+						hash,
 						e
 					);
 				}
@@ -204,44 +323,6 @@ where
 	}
 }
 
-/// Inform the offchain worker about new imported blocks
-pub async fn notification_future<Client, Block, Spawner>(
-	is_validator: bool,
-	client: Arc<Client>,
-	offchain: Arc<OffchainWorkers<Client, Block>>,
-	spawner: Spawner,
-	network_provider: Arc<dyn NetworkProvider + Send + Sync>,
-) where
-	Block: traits::Block,
-	Client:
-		ProvideRuntimeApi<Block> + sc_client_api::BlockchainEvents<Block> + Send + Sync + 'static,
-	Client::Api: OffchainWorkerApi<Block>,
-	Spawner: SpawnNamed,
-{
-	client
-		.import_notification_stream()
-		.for_each(move |n| {
-			if n.is_new_best {
-				spawner.spawn(
-					"offchain-on-block",
-					Some("offchain-worker"),
-					offchain
-						.on_block_imported(&n.header, network_provider.clone(), is_validator)
-						.boxed(),
-				);
-			} else {
-				tracing::debug!(
-					target: LOG_TARGET,
-					"Skipping offchain workers for non-canon block: {:?}",
-					n.header,
-				)
-			}
-
-			ready(())
-		})
-		.await;
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -249,15 +330,16 @@ mod tests {
 	use libp2p::{Multiaddr, PeerId};
 	use sc_block_builder::BlockBuilderProvider as _;
 	use sc_client_api::Backend as _;
-	use sc_network_common::{config::MultiaddrWithPeerId, protocol::ProtocolName};
-	use sc_peerset::ReputationChange;
-	use sc_transaction_pool::{BasicPool, FullChainApi};
+	use sc_network::{config::MultiaddrWithPeerId, types::ProtocolName, ReputationChange};
+	use sc_transaction_pool::BasicPool;
 	use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 	use sp_consensus::BlockOrigin;
 	use std::{collections::HashSet, sync::Arc};
 	use substrate_test_runtime_client::{
-		runtime::Block, ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient,
-		TestClientBuilderExt,
+		runtime::{
+			substrate_test_pallet::pallet::Call as PalletCall, ExtrinsicBuilder, RuntimeCall,
+		},
+		ClientBlockImportExt, DefaultTestClientBuilderExt, TestClientBuilderExt,
 	};
 
 	struct TestNetwork();
@@ -269,6 +351,10 @@ mod tests {
 
 		fn local_peer_id(&self) -> PeerId {
 			PeerId::random()
+		}
+
+		fn listen_addresses(&self) -> Vec<Multiaddr> {
+			Vec::new()
 		}
 	}
 
@@ -325,39 +411,16 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
-			unimplemented!();
-		}
-
-		fn add_to_peers_set(
+		fn remove_peers_from_reserved_set(
 			&self,
 			_protocol: ProtocolName,
-			_peers: HashSet<Multiaddr>,
+			_peers: Vec<PeerId>,
 		) -> Result<(), String> {
-			unimplemented!();
-		}
-
-		fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
 			unimplemented!();
 		}
 
 		fn sync_num_connected(&self) -> usize {
 			unimplemented!();
-		}
-	}
-
-	struct TestPool(Arc<BasicPool<FullChainApi<TestClient, Block>, Block>>);
-
-	impl sc_transaction_pool_api::OffchainSubmitTransaction<Block> for TestPool {
-		fn submit_at(
-			&self,
-			at: &BlockId<Block>,
-			extrinsic: <Block as traits::Block>::Extrinsic,
-		) -> Result<(), ()> {
-			let source = sc_transaction_pool_api::TransactionSource::Local;
-			futures::executor::block_on(self.0.submit_one(&at, source, extrinsic))
-				.map(|_| ())
-				.map_err(|_| ())
 		}
 	}
 
@@ -367,23 +430,30 @@ mod tests {
 
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let pool = TestPool(BasicPool::new_full(
-			Default::default(),
-			true.into(),
-			None,
-			spawner,
-			client.clone(),
-		));
+		let pool =
+			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 		let network = Arc::new(TestNetwork());
 		let header = client.header(client.chain_info().genesis_hash).unwrap().unwrap();
 
 		// when
-		let offchain = OffchainWorkers::new(client);
-		futures::executor::block_on(offchain.on_block_imported(&header, network, false));
+		let offchain = OffchainWorkers::new(OffchainWorkerOptions {
+			runtime_api_provider: client,
+			keystore: None,
+			offchain_db: None::<NoOffchainStorage>,
+			transaction_pool: Some(OffchainTransactionPoolFactory::new(pool.clone())),
+			network_provider: network,
+			is_validator: false,
+			enable_http_requests: false,
+			custom_extensions: |_| Vec::new(),
+		});
+		futures::executor::block_on(offchain.on_block_imported(&header));
 
 		// then
-		assert_eq!(pool.0.status().ready, 1);
-		assert_eq!(pool.0.ready().next().unwrap().is_propagable(), false);
+		assert_eq!(pool.status().ready, 1);
+		assert!(matches!(
+			pool.ready().next().unwrap().data().function,
+			RuntimeCall::SubstrateTest(PalletCall::storage_change { .. })
+		));
 	}
 
 	#[test]
@@ -401,12 +471,8 @@ mod tests {
 		let key = &b"hello"[..];
 		let value = &b"world"[..];
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		block_builder
-			.push(substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexSet(
-				key.to_vec(),
-				value.to_vec(),
-			))
-			.unwrap();
+		let ext = ExtrinsicBuilder::new_offchain_index_set(key.to_vec(), value.to_vec()).build();
+		block_builder.push(ext).unwrap();
 
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
@@ -414,11 +480,8 @@ mod tests {
 		assert_eq!(value, &offchain_db.get(sp_offchain::STORAGE_PREFIX, &key).unwrap());
 
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		block_builder
-			.push(substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexClear(
-				key.to_vec(),
-			))
-			.unwrap();
+		let ext = ExtrinsicBuilder::new_offchain_index_clear(key.to_vec()).nonce(1).build();
+		block_builder.push(ext).unwrap();
 
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();

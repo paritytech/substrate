@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,21 +29,17 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 use sp_std::collections::btree_map::BTreeMap;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		MessageQueue: pallet_message_queue::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -53,14 +49,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -84,6 +79,7 @@ impl Config for Test {
 	type MessageProcessor = RecordingMessageProcessor;
 	type Size = u32;
 	type QueueChangeHandler = RecordingQueueChangeHandler;
+	type QueuePausedQuery = MockedQueuePauser;
 	type HeapSize = HeapSize;
 	type MaxStale = MaxStale;
 	type ServiceWeight = ServiceWeight;
@@ -154,6 +150,8 @@ impl crate::weights::WeightInfo for MockedWeightInfo {
 
 parameter_types! {
 	pub static MessagesProcessed: Vec<(Vec<u8>, MessageOrigin)> = vec![];
+	/// Queues that should return `Yield` upon being processed.
+	pub static YieldingQueues: Vec<MessageOrigin> = vec![];
 }
 
 /// A message processor which records all processed messages into [`MessagesProcessed`].
@@ -170,9 +168,10 @@ impl ProcessMessage for RecordingMessageProcessor {
 	fn process_message(
 		message: &[u8],
 		origin: Self::Origin,
-		weight_limit: Weight,
-	) -> Result<(bool, Weight), ProcessMessageError> {
-		processing_message(message)?;
+		meter: &mut WeightMeter,
+		_id: &mut [u8; 32],
+	) -> Result<bool, ProcessMessageError> {
+		processing_message(message, &origin)?;
 
 		let weight = if message.starts_with(&b"weight="[..]) {
 			let mut w: u64 = 0;
@@ -187,22 +186,26 @@ impl ProcessMessage for RecordingMessageProcessor {
 		} else {
 			1
 		};
-		let weight = Weight::from_parts(weight, weight);
+		let required = Weight::from_parts(weight, weight);
 
-		if weight.all_lte(weight_limit) {
+		if meter.try_consume(required).is_ok() {
 			let mut m = MessagesProcessed::get();
 			m.push((message.to_vec(), origin));
 			MessagesProcessed::set(m);
-			Ok((true, weight))
+			Ok(true)
 		} else {
-			Err(ProcessMessageError::Overweight(weight))
+			Err(ProcessMessageError::Overweight(required))
 		}
 	}
 }
 
-/// Processed a mocked message. Messages that end with `badformat`, `corrupt` or `unsupported` will
-/// fail with the respective error.
-fn processing_message(msg: &[u8]) -> Result<(), ProcessMessageError> {
+/// Processed a mocked message. Messages that end with `badformat`, `corrupt`, `unsupported` or
+/// `yield` will fail with an error respectively.
+fn processing_message(msg: &[u8], origin: &MessageOrigin) -> Result<(), ProcessMessageError> {
+	if YieldingQueues::get().contains(&origin) {
+		return Err(ProcessMessageError::Yield)
+	}
+
 	let msg = String::from_utf8_lossy(msg);
 	if msg.ends_with("badformat") {
 		Err(ProcessMessageError::BadFormat)
@@ -210,6 +213,8 @@ fn processing_message(msg: &[u8]) -> Result<(), ProcessMessageError> {
 		Err(ProcessMessageError::Corrupt)
 	} else if msg.ends_with("unsupported") {
 		Err(ProcessMessageError::Unsupported)
+	} else if msg.ends_with("yield") {
+		Err(ProcessMessageError::Yield)
 	} else {
 		Ok(())
 	}
@@ -230,20 +235,21 @@ impl ProcessMessage for CountingMessageProcessor {
 
 	fn process_message(
 		message: &[u8],
-		_origin: Self::Origin,
-		weight_limit: Weight,
-	) -> Result<(bool, Weight), ProcessMessageError> {
-		if let Err(e) = processing_message(message) {
+		origin: Self::Origin,
+		meter: &mut WeightMeter,
+		_id: &mut [u8; 32],
+	) -> Result<bool, ProcessMessageError> {
+		if let Err(e) = processing_message(message, &origin) {
 			NumMessagesErrored::set(NumMessagesErrored::get() + 1);
 			return Err(e)
 		}
-		let weight = Weight::from_parts(1, 1);
+		let required = Weight::from_parts(1, 1);
 
-		if weight.all_lte(weight_limit) {
+		if meter.try_consume(required).is_ok() {
 			NumMessagesProcessed::set(NumMessagesProcessed::get() + 1);
-			Ok((true, weight))
+			Ok(true)
 		} else {
-			Err(ProcessMessageError::Overweight(weight))
+			Err(ProcessMessageError::Overweight(required))
 		}
 	}
 }
@@ -261,21 +267,38 @@ impl OnQueueChanged<MessageOrigin> for RecordingQueueChangeHandler {
 	}
 }
 
+parameter_types! {
+	pub static PausedQueues: Vec<MessageOrigin> = vec![];
+}
+
+pub struct MockedQueuePauser;
+impl QueuePausedQuery<MessageOrigin> for MockedQueuePauser {
+	fn is_paused(id: &MessageOrigin) -> bool {
+		PausedQueues::get().contains(id)
+	}
+}
+
 /// Create new test externalities.
 ///
 /// Is generic since it is used by the unit test, integration tests and benchmarks.
 pub fn new_test_ext<T: Config>() -> sp_io::TestExternalities
 where
-	<T as frame_system::Config>::BlockNumber: From<u32>,
+	frame_system::pallet_prelude::BlockNumberFor<T>: From<u32>,
 {
 	sp_tracing::try_init_simple();
 	WeightForCall::take();
 	QueueChanges::take();
 	NumMessagesErrored::take();
-	let t = frame_system::GenesisConfig::default().build_storage::<T>().unwrap();
+	let t = frame_system::GenesisConfig::<T>::default().build_storage().unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| frame_system::Pallet::<T>::set_block_number(1.into()));
 	ext
+}
+
+/// Run this closure in test externalities.
+pub fn test_closure<R>(f: impl FnOnce() -> R) -> R {
+	let mut ext = new_test_ext::<Test>();
+	ext.execute_with(f)
 }
 
 /// Set the weight of a specific weight function.
@@ -285,7 +308,11 @@ pub fn set_weight(name: &str, w: Weight) {
 
 /// Assert that exactly these pages are present. Assumes `Here` origin.
 pub fn assert_pages(indices: &[u32]) {
-	assert_eq!(Pages::<Test>::iter().count(), indices.len());
+	assert_eq!(
+		Pages::<Test>::iter_keys().count(),
+		indices.len(),
+		"Wrong number of pages in the queue"
+	);
 	for i in indices {
 		assert!(Pages::<Test>::contains_key(MessageOrigin::Here, i));
 	}
@@ -308,4 +335,13 @@ pub fn knit(queue: &MessageOrigin) {
 
 pub fn unknit(queue: &MessageOrigin) {
 	super::mock_helpers::unknit::<Test>(queue);
+}
+
+pub fn num_overweight_enqueued_events() -> u32 {
+	frame_system::Pallet::<Test>::events()
+		.into_iter()
+		.filter(|e| {
+			matches!(e.event, RuntimeEvent::MessageQueue(crate::Event::OverweightEnqueued { .. }))
+		})
+		.count() as u32
 }

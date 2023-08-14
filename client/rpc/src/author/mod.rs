@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -37,10 +37,10 @@ use sc_transaction_pool_api::{
 	error::IntoPoolError, BlockHash, InPoolTransaction, TransactionFor, TransactionPool,
 	TransactionSource, TxHash,
 };
-use sp_api::ProvideRuntimeApi;
+use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{KeystoreExt, KeystorePtr};
 use sp_runtime::{generic, traits::Block as BlockT};
 use sp_session::SessionKeys;
 
@@ -55,7 +55,7 @@ pub struct Author<P, Client> {
 	/// Transactions pool
 	pool: Arc<P>,
 	/// The key store.
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 	/// Executor to spawn subscriptions.
@@ -67,7 +67,7 @@ impl<P, Client> Author<P, Client> {
 	pub fn new(
 		client: Arc<Client>,
 		pool: Arc<P>,
-		keystore: SyncCryptoStorePtr,
+		keystore: KeystorePtr,
 		deny_unsafe: DenyUnsafe,
 		executor: SubscriptionTaskExecutor,
 	) -> Self {
@@ -112,8 +112,9 @@ where
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
-		SyncCryptoStore::insert_unknown(&*self.keystore, key_type, &suri, &public[..])
-			.map_err(|_| Error::KeyStoreUnavailable)?;
+		self.keystore
+			.insert(key_type, &suri, &public[..])
+			.map_err(|_| Error::KeystoreUnavailable)?;
 		Ok(())
 	}
 
@@ -121,9 +122,12 @@ where
 		self.deny_unsafe.check_if_safe()?;
 
 		let best_block_hash = self.client.info().best_hash;
-		self.client
-			.runtime_api()
-			.generate_session_keys(&generic::BlockId::Hash(best_block_hash), None)
+		let mut runtime_api = self.client.runtime_api();
+
+		runtime_api.register_extension(KeystoreExt::from(self.keystore.clone()));
+
+		runtime_api
+			.generate_session_keys(best_block_hash, None)
 			.map(Into::into)
 			.map_err(|api_err| Error::Client(Box::new(api_err)).into())
 	}
@@ -135,18 +139,18 @@ where
 		let keys = self
 			.client
 			.runtime_api()
-			.decode_session_keys(&generic::BlockId::Hash(best_block_hash), session_keys.to_vec())
+			.decode_session_keys(best_block_hash, session_keys.to_vec())
 			.map_err(|e| Error::Client(Box::new(e)))?
 			.ok_or(Error::InvalidSessionKeys)?;
 
-		Ok(SyncCryptoStore::has_keys(&*self.keystore, &keys))
+		Ok(self.keystore.has_keys(&keys))
 	}
 
 	fn has_key(&self, public_key: Bytes, key_type: String) -> RpcResult<bool> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
-		Ok(SyncCryptoStore::has_keys(&*self.keystore, &[(public_key.to_vec(), key_type)]))
+		Ok(self.keystore.has_keys(&[(public_key.to_vec(), key_type)]))
 	}
 
 	fn pending_extrinsics(&self) -> RpcResult<Vec<Bytes>> {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,6 +35,8 @@ mod stats;
 mod testing;
 mod trie_backend;
 mod trie_backend_essence;
+
+pub use trie_backend::TrieCacheProvider;
 
 #[cfg(feature = "std")]
 pub use std_reexport::*;
@@ -123,7 +125,7 @@ impl sp_std::fmt::Display for DefaultError {
 }
 
 pub use crate::{
-	backend::Backend,
+	backend::{Backend, IterArgs, KeysIter, PairsIter, StorageIterator},
 	error::{Error, ExecutionError},
 	ext::Ext,
 	overlayed_changes::{
@@ -163,17 +165,10 @@ mod execution {
 	use sp_core::{
 		hexdisplay::HexDisplay,
 		storage::{ChildInfo, ChildType, PrefixedStorageKey},
-		traits::{CodeExecutor, ReadRuntimeVersionExt, RuntimeCode, SpawnNamed},
+		traits::{CallContext, CodeExecutor, RuntimeCode},
 	};
 	use sp_externalities::Extensions;
-	use std::{
-		collections::{HashMap, HashSet},
-		fmt,
-	};
-
-	const PROOF_CLOSE_TRANSACTION: &str = "\
-		Closing a transaction that was started in this function. Client initiated transactions
-		are protected from being closed by the runtime. qed";
+	use std::collections::{HashMap, HashSet};
 
 	pub(crate) type CallResult<E> = Result<Vec<u8>, E>;
 
@@ -182,21 +177,6 @@ mod execution {
 
 	/// Trie backend with in-memory storage.
 	pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H>;
-
-	/// Strategy for executing a call into the runtime.
-	#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-	pub enum ExecutionStrategy {
-		/// Execute with the native equivalent if it is compatible with the given wasm module;
-		/// otherwise fall back to the wasm.
-		NativeWhenPossible,
-		/// Use the given wasm module.
-		AlwaysWasm,
-		/// Run with both the wasm and the native variant (if compatible). Report any discrepancy
-		/// as an error.
-		Both,
-		/// First native, then if that fails or is not possible, wasm.
-		NativeElseWasm,
-	}
 
 	/// Storage backend trust level.
 	#[derive(Debug, Clone)]
@@ -207,73 +187,6 @@ mod execution {
 		/// Untrusted backend may be missing some parts of the trie, so panics are not considered
 		/// fatal.
 		Untrusted,
-	}
-
-	/// Like `ExecutionStrategy` only it also stores a handler in case of consensus failure.
-	#[derive(Clone)]
-	pub enum ExecutionManager<F> {
-		/// Execute with the native equivalent if it is compatible with the given wasm module;
-		/// otherwise fall back to the wasm.
-		NativeWhenPossible,
-		/// Use the given wasm module. The backend on which code is executed code could be
-		/// trusted to provide all storage or not (i.e. the light client cannot be trusted to
-		/// provide for all storage queries since the storage entries it has come from an external
-		/// node).
-		AlwaysWasm(BackendTrustLevel),
-		/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of
-		/// any discrepancy.
-		Both(F),
-		/// First native, then if that fails or is not possible, wasm.
-		NativeElseWasm,
-	}
-
-	impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
-		fn from(s: &'a ExecutionManager<F>) -> Self {
-			match *s {
-				ExecutionManager::NativeWhenPossible => ExecutionStrategy::NativeWhenPossible,
-				ExecutionManager::AlwaysWasm(_) => ExecutionStrategy::AlwaysWasm,
-				ExecutionManager::NativeElseWasm => ExecutionStrategy::NativeElseWasm,
-				ExecutionManager::Both(_) => ExecutionStrategy::Both,
-			}
-		}
-	}
-
-	impl ExecutionStrategy {
-		/// Gets the corresponding manager for the execution strategy.
-		pub fn get_manager<E: fmt::Debug>(self) -> ExecutionManager<DefaultHandler<E>> {
-			match self {
-				ExecutionStrategy::AlwaysWasm =>
-					ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted),
-				ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
-				ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
-				ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
-					warn!(
-						"Consensus error between wasm {:?} and native {:?}. Using wasm.",
-						wasm_result, native_result,
-					);
-					warn!("   Native result {:?}", native_result);
-					warn!("   Wasm result {:?}", wasm_result);
-					wasm_result
-				}),
-			}
-		}
-	}
-
-	/// Evaluate to ExecutionManager::NativeElseWasm, without having to figure out the type.
-	pub fn native_else_wasm<E>() -> ExecutionManager<DefaultHandler<E>> {
-		ExecutionManager::NativeElseWasm
-	}
-
-	/// Evaluate to ExecutionManager::AlwaysWasm with trusted backend, without having to figure out
-	/// the type.
-	fn always_wasm<E>() -> ExecutionManager<DefaultHandler<E>> {
-		ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted)
-	}
-
-	/// Evaluate ExecutionManager::AlwaysWasm with untrusted backend, without having to figure out
-	/// the type.
-	fn always_untrusted_wasm<E>() -> ExecutionManager<DefaultHandler<E>> {
-		ExecutionManager::AlwaysWasm(BackendTrustLevel::Untrusted)
 	}
 
 	/// The substrate state machine.
@@ -287,7 +200,7 @@ mod execution {
 		method: &'a str,
 		call_data: &'a [u8],
 		overlay: &'a mut OverlayedChanges,
-		extensions: Extensions,
+		extensions: &'a mut Extensions,
 		storage_transaction_cache: Option<&'a mut StorageTransactionCache<B::Transaction, H>>,
 		runtime_code: &'a RuntimeCode<'a>,
 		stats: StateMachineStats,
@@ -295,6 +208,7 @@ mod execution {
 		///
 		/// Used for logging.
 		parent_hash: Option<H::Out>,
+		context: CallContext,
 	}
 
 	impl<'a, B, H, Exec> Drop for StateMachine<'a, B, H, Exec>
@@ -321,13 +235,10 @@ mod execution {
 			exec: &'a Exec,
 			method: &'a str,
 			call_data: &'a [u8],
-			mut extensions: Extensions,
+			extensions: &'a mut Extensions,
 			runtime_code: &'a RuntimeCode,
-			spawn_handle: impl SpawnNamed + Send + 'static,
+			context: CallContext,
 		) -> Self {
-			extensions.register(ReadRuntimeVersionExt::new(exec.clone()));
-			extensions.register(sp_core::traits::TaskExecutorExt::new(spawn_handle));
-
 			Self {
 				backend,
 				exec,
@@ -339,6 +250,7 @@ mod execution {
 				runtime_code,
 				stats: StateMachineStats::default(),
 				parent_hash: None,
+				context,
 			}
 		}
 
@@ -371,13 +283,7 @@ mod execution {
 		/// blocks (e.g. a transaction at a time), ensure a different method is used.
 		///
 		/// Returns the SCALE encoded result of the executed function.
-		pub fn execute(&mut self, strategy: ExecutionStrategy) -> Result<Vec<u8>, Box<dyn Error>> {
-			// We are not giving a native call and thus we are sure that the result can never be a
-			// native value.
-			self.execute_using_consensus_failure_handler(strategy.get_manager())
-		}
-
-		fn execute_aux(&mut self, use_native: bool) -> (CallResult<Exec::Error>, bool) {
+		pub fn execute(&mut self) -> Result<Vec<u8>, Box<dyn Error>> {
 			let mut cache = StorageTransactionCache::default();
 
 			let cache = match self.storage_transaction_cache.as_mut() {
@@ -389,7 +295,7 @@ mod execution {
 				.enter_runtime()
 				.expect("StateMachine is never called from the runtime; qed");
 
-			let mut ext = Ext::new(self.overlay, cache, self.backend, Some(&mut self.extensions));
+			let mut ext = Ext::new(self.overlay, cache, self.backend, Some(self.extensions));
 
 			let ext_id = ext.id;
 
@@ -402,13 +308,10 @@ mod execution {
 				"Call",
 			);
 
-			let (result, was_native) = self.exec.call(
-				&mut ext,
-				self.runtime_code,
-				self.method,
-				self.call_data,
-				use_native,
-			);
+			let result = self
+				.exec
+				.call(&mut ext, self.runtime_code, self.method, self.call_data, false, self.context)
+				.0;
 
 			self.overlay
 				.exit_runtime()
@@ -417,101 +320,19 @@ mod execution {
 			trace!(
 				target: "state",
 				ext_id = %HexDisplay::from(&ext_id.to_le_bytes()),
-				?was_native,
 				?result,
 				"Return",
 			);
 
-			(result, was_native)
-		}
-
-		fn execute_call_with_both_strategy<Handler>(
-			&mut self,
-			on_consensus_failure: Handler,
-		) -> CallResult<Exec::Error>
-		where
-			Handler:
-				FnOnce(CallResult<Exec::Error>, CallResult<Exec::Error>) -> CallResult<Exec::Error>,
-		{
-			self.overlay.start_transaction();
-			let (result, was_native) = self.execute_aux(true);
-
-			if was_native {
-				self.overlay.rollback_transaction().expect(PROOF_CLOSE_TRANSACTION);
-				let (wasm_result, _) = self.execute_aux(false);
-
-				if (result.is_ok() &&
-					wasm_result.is_ok() && result.as_ref().ok() == wasm_result.as_ref().ok()) ||
-					result.is_err() && wasm_result.is_err()
-				{
-					result
-				} else {
-					on_consensus_failure(wasm_result, result)
-				}
-			} else {
-				self.overlay.commit_transaction().expect(PROOF_CLOSE_TRANSACTION);
-				result
-			}
-		}
-
-		fn execute_call_with_native_else_wasm_strategy(&mut self) -> CallResult<Exec::Error> {
-			self.overlay.start_transaction();
-			let (result, was_native) = self.execute_aux(true);
-
-			if !was_native || result.is_ok() {
-				self.overlay.commit_transaction().expect(PROOF_CLOSE_TRANSACTION);
-				result
-			} else {
-				self.overlay.rollback_transaction().expect(PROOF_CLOSE_TRANSACTION);
-				self.execute_aux(false).0
-			}
-		}
-
-		/// Execute a call using the given state backend, overlayed changes, and call executor.
-		///
-		/// On an error, no prospective changes are written to the overlay.
-		///
-		/// Note: changes to code will be in place if this call is made again. For running partial
-		/// blocks (e.g. a transaction at a time), ensure a different method is used.
-		///
-		/// Returns the result of the executed function either in native representation `R` or
-		/// in SCALE encoded representation.
-		pub fn execute_using_consensus_failure_handler<Handler>(
-			&mut self,
-			manager: ExecutionManager<Handler>,
-		) -> Result<Vec<u8>, Box<dyn Error>>
-		where
-			Handler:
-				FnOnce(CallResult<Exec::Error>, CallResult<Exec::Error>) -> CallResult<Exec::Error>,
-		{
-			let result = {
-				match manager {
-					ExecutionManager::Both(on_consensus_failure) =>
-						self.execute_call_with_both_strategy(on_consensus_failure),
-					ExecutionManager::NativeElseWasm =>
-						self.execute_call_with_native_else_wasm_strategy(),
-					ExecutionManager::AlwaysWasm(trust_level) => {
-						let _abort_guard = match trust_level {
-							BackendTrustLevel::Trusted => None,
-							BackendTrustLevel::Untrusted =>
-								Some(sp_panic_handler::AbortGuard::never_abort()),
-						};
-						self.execute_aux(false).0
-					},
-					ExecutionManager::NativeWhenPossible => self.execute_aux(true).0,
-				}
-			};
-
-			result.map_err(|e| Box::new(e) as _)
+			result.map_err(|e| Box::new(e) as Box<_>)
 		}
 	}
 
 	/// Prove execution using the given state backend, overlayed changes, and call executor.
-	pub fn prove_execution<B, H, Exec, Spawn>(
+	pub fn prove_execution<B, H, Exec>(
 		backend: &mut B,
 		overlay: &mut OverlayedChanges,
 		exec: &Exec,
-		spawn_handle: Spawn,
 		method: &str,
 		call_data: &[u8],
 		runtime_code: &RuntimeCode,
@@ -521,18 +342,16 @@ mod execution {
 		H: Hasher,
 		H::Out: Ord + 'static + codec::Codec,
 		Exec: CodeExecutor + Clone + 'static,
-		Spawn: SpawnNamed + Send + 'static,
 	{
 		let trie_backend = backend.as_trie_backend();
-		prove_execution_on_trie_backend::<_, _, _, _>(
+		prove_execution_on_trie_backend::<_, _, _>(
 			trie_backend,
 			overlay,
 			exec,
-			spawn_handle,
 			method,
 			call_data,
 			runtime_code,
-			Default::default(),
+			&mut Default::default(),
 		)
 	}
 
@@ -545,22 +364,20 @@ mod execution {
 	///
 	/// Note: changes to code will be in place if this call is made again. For running partial
 	/// blocks (e.g. a transaction at a time), ensure a different method is used.
-	pub fn prove_execution_on_trie_backend<S, H, Exec, Spawn>(
+	pub fn prove_execution_on_trie_backend<S, H, Exec>(
 		trie_backend: &TrieBackend<S, H>,
 		overlay: &mut OverlayedChanges,
 		exec: &Exec,
-		spawn_handle: Spawn,
 		method: &str,
 		call_data: &[u8],
 		runtime_code: &RuntimeCode,
-		extensions: Extensions,
+		extensions: &mut Extensions,
 	) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 	where
 		S: trie_backend_essence::TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: Ord + 'static + codec::Codec,
 		Exec: CodeExecutor + 'static + Clone,
-		Spawn: SpawnNamed + Send + 'static,
 	{
 		let proving_backend =
 			TrieBackendBuilder::wrap(trie_backend).with_recorder(Default::default()).build();
@@ -573,9 +390,9 @@ mod execution {
 			call_data,
 			extensions,
 			runtime_code,
-			spawn_handle,
+			CallContext::Offchain,
 		)
-		.execute_using_consensus_failure_handler::<_>(always_wasm())?;
+		.execute()?;
 
 		let proof = proving_backend
 			.extract_proof()
@@ -585,12 +402,11 @@ mod execution {
 	}
 
 	/// Check execution proof, generated by `prove_execution` call.
-	pub fn execution_proof_check<H, Exec, Spawn>(
+	pub fn execution_proof_check<H, Exec>(
 		root: H::Out,
 		proof: StorageProof,
 		overlay: &mut OverlayedChanges,
 		exec: &Exec,
-		spawn_handle: Spawn,
 		method: &str,
 		call_data: &[u8],
 		runtime_code: &RuntimeCode,
@@ -599,14 +415,12 @@ mod execution {
 		H: Hasher + 'static,
 		Exec: CodeExecutor + Clone + 'static,
 		H::Out: Ord + 'static + codec::Codec,
-		Spawn: SpawnNamed + Send + 'static,
 	{
 		let trie_backend = create_proof_check_backend::<H>(root, proof)?;
-		execution_proof_check_on_trie_backend::<_, _, _>(
+		execution_proof_check_on_trie_backend::<_, _>(
 			&trie_backend,
 			overlay,
 			exec,
-			spawn_handle,
 			method,
 			call_data,
 			runtime_code,
@@ -614,11 +428,10 @@ mod execution {
 	}
 
 	/// Check execution proof on proving backend, generated by `prove_execution` call.
-	pub fn execution_proof_check_on_trie_backend<H, Exec, Spawn>(
+	pub fn execution_proof_check_on_trie_backend<H, Exec>(
 		trie_backend: &TrieBackend<MemoryDB<H>, H>,
 		overlay: &mut OverlayedChanges,
 		exec: &Exec,
-		spawn_handle: Spawn,
 		method: &str,
 		call_data: &[u8],
 		runtime_code: &RuntimeCode,
@@ -627,7 +440,6 @@ mod execution {
 		H: Hasher,
 		H::Out: Ord + 'static + codec::Codec,
 		Exec: CodeExecutor + Clone + 'static,
-		Spawn: SpawnNamed + Send + 'static,
 	{
 		StateMachine::<_, H, Exec>::new(
 			trie_backend,
@@ -635,11 +447,11 @@ mod execution {
 			exec,
 			method,
 			call_data,
-			Extensions::default(),
+			&mut Extensions::default(),
 			runtime_code,
-			spawn_handle,
+			CallContext::Offchain,
 		)
-		.execute_using_consensus_failure_handler(always_untrusted_wasm())
+		.execute()
 	}
 
 	/// Generate storage read proof.
@@ -843,47 +655,36 @@ mod execution {
 
 			let start_at_ref = start_at.as_ref().map(AsRef::as_ref);
 			let mut switch_child_key = None;
-			let mut first = start_at.is_some();
-			let completed = proving_backend
-				.apply_to_key_values_while(
-					child_info.as_ref(),
-					None,
-					start_at_ref,
-					|key, value| {
-						if first &&
-							start_at_ref
-								.as_ref()
-								.map(|start| &key.as_slice() > start)
-								.unwrap_or(true)
-						{
-							first = false;
-						}
-
-						if first {
-							true
-						} else if depth < MAX_NESTED_TRIE_DEPTH &&
-							sp_core::storage::well_known_keys::is_child_storage_key(
-								key.as_slice(),
-							) {
-							count += 1;
-							if !child_roots.contains(value.as_slice()) {
-								child_roots.insert(value);
-								switch_child_key = Some(key);
-								false
-							} else {
-								// do not add two child trie with same root
-								true
-							}
-						} else if recorder.estimate_encoded_size() <= size_limit {
-							count += 1;
-							true
-						} else {
-							false
-						}
-					},
-					false,
-				)
+			let mut iter = proving_backend
+				.pairs(IterArgs {
+					child_info,
+					start_at: start_at_ref,
+					start_at_exclusive: true,
+					..IterArgs::default()
+				})
 				.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+			while let Some(item) = iter.next() {
+				let (key, value) = item.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+				if depth < MAX_NESTED_TRIE_DEPTH &&
+					sp_core::storage::well_known_keys::is_child_storage_key(key.as_slice())
+				{
+					count += 1;
+					// do not add two child trie with same root
+					if !child_roots.contains(value.as_slice()) {
+						child_roots.insert(value);
+						switch_child_key = Some(key);
+						break
+					}
+				} else if recorder.estimate_encoded_size() <= size_limit {
+					count += 1;
+				} else {
+					break
+				}
+			}
+
+			let completed = iter.was_complete();
 
 			if switch_child_key.is_none() {
 				if depth == 1 {
@@ -945,22 +746,26 @@ mod execution {
 		let proving_backend =
 			TrieBackendBuilder::wrap(trie_backend).with_recorder(recorder.clone()).build();
 		let mut count = 0;
-		proving_backend
-			.apply_to_key_values_while(
-				child_info,
+		let iter = proving_backend
+			// NOTE: Even though the loop below doesn't use these values
+			//       this *must* fetch both the keys and the values so that
+			//       the proof is correct.
+			.pairs(IterArgs {
+				child_info: child_info.cloned(),
 				prefix,
 				start_at,
-				|_key, _value| {
-					if count == 0 || recorder.estimate_encoded_size() <= size_limit {
-						count += 1;
-						true
-					} else {
-						false
-					}
-				},
-				false,
-			)
+				..IterArgs::default()
+			})
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+		for item in iter {
+			item.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+			if count == 0 || recorder.estimate_encoded_size() <= size_limit {
+				count += 1;
+			} else {
+				break
+			}
+		}
 
 		let proof = proving_backend
 			.extract_proof()
@@ -1167,20 +972,25 @@ mod execution {
 		H::Out: Ord + Codec,
 	{
 		let mut values = Vec::new();
-		let result = proving_backend.apply_to_key_values_while(
-			child_info,
-			prefix,
-			start_at,
-			|key, value| {
-				values.push((key.to_vec(), value.to_vec()));
-				count.as_ref().map_or(true, |c| (values.len() as u32) < *c)
-			},
-			true,
-		);
-		match result {
-			Ok(completed) => Ok((values, completed)),
-			Err(e) => Err(Box::new(e) as Box<dyn Error>),
+		let mut iter = proving_backend
+			.pairs(IterArgs {
+				child_info: child_info.cloned(),
+				prefix,
+				start_at,
+				stop_on_incomplete_database: true,
+				..IterArgs::default()
+			})
+			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+		while let Some(item) = iter.next() {
+			let (key, value) = item.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+			values.push((key, value));
+			if !count.as_ref().map_or(true, |c| (values.len() as u32) < *c) {
+				break
+			}
 		}
+
+		Ok((values, iter.was_complete()))
 	}
 
 	/// Check storage range proof on pre-created proving backend.
@@ -1249,46 +1059,34 @@ mod execution {
 			};
 			let start_at_ref = start_at.as_ref().map(AsRef::as_ref);
 			let mut switch_child_key = None;
-			let mut first = start_at.is_some();
-			let completed = proving_backend
-				.apply_to_key_values_while(
-					child_info.as_ref(),
-					None,
-					start_at_ref,
-					|key, value| {
-						if first &&
-							start_at_ref
-								.as_ref()
-								.map(|start| &key.as_slice() > start)
-								.unwrap_or(true)
-						{
-							first = false;
-						}
 
-						if !first {
-							values.push((key.to_vec(), value.to_vec()));
-						}
-						if first {
-							true
-						} else if depth < MAX_NESTED_TRIE_DEPTH &&
-							sp_core::storage::well_known_keys::is_child_storage_key(
-								key.as_slice(),
-							) {
-							if child_roots.contains(value.as_slice()) {
-								// Do not add two chid trie with same root.
-								true
-							} else {
-								child_roots.insert(value.clone());
-								switch_child_key = Some((key, value));
-								false
-							}
-						} else {
-							true
-						}
-					},
-					true,
-				)
+			let mut iter = proving_backend
+				.pairs(IterArgs {
+					child_info,
+					start_at: start_at_ref,
+					start_at_exclusive: true,
+					stop_on_incomplete_database: true,
+					..IterArgs::default()
+				})
 				.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+			while let Some(item) = iter.next() {
+				let (key, value) = item.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+				values.push((key.to_vec(), value.to_vec()));
+
+				if depth < MAX_NESTED_TRIE_DEPTH &&
+					sp_core::storage::well_known_keys::is_child_storage_key(key.as_slice())
+				{
+					// Do not add two chid trie with same root.
+					if !child_roots.contains(value.as_slice()) {
+						child_roots.insert(value.clone());
+						switch_child_key = Some((key, value));
+						break
+					}
+				}
+			}
+
+			let completed = iter.was_complete();
 
 			if switch_child_key.is_none() {
 				if !completed {
@@ -1317,11 +1115,14 @@ mod tests {
 	use sp_core::{
 		map,
 		storage::{ChildInfo, StateVersion},
-		testing::TaskExecutor,
-		traits::{CodeExecutor, Externalities, RuntimeCode},
+		traits::{CallContext, CodeExecutor, Externalities, RuntimeCode},
+		H256,
 	};
 	use sp_runtime::traits::BlakeTwo256;
-	use sp_trie::trie_types::{TrieDBMutBuilderV0, TrieDBMutBuilderV1};
+	use sp_trie::{
+		trie_types::{TrieDBMutBuilderV0, TrieDBMutBuilderV1},
+		KeySpacedDBMut, PrefixedMemoryDB,
+	};
 	use std::collections::{BTreeMap, HashMap};
 
 	#[derive(Clone)]
@@ -1341,6 +1142,7 @@ mod tests {
 			_method: &str,
 			_data: &[u8],
 			use_native: bool,
+			_: CallContext,
 		) -> (CallResult<Self::Error>, bool) {
 			let using_native = use_native && self.native_available;
 			match (using_native, self.native_succeeds, self.fallback_succeeds) {
@@ -1374,6 +1176,7 @@ mod tests {
 		let backend = trie_backend::tests::test_trie(state_version, None, None);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
+		let mut execution_extensions = &mut Default::default();
 
 		let mut state_machine = StateMachine::new(
 			&backend,
@@ -1385,12 +1188,12 @@ mod tests {
 			},
 			"test",
 			&[],
-			Default::default(),
+			&mut execution_extensions,
 			&wasm_code,
-			TaskExecutor::new(),
+			CallContext::Offchain,
 		);
 
-		assert_eq!(state_machine.execute(ExecutionStrategy::NativeWhenPossible).unwrap(), vec![66]);
+		assert_eq!(state_machine.execute().unwrap(), vec![66]);
 	}
 
 	#[test]
@@ -1402,6 +1205,7 @@ mod tests {
 		let backend = trie_backend::tests::test_trie(state_version, None, None);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
+		let mut execution_extensions = &mut Default::default();
 
 		let mut state_machine = StateMachine::new(
 			&backend,
@@ -1413,47 +1217,12 @@ mod tests {
 			},
 			"test",
 			&[],
-			Default::default(),
+			&mut execution_extensions,
 			&wasm_code,
-			TaskExecutor::new(),
+			CallContext::Offchain,
 		);
 
-		assert_eq!(state_machine.execute(ExecutionStrategy::NativeElseWasm).unwrap(), vec![66]);
-	}
-
-	#[test]
-	fn dual_execution_strategy_detects_consensus_failure() {
-		dual_execution_strategy_detects_consensus_failure_inner(StateVersion::V0);
-		dual_execution_strategy_detects_consensus_failure_inner(StateVersion::V1);
-	}
-	fn dual_execution_strategy_detects_consensus_failure_inner(state_version: StateVersion) {
-		let mut consensus_failed = false;
-		let backend = trie_backend::tests::test_trie(state_version, None, None);
-		let mut overlayed_changes = Default::default();
-		let wasm_code = RuntimeCode::empty();
-
-		let mut state_machine = StateMachine::new(
-			&backend,
-			&mut overlayed_changes,
-			&DummyCodeExecutor {
-				native_available: true,
-				native_succeeds: true,
-				fallback_succeeds: false,
-			},
-			"test",
-			&[],
-			Default::default(),
-			&wasm_code,
-			TaskExecutor::new(),
-		);
-
-		assert!(state_machine
-			.execute_using_consensus_failure_handler(ExecutionManager::Both(|we, _ne| {
-				consensus_failed = true;
-				we
-			}),)
-			.is_err());
-		assert!(consensus_failed);
+		assert_eq!(state_machine.execute().unwrap(), vec![66]);
 	}
 
 	#[test]
@@ -1475,7 +1244,6 @@ mod tests {
 			&mut remote_backend,
 			&mut Default::default(),
 			&executor,
-			TaskExecutor::new(),
 			"test",
 			&[],
 			&RuntimeCode::empty(),
@@ -1483,12 +1251,11 @@ mod tests {
 		.unwrap();
 
 		// check proof locally
-		let local_result = execution_proof_check::<BlakeTwo256, _, _>(
+		let local_result = execution_proof_check::<BlakeTwo256, _>(
 			remote_root,
 			remote_proof,
 			&mut Default::default(),
 			&executor,
-			TaskExecutor::new(),
 			"test",
 			&[],
 			&RuntimeCode::empty(),
@@ -1943,12 +1710,14 @@ mod tests {
 		// Always contains at least some nodes.
 		assert_eq!(proof.to_memory_db::<BlakeTwo256>().drain().len(), 3);
 		assert_eq!(count, 1);
+		assert_eq!(proof.encoded_size(), 443);
 
 		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let (proof, count) =
 			prove_range_read_with_size(remote_backend, None, None, 800, Some(&[])).unwrap();
 		assert_eq!(proof.to_memory_db::<BlakeTwo256>().drain().len(), 9);
 		assert_eq!(count, 85);
+		assert_eq!(proof.encoded_size(), 857);
 		let (results, completed) = read_range_proof_check::<BlakeTwo256>(
 			remote_root,
 			proof.clone(),
@@ -1972,11 +1741,39 @@ mod tests {
 			prove_range_read_with_size(remote_backend, None, None, 50000, Some(&[])).unwrap();
 		assert_eq!(proof.to_memory_db::<BlakeTwo256>().drain().len(), 11);
 		assert_eq!(count, 132);
+		assert_eq!(proof.encoded_size(), 990);
+
 		let (results, completed) =
 			read_range_proof_check::<BlakeTwo256>(remote_root, proof, None, None, None, None)
 				.unwrap();
 		assert_eq!(results.len() as u32, count);
 		assert_eq!(completed, true);
+	}
+
+	#[test]
+	fn prove_read_with_size_limit_proof_size() {
+		let mut root = H256::default();
+		let mut mdb = PrefixedMemoryDB::<BlakeTwo256>::default();
+		{
+			let mut mdb = KeySpacedDBMut::new(&mut mdb, b"");
+			let mut trie = TrieDBMutBuilderV1::new(&mut mdb, &mut root).build();
+			trie.insert(b"value1", &[123; 1]).unwrap();
+			trie.insert(b"value2", &[123; 10]).unwrap();
+			trie.insert(b"value3", &[123; 100]).unwrap();
+			trie.insert(b"value4", &[123; 1000]).unwrap();
+		}
+
+		let remote_backend: TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> =
+			TrieBackendBuilder::new(mdb, root)
+				.with_optional_cache(None)
+				.with_optional_recorder(None)
+				.build();
+
+		let (proof, count) =
+			prove_range_read_with_size(remote_backend, None, None, 1000, None).unwrap();
+
+		assert_eq!(proof.encoded_size(), 1267);
+		assert_eq!(count, 3);
 	}
 
 	#[test]

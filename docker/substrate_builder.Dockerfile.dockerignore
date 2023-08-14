@@ -1,0 +1,11 @@
+doc
+**target*
+.idea/
+.git/
+.github/
+Dockerfile
+.dockerignore
+.local
+.env*
+HEADER-GPL3
+LICENSE-GPL3

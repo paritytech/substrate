@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,25 +22,20 @@
 use crate as pallet_aura;
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64, DisabledValidators, GenesisBuild},
+	traits::{ConstU32, ConstU64, DisabledValidators},
 };
 use sp_consensus_aura::{ed25519::AuthorityId, AuthorityIndex};
 use sp_core::H256;
-use sp_runtime::{
-	testing::{Header, UintAuthorityId},
-	traits::IdentityLookup,
-};
+use sp_runtime::{testing::UintAuthorityId, traits::IdentityLookup, BuildStorage};
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
+const SLOT_DURATION: u64 = 2;
+
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Aura: pallet_aura::{Pallet, Storage, Config<T>},
 	}
@@ -52,14 +47,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -76,12 +70,13 @@ impl frame_system::Config for Test {
 impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = Aura;
-	type MinimumPeriod = ConstU64<1>;
+	type MinimumPeriod = ConstU64<{ SLOT_DURATION / 2 }>;
 	type WeightInfo = ();
 }
 
 parameter_types! {
 	static DisabledValidatorTestValue: Vec<AuthorityIndex> = Default::default();
+	pub static AllowMultipleBlocksPerSlot: bool = false;
 }
 
 pub struct MockDisabledValidators;
@@ -106,14 +101,26 @@ impl pallet_aura::Config for Test {
 	type AuthorityId = AuthorityId;
 	type DisabledValidators = MockDisabledValidators;
 	type MaxAuthorities = ConstU32<10>;
+	type AllowMultipleBlocksPerSlot = AllowMultipleBlocksPerSlot;
+
+	#[cfg(feature = "experimental")]
+	type SlotDuration = ConstU64<SLOT_DURATION>;
 }
 
-pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+fn build_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
+	let mut storage = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	pallet_aura::GenesisConfig::<Test> {
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a).to_public_key()).collect(),
 	}
-	.assimilate_storage(&mut t)
+	.assimilate_storage(&mut storage)
 	.unwrap();
-	t.into()
+	storage.into()
+}
+
+pub fn build_ext_and_execute_test(authorities: Vec<u64>, test: impl FnOnce() -> ()) {
+	let mut ext = build_ext(authorities);
+	ext.execute_with(|| {
+		test();
+		Aura::do_try_state().expect("Storage invariants should hold")
+	});
 }

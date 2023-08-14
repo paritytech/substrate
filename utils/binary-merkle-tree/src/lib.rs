@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,8 +27,7 @@
 //! Merkle Tree is constructed from arbitrary-length leaves, that are initially hashed using the
 //! same hasher as the inner nodes.
 //! Inner nodes are created by concatenating child hashes and hashing again. The implementation
-//! sorts each pair of hashes before every hash operation. This makes proof verification more
-//! efficient by removing the need to track which side each intermediate hash is concatenated on.
+//! does not perform any sorting of the input data (leaves) nor when inner nodes are created.
 //!
 //! If the number of leaves is not even, last leaf (hash of) is promoted to the upper layer.
 #[cfg(not(feature = "std"))]
@@ -48,7 +47,7 @@ use hash_db::Hasher;
 pub fn merkle_root<H, I>(leaves: I) -> H::Out
 where
 	H: Hasher,
-	H::Out: Default + AsRef<[u8]> + PartialOrd,
+	H::Out: Default + AsRef<[u8]>,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
@@ -59,7 +58,7 @@ where
 fn merkelize<H, V, I>(leaves: I, visitor: &mut V) -> H::Out
 where
 	H: Hasher,
-	H::Out: Default + AsRef<[u8]> + PartialOrd,
+	H::Out: Default + AsRef<[u8]>,
 	V: Visitor<H::Out>,
 	I: Iterator<Item = H::Out>,
 {
@@ -144,7 +143,7 @@ impl<T> Visitor<T> for () {
 pub fn merkle_proof<H, I, T>(leaves: I, leaf_index: usize) -> MerkleProof<H::Out, T>
 where
 	H: Hasher,
-	H::Out: Default + Copy + AsRef<[u8]> + PartialOrd,
+	H::Out: Default + Copy + AsRef<[u8]>,
 	I: IntoIterator<Item = T>,
 	I::IntoIter: ExactSizeIterator,
 	T: AsRef<[u8]>,
@@ -203,7 +202,7 @@ where
 		collect_proof
 			.proof
 			.iter()
-			.map(|s| array_bytes::bytes2hex("", s.as_ref()))
+			.map(|s| array_bytes::bytes2hex("", s))
 			.collect::<Vec<_>>()
 	);
 
@@ -244,7 +243,7 @@ pub fn verify_proof<'a, H, P, L>(
 ) -> bool
 where
 	H: Hasher,
-	H::Out: PartialEq + AsRef<[u8]> + PartialOrd,
+	H::Out: PartialEq + AsRef<[u8]>,
 	P: IntoIterator<Item = H::Out>,
 	L: Into<Leaf<'a, H::Out>>,
 {
@@ -259,23 +258,27 @@ where
 
 	let hash_len = <H as Hasher>::LENGTH;
 	let mut combined = vec![0_u8; hash_len * 2];
+	let mut position = leaf_index;
+	let mut width = number_of_leaves;
 	let computed = proof.into_iter().fold(leaf_hash, |a, b| {
-		if a < b {
-			combined[..hash_len].copy_from_slice(&a.as_ref());
-			combined[hash_len..].copy_from_slice(&b.as_ref());
-		} else {
+		if position % 2 == 1 || position + 1 == width {
 			combined[..hash_len].copy_from_slice(&b.as_ref());
 			combined[hash_len..].copy_from_slice(&a.as_ref());
+		} else {
+			combined[..hash_len].copy_from_slice(&a.as_ref());
+			combined[hash_len..].copy_from_slice(&b.as_ref());
 		}
 		let hash = <H as Hasher>::hash(&combined);
 		#[cfg(feature = "debug")]
 		log::debug!(
 			"[verify_proof]: (a, b) {:?}, {:?} => {:?} ({:?}) hash",
-			array_bytes::bytes2hex("", &a.as_ref()),
-			array_bytes::bytes2hex("", &b.as_ref()),
-			array_bytes::bytes2hex("", &hash.as_ref()),
-			array_bytes::bytes2hex("", &combined.as_ref())
+			array_bytes::bytes2hex("", a),
+			array_bytes::bytes2hex("", b),
+			array_bytes::bytes2hex("", hash),
+			array_bytes::bytes2hex("", &combined)
 		);
+		position /= 2;
+		width = ((width - 1) / 2) + 1;
 		hash
 	});
 
@@ -294,7 +297,7 @@ fn merkelize_row<H, V, I>(
 ) -> Result<H::Out, Vec<H::Out>>
 where
 	H: Hasher,
-	H::Out: AsRef<[u8]> + PartialOrd,
+	H::Out: AsRef<[u8]>,
 	V: Visitor<H::Out>,
 	I: Iterator<Item = H::Out>,
 {
@@ -313,20 +316,15 @@ where
 		#[cfg(feature = "debug")]
 		log::debug!(
 			"  {:?}\n  {:?}",
-			a.as_ref().map(|s| array_bytes::bytes2hex("", s.as_ref())),
-			b.as_ref().map(|s| array_bytes::bytes2hex("", s.as_ref()))
+			a.as_ref().map(|s| array_bytes::bytes2hex("", s)),
+			b.as_ref().map(|s| array_bytes::bytes2hex("", s))
 		);
 
 		index += 2;
 		match (a, b) {
 			(Some(a), Some(b)) => {
-				if a < b {
-					combined[..hash_len].copy_from_slice(a.as_ref());
-					combined[hash_len..].copy_from_slice(b.as_ref());
-				} else {
-					combined[..hash_len].copy_from_slice(b.as_ref());
-					combined[hash_len..].copy_from_slice(a.as_ref());
-				}
+				combined[..hash_len].copy_from_slice(a.as_ref());
+				combined[hash_len..].copy_from_slice(b.as_ref());
 
 				next.push(<H as Hasher>::hash(&combined));
 			},
@@ -341,7 +339,7 @@ where
 				#[cfg(feature = "debug")]
 				log::debug!(
 					"[merkelize_row] Next: {:?}",
-					next.iter().map(|s| array_bytes::bytes2hex("", s.as_ref())).collect::<Vec<_>>()
+					next.iter().map(|s| array_bytes::bytes2hex("", s)).collect::<Vec<_>>()
 				);
 				return Err(next)
 			},
@@ -366,7 +364,7 @@ mod tests {
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", out.as_ref()),
+			array_bytes::bytes2hex("", out),
 			"0000000000000000000000000000000000000000000000000000000000000000"
 		);
 	}
@@ -375,7 +373,7 @@ mod tests {
 	fn should_generate_single_root() {
 		// given
 		let _ = env_logger::try_init();
-		let data = vec![array_bytes::hex2array_unchecked::<20>(
+		let data = vec![array_bytes::hex2array_unchecked::<_, 20>(
 			"E04CC55ebEE1cBCE552f250e85c57B70B2E2625b",
 		)];
 
@@ -384,7 +382,7 @@ mod tests {
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", out.as_ref()),
+			array_bytes::bytes2hex("", out),
 			"aeb47a269393297f4b0a3c9c9cfd00c7a4195255274cf39d83dabc2fcc9ff3d7"
 		);
 	}
@@ -394,8 +392,8 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let data = vec![
-			array_bytes::hex2array_unchecked::<20>("E04CC55ebEE1cBCE552f250e85c57B70B2E2625b"),
-			array_bytes::hex2array_unchecked::<20>("25451A4de12dcCc2D166922fA938E900fCc4ED24"),
+			array_bytes::hex2array_unchecked::<_, 20>("E04CC55ebEE1cBCE552f250e85c57B70B2E2625b"),
+			array_bytes::hex2array_unchecked::<_, 20>("25451A4de12dcCc2D166922fA938E900fCc4ED24"),
 		];
 
 		// when
@@ -403,7 +401,7 @@ mod tests {
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", out.as_ref()),
+			array_bytes::bytes2hex("", out),
 			"697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402"
 		);
 	}
@@ -412,19 +410,16 @@ mod tests {
 	fn should_generate_root_complex() {
 		let _ = env_logger::try_init();
 		let test = |root, data| {
-			assert_eq!(
-				array_bytes::bytes2hex("", &merkle_root::<Keccak256, _>(data).as_ref()),
-				root
-			);
+			assert_eq!(array_bytes::bytes2hex("", &merkle_root::<Keccak256, _>(data)), root);
 		};
 
 		test(
-			"5842148bc6ebeb52af882a317c765fccd3ae80589b21a9b8cbf21abb630e46a7",
+			"aff1208e69c9e8be9b584b07ebac4e48a1ee9d15ce3afe20b77a4d29e4175aa3",
 			vec!["a", "b", "c"],
 		);
 
 		test(
-			"7b84bec68b13c39798c6c50e9e40a0b268e3c1634db8f4cb97314eb243d4c514",
+			"b8912f7269068901f231a965adfefbc10f0eedcfa61852b103efd54dac7db3d7",
 			vec!["a", "b", "a"],
 		);
 
@@ -434,7 +429,7 @@ mod tests {
 		);
 
 		test(
-			"cc50382cfd3c9a617741e9a85efee8752b8feb95a2cbecd6365fb21366ce0c8c",
+			"fb3b3be94be9e983ba5e094c9c51a7d96a4fa2e5d8e891df00ca89ba05bb1239",
 			vec!["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
 		);
 	}
@@ -475,12 +470,12 @@ mod tests {
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", &proof0.root.as_ref()),
-			array_bytes::bytes2hex("", &proof1.root.as_ref())
+			array_bytes::bytes2hex("", &proof0.root),
+			array_bytes::bytes2hex("", &proof1.root)
 		);
 		assert_eq!(
-			array_bytes::bytes2hex("", &proof2.root.as_ref()),
-			array_bytes::bytes2hex("", &proof1.root.as_ref())
+			array_bytes::bytes2hex("", &proof2.root),
+			array_bytes::bytes2hex("", &proof1.root)
 		);
 
 		assert!(!verify_proof::<Keccak256, _, _>(
@@ -752,7 +747,7 @@ mod tests {
 			"0xc26B34D375533fFc4c5276282Fa5D660F3d8cbcB",
 		];
 		let root: H256 = array_bytes::hex2array_unchecked(
-			"7b2c6eebec6e85b2e272325a11c31af71df52bc0534d2d4f903e0ced191f022e",
+			"72b0acd7c302a84f1f6b6cefe0ba7194b7398afb440e1b44a9dbbe270394ca53",
 		)
 		.into();
 
@@ -764,10 +759,7 @@ mod tests {
 		for l in 0..data.len() {
 			// when
 			let proof = merkle_proof::<Keccak256, _, _>(data.clone(), l);
-			assert_eq!(
-				array_bytes::bytes2hex("", &proof.root.as_ref()),
-				array_bytes::bytes2hex("", &root.as_ref())
-			);
+			assert_eq!(array_bytes::bytes2hex("", &proof.root), array_bytes::bytes2hex("", &root));
 			assert_eq!(proof.leaf_index, l);
 			assert_eq!(&proof.leaf, &data[l]);
 
@@ -797,17 +789,17 @@ mod tests {
 					)
 					.into(),
 					array_bytes::hex2array_unchecked(
-						"1fad92ed8d0504ef6c0231bbbeeda960a40693f297c64e87b582beb92ecfb00f"
+						"d02609d2bbdb28aa25f58b85afec937d5a4c85d37925bce6d0cf802f9d76ba79"
 					)
 					.into(),
 					array_bytes::hex2array_unchecked(
-						"0b84c852cbcf839d562d826fd935e1b37975ccaa419e1def8d219df4b83dcbf4"
+						"ae3f8991955ed884613b0a5f40295902eea0e0abe5858fc520b72959bc016d4e"
 					)
 					.into(),
 				],
 				number_of_leaves: data.len(),
 				leaf_index: data.len() - 1,
-				leaf: array_bytes::hex2array_unchecked::<20>(
+				leaf: array_bytes::hex2array_unchecked::<_, 20>(
 					"c26B34D375533fFc4c5276282Fa5D660F3d8cbcB"
 				)
 				.to_vec(),

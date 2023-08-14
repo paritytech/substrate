@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -415,6 +415,34 @@ fn expand_origin_pallet_conversions(
 					Ok(l)
 				} else {
 					Err(x)
+				}
+			}
+		}
+
+		#attr
+		impl<'a> TryFrom<&'a OriginCaller> for &'a #pallet_origin {
+			type Error = ();
+			fn try_from(
+				x: &'a OriginCaller,
+			) -> #scrate::sp_std::result::Result<&'a #pallet_origin, ()> {
+				if let OriginCaller::#variant_name(l) = x {
+					Ok(&l)
+				} else {
+					Err(())
+				}
+			}
+		}
+
+		#attr
+		impl<'a> TryFrom<&'a RuntimeOrigin> for &'a #pallet_origin {
+			type Error = ();
+			fn try_from(
+				x: &'a RuntimeOrigin,
+			) -> #scrate::sp_std::result::Result<&'a #pallet_origin, ()> {
+				if let OriginCaller::#variant_name(l) = &x.caller {
+					Ok(&l)
+				} else {
+					Err(())
 				}
 			}
 		}

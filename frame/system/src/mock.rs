@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,26 +22,21 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage, Perbill,
 };
 
-type UncheckedExtrinsic = mocking::MockUncheckedExtrinsic<Test>;
 type Block = mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 	}
 );
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
-const MAX_BLOCK_WEIGHT: Weight = Weight::from_ref_time(1024).set_proof_size(u64::MAX);
+const MAX_BLOCK_WEIGHT: Weight = Weight::from_parts(1024, u64::MAX);
 
 parameter_types! {
 	pub Version: RuntimeVersion = RuntimeVersion {
@@ -59,15 +54,15 @@ parameter_types! {
 		write: 100,
 	};
 	pub RuntimeBlockWeights: limits::BlockWeights = limits::BlockWeights::builder()
-		.base_block(Weight::from_ref_time(10))
+		.base_block(Weight::from_parts(10, 0))
 		.for_class(DispatchClass::all(), |weights| {
-			weights.base_extrinsic = Weight::from_ref_time(5);
+			weights.base_extrinsic = Weight::from_parts(5, 0);
 		})
 		.for_class(DispatchClass::Normal, |weights| {
 			weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT);
 		})
 		.for_class(DispatchClass::Operational, |weights| {
-			weights.base_extrinsic = Weight::from_ref_time(10);
+			weights.base_extrinsic = Weight::from_parts(10, 0);
 			weights.max_total = Some(MAX_BLOCK_WEIGHT);
 			weights.reserved = Some(
 				MAX_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT
@@ -96,13 +91,12 @@ impl Config for Test {
 	type BlockLength = RuntimeBlockLength;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<10>;
 	type DbWeight = DbWeight;
@@ -126,7 +120,7 @@ pub const CALL: &<Test as Config>::RuntimeCall =
 /// Create new externalities for `System` module tests.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities =
-		GenesisConfig::default().build_storage().unwrap().into();
+		RuntimeGenesisConfig::default().build_storage().unwrap().into();
 	// Add to each test the initial weight of a block
 	ext.execute_with(|| {
 		System::register_extra_weight_unchecked(

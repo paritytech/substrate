@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,25 +22,21 @@ use crate as pallet_scored_pool;
 
 use frame_support::{
 	bounded_vec, construct_runtime, ord_parameter_types, parameter_types,
-	traits::{ConstU32, ConstU64, GenesisBuild},
+	traits::{ConstU32, ConstU64},
 };
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		ScoredPool: pallet_scored_pool::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
@@ -60,14 +56,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -91,6 +86,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 
 parameter_types! {
@@ -136,7 +135,7 @@ impl Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let mut balances = vec![];
 	for i in 1..31 {
 		balances.push((i, 500_000));

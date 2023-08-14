@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -281,6 +281,54 @@ impl PartialEq for Rational128 {
 				helpers_128bit::to_big_uint(other.0) * helpers_128bit::to_big_uint(self.1);
 			self_n.eq(&other_n)
 		}
+	}
+}
+
+pub trait MultiplyRational: Sized {
+	fn multiply_rational(self, n: Self, d: Self, r: Rounding) -> Option<Self>;
+}
+
+macro_rules! impl_rrm {
+	($ulow:ty, $uhi:ty) => {
+		impl MultiplyRational for $ulow {
+			fn multiply_rational(self, n: Self, d: Self, r: Rounding) -> Option<Self> {
+				if d.is_zero() {
+					return None
+				}
+
+				let sn = (self as $uhi) * (n as $uhi);
+				let mut result = sn / (d as $uhi);
+				let remainder = (sn % (d as $uhi)) as $ulow;
+				if match r {
+					Rounding::Up => remainder > 0,
+					// cannot be `(d + 1) / 2` since `d` might be `max_value` and overflow.
+					Rounding::NearestPrefUp => remainder >= d / 2 + d % 2,
+					Rounding::NearestPrefDown => remainder > d / 2,
+					Rounding::Down => false,
+				} {
+					result = match result.checked_add(1) {
+						Some(v) => v,
+						None => return None,
+					};
+				}
+				if result > (<$ulow>::max_value() as $uhi) {
+					None
+				} else {
+					Some(result as $ulow)
+				}
+			}
+		}
+	};
+}
+
+impl_rrm!(u8, u16);
+impl_rrm!(u16, u32);
+impl_rrm!(u32, u64);
+impl_rrm!(u64, u128);
+
+impl MultiplyRational for u128 {
+	fn multiply_rational(self, n: Self, d: Self, r: Rounding) -> Option<Self> {
+		crate::helpers_128bit::multiply_by_rational_with_rounding(self, n, d, r)
 	}
 }
 

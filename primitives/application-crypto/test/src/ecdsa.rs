@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,11 +16,13 @@
 // limitations under the License.
 
 //! Integration tests for ecdsa
-use sp_api::ProvideRuntimeApi;
-use sp_application_crypto::ecdsa::{AppPair, AppPublic};
-use sp_core::{crypto::Pair, testing::ECDSA};
-use sp_keystore::{testing::KeyStore, SyncCryptoStore};
-use sp_runtime::generic::BlockId;
+use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_application_crypto::ecdsa::AppPair;
+use sp_core::{
+	crypto::{ByteArray, Pair},
+	testing::ECDSA,
+};
+use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
@@ -28,14 +30,17 @@ use substrate_test_runtime_client::{
 
 #[test]
 fn ecdsa_works_in_runtime() {
-	let keystore = Arc::new(KeyStore::new());
-	let test_client = TestClientBuilder::new().set_keystore(keystore.clone()).build();
-	let (signature, public) = test_client
-		.runtime_api()
-		.test_ecdsa_crypto(&BlockId::Number(0))
+	let keystore = Arc::new(MemoryKeystore::new());
+	let test_client = TestClientBuilder::new().build();
+
+	let mut runtime_api = test_client.runtime_api();
+	runtime_api.register_extension(KeystoreExt::new(keystore.clone()));
+
+	let (signature, public) = runtime_api
+		.test_ecdsa_crypto(test_client.chain_info().genesis_hash)
 		.expect("Tests `ecdsa` crypto.");
 
-	let supported_keys = SyncCryptoStore::keys(&*keystore, ECDSA).unwrap();
-	assert!(supported_keys.contains(&public.clone().into()));
-	assert!(AppPair::verify(&signature, "ecdsa", &AppPublic::from(public)));
+	let supported_keys = keystore.keys(ECDSA).unwrap();
+	assert!(supported_keys.contains(&public.to_raw_vec()));
+	assert!(AppPair::verify(&signature, "ecdsa", &public));
 }

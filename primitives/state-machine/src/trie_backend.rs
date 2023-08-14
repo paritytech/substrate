@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,63 +20,146 @@
 #[cfg(feature = "std")]
 use crate::backend::AsTrieBackend;
 use crate::{
-	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage},
+	backend::{IterArgs, StorageIterator},
+	trie_backend_essence::{RawIter, TrieBackendEssence, TrieBackendStorage},
 	Backend, StorageKey, StorageValue,
 };
+
 use codec::Codec;
 #[cfg(feature = "std")]
 use hash_db::HashDB;
 use hash_db::Hasher;
 use sp_core::storage::{ChildInfo, StateVersion};
-use sp_std::vec::Vec;
 #[cfg(feature = "std")]
-use sp_trie::{cache::LocalTrieCache, recorder::Recorder};
-#[cfg(feature = "std")]
-use sp_trie::{MemoryDB, StorageProof};
-
-/// Dummy type to be used in `no_std`.
-///
-/// This is required to have the type available for [`TrieBackendBuilder`] and [`TrieBackend`].
+use sp_trie::{
+	cache::{LocalTrieCache, TrieCache},
+	recorder::Recorder,
+	MemoryDB, StorageProof,
+};
 #[cfg(not(feature = "std"))]
-pub struct LocalTrieCache<H>(sp_std::marker::PhantomData<H>);
+use sp_trie::{Error, NodeCodec};
+use trie_db::TrieCache as TrieCacheT;
+#[cfg(not(feature = "std"))]
+use trie_db::{node::NodeOwned, CachedValue};
 
-/// Special trait to support taking the [`LocalTrieCache`] by value or by reference.
-///
-/// This trait is internal use only and to emphasize this, the trait is sealed.
-pub trait AsLocalTrieCache<H: Hasher>: sealed::Sealed {
-	/// Returns `self` as [`LocalTrieCache`].
-	#[cfg(feature = "std")]
-	fn as_local_trie_cache(&self) -> &LocalTrieCache<H>;
+/// A provider of trie caches that are compatible with [`trie_db::TrieDB`].
+pub trait TrieCacheProvider<H: Hasher> {
+	/// Cache type that implements [`trie_db::TrieCache`].
+	type Cache<'a>: TrieCacheT<sp_trie::NodeCodec<H>> + 'a
+	where
+		Self: 'a;
+
+	/// Return a [`trie_db::TrieDB`] compatible cache.
+	///
+	/// The `storage_root` parameter should be the storage root of the used trie.
+	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Cache<'_>;
+
+	/// Returns a cache that can be used with a [`trie_db::TrieDBMut`].
+	///
+	/// When finished with the operation on the trie, it is required to call [`Self::merge`] to
+	/// merge the cached items for the correct `storage_root`.
+	fn as_trie_db_mut_cache(&self) -> Self::Cache<'_>;
+
+	/// Merge the cached data in `other` into the provider using the given `new_root`.
+	///
+	/// This must be used for the cache returned by [`Self::as_trie_db_mut_cache`] as otherwise the
+	/// cached data is just thrown away.
+	fn merge<'a>(&'a self, other: Self::Cache<'a>, new_root: H::Out);
 }
 
-impl<H: Hasher> AsLocalTrieCache<H> for LocalTrieCache<H> {
-	#[cfg(feature = "std")]
-	fn as_local_trie_cache(&self) -> &LocalTrieCache<H> {
-		self
+#[cfg(feature = "std")]
+impl<H: Hasher> TrieCacheProvider<H> for LocalTrieCache<H> {
+	type Cache<'a> = TrieCache<'a, H> where H: 'a;
+
+	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Cache<'_> {
+		self.as_trie_db_cache(storage_root)
+	}
+
+	fn as_trie_db_mut_cache(&self) -> Self::Cache<'_> {
+		self.as_trie_db_mut_cache()
+	}
+
+	fn merge<'a>(&'a self, other: Self::Cache<'a>, new_root: H::Out) {
+		other.merge_into(self, new_root)
 	}
 }
 
 #[cfg(feature = "std")]
-impl<H: Hasher> AsLocalTrieCache<H> for &LocalTrieCache<H> {
-	fn as_local_trie_cache(&self) -> &LocalTrieCache<H> {
-		self
+impl<H: Hasher> TrieCacheProvider<H> for &LocalTrieCache<H> {
+	type Cache<'a> = TrieCache<'a, H> where Self: 'a;
+
+	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Cache<'_> {
+		(*self).as_trie_db_cache(storage_root)
+	}
+
+	fn as_trie_db_mut_cache(&self) -> Self::Cache<'_> {
+		(*self).as_trie_db_mut_cache()
+	}
+
+	fn merge<'a>(&'a self, other: Self::Cache<'a>, new_root: H::Out) {
+		other.merge_into(self, new_root)
 	}
 }
 
-/// Special module that contains the `Sealed` trait.
-mod sealed {
-	use super::*;
-
-	/// A special trait which prevents externals to implement the [`AsLocalTrieCache`] outside
-	/// of this crate.
-	pub trait Sealed {}
-
-	impl<H: Hasher> Sealed for LocalTrieCache<H> {}
-	impl<H: Hasher> Sealed for &LocalTrieCache<H> {}
+/// Cache provider that allows construction of a [`TrieBackend`] and satisfies the requirements, but
+/// can never be instantiated.
+#[cfg(not(feature = "std"))]
+pub struct UnimplementedCacheProvider<H> {
+	// Not strictly necessary, but the H bound allows to use this as a drop-in
+	// replacement for the `LocalTrieCache` in no-std contexts.
+	_phantom: core::marker::PhantomData<H>,
+	// Statically prevents construction.
+	_infallible: core::convert::Infallible,
 }
+
+#[cfg(not(feature = "std"))]
+impl<H: Hasher> trie_db::TrieCache<NodeCodec<H>> for UnimplementedCacheProvider<H> {
+	fn lookup_value_for_key(&mut self, _key: &[u8]) -> Option<&CachedValue<H::Out>> {
+		unimplemented!()
+	}
+
+	fn cache_value_for_key(&mut self, _key: &[u8], _value: CachedValue<H::Out>) {
+		unimplemented!()
+	}
+
+	fn get_or_insert_node(
+		&mut self,
+		_hash: H::Out,
+		_fetch_node: &mut dyn FnMut() -> trie_db::Result<NodeOwned<H::Out>, H::Out, Error<H::Out>>,
+	) -> trie_db::Result<&NodeOwned<H::Out>, H::Out, Error<H::Out>> {
+		unimplemented!()
+	}
+
+	fn get_node(&mut self, _hash: &H::Out) -> Option<&NodeOwned<H::Out>> {
+		unimplemented!()
+	}
+}
+
+#[cfg(not(feature = "std"))]
+impl<H: Hasher> TrieCacheProvider<H> for UnimplementedCacheProvider<H> {
+	type Cache<'a> = UnimplementedCacheProvider<H> where H: 'a;
+
+	fn as_trie_db_cache(&self, _storage_root: <H as Hasher>::Out) -> Self::Cache<'_> {
+		unimplemented!()
+	}
+
+	fn as_trie_db_mut_cache(&self) -> Self::Cache<'_> {
+		unimplemented!()
+	}
+
+	fn merge<'a>(&'a self, _other: Self::Cache<'a>, _new_root: <H as Hasher>::Out) {
+		unimplemented!()
+	}
+}
+
+#[cfg(feature = "std")]
+type DefaultCache<H> = LocalTrieCache<H>;
+
+#[cfg(not(feature = "std"))]
+type DefaultCache<H> = UnimplementedCacheProvider<H>;
 
 /// Builder for creating a [`TrieBackend`].
-pub struct TrieBackendBuilder<S: TrieBackendStorage<H>, H: Hasher, C = LocalTrieCache<H>> {
+pub struct TrieBackendBuilder<S: TrieBackendStorage<H>, H: Hasher, C = DefaultCache<H>> {
 	storage: S,
 	root: H::Out,
 	#[cfg(feature = "std")]
@@ -84,7 +167,7 @@ pub struct TrieBackendBuilder<S: TrieBackendStorage<H>, H: Hasher, C = LocalTrie
 	cache: Option<C>,
 }
 
-impl<S, H> TrieBackendBuilder<S, H, LocalTrieCache<H>>
+impl<S, H> TrieBackendBuilder<S, H, DefaultCache<H>>
 where
 	S: TrieBackendStorage<H>,
 	H: Hasher,
@@ -106,6 +189,16 @@ where
 	S: TrieBackendStorage<H>,
 	H: Hasher,
 {
+	/// Create a new builder instance.
+	pub fn new_with_cache(storage: S, root: H::Out, cache: C) -> Self {
+		Self {
+			storage,
+			root,
+			#[cfg(feature = "std")]
+			recorder: None,
+			cache: Some(cache),
+		}
+	}
 	/// Wrap the given [`TrieBackend`].
 	///
 	/// This can be used for example if all accesses to the trie should
@@ -119,10 +212,7 @@ where
 			root: *other.essence.root(),
 			#[cfg(feature = "std")]
 			recorder: None,
-			#[cfg(feature = "std")]
 			cache: other.essence.trie_node_cache.as_ref(),
-			#[cfg(not(feature = "std"))]
-			cache: None,
 		}
 	}
 
@@ -139,23 +229,23 @@ where
 	}
 
 	/// Use the given optional `cache` for the to be configured [`TrieBackend`].
-	#[cfg(feature = "std")]
 	pub fn with_optional_cache<LC>(self, cache: Option<LC>) -> TrieBackendBuilder<S, H, LC> {
 		TrieBackendBuilder {
 			cache,
 			root: self.root,
 			storage: self.storage,
+			#[cfg(feature = "std")]
 			recorder: self.recorder,
 		}
 	}
 
 	/// Use the given `cache` for the to be configured [`TrieBackend`].
-	#[cfg(feature = "std")]
 	pub fn with_cache<LC>(self, cache: LC) -> TrieBackendBuilder<S, H, LC> {
 		TrieBackendBuilder {
 			cache: Some(cache),
 			root: self.root,
 			storage: self.storage,
+			#[cfg(feature = "std")]
 			recorder: self.recorder,
 		}
 	}
@@ -170,35 +260,88 @@ where
 				self.cache,
 				self.recorder,
 			),
+			next_storage_key_cache: Default::default(),
 		}
 	}
 
 	/// Build the configured [`TrieBackend`].
 	#[cfg(not(feature = "std"))]
 	pub fn build(self) -> TrieBackend<S, H, C> {
-		let _ = self.cache;
-
-		TrieBackend { essence: TrieBackendEssence::new(self.storage, self.root) }
+		TrieBackend {
+			essence: TrieBackendEssence::new_with_cache(self.storage, self.root, self.cache),
+			next_storage_key_cache: Default::default(),
+		}
 	}
 }
 
-/// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
-pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, C = LocalTrieCache<H>> {
-	pub(crate) essence: TrieBackendEssence<S, H, C>,
+/// A cached iterator.
+struct CachedIter<S, H, C>
+where
+	H: Hasher,
+{
+	last_key: sp_std::vec::Vec<u8>,
+	iter: RawIter<S, H, C>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync> TrieBackend<S, H, C>
+impl<S, H, C> Default for CachedIter<S, H, C>
+where
+	H: Hasher,
+{
+	fn default() -> Self {
+		Self { last_key: Default::default(), iter: Default::default() }
+	}
+}
+
+#[cfg(feature = "std")]
+type CacheCell<T> = parking_lot::Mutex<T>;
+
+#[cfg(not(feature = "std"))]
+type CacheCell<T> = core::cell::RefCell<T>;
+
+#[cfg(feature = "std")]
+fn access_cache<T, R>(cell: &CacheCell<T>, callback: impl FnOnce(&mut T) -> R) -> R {
+	callback(&mut *cell.lock())
+}
+
+#[cfg(not(feature = "std"))]
+fn access_cache<T, R>(cell: &CacheCell<T>, callback: impl FnOnce(&mut T) -> R) -> R {
+	callback(&mut *cell.borrow_mut())
+}
+
+/// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
+pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, C = DefaultCache<H>> {
+	pub(crate) essence: TrieBackendEssence<S, H, C>,
+	next_storage_key_cache: CacheCell<Option<CachedIter<S, H, C>>>,
+}
+
+impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H> + Send + Sync>
+	TrieBackend<S, H, C>
 where
 	H::Out: Codec,
 {
+	#[cfg(test)]
+	pub(crate) fn from_essence(essence: TrieBackendEssence<S, H, C>) -> Self {
+		Self { essence, next_storage_key_cache: Default::default() }
+	}
+
 	/// Get backend essence reference.
 	pub fn essence(&self) -> &TrieBackendEssence<S, H, C> {
 		&self.essence
 	}
 
 	/// Get backend storage reference.
+	pub fn backend_storage_mut(&mut self) -> &mut S {
+		self.essence.backend_storage_mut()
+	}
+
+	/// Get backend storage reference.
 	pub fn backend_storage(&self) -> &S {
 		self.essence.backend_storage()
+	}
+
+	/// Set trie root.
+	pub fn set_root(&mut self, root: H::Out) {
+		self.essence.set_root(root)
 	}
 
 	/// Get trie root.
@@ -220,7 +363,7 @@ where
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H>> sp_std::fmt::Debug
+impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H>> sp_std::fmt::Debug
 	for TrieBackend<S, H, C>
 {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
@@ -228,7 +371,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H>> sp_std::fmt::D
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync> Backend<H>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H> + Send + Sync> Backend<H>
 	for TrieBackend<S, H, C>
 where
 	H::Out: Ord + Codec,
@@ -236,6 +379,7 @@ where
 	type Error = crate::DefaultError;
 	type Transaction = S::Overlay;
 	type TrieBackendStorage = S;
+	type RawIter = crate::trie_backend_essence::RawIter<S, H, C>;
 
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
 		self.essence.storage_hash(key)
@@ -262,7 +406,40 @@ where
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
-		self.essence.next_storage_key(key)
+		let (is_cached, mut cache) = access_cache(&self.next_storage_key_cache, Option::take)
+			.map(|cache| (cache.last_key == key, cache))
+			.unwrap_or_default();
+
+		if !is_cached {
+			cache.iter = self.raw_iter(IterArgs {
+				start_at: Some(key),
+				start_at_exclusive: true,
+				..IterArgs::default()
+			})?
+		};
+
+		let next_key = match cache.iter.next_key(self) {
+			None => return Ok(None),
+			Some(Err(error)) => return Err(error),
+			Some(Ok(next_key)) => next_key,
+		};
+
+		cache.last_key.clear();
+		cache.last_key.extend_from_slice(&next_key);
+		access_cache(&self.next_storage_key_cache, |cache_cell| cache_cell.replace(cache));
+
+		#[cfg(debug_assertions)]
+		debug_assert_eq!(
+			self.essence
+				.next_storage_key_slow(key)
+				.expect(
+					"fetching the next key through iterator didn't fail so this shouldn't either"
+				)
+				.as_ref(),
+			Some(&next_key)
+		);
+
+		Ok(Some(next_key))
 	}
 
 	fn next_child_storage_key(
@@ -273,51 +450,8 @@ where
 		self.essence.next_child_storage_key(child_info, key)
 	}
 
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.essence.for_keys_with_prefix(prefix, f)
-	}
-
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.essence.for_key_values_with_prefix(prefix, f)
-	}
-
-	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		f: F,
-		allow_missing: bool,
-	) -> Result<bool, Self::Error> {
-		self.essence
-			.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
-	}
-
-	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		f: F,
-	) {
-		self.essence.apply_to_keys_while(child_info, prefix, start_at, f)
-	}
-
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-		f: F,
-	) {
-		self.essence.for_child_keys_with_prefix(child_info, prefix, f)
-	}
-
-	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
-		self.essence.pairs()
-	}
-
-	fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
-		self.essence.keys(prefix)
+	fn raw_iter(&self, args: IterArgs) -> Result<Self::RawIter, Self::Error> {
+		self.essence.raw_iter(args)
 	}
 
 	fn storage_root<'a>(
@@ -397,7 +531,7 @@ pub mod tests {
 		trie_types::{TrieDBBuilder, TrieDBMutBuilderV0, TrieDBMutBuilderV1},
 		KeySpacedDBMut, PrefixedKey, PrefixedMemoryDB, Trie, TrieCache, TrieMut,
 	};
-	use std::{collections::HashSet, iter};
+	use std::iter;
 	use trie_db::NodeCodec;
 
 	const CHILD_KEY_1: &[u8] = b"sub1";
@@ -499,12 +633,49 @@ pub mod tests {
 		(mdb, root)
 	}
 
+	pub(crate) fn test_db_with_hex_keys(
+		state_version: StateVersion,
+		keys: &[&str],
+	) -> (PrefixedMemoryDB<BlakeTwo256>, H256) {
+		let mut root = H256::default();
+		let mut mdb = PrefixedMemoryDB::<BlakeTwo256>::default();
+		match state_version {
+			StateVersion::V0 => {
+				let mut trie = TrieDBMutBuilderV0::new(&mut mdb, &mut root).build();
+				for (index, key) in keys.iter().enumerate() {
+					trie.insert(&array_bytes::hex2bytes(key).unwrap(), &[index as u8]).unwrap();
+				}
+			},
+			StateVersion::V1 => {
+				let mut trie = TrieDBMutBuilderV1::new(&mut mdb, &mut root).build();
+				for (index, key) in keys.iter().enumerate() {
+					trie.insert(&array_bytes::hex2bytes(key).unwrap(), &[index as u8]).unwrap();
+				}
+			},
+		};
+		(mdb, root)
+	}
+
 	pub(crate) fn test_trie(
 		hashed_value: StateVersion,
 		cache: Option<Cache>,
 		recorder: Option<Recorder>,
 	) -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
 		let (mdb, root) = test_db(hashed_value);
+
+		TrieBackendBuilder::new(mdb, root)
+			.with_optional_cache(cache)
+			.with_optional_recorder(recorder)
+			.build()
+	}
+
+	pub(crate) fn test_trie_with_hex_keys(
+		hashed_value: StateVersion,
+		cache: Option<Cache>,
+		recorder: Option<Recorder>,
+		keys: &[&str],
+	) -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
+		let (mdb, root) = test_db_with_hex_keys(hashed_value, keys);
 
 		TrieBackendBuilder::new(mdb, root)
 			.with_optional_cache(cache)
@@ -579,7 +750,11 @@ pub mod tests {
 		cache: Option<Cache>,
 		recorder: Option<Recorder>,
 	) {
-		assert!(!test_trie(state_version, cache, recorder).pairs().is_empty());
+		assert!(!test_trie(state_version, cache, recorder)
+			.pairs(Default::default())
+			.unwrap()
+			.next()
+			.is_none());
 	}
 
 	#[test]
@@ -589,8 +764,176 @@ pub mod tests {
 			Default::default(),
 		)
 		.build()
-		.pairs()
-		.is_empty());
+		.pairs(Default::default())
+		.unwrap()
+		.next()
+		.is_none());
+	}
+
+	parameterized_test!(storage_iteration_works, storage_iteration_works_inner);
+	fn storage_iteration_works_inner(
+		state_version: StateVersion,
+		cache: Option<Cache>,
+		recorder: Option<Recorder>,
+	) {
+		let trie = test_trie(state_version, cache, recorder);
+
+		// Fetch everything.
+		assert_eq!(
+			trie.keys(Default::default())
+				.unwrap()
+				.map(|result| result.unwrap())
+				.take(5)
+				.collect::<Vec<_>>(),
+			vec![
+				b":child_storage:default:sub1".to_vec(),
+				b":code".to_vec(),
+				b"key".to_vec(),
+				b"value1".to_vec(),
+				b"value2".to_vec(),
+			]
+		);
+
+		// Fetch starting at a given key (full key).
+		assert_eq!(
+			trie.keys(IterArgs { start_at: Some(b"key"), ..IterArgs::default() })
+				.unwrap()
+				.map(|result| result.unwrap())
+				.take(3)
+				.collect::<Vec<_>>(),
+			vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]
+		);
+
+		// Fetch starting at a given key (partial key).
+		assert_eq!(
+			trie.keys(IterArgs { start_at: Some(b"ke"), ..IterArgs::default() })
+				.unwrap()
+				.map(|result| result.unwrap())
+				.take(3)
+				.collect::<Vec<_>>(),
+			vec![b"key".to_vec(), b"value1".to_vec(), b"value2".to_vec(),]
+		);
+
+		// Fetch starting at a given key (empty key).
+		assert_eq!(
+			trie.keys(IterArgs { start_at: Some(b""), ..IterArgs::default() })
+				.unwrap()
+				.map(|result| result.unwrap())
+				.take(5)
+				.collect::<Vec<_>>(),
+			vec![
+				b":child_storage:default:sub1".to_vec(),
+				b":code".to_vec(),
+				b"key".to_vec(),
+				b"value1".to_vec(),
+				b"value2".to_vec(),
+			]
+		);
+
+		// Fetch starting at a given key and with prefix which doesn't match that key.
+		// (Start *before* the prefix.)
+		assert_eq!(
+			trie.keys(IterArgs {
+				prefix: Some(b"value"),
+				start_at: Some(b"key"),
+				..IterArgs::default()
+			})
+			.unwrap()
+			.map(|result| result.unwrap())
+			.collect::<Vec<_>>(),
+			vec![b"value1".to_vec(), b"value2".to_vec(),]
+		);
+
+		// Fetch starting at a given key and with prefix which doesn't match that key.
+		// (Start *after* the prefix.)
+		assert!(trie
+			.keys(IterArgs {
+				prefix: Some(b"value"),
+				start_at: Some(b"vblue"),
+				..IterArgs::default()
+			})
+			.unwrap()
+			.map(|result| result.unwrap())
+			.next()
+			.is_none());
+
+		// Fetch starting at a given key and with prefix which does match that key.
+		assert_eq!(
+			trie.keys(IterArgs {
+				prefix: Some(b"value"),
+				start_at: Some(b"value"),
+				..IterArgs::default()
+			})
+			.unwrap()
+			.map(|result| result.unwrap())
+			.collect::<Vec<_>>(),
+			vec![b"value1".to_vec(), b"value2".to_vec(),]
+		);
+	}
+
+	// This test reproduces an actual real-world issue: https://github.com/polkadot-js/apps/issues/9103
+	parameterized_test!(
+		storage_iter_does_not_return_out_of_prefix_keys,
+		storage_iter_does_not_return_out_of_prefix_keys_inner
+	);
+	fn storage_iter_does_not_return_out_of_prefix_keys_inner(
+		state_version: StateVersion,
+		cache: Option<Cache>,
+		recorder: Option<Recorder>,
+	) {
+		let trie = test_trie_with_hex_keys(state_version, cache, recorder, &[
+			"6cf4040bbce30824850f1a4823d8c65faeefaa25a5bae16a431719647c1d99da",
+			"6cf4040bbce30824850f1a4823d8c65ff536928ca5ba50039bc2766a48ddbbab",
+			"70f943199f1a2dde80afdaf3f447db834e7b9012096b41c4eb3aaf947f6ea429",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d007fc7effcb0c044a0c41fd8a77eb55d2133058a86d1f4d6f8e45612cd271eefd77f91caeaacfe011b8f41540e0a793b0fd51b245dae19382b45386570f2b545fab75e3277910f7324b55f47c29f9965e8298371404e50ac",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d0179c23cd593c770fde9fc7aa8f84b3e401e654b8986c67728844da0080ec9ee222b41a85708a471a511548302870b53f40813d8354b6d2969e1b7ca9e083ecf96f9647e004ecb41c7f26f0110f778bdb3d9da31bef323d9",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d024de296f88310247001277477f4ace4d0aa5685ea2928d518a807956e4806a656520d6520b8ac259f684aa0d91961d76f697716f04e6c997338d03560ab7d703829fe7b9d0e6d7eff8d8412fc428364c2f474a67b36586d",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d13dc5d83f2361c14d05933eb3182a92ac14665718569703baf1da25c7d571843b6489f03d8549c87bfa5709836ba729443c319659e83ad5ee133e6f11af51d883e56216e9e1bbb1e2920c7c6120cbb55cd469b1f95b61601",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d1786d20bbb4b91eb1f5765432d750bd0111a0807c8d04f05110ffaf73f4fa7b360422c13bc97efc3a2324d9fa8f954b424c0bcfce7236a2e8107dd31c2042a9860a964f8472fda49749dec3f146e81470b55aa0f3930d854",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d18c246484ec5335a40903e7cd05771be7c0b8459333f1ae2925c3669fc3e5accd0f38c4711a15544bfa5709836ba729443c319659e83ad5ee133e6f11af51d883e56216e9e1bbb1e2920c7c6120cbb55cd469b1f95b61601",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d1aca749033252ce75245528397430d14cb8e8c09248d81ee5de00b6ae93ee880b6d19a595e6dc106bfa5709836ba729443c319659e83ad5ee133e6f11af51d883e56216e9e1bbb1e2920c7c6120cbb55cd469b1f95b61601",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d1d6bceb91bc07973e7b3296f83af9f1c4300ce9198cc3b44c54dafddb58f4a43aee44a9bef1a2e9dbfa5709836ba729443c319659e83ad5ee133e6f11af51d883e56216e9e1bbb1e2920c7c6120cbb55cd469b1f95b61601",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d203383772f45721232139e1a8863b0f2f8d480bdc15bcc1f2033cf467e137059558da743838f6b58bfa5709836ba729443c319659e83ad5ee133e6f11af51d883e56216e9e1bbb1e2920c7c6120cbb55cd469b1f95b61601",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d2197cc5c3eb3a6a67538e0dc3eaaf8c820d71310d377499c4a5d276381789e0a234475e69cddf709d207458083d6146d3a36fce7f1fe05b232702bf154096e5e3a8c378bdc237d7a27909acd663563917f0f70bb0e8e61a3",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d4f19c117f2ea36100f753c4885aa8d63b4d65a0dc32106f829f89eeabd52c37105c9bdb75f752469729fa3f0e7d907c1d949192c8e264a1a510c32abe3a05ed50be2262d5bfb981673ec80a07fd2ce28c7f27cd0043a788c",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d547d5aaa651bafa63d077560dfe823ac75665ebf1dcfd96a06e45499f03dda31282977706918d4821b8f41540e0a793b0fd51b245dae19382b45386570f2b545fab75e3277910f7324b55f47c29f9965e8298371404e50ac",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d6037207d54d69a082ea225ab4a412e4b87d6f5612053b07c405cf05ea25e482a4908c0713be2998abfa5709836ba729443c319659e83ad5ee133e6f11af51d883e56216e9e1bbb1e2920c7c6120cbb55cd469b1f95b61601",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d63d0920de0c7315ebaed1d639d926961d28af89461c31eca890441e449147d23bb7c9d4fc42d7c16bfa5709836ba729443c319659e83ad5ee133e6f11af51d883e56216e9e1bbb1e2920c7c6120cbb55cd469b1f95b61601",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d7912c66be82a5972e5bc11c8d10551a296ba9aaff8ca6ab22a8cd1987974b87a97121c871f786d2e17e0a629acf01c38947f170b7e02a9ebb4ee60f83779acb99b71114c01a4f0a60694611a1502c399c77214ffa26e955b",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d7aa00f217f3a374a2f1ca0f388719f84099e8157a8a83c5ccf54eae1617f93933fa976baa629e6febfa5709836ba729443c319659e83ad5ee133e6f11af51d883e56216e9e1bbb1e2920c7c6120cbb55cd469b1f95b61601",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d9e1c3c8ab41943cf377b1aa724d7f518a3cfc96a732bdc4658155d09ed2bfc31b5ccbc6d8646b59f1b8f41540e0a793b0fd51b245dae19382b45386570f2b545fab75e3277910f7324b55f47c29f9965e8298371404e50ac",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d9fb8d6d95d5214a3305a4fa07e344eb99fad4be3565d646c8ac5af85514d9c96702c9c207be234958dbdb9185f467d2be3b84e8b2f529f7ec3844b378a889afd6bd31a9b5ed22ffee2019ad82c6692f1736dd41c8bb85726",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8d9fb8d6d95d5214a3305a4fa07e344eb99fad4be3565d646c8ac5af85514d9c96702c9c207be23495ec1caa509591a36a8403684384ce40838c9bd7fc49d933a10d3b26e979273e2f17ebf0bf41cd90e4287e126a59d5a243",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8da7fc066aae2ffe03b36e9a72f9a39cb2befac7e47f320309f31f1c1676288d9596045807304b3d79bfa5709836ba729443c319659e83ad5ee133e6f11af51d883e56216e9e1bbb1e2920c7c6120cbb55cd469b1f95b61601",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8daf3c377b0fddf7c7ad6d390fab0ab45ac16c21645be880af5cab2fbbeb04820401a4c9f766c17bef9fc14a2e16ade86fe26ee81d4497dc6aab81cc5f5bb0458d6149a763ecb09aefec06950dd61db1ba025401d2a04e3b9d",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8daf3c377b0fddf7c7ad6d390fab0ab45ac16c21645be880af5cab2fbbeb04820401a4c9f766c17befbfa5709836ba729443c319659e83ad5ee133e6f11af51d883e56216e9e1bbb1e2920c7c6120cbb55cd469b1f95b61601",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8db60505ba8b77ef03ed805436d3242f26dc828084b12aaf4bcb96af468816a182b5360149398aad6b1dafe949b0918138ceef924f6393d1818a04842301294604972da17b24b31b155e4409a01273733b8d21a156c2e7eb71",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8dbd27136a6e028656073cc840bfabb48fe935880c4c4c990ee98458b2fed308e9765f7f7f717dd3b2862fa5361d3b55afa6040e582687403c852b2d065b24f253276cc581226991f8e1818a78fc64c39da7f0b383c6726e0f",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8dca40d91320edd326500f9e8b5a0b23a8bdf21549f98f0e014f66b6a18bdd78e337a6c05d670c80c88a55d4c7bb6fbae546e2d03ac9ab16e85fe11dad6adfd6a20618905477b831d7d48ca32d0bfd2bdc8dbeba26ffe2c710",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8dd27478512243ed62c1c1f7066021798a464d4cf9099546d5d9907b3369f1b9d7a5aa5d60ca845619bfa5709836ba729443c319659e83ad5ee133e6f11af51d883e56216e9e1bbb1e2920c7c6120cbb55cd469b1f95b61601",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8de6da5659cbbe1489abbe99c4d3a474f4d1e78edb55a9be68d8f52c6fe730388a298e6f6325db3da7bfa5709836ba729443c319659e83ad5ee133e6f11af51d883e56216e9e1bbb1e2920c7c6120cbb55cd469b1f95b61601",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8de6da5659cbbe1489abbe99c4d3a474f4d1e78edb55a9be68d8f52c6fe730388a298e6f6325db3da7e94ca3e8c297d82f71e232a2892992d1f6480475fb797ce64e58f773d8fafd9fbcee4bdf4b14f2a71b6d3a428cf9f24b",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8decdd1760c61ff7234f2876dbe817af803170233320d778b92043b2359e3de6d16c9e5359f6302da31c84d6f551ad2a831263ef956f0cdb3b4810cefcb2d0b57bcce7b82007016ae4fe752c31d1a01b589a7966cea03ec65c",
+			"7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8df9981ee6b69eb7af2153af34f39ffc06e2daa5272c99798c8849091284dc8905f2a76b65754c2089bfa5709836ba729443c319659e83ad5ee133e6f11af51d883e56216e9e1bbb1e2920c7c6120cbb55cd469b1f95b61601",
+			"7474449cca95dc5d0c00e71735a6d17d4e7b9012096b41c4eb3aaf947f6ea429",
+			"89d139e01a5eb2256f222e5fc5dbe6b33c9c1284130706f5aea0c8b3d4c54d89",
+			"89d139e01a5eb2256f222e5fc5dbe6b36254e9d55588784fa2a62b726696e2b1"
+		]);
+
+		let key = array_bytes::hex2bytes("7474449cca95dc5d0c00e71735a6d17d3cd15a3fd6e04e47bee3922dbfa92c8da7dad55cf08ffe8194efa962146801b0503092b1ed6a3fa6aee9107334aefd7965bbe568c3d24c6d").unwrap();
+
+		assert_eq!(
+			trie.keys(IterArgs {
+				prefix: Some(&key),
+				start_at: Some(&key),
+				start_at_exclusive: true,
+				..IterArgs::default()
+			})
+			.unwrap()
+			.map(|result| result.unwrap())
+			.collect::<Vec<_>>(),
+			Vec::<Vec<u8>>::new()
+		);
 	}
 
 	parameterized_test!(storage_root_is_non_default, storage_root_is_non_default_inner);
@@ -626,26 +969,6 @@ pub mod tests {
 		);
 	}
 
-	parameterized_test!(prefix_walking_works, prefix_walking_works_inner);
-	fn prefix_walking_works_inner(
-		state_version: StateVersion,
-		cache: Option<Cache>,
-		recorder: Option<Recorder>,
-	) {
-		let trie = test_trie(state_version, cache, recorder);
-
-		let mut seen = HashSet::new();
-		trie.for_keys_with_prefix(b"value", |key| {
-			let for_first_time = seen.insert(key.to_vec());
-			assert!(for_first_time, "Seen key '{:?}' more than once", key);
-		});
-
-		let mut expected = HashSet::new();
-		expected.insert(b"value1".to_vec());
-		expected.insert(b"value2".to_vec());
-		assert_eq!(seen, expected);
-	}
-
 	parameterized_test!(
 		keys_with_empty_prefix_returns_all_keys,
 		keys_with_empty_prefix_returns_all_keys_inner
@@ -664,7 +987,8 @@ pub mod tests {
 			.collect::<Vec<_>>();
 
 		let trie = test_trie(state_version, cache, recorder);
-		let keys = trie.keys(&[]);
+		let keys: Vec<_> =
+			trie.keys(Default::default()).unwrap().map(|result| result.unwrap()).collect();
 
 		assert_eq!(expected, keys);
 	}
@@ -724,7 +1048,18 @@ pub mod tests {
 			.with_recorder(Recorder::default())
 			.build();
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
-		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
+		assert_eq!(
+			trie_backend
+				.pairs(Default::default())
+				.unwrap()
+				.map(|result| result.unwrap())
+				.collect::<Vec<_>>(),
+			proving_backend
+				.pairs(Default::default())
+				.unwrap()
+				.map(|result| result.unwrap())
+				.collect::<Vec<_>>()
+		);
 
 		let (trie_root, mut trie_mdb) =
 			trie_backend.storage_root(std::iter::empty(), state_version);

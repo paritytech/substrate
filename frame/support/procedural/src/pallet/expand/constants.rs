@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +23,7 @@ struct ConstDef {
 	/// The type in Get, e.g. `u32` in `type Foo: Get<u32>;`, but `Self` is replaced by `T`
 	pub type_: syn::Type,
 	/// The doc associated
-	pub doc: Vec<syn::Lit>,
+	pub doc: Vec<syn::Expr>,
 	/// default_byte implementation
 	pub default_byte_impl: proc_macro2::TokenStream,
 	/// Constant name for Metadata (optional)
@@ -85,7 +85,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 		let default_byte_impl = &const_.default_byte_impl;
 
 		quote::quote!({
-			#frame_support::metadata::PalletConstantMetadata {
+			#frame_support::metadata_ir::PalletConstantMetadataIR {
 				name: #ident_str,
 				ty: #frame_support::scale_info::meta_type::<#const_type>(),
 				value: { #default_byte_impl },
@@ -99,7 +99,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 
 			#[doc(hidden)]
 			pub fn pallet_constants_metadata()
-				-> #frame_support::sp_std::vec::Vec<#frame_support::metadata::PalletConstantMetadata>
+				-> #frame_support::sp_std::vec::Vec<#frame_support::metadata_ir::PalletConstantMetadataIR>
 			{
 				#frame_support::sp_std::vec![ #( #consts ),* ]
 			}

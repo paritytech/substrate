@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,257 +16,257 @@
 // limitations under the License.
 
 //! General tests for construct_runtime macro, test for:
-//! * error declareed with decl_error works
+//! * error declared with decl_error works
 //! * integrity test is generated
 
 #![recursion_limit = "128"]
 
 use codec::MaxEncodedLen;
-use frame_support::{parameter_types, traits::PalletInfo as _};
+use frame_support::{
+	derive_impl, parameter_types, traits::PalletInfo as _, weights::RuntimeDbWeight,
+};
+use frame_system::limits::{BlockLength, BlockWeights};
 use scale_info::TypeInfo;
-use sp_core::{sr25519, H256};
+use sp_api::RuntimeVersion;
+use sp_core::{sr25519, ConstU64};
 use sp_runtime::{
 	generic,
 	traits::{BlakeTwo256, Verify},
 	DispatchError, ModuleError,
 };
 
-mod system;
-
-pub trait Currency {}
-
 parameter_types! {
 	pub static IntegrityTestExec: u32 = 0;
 }
 
+#[frame_support::pallet(dev_mode)]
 mod module1 {
-	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
-	pub trait Config<I>: system::Config {}
+	#[pallet::pallet]
+	pub struct Pallet<T, I = ()>(_);
 
-	frame_support::decl_module! {
-		pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call
-			where origin: <T as system::Config>::RuntimeOrigin, system=system
-		{
-			#[weight = 0]
-			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
-				Err(Error::<T, I>::Something.into())
-			}
+	#[pallet::config]
+	pub trait Config<I: 'static = ()>: frame_system::Config {
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+	}
+
+	#[pallet::call]
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		pub fn fail(_origin: OriginFor<T>) -> DispatchResult {
+			Err(Error::<T, I>::Something.into())
 		}
 	}
 
-	#[derive(
-		Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo, MaxEncodedLen,
-	)]
-	pub struct Origin<T, I: Instance = DefaultInstance>(pub core::marker::PhantomData<(T, I)>);
+	#[pallet::origin]
+	#[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
+	#[scale_info(skip_type_params(I))]
+	pub struct Origin<T, I = ()>(pub PhantomData<(T, I)>);
 
-	frame_support::decl_event! {
-		pub enum Event<T, I: Instance = DefaultInstance> where
-			<T as system::Config>::AccountId
-		{
-			A(AccountId),
-		}
+	#[pallet::event]
+	pub enum Event<T: Config<I>, I: 'static = ()> {
+		A(<T as frame_system::Config>::AccountId),
 	}
 
-	frame_support::decl_error! {
-		pub enum Error for Module<T: Config<I>, I: Instance> {
-			Something
-		}
-	}
-
-	frame_support::decl_storage! {
-		trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Module {}
+	#[pallet::error]
+	pub enum Error<T, I = ()> {
+		Something,
 	}
 }
 
+#[frame_support::pallet(dev_mode)]
 mod module2 {
 	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
-	pub trait Config: system::Config {}
+	#[pallet::pallet]
+	pub struct Pallet<T>(_);
 
-	frame_support::decl_module! {
-		pub struct Module<T: Config> for enum Call
-			where origin: <T as system::Config>::RuntimeOrigin, system=system
-		{
-			#[weight = 0]
-			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
-				Err(Error::<T>::Something.into())
-			}
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+	}
 
-			fn integrity_test() {
-				IntegrityTestExec::mutate(|i| *i += 1);
-			}
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn integrity_test() {
+			IntegrityTestExec::mutate(|i| *i += 1);
 		}
 	}
 
-	#[derive(
-		Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo, MaxEncodedLen,
-	)]
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		pub fn fail(_origin: OriginFor<T>) -> DispatchResult {
+			Err(Error::<T>::Something.into())
+		}
+	}
+
+	#[pallet::origin]
+	#[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 	pub struct Origin;
 
-	frame_support::decl_event! {
-		pub enum Event {
-			A,
-		}
+	#[pallet::event]
+	pub enum Event<T> {
+		A,
 	}
 
-	frame_support::decl_error! {
-		pub enum Error for Module<T: Config> {
-			Something
-		}
-	}
-
-	frame_support::decl_storage! {
-		trait Store for Module<T: Config> as Module {}
+	#[pallet::error]
+	pub enum Error<T> {
+		Something,
 	}
 }
 
 mod nested {
 	use super::*;
 
+	#[frame_support::pallet(dev_mode)]
 	pub mod module3 {
 		use super::*;
+		use frame_support::pallet_prelude::*;
+		use frame_system::pallet_prelude::*;
 
-		pub trait Config: system::Config {}
+		#[pallet::pallet]
+		pub struct Pallet<T>(_);
 
-		frame_support::decl_module! {
-			pub struct Module<T: Config> for enum Call
-				where origin: <T as system::Config>::RuntimeOrigin, system=system
-			{
-				#[weight = 0]
-				pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
-					Err(Error::<T>::Something.into())
-				}
+		#[pallet::config]
+		pub trait Config: frame_system::Config {
+			type RuntimeEvent: From<Event<Self>>
+				+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		}
 
-				fn integrity_test() {
-					IntegrityTestExec::mutate(|i| *i += 1);
-				}
+		#[pallet::hooks]
+		impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+			fn integrity_test() {
+				IntegrityTestExec::mutate(|i| *i += 1);
 			}
 		}
 
-		#[derive(
-			Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo, MaxEncodedLen,
-		)]
-		pub struct Origin;
-
-		frame_support::decl_event! {
-			pub enum Event {
-				A,
-			}
-		}
-
-		frame_support::decl_error! {
-			pub enum Error for Module<T: Config> {
-				Something
-			}
-		}
-
-		frame_support::decl_storage! {
-			trait Store for Module<T: Config> as Module {}
-			add_extra_genesis {
-				build(|_config| {})
-			}
-		}
-	}
-}
-
-pub mod module3 {
-	use super::*;
-
-	pub trait Config: system::Config {}
-
-	frame_support::decl_module! {
-		pub struct Module<T: Config> for enum Call
-			where origin: <T as system::Config>::RuntimeOrigin, system=system
-		{
-			#[weight = 0]
-			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
+		#[pallet::call]
+		impl<T: Config> Pallet<T> {
+			pub fn fail(_origin: OriginFor<T>) -> DispatchResult {
 				Err(Error::<T>::Something.into())
 			}
-			#[weight = 0]
-			pub fn aux_1(_origin, #[compact] _data: u32) -> frame_support::dispatch::DispatchResult {
-				unreachable!()
-			}
-			#[weight = 0]
-			pub fn aux_2(_origin, _data: i32, #[compact] _data2: u32) -> frame_support::dispatch::DispatchResult {
-				unreachable!()
-			}
-			#[weight = 0]
-			fn aux_3(_origin, _data: i32, _data2: String) -> frame_support::dispatch::DispatchResult {
-				unreachable!()
-			}
-			#[weight = 3]
-			fn aux_4(_origin) -> frame_support::dispatch::DispatchResult { unreachable!() }
-			#[weight = (5, frame_support::dispatch::DispatchClass::Operational)]
-			fn operational(_origin) { unreachable!() }
 		}
-	}
 
-	#[derive(
-		Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo, MaxEncodedLen,
-	)]
-	pub struct Origin<T>(pub core::marker::PhantomData<T>);
+		#[pallet::origin]
+		#[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
+		pub struct Origin;
 
-	frame_support::decl_event! {
-		pub enum Event {
+		#[pallet::event]
+		pub enum Event<T> {
 			A,
 		}
-	}
 
-	frame_support::decl_error! {
-		pub enum Error for Module<T: Config> {
-			Something
+		#[pallet::error]
+		pub enum Error<T> {
+			Something,
 		}
-	}
 
-	frame_support::decl_storage! {
-		trait Store for Module<T: Config> as Module {}
-		add_extra_genesis {
-			build(|_config| {})
+		#[pallet::genesis_config]
+		#[derive(frame_support::DefaultNoBound)]
+		pub struct GenesisConfig<T: Config> {
+			#[serde(skip)]
+			pub _config: sp_std::marker::PhantomData<T>,
+		}
+
+		#[pallet::genesis_build]
+		impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+			fn build(&self) {}
 		}
 	}
 }
 
-impl<I> module1::Config<I> for Runtime {}
-impl module2::Config for Runtime {}
-impl nested::module3::Config for Runtime {}
-impl module3::Config for Runtime {}
+#[frame_support::pallet(dev_mode)]
+pub mod module3 {
+	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
+	#[pallet::pallet]
+	pub struct Pallet<T>(_);
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		pub fn fail(_origin: OriginFor<T>) -> DispatchResult {
+			Err(Error::<T>::Something.into())
+		}
+		pub fn aux_1(_origin: OriginFor<T>, #[pallet::compact] _data: u32) -> DispatchResult {
+			unreachable!()
+		}
+		pub fn aux_2(
+			_origin: OriginFor<T>,
+			_data: i32,
+			#[pallet::compact] _data2: u32,
+		) -> DispatchResult {
+			unreachable!()
+		}
+		#[pallet::weight(0)]
+		pub fn aux_3(_origin: OriginFor<T>, _data: i32, _data2: String) -> DispatchResult {
+			unreachable!()
+		}
+		#[pallet::weight(3)]
+		pub fn aux_4(_origin: OriginFor<T>) -> DispatchResult {
+			unreachable!()
+		}
+		#[pallet::weight((5, DispatchClass::Operational))]
+		pub fn operational(_origin: OriginFor<T>) -> DispatchResult {
+			unreachable!()
+		}
+	}
+
+	#[pallet::origin]
+	#[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
+	pub struct Origin<T>(pub PhantomData<T>);
+
+	#[pallet::event]
+	pub enum Event<T> {
+		A,
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		Something,
+	}
+
+	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
+	pub struct GenesisConfig<T: Config> {
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+		fn build(&self) {}
+	}
+}
+
+pub type BlockNumber = u64;
 pub type Signature = sr25519::Signature;
 pub type AccountId = <Signature as Verify>::Signer;
-pub type BlockNumber = u64;
-pub type Index = u64;
-
-fn test_pub() -> AccountId {
-	AccountId::from_raw([0; 32])
-}
-
-impl system::Config for Runtime {
-	type BaseCallFilter = frame_support::traits::Everything;
-	type Hash = H256;
-	type RuntimeOrigin = RuntimeOrigin;
-	type BlockNumber = BlockNumber;
-	type AccountId = AccountId;
-	type RuntimeEvent = RuntimeEvent;
-	type PalletInfo = PalletInfo;
-	type RuntimeCall = RuntimeCall;
-	type DbWeight = ();
-}
+pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub struct Runtime
 	{
-		System: system::{Pallet, Call, Event<T>, Origin<T>} = 30,
+		System: frame_system::{Pallet, Call, Event<T>, Origin<T>} = 30,
 		Module1_1: module1::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>},
-		Module2: module2::{Pallet, Call, Storage, Event, Origin},
+		Module2: module2::{Pallet, Call, Storage, Event<T>, Origin},
 		Module1_2: module1::<Instance2>::{Pallet, Call, Storage, Event<T>, Origin<T>},
-		NestedModule3: nested::module3::{Pallet, Call, Config, Storage, Event, Origin},
-		Module3: self::module3::{Pallet, Call, Config, Storage, Event, Origin<T>},
-		Module1_3: module1::<Instance3>::{Pallet, Storage} = 6,
-		Module1_4: module1::<Instance4>::{Pallet, Call} = 3,
+		NestedModule3: nested::module3::{Pallet, Call, Config<T>, Storage, Event<T>, Origin},
+		Module3: self::module3::{Pallet, Call, Config<T>, Storage, Event<T>, Origin<T>},
+		Module1_3: module1::<Instance3>::{Pallet, Storage, Event<T> } = 6,
+		Module1_4: module1::<Instance4>::{Pallet, Call, Event<T> } = 3,
 		Module1_5: module1::<Instance5>::{Pallet, Event<T>},
 		Module1_6: module1::<Instance6>::{Pallet, Call, Storage, Event<T>, Origin<T>} = 1,
 		Module1_7: module1::<Instance7>::{Pallet, Call, Storage, Event<T>, Origin<T>},
@@ -275,15 +275,66 @@ frame_support::construct_runtime!(
 	}
 );
 
-pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
-pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+impl frame_system::Config for Runtime {
+	type AccountId = AccountId;
+	type Lookup = sp_runtime::traits::IdentityLookup<AccountId>;
+	type BaseCallFilter = frame_support::traits::Everything;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
+	type PalletInfo = PalletInfo;
+	type OnSetCode = ();
+	type Block = Block;
+	type BlockHashCount = ConstU64<10>;
+}
+
+impl module1::Config<module1::Instance1> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+impl module1::Config<module1::Instance2> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+impl module1::Config<module1::Instance3> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+impl module1::Config<module1::Instance4> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+impl module1::Config<module1::Instance5> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+impl module1::Config<module1::Instance6> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+impl module1::Config<module1::Instance7> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+impl module1::Config<module1::Instance8> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+impl module1::Config<module1::Instance9> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+impl module2::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+impl nested::module3::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+impl module3::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+
+fn test_pub() -> AccountId {
+	AccountId::from_raw([0; 32])
+}
 
 #[test]
 fn check_modules_error_type() {
 	sp_io::TestExternalities::default().execute_with(|| {
 		assert_eq!(
-			Module1_1::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_1::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 31,
 				error: [0; 4],
@@ -291,7 +342,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module2::fail(system::Origin::<Runtime>::Root.into()),
+			Module2::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 32,
 				error: [0; 4],
@@ -299,7 +350,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_2::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_2::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 33,
 				error: [0; 4],
@@ -307,7 +358,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			NestedModule3::fail(system::Origin::<Runtime>::Root.into()),
+			NestedModule3::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 34,
 				error: [0; 4],
@@ -315,7 +366,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_3::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_3::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 6,
 				error: [0; 4],
@@ -323,7 +374,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_4::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_4::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 3,
 				error: [0; 4],
@@ -331,7 +382,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_5::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_5::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 4,
 				error: [0; 4],
@@ -339,7 +390,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_6::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_6::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 1,
 				error: [0; 4],
@@ -347,7 +398,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_7::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_7::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 2,
 				error: [0; 4],
@@ -355,7 +406,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_8::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_8::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 12,
 				error: [0; 4],
@@ -363,7 +414,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_9::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_9::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 13,
 				error: [0; 4],
@@ -383,7 +434,7 @@ fn integrity_test_works() {
 fn origin_codec() {
 	use codec::Encode;
 
-	let origin = OriginCaller::system(system::RawOrigin::None);
+	let origin = OriginCaller::system(frame_system::RawOrigin::None);
 	assert_eq!(origin.encode()[0], 30);
 
 	let origin = OriginCaller::Module1_1(module1::Origin(Default::default()));
@@ -418,7 +469,8 @@ fn origin_codec() {
 fn event_codec() {
 	use codec::Encode;
 
-	let event = system::Event::<Runtime>::ExtrinsicSuccess;
+	let event =
+		frame_system::Event::<Runtime>::ExtrinsicSuccess { dispatch_info: Default::default() };
 	assert_eq!(RuntimeEvent::from(event).encode()[0], 30);
 
 	let event = module1::Event::<Runtime, module1::Instance1>::A(test_pub());
@@ -455,7 +507,7 @@ fn event_codec() {
 #[test]
 fn call_codec() {
 	use codec::Encode;
-	assert_eq!(RuntimeCall::System(system::Call::noop {}).encode()[0], 30);
+	assert_eq!(RuntimeCall::System(frame_system::Call::remark { remark: vec![1] }).encode()[0], 30);
 	assert_eq!(RuntimeCall::Module1_1(module1::Call::fail {}).encode()[0], 31);
 	assert_eq!(RuntimeCall::Module2(module2::Call::fail {}).encode()[0], 32);
 	assert_eq!(RuntimeCall::Module1_2(module1::Call::fail {}).encode()[0], 33);
@@ -471,12 +523,12 @@ fn call_codec() {
 #[test]
 fn call_compact_attr() {
 	use codec::Encode;
-	let call: module3::Call<Runtime> = module3::Call::aux_1 { _data: 1 };
+	let call: module3::Call<Runtime> = module3::Call::aux_1 { data: 1 };
 	let encoded = call.encode();
 	assert_eq!(2, encoded.len());
 	assert_eq!(vec![1, 4], encoded);
 
-	let call: module3::Call<Runtime> = module3::Call::aux_2 { _data: 1, _data2: 2 };
+	let call: module3::Call<Runtime> = module3::Call::aux_2 { data: 1, data2: 2 };
 	let encoded = call.encode();
 	assert_eq!(6, encoded.len());
 	assert_eq!(vec![2, 1, 0, 0, 0, 8], encoded);
@@ -491,7 +543,7 @@ fn call_encode_is_correct_and_decode_works() {
 	let decoded = module3::Call::<Runtime>::decode(&mut &encoded[..]).unwrap();
 	assert_eq!(decoded, call);
 
-	let call: module3::Call<Runtime> = module3::Call::aux_3 { _data: 32, _data2: "hello".into() };
+	let call: module3::Call<Runtime> = module3::Call::aux_3 { data: 32, data2: "hello".into() };
 	let encoded = call.encode();
 	assert_eq!(vec![3, 32, 0, 0, 0, 20, 104, 101, 108, 108, 111], encoded);
 	let decoded = module3::Call::<Runtime>::decode(&mut &encoded[..]).unwrap();
@@ -508,7 +560,7 @@ fn call_weight_should_attach_to_call_enum() {
 	assert_eq!(
 		module3::Call::<Runtime>::operational {}.get_dispatch_info(),
 		DispatchInfo {
-			weight: Weight::from_ref_time(5),
+			weight: Weight::from_parts(5, 0),
 			class: DispatchClass::Operational,
 			pays_fee: Pays::Yes
 		},
@@ -517,7 +569,7 @@ fn call_weight_should_attach_to_call_enum() {
 	assert_eq!(
 		module3::Call::<Runtime>::aux_4 {}.get_dispatch_info(),
 		DispatchInfo {
-			weight: Weight::from_ref_time(3),
+			weight: Weight::from_parts(3, 0),
 			class: DispatchClass::Normal,
 			pays_fee: Pays::Yes
 		},
@@ -584,80 +636,132 @@ fn call_subtype_conversion() {
 
 #[test]
 fn test_metadata() {
-	use frame_support::metadata::*;
+	use frame_support::metadata::{v14::*, *};
 	use scale_info::meta_type;
+	use sp_core::Encode;
+
+	fn maybe_docs(doc: Vec<&'static str>) -> Vec<&'static str> {
+		if cfg!(feature = "no-metadata-docs") {
+			vec![]
+		} else {
+			doc
+		}
+	}
 
 	let pallets = vec![
 		PalletMetadata {
 			name: "System",
 			storage: None,
-			calls: Some(meta_type::<system::Call<Runtime>>().into()),
-			event: Some(meta_type::<system::Event<Runtime>>().into()),
-			constants: vec![],
-			error: None,
+			calls: Some(meta_type::<frame_system::Call<Runtime>>().into()),
+			event: Some(meta_type::<frame_system::Event<Runtime>>().into()),
+			constants: vec![
+				PalletConstantMetadata {
+					name: "BlockWeights",
+					ty: meta_type::<BlockWeights>(),
+					value: BlockWeights::default().encode(),
+					docs: maybe_docs(vec![" Block & extrinsics weights: base values and limits."]),
+				},
+				PalletConstantMetadata {
+					name: "BlockLength",
+					ty: meta_type::<BlockLength>(),
+					value: BlockLength::default().encode(),
+					docs: maybe_docs(vec![" The maximum length of a block (in bytes)."]),
+				},
+				PalletConstantMetadata {
+					name: "BlockHashCount",
+					ty: meta_type::<u64>(),
+					value: 10u64.encode(),
+					docs: maybe_docs(vec![" Maximum number of block number to block hash mappings to keep (oldest pruned first)."]),
+				},
+				PalletConstantMetadata {
+					name: "DbWeight",
+					ty: meta_type::<RuntimeDbWeight>(),
+					value: RuntimeDbWeight::default().encode(),
+					docs: maybe_docs(vec![" The weight of runtime database operations the runtime can invoke.",]),
+				},
+				PalletConstantMetadata {
+					name: "Version",
+					ty: meta_type::<RuntimeVersion>(),
+					value: RuntimeVersion::default().encode(),
+					docs: maybe_docs(vec![ " Get the chain's current version."]),
+				},
+				PalletConstantMetadata {
+					name: "SS58Prefix",
+					ty: meta_type::<u16>(),
+					value: 0u16.encode(),
+					docs: maybe_docs(vec![
+						" The designated SS58 prefix of this chain.",
+						"",
+						" This replaces the \"ss58Format\" property declared in the chain spec. Reason is",
+						" that the runtime should know about the prefix in order to make use of it as",
+						" an identifier of the chain.",
+					]),
+				},
+			],
+			error: Some(meta_type::<frame_system::Error<Runtime>>().into()),
 			index: 30,
 		},
 		PalletMetadata {
 			name: "Module1_1",
-			storage: Some(PalletStorageMetadata { prefix: "Instance1Module", entries: vec![] }),
+			storage: Some(PalletStorageMetadata { prefix: "Module1_1", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance1>>().into()),
 			event: Some(meta_type::<module1::Event<Runtime, module1::Instance1>>().into()),
 			constants: vec![],
-			error: None,
+			error: Some(meta_type::<module1::Error<Runtime>>().into()),
 			index: 31,
 		},
 		PalletMetadata {
 			name: "Module2",
-			storage: Some(PalletStorageMetadata { prefix: "Module", entries: vec![] }),
+			storage: Some(PalletStorageMetadata { prefix: "Module2", entries: vec![] }),
 			calls: Some(meta_type::<module2::Call<Runtime>>().into()),
-			event: Some(meta_type::<module2::Event>().into()),
+			event: Some(meta_type::<module2::Event<Runtime>>().into()),
 			constants: vec![],
-			error: None,
+			error: Some(meta_type::<module2::Error<Runtime>>().into()),
 			index: 32,
 		},
 		PalletMetadata {
 			name: "Module1_2",
-			storage: Some(PalletStorageMetadata { prefix: "Instance2Module", entries: vec![] }),
+			storage: Some(PalletStorageMetadata { prefix: "Module1_2", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance2>>().into()),
 			event: Some(meta_type::<module1::Event<Runtime, module1::Instance2>>().into()),
 			constants: vec![],
-			error: None,
+			error: Some(meta_type::<module1::Error<Runtime, module1::Instance2>>().into()),
 			index: 33,
 		},
 		PalletMetadata {
 			name: "NestedModule3",
-			storage: Some(PalletStorageMetadata { prefix: "Module", entries: vec![] }),
+			storage: Some(PalletStorageMetadata { prefix: "NestedModule3", entries: vec![] }),
 			calls: Some(meta_type::<nested::module3::Call<Runtime>>().into()),
-			event: Some(meta_type::<nested::module3::Event>().into()),
+			event: Some(meta_type::<nested::module3::Event<Runtime>>().into()),
 			constants: vec![],
-			error: None,
+			error: Some(meta_type::<nested::module3::Error<Runtime>>().into()),
 			index: 34,
 		},
 		PalletMetadata {
 			name: "Module3",
-			storage: Some(PalletStorageMetadata { prefix: "Module", entries: vec![] }),
+			storage: Some(PalletStorageMetadata { prefix: "Module3", entries: vec![] }),
 			calls: Some(meta_type::<module3::Call<Runtime>>().into()),
-			event: Some(meta_type::<module3::Event>().into()),
+			event: Some(meta_type::<module3::Event<Runtime>>().into()),
 			constants: vec![],
-			error: None,
+			error: Some(meta_type::<module3::Error<Runtime>>().into()),
 			index: 35,
 		},
 		PalletMetadata {
 			name: "Module1_3",
-			storage: Some(PalletStorageMetadata { prefix: "Instance3Module", entries: vec![] }),
+			storage: Some(PalletStorageMetadata { prefix: "Module1_3", entries: vec![] }),
 			calls: None,
-			event: None,
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance3>>().into()),
 			constants: vec![],
-			error: None,
+			error: Some(meta_type::<module1::Error<Runtime, module1::Instance3>>().into()),
 			index: 6,
 		},
 		PalletMetadata {
 			name: "Module1_4",
 			storage: None,
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance4>>().into()),
-			event: None,
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance4>>().into()),
 			constants: vec![],
-			error: None,
+			error: Some(meta_type::<module1::Error<Runtime, module1::Instance4>>().into()),
 			index: 3,
 		},
 		PalletMetadata {
@@ -666,45 +770,43 @@ fn test_metadata() {
 			calls: None,
 			event: Some(meta_type::<module1::Event<Runtime, module1::Instance5>>().into()),
 			constants: vec![],
-			error: None,
+			error: Some(meta_type::<module1::Error<Runtime, module1::Instance5>>().into()),
 			index: 4,
 		},
 		PalletMetadata {
 			name: "Module1_6",
-			storage: Some(PalletStorageMetadata { prefix: "Instance6Module", entries: vec![] }),
+			storage: Some(PalletStorageMetadata { prefix: "Module1_6", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance6>>().into()),
 			event: Some(meta_type::<module1::Event<Runtime, module1::Instance6>>().into()),
 			constants: vec![],
-			error: None,
+			error: Some(meta_type::<module1::Error<Runtime, module1::Instance6>>().into()),
 			index: 1,
 		},
 		PalletMetadata {
 			name: "Module1_7",
-			storage: Some(PalletStorageMetadata { prefix: "Instance7Module", entries: vec![] }),
+			storage: Some(PalletStorageMetadata { prefix: "Module1_7", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance7>>().into()),
-			event: Some(PalletEventMetadata {
-				ty: meta_type::<module1::Event<Runtime, module1::Instance7>>(),
-			}),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance7>>().into()),
 			constants: vec![],
-			error: None,
+			error: Some(meta_type::<module1::Error<Runtime, module1::Instance7>>().into()),
 			index: 2,
 		},
 		PalletMetadata {
 			name: "Module1_8",
-			storage: Some(PalletStorageMetadata { prefix: "Instance8Module", entries: vec![] }),
+			storage: Some(PalletStorageMetadata { prefix: "Module1_8", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance8>>().into()),
 			event: Some(meta_type::<module1::Event<Runtime, module1::Instance8>>().into()),
 			constants: vec![],
-			error: None,
+			error: Some(meta_type::<module1::Error<Runtime, module1::Instance8>>().into()),
 			index: 12,
 		},
 		PalletMetadata {
 			name: "Module1_9",
-			storage: Some(PalletStorageMetadata { prefix: "Instance9Module", entries: vec![] }),
+			storage: Some(PalletStorageMetadata { prefix: "Module1_9", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance9>>().into()),
 			event: Some(meta_type::<module1::Event<Runtime, module1::Instance9>>().into()),
 			constants: vec![],
-			error: None,
+			error: Some(meta_type::<module1::Error<Runtime, module1::Instance9>>().into()),
 			index: 13,
 		},
 	];
@@ -722,6 +824,7 @@ fn test_metadata() {
 	let expected_metadata: RuntimeMetadataPrefixed =
 		RuntimeMetadataLastVersion::new(pallets, extrinsic, meta_type::<Runtime>()).into();
 	let actual_metadata = Runtime::metadata();
+
 	pretty_assertions::assert_eq!(actual_metadata, expected_metadata);
 }
 
@@ -729,7 +832,7 @@ fn test_metadata() {
 fn pallet_in_runtime_is_correct() {
 	assert_eq!(PalletInfo::index::<System>().unwrap(), 30);
 	assert_eq!(PalletInfo::name::<System>().unwrap(), "System");
-	assert_eq!(PalletInfo::module_name::<System>().unwrap(), "system");
+	assert_eq!(PalletInfo::module_name::<System>().unwrap(), "frame_system");
 	assert!(PalletInfo::crate_version::<System>().is_some());
 
 	assert_eq!(PalletInfo::index::<Module1_1>().unwrap(), 31);

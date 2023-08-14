@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +19,10 @@
 
 use super::*;
 use frame_support::traits::OnRuntimeUpgrade;
+use frame_system::pallet_prelude::BlockNumberFor;
+
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
 
 /// The log target.
 const TARGET: &'static str = "runtime::scheduler::migration";
@@ -31,22 +35,14 @@ pub mod v1 {
 	pub(crate) type Agenda<T: Config> = StorageMap<
 		Pallet<T>,
 		Twox64Concat,
-		<T as frame_system::Config>::BlockNumber,
-		Vec<
-			Option<
-				ScheduledV1<<T as Config>::RuntimeCall, <T as frame_system::Config>::BlockNumber>,
-			>,
-		>,
+		BlockNumberFor<T>,
+		Vec<Option<ScheduledV1<<T as Config>::RuntimeCall, BlockNumberFor<T>>>>,
 		ValueQuery,
 	>;
 
 	#[frame_support::storage_alias]
-	pub(crate) type Lookup<T: Config> = StorageMap<
-		Pallet<T>,
-		Twox64Concat,
-		Vec<u8>,
-		TaskAddress<<T as frame_system::Config>::BlockNumber>,
-	>;
+	pub(crate) type Lookup<T: Config> =
+		StorageMap<Pallet<T>, Twox64Concat, Vec<u8>, TaskAddress<BlockNumberFor<T>>>;
 }
 
 pub mod v2 {
@@ -57,18 +53,14 @@ pub mod v2 {
 	pub(crate) type Agenda<T: Config> = StorageMap<
 		Pallet<T>,
 		Twox64Concat,
-		<T as frame_system::Config>::BlockNumber,
+		BlockNumberFor<T>,
 		Vec<Option<ScheduledV2Of<T>>>,
 		ValueQuery,
 	>;
 
 	#[frame_support::storage_alias]
-	pub(crate) type Lookup<T: Config> = StorageMap<
-		Pallet<T>,
-		Twox64Concat,
-		Vec<u8>,
-		TaskAddress<<T as frame_system::Config>::BlockNumber>,
-	>;
+	pub(crate) type Lookup<T: Config> =
+		StorageMap<Pallet<T>, Twox64Concat, Vec<u8>, TaskAddress<BlockNumberFor<T>>>;
 }
 
 pub mod v3 {
@@ -79,26 +71,22 @@ pub mod v3 {
 	pub(crate) type Agenda<T: Config> = StorageMap<
 		Pallet<T>,
 		Twox64Concat,
-		<T as frame_system::Config>::BlockNumber,
+		BlockNumberFor<T>,
 		Vec<Option<ScheduledV3Of<T>>>,
 		ValueQuery,
 	>;
 
 	#[frame_support::storage_alias]
-	pub(crate) type Lookup<T: Config> = StorageMap<
-		Pallet<T>,
-		Twox64Concat,
-		Vec<u8>,
-		TaskAddress<<T as frame_system::Config>::BlockNumber>,
-	>;
+	pub(crate) type Lookup<T: Config> =
+		StorageMap<Pallet<T>, Twox64Concat, Vec<u8>, TaskAddress<BlockNumberFor<T>>>;
 
 	/// Migrate the scheduler pallet from V3 to V4.
 	pub struct MigrateToV4<T>(sp_std::marker::PhantomData<T>);
 
 	impl<T: Config<Hash = PreimageHash>> OnRuntimeUpgrade for MigrateToV4<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			assert_eq!(StorageVersion::get::<Pallet<T>>(), 3, "Can only upgrade from version 3");
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
+			ensure!(StorageVersion::get::<Pallet<T>>() == 3, "Can only upgrade from version 3");
 
 			let agendas = Agenda::<T>::iter_keys().count() as u32;
 			let decodable_agendas = Agenda::<T>::iter_values().count() as u32;
@@ -125,7 +113,7 @@ pub mod v3 {
 						agenda.len(),
 						max_scheduled_per_block,
 					);
-					return Err("Agenda would overflow `MaxScheduledPerBlock`.")
+					return Err("Agenda would overflow `MaxScheduledPerBlock`.".into())
 				}
 			}
 			// Check that bounding the calls will not overflow `MAX_LENGTH`.
@@ -142,7 +130,7 @@ pub mod v3 {
 									block_number,
 									l,
 								);
-								return Err("Call is too large.")
+								return Err("Call is too large.".into())
 							}
 						},
 						_ => (),
@@ -169,12 +157,12 @@ pub mod v3 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-			assert_eq!(StorageVersion::get::<Pallet<T>>(), 4, "Must upgrade");
+		fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
+			ensure!(StorageVersion::get::<Pallet<T>>() == 4, "Must upgrade");
 
 			// Check that everything decoded fine.
 			for k in crate::Agenda::<T>::iter_keys() {
-				assert!(crate::Agenda::<T>::try_get(k).is_ok(), "Cannot decode V4 Agenda");
+				ensure!(crate::Agenda::<T>::try_get(k).is_ok(), "Cannot decode V4 Agenda");
 			}
 
 			let old_agendas: u32 =
@@ -210,7 +198,7 @@ pub mod v4 {
 
 	impl<T: Config> OnRuntimeUpgrade for CleanupAgendas<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 			assert_eq!(
 				StorageVersion::get::<Pallet<T>>(),
 				4,
@@ -285,8 +273,8 @@ pub mod v4 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-			assert_eq!(StorageVersion::get::<Pallet<T>>(), 4, "Version must not change");
+		fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
+			ensure!(StorageVersion::get::<Pallet<T>>() == 4, "Version must not change");
 
 			let (old_agendas, non_empty_agendas): (u32, u32) =
 				Decode::decode(&mut state.as_ref()).expect("Must decode pre_upgrade state");
@@ -297,14 +285,15 @@ pub mod v4 {
 					target: TARGET,
 					"Did not clean up any agendas. v4::CleanupAgendas can be removed."
 				),
-				Some(n) =>
-					log::info!(target: TARGET, "Cleaned up {} agendas, now {}", n, new_agendas),
+				Some(n) => {
+					log::info!(target: TARGET, "Cleaned up {} agendas, now {}", n, new_agendas)
+				},
 				None => unreachable!(
 					"Number of agendas cannot increase, old {} new {}",
 					old_agendas, new_agendas
 				),
 			}
-			assert_eq!(new_agendas, non_empty_agendas, "Expected to keep all non-empty agendas");
+			ensure!(new_agendas == non_empty_agendas, "Expected to keep all non-empty agendas");
 
 			Ok(())
 		}
@@ -495,7 +484,7 @@ mod test {
 
 			// The pre_upgrade hook fails:
 			let err = v3::MigrateToV4::<Test>::pre_upgrade().unwrap_err();
-			assert!(err.contains("Call is too large"));
+			assert_eq!(DispatchError::from("Call is too large."), err);
 			// But the migration itself works:
 			let _w = v3::MigrateToV4::<Test>::on_runtime_upgrade();
 
@@ -560,8 +549,9 @@ mod test {
 						"Agenda {} should be removed",
 						i
 					),
-					Some(new) =>
-						assert_eq!(Agenda::<Test>::get(i as u64), new, "Agenda wrong {}", i),
+					Some(new) => {
+						assert_eq!(Agenda::<Test>::get(i as u64), new, "Agenda wrong {}", i)
+					},
 				}
 			}
 		});

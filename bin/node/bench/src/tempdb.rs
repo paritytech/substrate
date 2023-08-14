@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -90,7 +90,7 @@ impl TempDatabase {
 			},
 			DatabaseType::ParityDb => Arc::new(ParityDbWrapper({
 				let mut options = parity_db::Options::with_columns(self.0.path(), 1);
-				let mut column_options = &mut options.columns[0];
+				let column_options = &mut options.columns[0];
 				column_options.ref_counted = true;
 				column_options.preimage = true;
 				column_options.uniform = true;

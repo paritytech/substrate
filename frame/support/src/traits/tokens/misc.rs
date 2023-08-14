@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,15 +20,68 @@
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
-use sp_runtime::{ArithmeticError, DispatchError, TokenError};
+use sp_runtime::{traits::Convert, ArithmeticError, DispatchError, TokenError};
 use sp_std::fmt::Debug;
+
+/// The origin of funds to be used for a deposit operation.
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
+pub enum Provenance {
+	/// The funds will be minted into the system, increasing total issuance (and potentially
+	/// causing an overflow there).
+	Minted,
+	/// The funds already exist in the system, therefore will not affect total issuance.
+	Extant,
+}
+
+/// The mode under which usage of funds may be restricted.
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
+pub enum Restriction {
+	/// Funds are under the normal conditions.
+	Free,
+	/// Funds are on hold.
+	OnHold,
+}
+
+/// The mode by which we describe whether an operation should keep an account alive.
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
+pub enum Preservation {
+	/// We don't care if the account gets killed by this operation.
+	Expendable,
+	/// The account may not be killed, but we don't care if the balance gets dusted.
+	Protect,
+	/// The account may not be killed and our provider reference must remain (in the context of
+	/// tokens, this means that the account may not be dusted).
+	Preserve,
+}
+
+/// The privilege with which a withdraw operation is conducted.
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
+pub enum Fortitude {
+	/// The operation should execute with regular privilege.
+	Polite,
+	/// The operation should be forced to succeed if possible. This is usually employed for system-
+	/// level security-critical events such as slashing.
+	Force,
+}
+
+/// The precision required of an operation generally involving some aspect of quantitative fund
+/// withdrawal or transfer.
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
+pub enum Precision {
+	/// The operation should must either proceed either exactly according to the amounts involved
+	/// or not at all.
+	Exact,
+	/// The operation may be considered successful even if less than the specified amounts are
+	/// available to be used. In this case a best effort will be made.
+	BestEffort,
+}
 
 /// One of a number of consequences of withdrawing a fungible from an account.
 #[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum WithdrawConsequence<Balance> {
 	/// Withdraw could not happen since the amount to be withdrawn is less than the total funds in
 	/// the account.
-	NoFunds,
+	BalanceLow,
 	/// The withdraw would mean the account dying when it needs to exist (usually because it is a
 	/// provider and there are consumer references on it).
 	WouldDie,
@@ -53,15 +106,16 @@ pub enum WithdrawConsequence<Balance> {
 impl<Balance: Zero> WithdrawConsequence<Balance> {
 	/// Convert the type into a `Result` with `DispatchError` as the error or the additional
 	/// `Balance` by which the account will be reduced.
-	pub fn into_result(self) -> Result<Balance, DispatchError> {
+	pub fn into_result(self, keep_nonzero: bool) -> Result<Balance, DispatchError> {
 		use WithdrawConsequence::*;
 		match self {
-			NoFunds => Err(TokenError::NoFunds.into()),
-			WouldDie => Err(TokenError::WouldDie.into()),
+			BalanceLow => Err(TokenError::FundsUnavailable.into()),
+			WouldDie => Err(TokenError::OnlyProvider.into()),
 			UnknownAsset => Err(TokenError::UnknownAsset.into()),
 			Underflow => Err(ArithmeticError::Underflow.into()),
 			Overflow => Err(ArithmeticError::Overflow.into()),
 			Frozen => Err(TokenError::Frozen.into()),
+			ReducedToZero(_) if keep_nonzero => Err(TokenError::NotExpendable.into()),
 			ReducedToZero(result) => Ok(result),
 			Success => Ok(Zero::zero()),
 		}
@@ -87,6 +141,8 @@ pub enum DepositConsequence {
 	Overflow,
 	/// Account continued in existence.
 	Success,
+	/// Account cannot receive the assets.
+	Blocked,
 }
 
 impl DepositConsequence {
@@ -98,6 +154,7 @@ impl DepositConsequence {
 			CannotCreate => TokenError::CannotCreate.into(),
 			UnknownAsset => TokenError::UnknownAsset.into(),
 			Overflow => ArithmeticError::Overflow.into(),
+			Blocked => TokenError::Blocked.into(),
 			Success => return Ok(()),
 		})
 	}
@@ -124,21 +181,6 @@ pub enum BalanceStatus {
 	Free,
 	/// Funds are reserved, as corresponding to `reserved` item in Balances.
 	Reserved,
-}
-
-/// Attribute namespaces for non-fungible tokens.
-#[derive(
-	Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen,
-)]
-pub enum AttributeNamespace<AccountId> {
-	/// An attribute was set by the pallet.
-	Pallet,
-	/// An attribute was set by collection's owner.
-	CollectionOwner,
-	/// An attribute was set by item's owner.
-	ItemOwner,
-	/// An attribute was set by pre-approved account.
-	Account(AccountId),
 }
 
 bitflags::bitflags! {
@@ -179,10 +221,10 @@ impl WithdrawReasons {
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
 pub trait AssetId:
-	FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
+	FullCodec + Clone + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
 {
 }
-impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen> AssetId
+impl<T: FullCodec + Clone + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen> AssetId
 	for T
 {
 }
@@ -205,13 +247,23 @@ impl<
 }
 
 /// Converts a balance value into an asset balance.
-pub trait BalanceConversion<InBalance, AssetId, OutBalance> {
+pub trait ConversionToAssetBalance<InBalance, AssetId, AssetBalance> {
 	type Error;
-	fn to_asset_balance(balance: InBalance, asset_id: AssetId) -> Result<OutBalance, Self::Error>;
+	fn to_asset_balance(balance: InBalance, asset_id: AssetId)
+		-> Result<AssetBalance, Self::Error>;
 }
 
-/// Trait to handle asset locking mechanism to ensure interactions with the asset can be implemented
-/// downstream to extend logic of Uniques current functionality.
+/// Converts an asset balance value into balance.
+pub trait ConversionFromAssetBalance<AssetBalance, AssetId, OutBalance> {
+	type Error;
+	fn from_asset_balance(
+		balance: AssetBalance,
+		asset_id: AssetId,
+	) -> Result<OutBalance, Self::Error>;
+}
+
+/// Trait to handle NFT locking mechanism to ensure interactions with the asset can be implemented
+/// downstream to extend logic of Uniques/Nfts current functionality.
 pub trait Locker<CollectionId, ItemId> {
 	/// Check if the asset should be locked and prevent interactions with the asset from executing.
 	fn is_locked(collection: CollectionId, item: ItemId) -> bool;
@@ -223,5 +275,20 @@ impl<CollectionId, ItemId> Locker<CollectionId, ItemId> for () {
 	// to work.
 	fn is_locked(_collection: CollectionId, _item: ItemId) -> bool {
 		false
+	}
+}
+
+/// Retrieve the salary for a member of a particular rank.
+pub trait GetSalary<Rank, AccountId, Balance> {
+	/// Retrieve the salary for a given rank. The account ID is also supplied in case this changes
+	/// things.
+	fn get_salary(rank: Rank, who: &AccountId) -> Balance;
+}
+
+/// Adapter for a rank-to-salary `Convert` implementation into a `GetSalary` implementation.
+pub struct ConvertRank<C>(sp_std::marker::PhantomData<C>);
+impl<A, R, B, C: Convert<R, B>> GetSalary<R, A, B> for ConvertRank<C> {
+	fn get_salary(rank: R, _: &A) -> B {
+		C::convert(rank)
 	}
 }

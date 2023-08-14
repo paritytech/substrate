@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,12 +40,9 @@ use sp_storage::{StorageData, StorageKey};
 /// # use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 /// #
 /// # construct_runtime!(
-/// # 	pub enum TestRuntime where
-/// # 		Block = frame_system::mocking::MockBlock<TestRuntime>,
-/// # 		NodeBlock = frame_system::mocking::MockBlock<TestRuntime>,
-/// # 		UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<TestRuntime>,
+/// # 	pub enum TestRuntime
 /// # 	{
-/// # 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+/// # 		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 /// # 		Test: pallet_test::{Pallet, Storage},
 /// # 	}
 /// # );
@@ -58,13 +55,12 @@ use sp_storage::{StorageData, StorageKey};
 /// # 	type BlockLength = ();
 /// # 	type RuntimeOrigin = RuntimeOrigin;
 /// # 	type RuntimeCall = RuntimeCall;
-/// # 	type Index = u64;
-/// # 	type BlockNumber = u64;
+/// # 	type Nonce = u64;
 /// # 	type Hash = Hash;
 /// # 	type Hashing = BlakeTwo256;
 /// # 	type AccountId = u64;
 /// # 	type Lookup = IdentityLookup<Self::AccountId>;
-/// # 	type Header = Header;
+/// # 	type Block = frame_system::mocking::MockBlock<TestRuntime>;
 /// # 	type RuntimeEvent = RuntimeEvent;
 /// # 	type BlockHashCount = ();
 /// # 	type DbWeight = ();
@@ -94,8 +90,7 @@ use sp_storage::{StorageData, StorageKey};
 /// 	use frame_support::pallet_prelude::*;
 ///
 /// 	#[pallet::pallet]
-/// 	#[pallet::generate_store(pub(super) trait Store)]
-/// 	pub struct Pallet<T>(PhantomData<T>);
+/// 	pub struct Pallet<T>(_);
 ///
 /// 	#[pallet::config]
 /// 	pub trait Config: frame_system::Config {}

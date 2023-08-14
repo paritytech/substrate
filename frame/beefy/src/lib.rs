@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,35 +20,48 @@
 use codec::{Encode, MaxEncodedLen};
 
 use frame_support::{
+	dispatch::{DispatchResultWithPostInfo, Pays},
 	log,
+	pallet_prelude::*,
 	traits::{Get, OneSessionHandler},
+	weights::Weight,
 	BoundedSlice, BoundedVec, Parameter,
 };
-
+use frame_system::{
+	ensure_none, ensure_signed,
+	pallet_prelude::{BlockNumberFor, OriginFor},
+};
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, Member},
 	RuntimeAppPublic,
 };
+use sp_session::{GetSessionNumber, GetValidatorCount};
+use sp_staking::{offence::OffenceReportSystem, SessionIndex};
 use sp_std::prelude::*;
 
-use beefy_primitives::{
-	AuthorityIndex, ConsensusLog, OnNewValidatorSet, ValidatorSet, BEEFY_ENGINE_ID,
-	GENESIS_AUTHORITY_SET_ID,
+use sp_consensus_beefy::{
+	AuthorityIndex, BeefyAuthorityId, ConsensusLog, EquivocationProof, OnNewValidatorSet,
+	ValidatorSet, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
+mod default_weights;
+mod equivocation;
 #[cfg(test)]
 mod mock;
-
 #[cfg(test)]
 mod tests;
 
+pub use crate::equivocation::{EquivocationOffence, EquivocationReportSystem, TimeSlot};
 pub use pallet::*;
+
+use crate::equivocation::EquivocationEvidenceFor;
+
+const LOG_TARGET: &str = "runtime::beefy";
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::BlockNumberFor;
 
 	#[pallet::config]
@@ -56,12 +69,27 @@ pub mod pallet {
 		/// Authority identifier type
 		type BeefyId: Member
 			+ Parameter
-			+ RuntimeAppPublic
+			// todo: use custom signature hashing type instead of hardcoded `Keccak256`
+			+ BeefyAuthorityId<sp_runtime::traits::Keccak256>
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen;
 
 		/// The maximum number of authorities that can be added.
+		#[pallet::constant]
 		type MaxAuthorities: Get<u32>;
+
+		/// The maximum number of nominators for each validator.
+		#[pallet::constant]
+		type MaxNominators: Get<u32>;
+
+		/// The maximum number of entries to keep in the set id to session index mapping.
+		///
+		/// Since the `SetIdSession` map is only used for validating equivocations this
+		/// value should relate to the bonding duration of whatever staking system is
+		/// being used (if any). If equivocation handling is not enabled then this value
+		/// can be zero.
+		#[pallet::constant]
+		type MaxSetIdSessionEntries: Get<u64>;
 
 		/// A hook to act on the new BEEFY validator set.
 		///
@@ -69,10 +97,26 @@ pub mod pallet {
 		/// externally apart from having it in the storage. For instance you might cache a light
 		/// weight MMR root over validators and make it available for Light Clients.
 		type OnNewValidatorSet: OnNewValidatorSet<<Self as Config>::BeefyId>;
+
+		/// Weights for this pallet.
+		type WeightInfo: WeightInfo;
+
+		/// The proof of key ownership, used for validating equivocation reports
+		/// The proof must include the session index and validator count of the
+		/// session at which the equivocation occurred.
+		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
+
+		/// The equivocation handling subsystem.
+		///
+		/// Defines methods to publish, check and process an equivocation offence.
+		type EquivocationReportSystem: OffenceReportSystem<
+			Option<Self::AccountId>,
+			EquivocationEvidenceFor<Self>,
+		>;
 	}
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	/// The current authorities set
 	#[pallet::storage]
@@ -84,7 +128,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn validator_set_id)]
 	pub(super) type ValidatorSetId<T: Config> =
-		StorageValue<_, beefy_primitives::ValidatorSetId, ValueQuery>;
+		StorageValue<_, sp_consensus_beefy::ValidatorSetId, ValueQuery>;
 
 	/// Authorities set scheduled to be used with the next session
 	#[pallet::storage]
@@ -92,9 +136,24 @@ pub mod pallet {
 	pub(super) type NextAuthorities<T: Config> =
 		StorageValue<_, BoundedVec<T::BeefyId, T::MaxAuthorities>, ValueQuery>;
 
+	/// A mapping from BEEFY set ID to the index of the *most recent* session for which its
+	/// members were responsible.
+	///
+	/// This is only used for validating equivocation proofs. An equivocation proof must
+	/// contains a key-ownership proof for a given session, therefore we need a way to tie
+	/// together sessions and BEEFY set ids, i.e. we need to validate that a validator
+	/// was the owner of a given key on a given session, and what the active set ID was
+	/// during that session.
+	///
+	/// TWOX-NOTE: `ValidatorSetId` is not under user control.
+	#[pallet::storage]
+	#[pallet::getter(fn session_for_set)]
+	pub(super) type SetIdSession<T: Config> =
+		StorageMap<_, Twox64Concat, sp_consensus_beefy::ValidatorSetId, SessionIndex>;
+
 	/// Block number where BEEFY consensus is enabled/started.
-	/// If changing this, make sure `Self::ValidatorSetId` is also reset to
-	/// `GENESIS_AUTHORITY_SET_ID` in the state of the new block number configured here.
+	/// By changing this (through governance or sudo), BEEFY consensus is effectively
+	/// restarted from the new block number.
 	#[pallet::storage]
 	#[pallet::getter(fn genesis_block)]
 	pub(super) type GenesisBlock<T: Config> =
@@ -111,7 +170,6 @@ pub mod pallet {
 		pub genesis_block: Option<BlockNumberFor<T>>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			// BEEFY genesis will be first BEEFY-MANDATORY block,
@@ -122,13 +180,103 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			Pallet::<T>::initialize_authorities(&self.authorities)
+			Pallet::<T>::initialize(&self.authorities)
 				// we panic here as runtime maintainers can simply reconfigure genesis and restart
 				// the chain easily
 				.expect("Authorities vec too big");
 			<GenesisBlock<T>>::put(&self.genesis_block);
+		}
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// A key ownership proof provided as part of an equivocation report is invalid.
+		InvalidKeyOwnershipProof,
+		/// An equivocation proof provided as part of an equivocation report is invalid.
+		InvalidEquivocationProof,
+		/// A given equivocation report is valid but already previously reported.
+		DuplicateOffenceReport,
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		/// Report voter equivocation/misbehavior. This method will verify the
+		/// equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence
+		/// will be reported.
+		#[pallet::call_index(0)]
+		#[pallet::weight(T::WeightInfo::report_equivocation(
+			key_owner_proof.validator_count(),
+			T::MaxNominators::get(),
+		))]
+		pub fn report_equivocation(
+			origin: OriginFor<T>,
+			equivocation_proof: Box<
+				EquivocationProof<
+					BlockNumberFor<T>,
+					T::BeefyId,
+					<T::BeefyId as RuntimeAppPublic>::Signature,
+				>,
+			>,
+			key_owner_proof: T::KeyOwnerProof,
+		) -> DispatchResultWithPostInfo {
+			let reporter = ensure_signed(origin)?;
+
+			T::EquivocationReportSystem::process_evidence(
+				Some(reporter),
+				(*equivocation_proof, key_owner_proof),
+			)?;
+			// Waive the fee since the report is valid and beneficial
+			Ok(Pays::No.into())
+		}
+
+		/// Report voter equivocation/misbehavior. This method will verify the
+		/// equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence
+		/// will be reported.
+		///
+		/// This extrinsic must be called unsigned and it is expected that only
+		/// block authors will call it (validated in `ValidateUnsigned`), as such
+		/// if the block author is defined it will be defined as the equivocation
+		/// reporter.
+		#[pallet::call_index(1)]
+		#[pallet::weight(T::WeightInfo::report_equivocation(
+			key_owner_proof.validator_count(),
+			T::MaxNominators::get(),
+		))]
+		pub fn report_equivocation_unsigned(
+			origin: OriginFor<T>,
+			equivocation_proof: Box<
+				EquivocationProof<
+					BlockNumberFor<T>,
+					T::BeefyId,
+					<T::BeefyId as RuntimeAppPublic>::Signature,
+				>,
+			>,
+			key_owner_proof: T::KeyOwnerProof,
+		) -> DispatchResultWithPostInfo {
+			ensure_none(origin)?;
+
+			T::EquivocationReportSystem::process_evidence(
+				None,
+				(*equivocation_proof, key_owner_proof),
+			)?;
+			Ok(Pays::No.into())
+		}
+	}
+
+	#[pallet::validate_unsigned]
+	impl<T: Config> ValidateUnsigned for Pallet<T> {
+		type Call = Call<T>;
+
+		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+			Self::pre_dispatch(call)
+		}
+
+		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			Self::validate_unsigned(source, call)
 		}
 	}
 }
@@ -137,8 +285,22 @@ impl<T: Config> Pallet<T> {
 	/// Return the current active BEEFY validator set.
 	pub fn validator_set() -> Option<ValidatorSet<T::BeefyId>> {
 		let validators: BoundedVec<T::BeefyId, T::MaxAuthorities> = Self::authorities();
-		let id: beefy_primitives::ValidatorSetId = Self::validator_set_id();
+		let id: sp_consensus_beefy::ValidatorSetId = Self::validator_set_id();
 		ValidatorSet::<T::BeefyId>::new(validators, id)
+	}
+
+	/// Submits an extrinsic to report an equivocation. This method will create
+	/// an unsigned extrinsic with a call to `report_equivocation_unsigned` and
+	/// will push the transaction to the pool. Only useful in an offchain context.
+	pub fn submit_unsigned_equivocation_report(
+		equivocation_proof: EquivocationProof<
+			BlockNumberFor<T>,
+			T::BeefyId,
+			<T::BeefyId as RuntimeAppPublic>::Signature,
+		>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> Option<()> {
+		T::EquivocationReportSystem::publish_evidence((equivocation_proof, key_owner_proof)).ok()
 	}
 
 	fn change_authorities(
@@ -169,7 +331,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn initialize_authorities(authorities: &Vec<T::BeefyId>) -> Result<(), ()> {
+	fn initialize(authorities: &Vec<T::BeefyId>) -> Result<(), ()> {
 		if authorities.is_empty() {
 			return Ok(())
 		}
@@ -199,6 +361,12 @@ impl<T: Config> Pallet<T> {
 				);
 			}
 		}
+
+		// NOTE: initialize first session of first set. this is necessary for
+		// the genesis set and session since we only update the set -> session
+		// mapping whenever a new session starts, i.e. through `on_new_session`.
+		SetIdSession::<T>::insert(0, 0);
+
 		Ok(())
 	}
 }
@@ -207,7 +375,10 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = T::BeefyId;
 }
 
-impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
+impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T>
+where
+	T: pallet_session::Config,
+{
 	type Key = T::BeefyId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -217,7 +388,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		let authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 		// we panic here as runtime maintainers can simply reconfigure genesis and restart the
 		// chain easily
-		Self::initialize_authorities(&authorities).expect("Authorities vec too big");
+		Self::initialize(&authorities).expect("Authorities vec too big");
 	}
 
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
@@ -227,9 +398,10 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 		if next_authorities.len() as u32 > T::MaxAuthorities::get() {
 			log::error!(
-				target: "runtime::beefy",
+				target: LOG_TARGET,
 				"authorities list {:?} truncated to length {}",
-				next_authorities, T::MaxAuthorities::get(),
+				next_authorities,
+				T::MaxAuthorities::get(),
 			);
 		}
 		let bounded_next_authorities =
@@ -238,9 +410,10 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		let next_queued_authorities = queued_validators.map(|(_, k)| k).collect::<Vec<_>>();
 		if next_queued_authorities.len() as u32 > T::MaxAuthorities::get() {
 			log::error!(
-				target: "runtime::beefy",
+				target: LOG_TARGET,
 				"queued authorities list {:?} truncated to length {}",
-				next_queued_authorities, T::MaxAuthorities::get(),
+				next_queued_authorities,
+				T::MaxAuthorities::get(),
 			);
 		}
 		let bounded_next_queued_authorities =
@@ -249,6 +422,16 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		// Always issue a change on each `session`, even if validator set hasn't changed.
 		// We want to have at least one BEEFY mandatory block per session.
 		Self::change_authorities(bounded_next_authorities, bounded_next_queued_authorities);
+
+		let validator_set_id = Self::validator_set_id();
+		// Update the mapping for the new set id that corresponds to the latest session (i.e. now).
+		let session_index = <pallet_session::Pallet<T>>::current_index();
+		SetIdSession::<T>::insert(validator_set_id, &session_index);
+		// Prune old entry if limit reached.
+		let max_set_id_session_entries = T::MaxSetIdSessionEntries::get().max(1);
+		if validator_set_id >= max_set_id_session_entries {
+			SetIdSession::<T>::remove(validator_set_id - max_set_id_session_entries);
+		}
 	}
 
 	fn on_disabled(i: u32) {
@@ -265,4 +448,8 @@ impl<T: Config> IsMember<T::BeefyId> for Pallet<T> {
 	fn is_member(authority_id: &T::BeefyId) -> bool {
 		Self::authorities().iter().any(|id| id == authority_id)
 	}
+}
+
+pub trait WeightInfo {
+	fn report_equivocation(validator_count: u32, max_nominators_per_validator: u32) -> Weight;
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,34 +22,31 @@
 use crate::{self as pallet_grandpa, AuthorityId, AuthorityList, Config, ConsensusLog};
 use ::grandpa as finality_grandpa;
 use codec::Encode;
-use frame_election_provider_support::{onchain, SequentialPhragmen};
+use frame_election_provider_support::{
+	bounds::{ElectionBounds, ElectionBoundsBuilder},
+	onchain, SequentialPhragmen,
+};
 use frame_support::{
 	parameter_types,
-	traits::{
-		ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnFinalize, OnInitialize,
-	},
+	traits::{ConstU128, ConstU32, ConstU64, KeyOwnerProofSystem, OnFinalize, OnInitialize},
 };
 use pallet_session::historical as pallet_session_historical;
+use sp_consensus_grandpa::{RoundNumber, SetId, GRANDPA_ENGINE_ID};
 use sp_core::{crypto::KeyTypeId, H256};
-use sp_finality_grandpa::{RoundNumber, SetId, GRANDPA_ENGINE_ID};
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	impl_opaque_keys,
-	testing::{Header, TestXt, UintAuthorityId},
+	testing::{TestXt, UintAuthorityId},
 	traits::{IdentityLookup, OpaqueKeys},
-	DigestItem, Perbill,
+	BuildStorage, DigestItem, Perbill,
 };
 use sp_staking::{EraIndex, SessionIndex};
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		Authorship: pallet_authorship,
@@ -75,14 +72,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -142,6 +138,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU128<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 
 impl pallet_timestamp::Config for Test {
@@ -167,6 +167,7 @@ parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
+	pub static ElectionsBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::default().build();
 }
 
 pub struct OnChainSeqPhragmen;
@@ -176,14 +177,12 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = ConstU32<100>;
-	type VotersBound = ConstU32<{ u32::MAX }>;
-	type TargetsBound = ConstU32<{ u32::MAX }>;
+	type Bounds = ElectionsBoundsOnChain;
 }
 
 impl pallet_staking::Config for Test {
-	type MaxNominations = ConstU32<16>;
 	type RewardRemainder = ();
-	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+	type CurrencyToVote = ();
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
@@ -203,9 +202,10 @@ impl pallet_staking::Config for Test {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
+	type NominationsQuota = pallet_staking::FixedNominationsQuota<16>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = ConstU32<84>;
-	type OnStakerSlash = ();
+	type EventListeners = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
@@ -224,23 +224,13 @@ parameter_types! {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-
-	type KeyOwnerProofSystem = Historical;
-
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
-
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		AuthorityId,
-	)>>::IdentificationTuple;
-
-	type HandleEquivocation =
-		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
-
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<100>;
+	type MaxNominators = ConstU32<1000>;
 	type MaxSetIdSessionEntries = MaxSetIdSessionEntries;
+	type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
+	type EquivocationReportSystem =
+		super::EquivocationReportSystem<Self, Offences, Historical, ReportLongevity>;
 }
 
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem {
@@ -264,7 +254,7 @@ pub fn new_test_ext(vec: Vec<(u64, u64)>) -> sp_io::TestExternalities {
 }
 
 pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
 	let balances: Vec<_> = (0..authorities.len()).map(|i| (i as u64, 10_000_000)).collect();
 
@@ -291,11 +281,9 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 		.assimilate_storage(&mut t)
 		.unwrap();
 
-	// controllers are the index + 1000
+	// controllers are the same as stash
 	let stakers: Vec<_> = (0..authorities.len())
-		.map(|i| {
-			(i as u64, i as u64 + 1000, 10_000, pallet_staking::StakerStatus::<u64>::Validator)
-		})
+		.map(|i| (i as u64, i as u64, 10_000, pallet_staking::StakerStatus::<u64>::Validator))
 		.collect();
 
 	let staking_config = pallet_staking::GenesisConfig::<Test> {
@@ -354,12 +342,12 @@ pub fn generate_equivocation_proof(
 	set_id: SetId,
 	vote1: (RoundNumber, H256, u64, &Ed25519Keyring),
 	vote2: (RoundNumber, H256, u64, &Ed25519Keyring),
-) -> sp_finality_grandpa::EquivocationProof<H256, u64> {
+) -> sp_consensus_grandpa::EquivocationProof<H256, u64> {
 	let signed_prevote = |round, hash, number, keyring: &Ed25519Keyring| {
 		let prevote = finality_grandpa::Prevote { target_hash: hash, target_number: number };
 
 		let prevote_msg = finality_grandpa::Message::Prevote(prevote.clone());
-		let payload = sp_finality_grandpa::localized_payload(round, set_id, &prevote_msg);
+		let payload = sp_consensus_grandpa::localized_payload(round, set_id, &prevote_msg);
 		let signed = keyring.sign(&payload).into();
 		(prevote, signed)
 	};
@@ -367,9 +355,9 @@ pub fn generate_equivocation_proof(
 	let (prevote1, signed1) = signed_prevote(vote1.0, vote1.1, vote1.2, vote1.3);
 	let (prevote2, signed2) = signed_prevote(vote2.0, vote2.1, vote2.2, vote2.3);
 
-	sp_finality_grandpa::EquivocationProof::new(
+	sp_consensus_grandpa::EquivocationProof::new(
 		set_id,
-		sp_finality_grandpa::Equivocation::Prevote(finality_grandpa::Equivocation {
+		sp_consensus_grandpa::Equivocation::Prevote(finality_grandpa::Equivocation {
 			round_number: vote1.0,
 			identity: vote1.3.public().into(),
 			first: (prevote1, signed1),

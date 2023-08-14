@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,12 +19,14 @@
 //! A method call executor interface.
 
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
+use sp_core::traits::CallContext;
+use sp_externalities::Extensions;
 use sp_runtime::traits::Block as BlockT;
-use sp_state_machine::{ExecutionStrategy, OverlayedChanges, StorageProof};
+use sp_state_machine::{OverlayedChanges, StorageProof};
 use std::cell::RefCell;
 
 use crate::execution_extensions::ExecutionExtensions;
-use sp_api::{ExecutionContext, ProofRecorder, StorageTransactionCache};
+use sp_api::{ProofRecorder, StorageTransactionCache};
 
 /// Executor Provider
 pub trait ExecutorProvider<Block: BlockT> {
@@ -57,7 +59,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 		at_hash: B::Hash,
 		method: &str,
 		call_data: &[u8],
-		strategy: ExecutionStrategy,
+		context: CallContext,
 	) -> Result<Vec<u8>, sp_blockchain::Error>;
 
 	/// Execute a contextual call on top of state in a block of a given hash.
@@ -77,7 +79,8 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 			>,
 		>,
 		proof_recorder: &Option<ProofRecorder<B>>,
-		context: ExecutionContext,
+		call_context: CallContext,
+		extensions: &RefCell<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>>;
 
 	/// Extract RuntimeVersion of given block

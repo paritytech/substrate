@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,53 +20,105 @@
 pub mod meter;
 
 use crate::{
-	exec::{AccountIdOf, StorageKey},
+	exec::{AccountIdOf, Key},
 	weights::WeightInfo,
-	BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, TrieId, SENTINEL,
+	AddressGenerator, BalanceOf, CodeHash, CodeInfo, Config, ContractInfoOf, DeletionQueue,
+	DeletionQueueCounter, Error, Pallet, TrieId, SENTINEL,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
+	dispatch::DispatchError,
 	storage::child::{self, ChildInfo},
 	weights::Weight,
+	CloneNoBound, DefaultNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
+use sp_core::Get;
 use sp_io::KillStorageResult;
 use sp_runtime::{
 	traits::{Hash, Saturating, Zero},
-	RuntimeDebug,
+	BoundedBTreeMap, DispatchResult, RuntimeDebug,
 };
-use sp_std::{marker::PhantomData, prelude::*};
+use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
+
+use self::meter::Diff;
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(Encode, Decode, CloneNoBound, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
 pub struct ContractInfo<T: Config> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
+	/// The account that holds this contracts storage deposit.
+	///
+	/// This is held in a separate account to prevent the contract from spending it.
+	deposit_account: DepositAccount<T>,
 	/// The code associated with a given account.
 	pub code_hash: CodeHash<T>,
 	/// How many bytes of storage are accumulated in this contract's child trie.
-	pub storage_bytes: u32,
+	storage_bytes: u32,
 	/// How many items of storage are accumulated in this contract's child trie.
-	pub storage_items: u32,
+	storage_items: u32,
 	/// This records to how much deposit the accumulated `storage_bytes` amount to.
 	pub storage_byte_deposit: BalanceOf<T>,
 	/// This records to how much deposit the accumulated `storage_items` amount to.
-	pub storage_item_deposit: BalanceOf<T>,
+	storage_item_deposit: BalanceOf<T>,
 	/// This records how much deposit is put down in order to pay for the contract itself.
 	///
 	/// We need to store this information separately so it is not used when calculating any refunds
 	/// since the base deposit can only ever be refunded on contract termination.
-	pub storage_base_deposit: BalanceOf<T>,
+	storage_base_deposit: BalanceOf<T>,
+	/// Map of code hashes and deposit balances.
+	///
+	/// Tracks the code hash and deposit held for adding delegate dependencies. Dependencies added
+	/// to the map can not be removed from the chain state and can be safely used for delegate
+	/// calls.
+	delegate_dependencies: BoundedBTreeMap<CodeHash<T>, BalanceOf<T>, T::MaxDelegateDependencies>,
 }
 
 impl<T: Config> ContractInfo<T> {
+	/// Constructs a new contract info **without** writing it to storage.
+	///
+	/// This returns an `Err` if an contract with the supplied `account` already exists
+	/// in storage.
+	pub fn new(
+		account: &AccountIdOf<T>,
+		nonce: u64,
+		code_hash: CodeHash<T>,
+	) -> Result<Self, DispatchError> {
+		if <ContractInfoOf<T>>::contains_key(account) {
+			return Err(Error::<T>::DuplicateContract.into())
+		}
+
+		let trie_id = {
+			let buf = (account, nonce).using_encoded(T::Hashing::hash);
+			buf.as_ref()
+				.to_vec()
+				.try_into()
+				.expect("Runtime uses a reasonable hash size. Hence sizeof(T::Hash) <= 128; qed")
+		};
+
+		let deposit_account = DepositAccount(T::AddressGenerator::deposit_address(account));
+
+		let contract = Self {
+			trie_id,
+			deposit_account,
+			code_hash,
+			storage_bytes: 0,
+			storage_items: 0,
+			storage_byte_deposit: Zero::zero(),
+			storage_item_deposit: Zero::zero(),
+			storage_base_deposit: Zero::zero(),
+			delegate_dependencies: Default::default(),
+		};
+
+		Ok(contract)
+	}
+
 	/// Associated child trie unique id is built from the hash part of the trie id.
-	#[cfg(test)]
 	pub fn child_trie_info(&self) -> ChildInfo {
-		child_trie_info(&self.trie_id[..])
+		ChildInfo::new_default(self.trie_id.as_ref())
 	}
 
 	/// The deposit paying for the accumulated storage generated within the contract's child trie.
@@ -76,79 +128,35 @@ impl<T: Config> ContractInfo<T> {
 
 	/// Same as [`Self::extra_deposit`] but including the base deposit.
 	pub fn total_deposit(&self) -> BalanceOf<T> {
-		self.extra_deposit().saturating_add(self.storage_base_deposit)
-	}
-}
-
-/// Associated child trie unique id is built from the hash part of the trie id.
-fn child_trie_info(trie_id: &[u8]) -> ChildInfo {
-	ChildInfo::new_default(trie_id)
-}
-
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct DeletedContract {
-	pub(crate) trie_id: TrieId,
-}
-
-/// Information about what happended to the pre-existing value when calling [`Storage::write`].
-#[cfg_attr(test, derive(Debug, PartialEq))]
-pub enum WriteOutcome {
-	/// No value existed at the specified key.
-	New,
-	/// A value of the returned length was overwritten.
-	Overwritten(u32),
-	/// The returned value was taken out of storage before being overwritten.
-	///
-	/// This is only returned when specifically requested because it causes additional work
-	/// depending on the size of the pre-existing value. When not requested [`Self::Overwritten`]
-	/// is returned instead.
-	Taken(Vec<u8>),
-}
-
-impl WriteOutcome {
-	/// Extracts the size of the overwritten value or `0` if there
-	/// was no value in storage.
-	pub fn old_len(&self) -> u32 {
-		match self {
-			Self::New => 0,
-			Self::Overwritten(len) => *len,
-			Self::Taken(value) => value.len() as u32,
-		}
+		self.extra_deposit()
+			.saturating_add(self.storage_base_deposit)
+			.saturating_sub(Pallet::<T>::min_balance())
 	}
 
-	/// Extracts the size of the overwritten value or `SENTINEL` if there
-	/// was no value in storage.
-	///
-	/// # Note
-	///
-	/// We cannot use `0` as sentinel value because there could be a zero sized
-	/// storage entry which is different from a non existing one.
-	pub fn old_len_with_sentinel(&self) -> u32 {
-		match self {
-			Self::New => SENTINEL,
-			Self::Overwritten(len) => *len,
-			Self::Taken(value) => value.len() as u32,
-		}
+	/// Returns the account that storage deposits should be deposited into.
+	pub fn deposit_account(&self) -> &DepositAccount<T> {
+		&self.deposit_account
 	}
-}
 
-pub struct Storage<T>(PhantomData<T>);
+	/// Returns the storage base deposit of the contract.
+	pub fn storage_base_deposit(&self) -> BalanceOf<T> {
+		self.storage_base_deposit
+	}
 
-impl<T: Config> Storage<T> {
 	/// Reads a storage kv pair of a contract.
 	///
 	/// The read is performed from the `trie_id` only. The `address` is not necessary. If the
 	/// contract doesn't store under the given `key` `None` is returned.
-	pub fn read<K: StorageKey<T>>(trie_id: &TrieId, key: &K) -> Option<Vec<u8>> {
-		child::get_raw(&child_trie_info(trie_id), key.hash().as_slice())
+	pub fn read(&self, key: &Key<T>) -> Option<Vec<u8>> {
+		child::get_raw(&self.child_trie_info(), key.hash().as_slice())
 	}
 
 	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
 	///
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
-	pub fn size<K: StorageKey<T>>(trie_id: &TrieId, key: &K) -> Option<u32> {
-		child::len(&child_trie_info(trie_id), key.hash().as_slice())
+	pub fn size(&self, key: &Key<T>) -> Option<u32> {
+		child::len(&self.child_trie_info(), key.hash().as_slice())
 	}
 
 	/// Update a storage entry into a contract's kv storage.
@@ -158,14 +166,14 @@ impl<T: Config> Storage<T> {
 	///
 	/// This function also records how much storage was created or removed if a `storage_meter`
 	/// is supplied. It should only be absent for testing or benchmarking code.
-	pub fn write<K: StorageKey<T>>(
-		trie_id: &TrieId,
-		key: &K,
+	pub fn write(
+		&self,
+		key: &Key<T>,
 		new_value: Option<Vec<u8>>,
 		storage_meter: Option<&mut meter::NestedMeter<T>>,
 		take: bool,
 	) -> Result<WriteOutcome, DispatchError> {
-		let child_trie_info = &child_trie_info(trie_id);
+		let child_trie_info = &self.child_trie_info();
 		let hashed_key = key.hash();
 		let (old_len, old_value) = if take {
 			let val = child::get_raw(child_trie_info, &hashed_key);
@@ -208,60 +216,88 @@ impl<T: Config> Storage<T> {
 		})
 	}
 
-	/// Creates a new contract descriptor in the storage with the given code hash at the given
-	/// address.
+	/// Sets and returns the contract base deposit.
 	///
-	/// Returns `Err` if there is already a contract at the given address.
-	pub fn new_contract(
-		account: &AccountIdOf<T>,
-		trie_id: TrieId,
+	/// The base deposit is updated when the `code_hash` of the contract changes, as it depends on
+	/// the deposit paid to upload the contract's code.
+	pub fn update_base_deposit(&mut self, code_info: &CodeInfo<T>) -> BalanceOf<T> {
+		let ed = Pallet::<T>::min_balance();
+		let info_deposit =
+			Diff { bytes_added: self.encoded_size() as u32, items_added: 1, ..Default::default() }
+				.update_contract::<T>(None)
+				.charge_or_zero();
+
+		// Instantiating the contract prevents its code to be deleted, therefore the base deposit
+		// includes a fraction (`T::CodeHashLockupDepositPercent`) of the original storage deposit
+		// to prevent abuse.
+		let upload_deposit = T::CodeHashLockupDepositPercent::get().mul_ceil(code_info.deposit());
+
+		// Instantiate needs to transfer at least the minimum balance in order to pull the
+		// deposit account into existence.
+		// We also add another `ed` here which goes to the contract's own account into existence.
+		let deposit = info_deposit.saturating_add(upload_deposit).max(ed).saturating_add(ed);
+
+		self.storage_base_deposit = deposit;
+		deposit
+	}
+
+	/// Adds a new delegate dependency to the contract.
+	/// The `amount` is the amount of funds that will be reserved for the dependency.
+	///
+	/// Returns an error if the maximum number of delegate_dependencies is reached or if
+	/// the delegate dependency already exists.
+	pub fn add_delegate_dependency(
+		&mut self,
 		code_hash: CodeHash<T>,
-	) -> Result<ContractInfo<T>, DispatchError> {
-		if <ContractInfoOf<T>>::contains_key(account) {
-			return Err(Error::<T>::DuplicateContract.into())
-		}
+		amount: BalanceOf<T>,
+	) -> DispatchResult {
+		self.delegate_dependencies
+			.try_insert(code_hash, amount)
+			.map_err(|_| Error::<T>::MaxDelegateDependenciesReached)?
+			.map_or(Ok(()), |_| Err(Error::<T>::DelegateDependencyAlreadyExists))
+			.map_err(Into::into)
+	}
 
-		let contract = ContractInfo::<T> {
-			code_hash,
-			trie_id,
-			storage_bytes: 0,
-			storage_items: 0,
-			storage_byte_deposit: Zero::zero(),
-			storage_item_deposit: Zero::zero(),
-			storage_base_deposit: Zero::zero(),
-		};
+	/// Removes the delegate dependency from the contract and returns the deposit held for this
+	/// dependency.
+	///
+	/// Returns an error if the entry doesn't exist.
+	pub fn remove_delegate_dependency(
+		&mut self,
+		code_hash: &CodeHash<T>,
+	) -> Result<BalanceOf<T>, DispatchError> {
+		self.delegate_dependencies
+			.remove(code_hash)
+			.ok_or(Error::<T>::DelegateDependencyNotFound.into())
+	}
 
-		Ok(contract)
+	/// Returns the delegate_dependencies of the contract.
+	pub fn delegate_dependencies(
+		&self,
+	) -> &BoundedBTreeMap<CodeHash<T>, BalanceOf<T>, T::MaxDelegateDependencies> {
+		&self.delegate_dependencies
 	}
 
 	/// Push a contract's trie to the deletion queue for lazy removal.
 	///
 	/// You must make sure that the contract is also removed when queuing the trie for deletion.
-	pub fn queue_trie_for_deletion(contract: &ContractInfo<T>) -> DispatchResult {
-		<DeletionQueue<T>>::try_append(DeletedContract { trie_id: contract.trie_id.clone() })
-			.map_err(|_| <Error<T>>::DeletionQueueFull.into())
+	pub fn queue_trie_for_deletion(&self) {
+		DeletionQueueManager::<T>::load().insert(self.trie_id.clone());
 	}
 
 	/// Calculates the weight that is necessary to remove one key from the trie and how many
-	/// of those keys can be deleted from the deletion queue given the supplied queue length
-	/// and weight limit.
-	pub fn deletion_budget(queue_len: usize, weight_limit: Weight) -> (u64, u32) {
+	/// of those keys can be deleted from the deletion queue given the supplied weight limit.
+	pub fn deletion_budget(weight_limit: Weight) -> (Weight, u32) {
 		let base_weight = T::WeightInfo::on_process_deletion_queue_batch();
-		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
-			T::WeightInfo::on_initialize_per_queue_item(0);
-		let weight_per_key = (T::WeightInfo::on_initialize_per_trie_key(1) -
-			T::WeightInfo::on_initialize_per_trie_key(0))
-		.ref_time();
-		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as u64);
+		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
+			T::WeightInfo::on_initialize_per_trie_key(0);
 
 		// `weight_per_key` being zero makes no sense and would constitute a failure to
 		// benchmark properly. We opt for not removing any keys at all in this case.
 		let key_budget = weight_limit
 			.saturating_sub(base_weight)
-			.saturating_sub(decoding_weight)
-			.checked_div(weight_per_key)
-			.unwrap_or(Weight::zero())
-			.ref_time() as u32;
+			.checked_div_per_component(&weight_per_key)
+			.unwrap_or(0) as u32;
 
 		(weight_per_key, key_budget)
 	}
@@ -270,13 +306,13 @@ impl<T: Config> Storage<T> {
 	///
 	/// It returns the amount of weight used for that task.
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
-		let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
-		if queue_len == 0 {
+		let mut queue = <DeletionQueueManager<T>>::load();
+
+		if queue.is_empty() {
 			return Weight::zero()
 		}
 
-		let (weight_per_key, mut remaining_key_budget) =
-			Self::deletion_budget(queue_len, weight_limit);
+		let (weight_per_key, mut remaining_key_budget) = Self::deletion_budget(weight_limit);
 
 		// We want to check whether we have enough weight to decode the queue before
 		// proceeding. Too little weight for decoding might happen during runtime upgrades
@@ -285,55 +321,165 @@ impl<T: Config> Storage<T> {
 			return weight_limit
 		}
 
-		let mut queue = <DeletionQueue<T>>::get();
+		while remaining_key_budget > 0 {
+			let Some(entry) = queue.next() else { break };
 
-		while !queue.is_empty() && remaining_key_budget > 0 {
-			// Cannot panic due to loop condition
-			let trie = &mut queue[0];
 			#[allow(deprecated)]
-			let outcome = child::kill_storage(&child_trie_info(&trie.trie_id), Some(remaining_key_budget));
-			let keys_removed = match outcome {
+			let outcome = child::kill_storage(
+				&ChildInfo::new_default(&entry.trie_id),
+				Some(remaining_key_budget),
+			);
+
+			match outcome {
 				// This happens when our budget wasn't large enough to remove all keys.
-				KillStorageResult::SomeRemaining(c) => c,
-				KillStorageResult::AllRemoved(c) => {
-					// We do not care to preserve order. The contract is deleted already and
-					// no one waits for the trie to be deleted.
-					queue.swap_remove(0);
-					c
+				KillStorageResult::SomeRemaining(_) => return weight_limit,
+				KillStorageResult::AllRemoved(keys_removed) => {
+					entry.remove();
+					remaining_key_budget = remaining_key_budget.saturating_sub(keys_removed);
 				},
 			};
-			remaining_key_budget = remaining_key_budget.saturating_sub(keys_removed);
 		}
 
-		<DeletionQueue<T>>::put(queue);
-		let ref_time_weight = weight_limit
-			.ref_time()
-			.saturating_sub(weight_per_key.saturating_mul(u64::from(remaining_key_budget)));
-		Weight::from_ref_time(ref_time_weight)
-	}
-
-	/// Generates a unique trie id by returning `hash(account_id ++ nonce)`.
-	pub fn generate_trie_id(account_id: &AccountIdOf<T>, nonce: u64) -> TrieId {
-		let buf = (account_id, nonce).using_encoded(T::Hashing::hash);
-		buf.as_ref()
-			.to_vec()
-			.try_into()
-			.expect("Runtime uses a reasonable hash size. Hence sizeof(T::Hash) <= 128; qed")
+		weight_limit.saturating_sub(weight_per_key.saturating_mul(u64::from(remaining_key_budget)))
 	}
 
 	/// Returns the code hash of the contract specified by `account` ID.
-	pub fn code_hash(account: &AccountIdOf<T>) -> Option<CodeHash<T>> {
+	pub fn load_code_hash(account: &AccountIdOf<T>) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).map(|i| i.code_hash)
 	}
+}
 
-	/// Fill up the queue in order to exercise the limits during testing.
-	#[cfg(test)]
-	pub fn fill_queue_with_dummies() {
-		use frame_support::{traits::Get, BoundedVec};
-		let queue: Vec<DeletedContract> = (0..T::DeletionQueueDepth::get())
-			.map(|_| DeletedContract { trie_id: TrieId::default() })
-			.collect();
-		let bounded: BoundedVec<_, _> = queue.try_into().map_err(|_| ()).unwrap();
-		<DeletionQueue<T>>::put(bounded);
+/// Information about what happened to the pre-existing value when calling [`ContractInfo::write`].
+#[cfg_attr(test, derive(Debug, PartialEq))]
+pub enum WriteOutcome {
+	/// No value existed at the specified key.
+	New,
+	/// A value of the returned length was overwritten.
+	Overwritten(u32),
+	/// The returned value was taken out of storage before being overwritten.
+	///
+	/// This is only returned when specifically requested because it causes additional work
+	/// depending on the size of the pre-existing value. When not requested [`Self::Overwritten`]
+	/// is returned instead.
+	Taken(Vec<u8>),
+}
+
+impl WriteOutcome {
+	/// Extracts the size of the overwritten value or `0` if there
+	/// was no value in storage.
+	pub fn old_len(&self) -> u32 {
+		match self {
+			Self::New => 0,
+			Self::Overwritten(len) => *len,
+			Self::Taken(value) => value.len() as u32,
+		}
+	}
+
+	/// Extracts the size of the overwritten value or `SENTINEL` if there
+	/// was no value in storage.
+	///
+	/// # Note
+	///
+	/// We cannot use `0` as sentinel value because there could be a zero sized
+	/// storage entry which is different from a non existing one.
+	pub fn old_len_with_sentinel(&self) -> u32 {
+		match self {
+			Self::New => SENTINEL,
+			Self::Overwritten(len) => *len,
+			Self::Taken(value) => value.len() as u32,
+		}
+	}
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(T))]
+pub struct DepositAccount<T: Config>(AccountIdOf<T>);
+
+impl<T: Config> Deref for DepositAccount<T> {
+	type Target = AccountIdOf<T>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+/// Manage the removal of contracts storage that are marked for deletion.
+///
+/// When a contract is deleted by calling `seal_terminate` it becomes inaccessible
+/// immediately, but the deletion of the storage items it has accumulated is performed
+/// later by pulling the contract from the queue in the `on_idle` hook.
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, DefaultNoBound, Clone)]
+#[scale_info(skip_type_params(T))]
+pub struct DeletionQueueManager<T: Config> {
+	/// Counter used as a key for inserting a new deleted contract in the queue.
+	/// The counter is incremented after each insertion.
+	insert_counter: u32,
+	/// The index used to read the next element to be deleted in the queue.
+	/// The counter is incremented after each deletion.
+	delete_counter: u32,
+
+	_phantom: PhantomData<T>,
+}
+
+/// View on a contract that is marked for deletion.
+struct DeletionQueueEntry<'a, T: Config> {
+	/// the trie id of the contract to delete.
+	trie_id: TrieId,
+
+	/// A mutable reference on the queue so that the contract can be removed, and none can be added
+	/// or read in the meantime.
+	queue: &'a mut DeletionQueueManager<T>,
+}
+
+impl<'a, T: Config> DeletionQueueEntry<'a, T> {
+	/// Remove the contract from the deletion queue.
+	fn remove(self) {
+		<DeletionQueue<T>>::remove(self.queue.delete_counter);
+		self.queue.delete_counter = self.queue.delete_counter.wrapping_add(1);
+		<DeletionQueueCounter<T>>::set(self.queue.clone());
+	}
+}
+
+impl<T: Config> DeletionQueueManager<T> {
+	/// Load the `DeletionQueueCounter`, so we can perform read or write operations on the
+	/// DeletionQueue storage.
+	fn load() -> Self {
+		<DeletionQueueCounter<T>>::get()
+	}
+
+	/// Returns `true` if the queue contains no elements.
+	fn is_empty(&self) -> bool {
+		self.insert_counter.wrapping_sub(self.delete_counter) == 0
+	}
+
+	/// Insert a contract in the deletion queue.
+	fn insert(&mut self, trie_id: TrieId) {
+		<DeletionQueue<T>>::insert(self.insert_counter, trie_id);
+		self.insert_counter = self.insert_counter.wrapping_add(1);
+		<DeletionQueueCounter<T>>::set(self.clone());
+	}
+
+	/// Fetch the next contract to be deleted.
+	///
+	/// Note:
+	/// we use the delete counter to get the next value to read from the queue and thus don't pay
+	/// the cost of an extra call to `sp_io::storage::next_key` to lookup the next entry in the map
+	fn next(&mut self) -> Option<DeletionQueueEntry<T>> {
+		if self.is_empty() {
+			return None
+		}
+
+		let entry = <DeletionQueue<T>>::get(self.delete_counter);
+		entry.map(|trie_id| DeletionQueueEntry { trie_id, queue: self })
+	}
+}
+
+#[cfg(test)]
+impl<T: Config> DeletionQueueManager<T> {
+	pub fn from_test_values(insert_counter: u32, delete_counter: u32) -> Self {
+		Self { insert_counter, delete_counter, _phantom: Default::default() }
+	}
+	pub fn as_test_tuple(&self) -> (u32, u32) {
+		(self.insert_counter, self.delete_counter)
 	}
 }

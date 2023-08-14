@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,26 +27,21 @@ use sp_core::{
 	sr25519::Signature,
 	H256,
 };
-use std::sync::Arc;
 
-use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStore};
+use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};
 use sp_runtime::{
-	testing::{Header, TestXt},
+	testing::TestXt,
 	traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify},
 	RuntimeAppPublic,
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // For testing the module, we construct a mock runtime.
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Example: example_offchain_worker::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},
 	}
 );
@@ -58,13 +53,12 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = sp_core::sr25519::Public;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -205,18 +199,15 @@ fn should_submit_signed_transaction_on_chain() {
 
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
-	let keystore = KeyStore::new();
-	SyncCryptoStore::sr25519_generate_new(
-		&keystore,
-		crate::crypto::Public::ID,
-		Some(&format!("{}/hunter1", PHRASE)),
-	)
-	.unwrap();
+	let keystore = MemoryKeystore::new();
+	keystore
+		.sr25519_generate_new(crate::crypto::Public::ID, Some(&format!("{}/hunter1", PHRASE)))
+		.unwrap();
 
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainWorkerExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(Arc::new(keystore)));
+	t.register_extension(KeystoreExt::new(keystore));
 
 	price_oracle_response(&mut offchain_state.write());
 
@@ -239,23 +230,18 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
 
-	let keystore = KeyStore::new();
+	let keystore = MemoryKeystore::new();
 
-	SyncCryptoStore::sr25519_generate_new(
-		&keystore,
-		crate::crypto::Public::ID,
-		Some(&format!("{}/hunter1", PHRASE)),
-	)
-	.unwrap();
-
-	let public_key = *SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
-		.get(0)
+	keystore
+		.sr25519_generate_new(crate::crypto::Public::ID, Some(&format!("{}/hunter1", PHRASE)))
 		.unwrap();
+
+	let public_key = *keystore.sr25519_public_keys(crate::crypto::Public::ID).get(0).unwrap();
 
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainWorkerExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(Arc::new(keystore)));
+	t.register_extension(KeystoreExt::new(keystore));
 
 	price_oracle_response(&mut offchain_state.write());
 
@@ -283,7 +269,7 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 			let signature_valid =
 				<PricePayload<
 					<Test as SigningTypes>::Public,
-					<Test as frame_system::Config>::BlockNumber,
+					frame_system::pallet_prelude::BlockNumberFor<Test>,
 				> as SignedPayload<Test>>::verify::<crypto::TestAuthId>(&price_payload, signature);
 
 			assert!(signature_valid);
@@ -298,23 +284,18 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
 
-	let keystore = KeyStore::new();
+	let keystore = MemoryKeystore::new();
 
-	SyncCryptoStore::sr25519_generate_new(
-		&keystore,
-		crate::crypto::Public::ID,
-		Some(&format!("{}/hunter1", PHRASE)),
-	)
-	.unwrap();
-
-	let public_key = *SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
-		.get(0)
+	keystore
+		.sr25519_generate_new(crate::crypto::Public::ID, Some(&format!("{}/hunter1", PHRASE)))
 		.unwrap();
+
+	let public_key = *keystore.sr25519_public_keys(crate::crypto::Public::ID).get(0).unwrap();
 
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainWorkerExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(Arc::new(keystore)));
+	t.register_extension(KeystoreExt::new(keystore));
 
 	price_oracle_response(&mut offchain_state.write());
 
@@ -342,7 +323,7 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 			let signature_valid =
 				<PricePayload<
 					<Test as SigningTypes>::Public,
-					<Test as frame_system::Config>::BlockNumber,
+					frame_system::pallet_prelude::BlockNumberFor<Test>,
 				> as SignedPayload<Test>>::verify::<crypto::TestAuthId>(&price_payload, signature);
 
 			assert!(signature_valid);
@@ -355,12 +336,12 @@ fn should_submit_raw_unsigned_transaction_on_chain() {
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
 
-	let keystore = KeyStore::new();
+	let keystore = MemoryKeystore::new();
 
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainWorkerExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(Arc::new(keystore)));
+	t.register_extension(KeystoreExt::new(keystore));
 
 	price_oracle_response(&mut offchain_state.write());
 

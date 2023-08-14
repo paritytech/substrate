@@ -13,12 +13,12 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 # parity
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
-scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 
 # primitives
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 
 # FRAME
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
@@ -27,18 +27,20 @@ frame-election-provider-support = { version = "4.0.0-dev", default-features = fa
 
 # third party
 log = { version = "0.4.17", default-features = false }
+docify = "0.2.1"
+aquamarine = { version = "0.3.2" }
 
 # Optional imports for benchmarking
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking", optional = true, default-features = false }
 pallet-balances = { version = "4.0.0-dev", path = "../balances", optional = true, default-features = false }
-sp-core = { version = "7.0.0", path = "../../primitives/core", optional = true, default-features = false }
-sp-io = { version = "7.0.0", path = "../../primitives/io", optional = true, default-features = false }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing", optional = true, default-features = false }
+sp-core = { version = "21.0.0", path = "../../primitives/core", optional = true, default-features = false }
+sp-io = { version = "23.0.0", path = "../../primitives/io", optional = true, default-features = false }
+sp-tracing = { version = "10.0.0", path = "../../primitives/tracing", optional = true, default-features = false }
 
 [dev-dependencies]
-sp-core = { version = "7.0.0", path = "../../primitives/core"}
-sp-io = { version = "7.0.0", path = "../../primitives/io"}
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
+sp-core = { version = "21.0.0", path = "../../primitives/core"}
+sp-io = { version = "23.0.0", path = "../../primitives/io"}
+sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
@@ -67,6 +69,9 @@ runtime-benchmarks = [
 	"pallet-balances/runtime-benchmarks",
 	"sp-tracing",
 	"frame-election-provider-support/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks"
 ]
 fuzz = [
 	"sp-core",
@@ -75,4 +80,10 @@ fuzz = [
 	"sp-tracing",
 	"frame-election-provider-support/fuzz",
 ]
-try-runtime = [ "frame-support/try-runtime" ]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-election-provider-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-balances?/try-runtime",
+	"sp-runtime/try-runtime"
+]

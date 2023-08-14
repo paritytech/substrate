@@ -1,6 +1,6 @@
 use frame_support::construct_runtime;
-use sp_runtime::{generic, traits::BlakeTwo256};
 use sp_core::sr25519;
+use sp_runtime::{generic, traits::BlakeTwo256};
 
 #[frame_support::pallet]
 mod pallet {
@@ -22,14 +22,13 @@ impl pallet::Config for Runtime {}
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u32;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = frame_support::traits::ConstU32<250>;
 	type BlockWeights = ();
@@ -47,13 +46,10 @@ impl frame_system::Config for Runtime {
 }
 
 construct_runtime! {
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub struct Runtime
 	{
-		System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-		Pallet: pallet::{Pallet, Event},
+		System: frame_system expanded::{}::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Pallet: pallet expanded::{}::{Pallet, Event},
 	}
 }
 

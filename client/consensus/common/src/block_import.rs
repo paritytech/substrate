@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,12 +20,12 @@
 
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
-	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, HashingFor, Header as HeaderT, NumberFor},
 	DigestItem, Justification, Justifications,
 };
 use std::{any::Any, borrow::Cow, collections::HashMap, sync::Arc};
 
-use sp_consensus::{BlockOrigin, CacheKeyId, Error};
+use sp_consensus::{BlockOrigin, Error};
 
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
@@ -121,7 +121,7 @@ pub struct BlockCheckParams<Block: BlockT> {
 /// Precomputed storage.
 pub enum StorageChanges<Block: BlockT, Transaction> {
 	/// Changes coming from block execution.
-	Changes(sp_state_machine::StorageChanges<Transaction, HashFor<Block>>),
+	Changes(sp_state_machine::StorageChanges<Transaction, HashingFor<Block>>),
 	/// Whole new state.
 	Import(ImportedState<Block>),
 }
@@ -348,12 +348,9 @@ pub trait BlockImport<B: BlockT> {
 	) -> Result<ImportResult, Self::Error>;
 
 	/// Import a block.
-	///
-	/// Cached data can be accessed through the blockchain cache.
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<B, Self::Transaction>,
-		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error>;
 }
 
@@ -374,14 +371,11 @@ where
 	}
 
 	/// Import a block.
-	///
-	/// Cached data can be accessed through the blockchain cache.
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<B, Transaction>,
-		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		(**self).import_block(block, cache).await
+		(**self).import_block(block).await
 	}
 }
 
@@ -405,9 +399,8 @@ where
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<B, Transaction>,
-		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		(&**self).import_block(block, cache).await
+		(&**self).import_block(block).await
 	}
 }
 

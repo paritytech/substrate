@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +29,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		desired_collection_id: T::CollectionId,
 		maybe_desired_item_id: Option<T::ItemId>,
 		maybe_price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-		duration: <T as SystemConfig>::BlockNumber,
+		duration: frame_system::pallet_prelude::BlockNumberFor<T>,
 	) -> DispatchResult {
 		ensure!(
 			Self::is_pallet_feature_enabled(PalletFeature::Swaps),

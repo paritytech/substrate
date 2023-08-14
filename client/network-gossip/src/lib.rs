@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -67,11 +67,12 @@ pub use self::{
 	validator::{DiscardAll, MessageIntent, ValidationResult, Validator, ValidatorContext},
 };
 
-use libp2p::{multiaddr, PeerId};
-use sc_network_common::{
-	protocol::ProtocolName,
-	service::{NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers},
+use libp2p_identity::PeerId;
+use multiaddr::{Multiaddr, Protocol};
+use sc_network::{
+	types::ProtocolName, NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 };
+use sc_network_common::sync::SyncEventStream;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::iter;
 
@@ -80,23 +81,25 @@ mod state_machine;
 mod validator;
 
 /// Abstraction over a network.
-pub trait Network<B: BlockT>:
-	NetworkPeers + NetworkEventStream + NetworkNotification + NetworkBlock<B::Hash, NumberFor<B>>
-{
+pub trait Network<B: BlockT>: NetworkPeers + NetworkEventStream + NetworkNotification {
 	fn add_set_reserved(&self, who: PeerId, protocol: ProtocolName) {
-		let addr =
-			iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
+		let addr = Multiaddr::empty().with(Protocol::P2p(who));
 		let result = self.add_peers_to_reserved_set(protocol, iter::once(addr).collect());
 		if let Err(err) = result {
 			log::error!(target: "gossip", "add_set_reserved failed: {}", err);
 		}
 	}
+	fn remove_set_reserved(&self, who: PeerId, protocol: ProtocolName) {
+		let result = self.remove_peers_from_reserved_set(protocol, iter::once(who).collect());
+		if let Err(err) = result {
+			log::error!(target: "gossip", "remove_set_reserved failed: {}", err);
+		}
+	}
 }
 
-impl<T, B: BlockT> Network<B> for T where
-	T: NetworkPeers
-		+ NetworkEventStream
-		+ NetworkNotification
-		+ NetworkBlock<B::Hash, NumberFor<B>>
-{
-}
+impl<T, B: BlockT> Network<B> for T where T: NetworkPeers + NetworkEventStream + NetworkNotification {}
+
+/// Abstraction over the syncing subsystem.
+pub trait Syncing<B: BlockT>: SyncEventStream + NetworkBlock<B::Hash, NumberFor<B>> {}
+
+impl<T, B: BlockT> Syncing<B> for T where T: SyncEventStream + NetworkBlock<B::Hash, NumberFor<B>> {}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,7 +50,7 @@
 //!   - [`CheckWeight`]: Checks the weight and length of the block and ensure that it does not
 //!     exceed the limits.
 //!   - [`CheckNonce`]: Checks the nonce of the transaction. Contains a single payload of type
-//!     `T::Index`.
+//!     `T::Nonce`.
 //!   - [`CheckEra`]: Checks the era of the transaction. Contains a single payload of type `Era`.
 //!   - [`CheckGenesis`]: Checks the provided genesis hash of the transaction. Must be a part of the
 //!     signed payload of the transaction.
@@ -64,16 +64,18 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use pallet_prelude::{BlockNumberFor, HeaderFor};
 #[cfg(feature = "std")]
 use serde::Serialize;
+use sp_io::hashing::blake2_256;
 #[cfg(feature = "runtime-benchmarks")]
 use sp_runtime::traits::TrailingZeroInput;
 use sp_runtime::{
 	generic,
 	traits::{
-		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
-		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay,
-		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
+		self, AtLeast32Bit, BadOrigin, BlockNumberProvider, Bounded, CheckEqual, Dispatchable,
+		Hash, Header, Lookup, LookupError, MaybeDisplay, MaybeSerializeDeserialize, Member, One,
+		Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
 	DispatchError, RuntimeDebug,
 };
@@ -83,15 +85,18 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 use sp_version::RuntimeVersion;
 
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
+#[cfg(feature = "std")]
+use frame_support::traits::BuildGenesisConfig;
 use frame_support::{
 	dispatch::{
 		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
 		DispatchResult, DispatchResultWithPostInfo, PerDispatchClass,
 	},
+	impl_ensure_origin_with_arg_ignoring_arg,
 	storage::{self, StorageStreamIter},
 	traits::{
-		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
-		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
+		ConstU32, Contains, EnsureOrigin, EnsureOriginWithArg, Get, HandleLifetime,
+		OnKilledAccount, OnNewAccount, OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
 	},
 	Parameter,
 };
@@ -99,8 +104,6 @@ use scale_info::TypeInfo;
 use sp_core::storage::well_known_keys;
 use sp_weights::{RuntimeDbWeight, Weight};
 
-#[cfg(feature = "std")]
-use frame_support::traits::GenesisBuild;
 #[cfg(any(feature = "std", test))]
 use sp_io::TestExternalities;
 
@@ -200,12 +203,52 @@ pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
 
+	/// Contains default types suitable for various environments
+	pub mod config_preludes {
+		use super::DefaultConfig;
+
+		/// Provides a viable default config that can be used with
+		/// [`derive_impl`](`frame_support::derive_impl`) to derive a testing pallet config
+		/// based on this one.
+		///
+		/// See `Test` in the `default-config` example pallet's `test.rs` for an example of
+		/// a downstream user of this particular `TestDefaultConfig`
+		pub struct TestDefaultConfig;
+
+		#[frame_support::register_default_impl(TestDefaultConfig)]
+		impl DefaultConfig for TestDefaultConfig {
+			type Nonce = u32;
+			type Hash = sp_core::hash::H256;
+			type Hashing = sp_runtime::traits::BlakeTwo256;
+			type AccountId = u64;
+			type Lookup = sp_runtime::traits::IdentityLookup<u64>;
+			type MaxConsumers = frame_support::traits::ConstU32<16>;
+			type AccountData = ();
+			type OnNewAccount = ();
+			type OnKilledAccount = ();
+			type SystemWeightInfo = ();
+			type SS58Prefix = ();
+			type Version = ();
+			type BlockWeights = ();
+			type BlockLength = ();
+			type DbWeight = ();
+		}
+	}
+
 	/// System configuration trait. Implemented by runtime.
-	#[pallet::config]
+	#[pallet::config(with_default)]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: 'static + Eq + Clone {
+		/// The aggregated event type of the runtime.
+		type RuntimeEvent: Parameter
+			+ Member
+			+ From<Event<Self>>
+			+ Debug
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
+		#[pallet::no_default]
 		type BaseCallFilter: Contains<Self::RuntimeCall>;
 
 		/// Block & extrinsics weights: base values and limits.
@@ -217,20 +260,21 @@ pub mod pallet {
 		type BlockLength: Get<limits::BlockLength>;
 
 		/// The `RuntimeOrigin` type used by dispatchable calls.
+		#[pallet::no_default]
 		type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, Self::RuntimeOrigin>>
 			+ From<RawOrigin<Self::AccountId>>
 			+ Clone
-			+ OriginTrait<Call = Self::RuntimeCall>;
+			+ OriginTrait<Call = Self::RuntimeCall, AccountId = Self::AccountId>;
 
 		/// The aggregated `RuntimeCall` type.
+		#[pallet::no_default]
 		type RuntimeCall: Parameter
 			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
 			+ Debug
 			+ From<Call<Self>>;
 
-		/// Account index (aka nonce) type. This stores the number of previous transactions
-		/// associated with a sender account.
-		type Index: Parameter
+		/// This stores the number of previous transactions associated with a sender account.
+		type Nonce: Parameter
 			+ Member
 			+ MaybeSerializeDeserialize
 			+ Debug
@@ -239,21 +283,6 @@ pub mod pallet {
 			+ AtLeast32Bit
 			+ Copy
 			+ MaxEncodedLen;
-
-		/// The block number type used by the runtime.
-		type BlockNumber: Parameter
-			+ Member
-			+ MaybeSerializeDeserialize
-			+ Debug
-			+ MaybeDisplay
-			+ AtLeast32BitUnsigned
-			+ Default
-			+ Bounded
-			+ Copy
-			+ sp_std::hash::Hash
-			+ sp_std::str::FromStr
-			+ MaxEncodedLen
-			+ TypeInfo;
 
 		/// The output of the `Hashing` function.
 		type Hash: Parameter
@@ -291,19 +320,15 @@ pub mod pallet {
 		/// functional/efficient alternatives.
 		type Lookup: StaticLookup<Target = Self::AccountId>;
 
-		/// The block header.
-		type Header: Parameter + traits::Header<Number = Self::BlockNumber, Hash = Self::Hash>;
-
-		/// The aggregated event type of the runtime.
-		type RuntimeEvent: Parameter
-			+ Member
-			+ From<Event<Self>>
-			+ Debug
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		/// The Block type used by the runtime. This is used by `construct_runtime` to retrieve the
+		/// extrinsics or other block specific data as needed.
+		#[pallet::no_default]
+		type Block: Parameter + Member + traits::Block<Hash = Self::Hash>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
-		type BlockHashCount: Get<Self::BlockNumber>;
+		#[pallet::no_default]
+		type BlockHashCount: Get<BlockNumberFor<Self>>;
 
 		/// The weight of runtime database operations the runtime can invoke.
 		#[pallet::constant]
@@ -319,6 +344,7 @@ pub mod pallet {
 		/// runtime.
 		///
 		/// For tests it is okay to use `()` as type, however it will provide "useless" data.
+		#[pallet::no_default]
 		type PalletInfo: PalletInfo;
 
 		/// Data to be associated with an account (other than nonce/transaction counter, which this
@@ -350,6 +376,7 @@ pub mod pallet {
 		/// [`Pallet::update_code_in_storage`]).
 		/// It's unlikely that this needs to be customized, unless you are writing a parachain using
 		/// `Cumulus`, where the actual code change is deferred.
+		#[pallet::no_default]
 		type OnSetCode: SetCode<Self>;
 
 		/// The maximum number of consumers allowed on a single account.
@@ -357,16 +384,13 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		#[cfg(feature = "std")]
 		fn integrity_test() {
-			sp_io::TestExternalities::default().execute_with(|| {
-				T::BlockWeights::get().validate().expect("The weights are invalid.");
-			});
+			T::BlockWeights::get().validate().expect("The weights are invalid.");
 		}
 	}
 
@@ -374,13 +398,10 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Make some on-chain remark.
 		///
-		/// # <weight>
-		/// - `O(1)`
-		/// # </weight>
+		/// Can be executed by every `origin`.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
-		pub fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
-			ensure_signed_or_root(origin)?;
+		pub fn remark(_origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
 			Ok(().into())
 		}
 
@@ -395,44 +416,26 @@ pub mod pallet {
 		}
 
 		/// Set the new runtime code.
-		///
-		/// # <weight>
-		/// - `O(C + S)` where `C` length of `code` and `S` complexity of `can_set_code`
-		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is
-		///   expensive).
-		/// - 1 storage write (codec `O(C)`).
-		/// - 1 digest item.
-		/// - 1 event.
-		/// The weight of this function is dependent on the runtime, but generally this is very
-		/// expensive. We will treat this as a full block.
-		/// # </weight>
 		#[pallet::call_index(2)]
-		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		#[pallet::weight((T::SystemWeightInfo::set_code(), DispatchClass::Operational))]
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
 			T::OnSetCode::set_code(code)?;
-			Ok(().into())
+			// consume the rest of the block to prevent further transactions
+			Ok(Some(T::BlockWeights::get().max_block).into())
 		}
 
 		/// Set the new runtime code without doing any checks of the given `code`.
-		///
-		/// # <weight>
-		/// - `O(C)` where `C` length of `code`
-		/// - 1 storage write (codec `O(C)`).
-		/// - 1 digest item.
-		/// - 1 event.
-		/// The weight of this function is dependent on the runtime. We will treat this as a full
-		/// block. # </weight>
 		#[pallet::call_index(3)]
-		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		#[pallet::weight((T::SystemWeightInfo::set_code(), DispatchClass::Operational))]
 		pub fn set_code_without_checks(
 			origin: OriginFor<T>,
 			code: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			T::OnSetCode::set_code(code)?;
-			Ok(().into())
+			Ok(Some(T::BlockWeights::get().max_block).into())
 		}
 
 		/// Set some items of storage.
@@ -548,7 +551,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		AccountInfo<T::Index, T::AccountData>,
+		AccountInfo<T::Nonce, T::AccountData>,
 		ValueQuery,
 	>;
 
@@ -570,7 +573,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn block_hash)]
 	pub type BlockHash<T: Config> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, T::Hash, ValueQuery>;
+		StorageMap<_, Twox64Concat, BlockNumberFor<T>, T::Hash, ValueQuery>;
 
 	/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 	#[pallet::storage]
@@ -583,7 +586,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::whitelist_storage]
 	#[pallet::getter(fn block_number)]
-	pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub(super) type Number<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Hash of the previous block.
 	#[pallet::storage]
@@ -622,14 +625,14 @@ pub mod pallet {
 	/// allows light-clients to leverage the changes trie storage tracking mechanism and
 	/// in case of changes fetch the list of events of interest.
 	///
-	/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
+	/// The value has the type `(BlockNumberFor<T>, EventIndex)` because if we used only just
 	/// the `EventIndex` then in case if the topic has the same contents on the next block
 	/// no notification will be triggered thus the event might be lost.
 	#[pallet::storage]
 	#[pallet::unbounded]
 	#[pallet::getter(fn event_topics)]
 	pub(super) type EventTopics<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::Hash, Vec<(T::BlockNumber, EventIndex)>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, T::Hash, Vec<(BlockNumberFor<T>, EventIndex)>, ValueQuery>;
 
 	/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade happened.
 	#[pallet::storage]
@@ -650,17 +653,19 @@ pub mod pallet {
 	#[pallet::whitelist_storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(frame_support::DefaultNoBound)]
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
+	pub struct GenesisConfig<T: Config> {
 		#[serde(with = "sp_core::bytes")]
 		pub code: Vec<u8>,
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			<BlockHash<T>>::insert::<_, T::Hash>(T::BlockNumber::zero(), hash69());
+			<BlockHash<T>>::insert::<_, T::Hash>(BlockNumberFor::<T>::zero(), hash69());
 			<ParentHash<T>>::put::<T::Hash>(hash69());
 			<LastRuntimeUpgrade<T>>::put(LastRuntimeUpgradeInfo::from(T::Version::get()));
 			<UpgradedToU32RefCount<T>>::put(true);
@@ -669,26 +674,6 @@ pub mod pallet {
 			sp_io::storage::set(well_known_keys::CODE, &self.code);
 			sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
 		}
-	}
-}
-
-#[cfg(feature = "std")]
-impl GenesisConfig {
-	/// Direct implementation of `GenesisBuild::build_storage`.
-	///
-	/// Kept in order not to break dependency.
-	pub fn build_storage<T: Config>(&self) -> Result<sp_runtime::Storage, String> {
-		<Self as GenesisBuild<T>>::build_storage(self)
-	}
-
-	/// Direct implementation of `GenesisBuild::assimilate_storage`.
-	///
-	/// Kept in order not to break dependency.
-	pub fn assimilate_storage<T: Config>(
-		&self,
-		storage: &mut sp_runtime::Storage,
-	) -> Result<(), String> {
-		<Self as GenesisBuild<T>>::assimilate_storage(self, storage)
 	}
 }
 
@@ -727,7 +712,6 @@ pub struct EventRecord<E: Parameter + Member, T> {
 
 // Create a Hash with 69 for each byte,
 // only used to build genesis config.
-#[cfg(feature = "std")]
 fn hash69<T: AsMut<[u8]> + Default>() -> T {
 	let mut h = T::default();
 	h.as_mut().iter_mut().for_each(|byte| *byte = 69);
@@ -745,9 +729,9 @@ pub type RefCount = u32;
 
 /// Information of an account.
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct AccountInfo<Index, AccountData> {
+pub struct AccountInfo<Nonce, AccountData> {
 	/// The number of transactions this account has sent.
-	pub nonce: Index,
+	pub nonce: Nonce,
 	/// The number of other modules that currently depend on this account's existence. The account
 	/// cannot be reaped until this is zero.
 	pub consumers: RefCount,
@@ -805,6 +789,12 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., AccountId: Decode, T } >
+		EnsureOriginWithArg<O, T> for EnsureRoot<AccountId>
+	{}
+}
+
 /// Ensure the origin is Root and return the provided `Success` value.
 pub struct EnsureRootWithSuccess<AccountId, Success>(
 	sp_std::marker::PhantomData<(AccountId, Success)>,
@@ -827,6 +817,12 @@ impl<
 	fn try_successful_origin() -> Result<O, ()> {
 		Ok(O::from(RawOrigin::Root))
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., AccountId: Decode, Success: TypedGet, T } >
+		EnsureOriginWithArg<O, T> for EnsureRootWithSuccess<AccountId, Success>
+	{}
 }
 
 /// Ensure the origin is provided `Ensure` origin and return the provided `Success` value.
@@ -874,6 +870,12 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., AccountId: Decode, T } >
+		EnsureOriginWithArg<O, T> for EnsureSigned<AccountId>
+	{}
+}
+
 /// Ensure the origin is `Signed` origin from the given `AccountId`.
 pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, AccountId)>);
 impl<
@@ -892,15 +894,18 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<O, ()> {
-		let zero_account_id =
-			AccountId::decode(&mut TrailingZeroInput::zeroes()).map_err(|_| ())?;
-		let members = Who::sorted_members();
-		let first_member = match members.get(0) {
+		let first_member = match Who::sorted_members().first() {
 			Some(account) => account.clone(),
-			None => zero_account_id,
+			None => AccountId::decode(&mut TrailingZeroInput::zeroes()).map_err(|_| ())?,
 		};
 		Ok(O::from(RawOrigin::Signed(first_member)))
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., Who: SortedMembers<AccountId>, AccountId: PartialEq + Clone + Ord + Decode, T } >
+		EnsureOriginWithArg<O, T> for EnsureSignedBy<Who, AccountId>
+	{}
 }
 
 /// Ensure the origin is `None`. i.e. unsigned transaction.
@@ -922,10 +927,16 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., AccountId, T } >
+		EnsureOriginWithArg<O, T> for EnsureNone<AccountId>
+	{}
+}
+
 /// Always fail.
-pub struct EnsureNever<T>(sp_std::marker::PhantomData<T>);
-impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
-	type Success = T;
+pub struct EnsureNever<Success>(sp_std::marker::PhantomData<Success>);
+impl<O, Success> EnsureOrigin<O> for EnsureNever<Success> {
+	type Success = Success;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		Err(o)
 	}
@@ -934,6 +945,12 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	fn try_successful_origin() -> Result<O, ()> {
 		Err(())
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O, Success, T } >
+		EnsureOriginWithArg<O, T> for EnsureNever<Success>
+	{}
 }
 
 /// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
@@ -1240,10 +1257,20 @@ impl<T: Config> Pallet<T> {
 		a.consumers == 0 || a.providers > 1
 	}
 
-	/// True if the account has at least one provider reference.
-	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
+	/// True if the account has at least one provider reference and adding `amount` consumer
+	/// references would not take it above the the maximum.
+	pub fn can_accrue_consumers(who: &T::AccountId, amount: u32) -> bool {
 		let a = Account::<T>::get(who);
-		a.providers > 0 && a.consumers < T::MaxConsumers::max_consumers()
+		match a.consumers.checked_add(amount) {
+			Some(c) => a.providers > 0 && c <= T::MaxConsumers::max_consumers(),
+			None => false,
+		}
+	}
+
+	/// True if the account has at least one provider reference and fewer consumer references than
+	/// the maximum.
+	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
+		Self::can_accrue_consumers(who, 1)
 	}
 
 	/// Deposits an event into this block's event record.
@@ -1270,7 +1297,7 @@ impl<T: Config> Pallet<T> {
 		let phase = ExecutionPhase::<T>::get().unwrap_or_default();
 		let event = EventRecord { phase, event, topics: topics.to_vec() };
 
-		// Index of the to be added event.
+		// Index of the event to be added.
 		let event_idx = {
 			let old_event_count = EventCount::<T>::get();
 			let new_event_count = match old_event_count.checked_add(1) {
@@ -1326,10 +1353,12 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Start the execution of a particular block.
-	pub fn initialize(number: &T::BlockNumber, parent_hash: &T::Hash, digest: &generic::Digest) {
+	pub fn initialize(number: &BlockNumberFor<T>, parent_hash: &T::Hash, digest: &generic::Digest) {
 		// populate environment
 		ExecutionPhase::<T>::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
+		let entropy = (b"frame_system::initialize", parent_hash).using_encoded(blake2_256);
+		storage::unhashed::put_raw(well_known_keys::INTRABLOCK_ENTROPY, &entropy[..]);
 		<Number<T>>::put(number);
 		<Digest<T>>::put(digest);
 		<ParentHash<T>>::put(parent_hash);
@@ -1341,7 +1370,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Remove temporary "environment" entries in storage, compute the storage root and return the
 	/// resulting header for this block.
-	pub fn finalize() -> T::Header {
+	pub fn finalize() -> HeaderFor<T> {
 		log::debug!(
 			target: LOG_TARGET,
 			"[{:?}] {} extrinsics, length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight:\
@@ -1379,6 +1408,7 @@ impl<T: Config> Pallet<T> {
 		);
 		ExecutionPhase::<T>::kill();
 		AllExtrinsicsLen::<T>::kill();
+		storage::unhashed::kill(well_known_keys::INTRABLOCK_ENTROPY);
 
 		// The following fields
 		//
@@ -1412,21 +1442,10 @@ impl<T: Config> Pallet<T> {
 		let storage_root = T::Hash::decode(&mut &sp_io::storage::root(version)[..])
 			.expect("Node is configured to use the same hash; qed");
 
-		<T::Header as traits::Header>::new(
-			number,
-			extrinsics_root,
-			storage_root,
-			parent_hash,
-			digest,
-		)
+		HeaderFor::<T>::new(number, extrinsics_root, storage_root, parent_hash, digest)
 	}
 
 	/// Deposits a log and ensures it matches the block's log data.
-	///
-	/// # <weight>
-	/// - `O(1)`
-	/// - 1 storage write (codec `O(1)`)
-	/// # </weight>
 	pub fn deposit_log(item: generic::DigestItem) {
 		<Digest<T>>::append(item);
 	}
@@ -1436,8 +1455,8 @@ impl<T: Config> Pallet<T> {
 	pub fn externalities() -> TestExternalities {
 		TestExternalities::new(sp_core::storage::Storage {
 			top: map![
-				<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
-				<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
+				<BlockHash<T>>::hashed_key_for(BlockNumberFor::<T>::zero()) => [69u8; 32].encode(),
+				<Number<T>>::hashed_key().to_vec() => BlockNumberFor::<T>::one().encode(),
 				<ParentHash<T>>::hashed_key().to_vec() => [69u8; 32].encode()
 			],
 			children_default: map![],
@@ -1462,6 +1481,14 @@ impl<T: Config> Pallet<T> {
 		Self::read_events_no_consensus().map(|e| *e).collect()
 	}
 
+	/// Get a single event at specified index.
+	///
+	/// Should only be called if you know what you are doing and outside of the runtime block
+	/// execution else it can have a large impact on the PoV size of a block.
+	pub fn event_no_consensus(index: usize) -> Option<T::RuntimeEvent> {
+		Self::read_events_no_consensus().nth(index).map(|e| e.event.clone())
+	}
+
 	/// Get the current events deposited by the runtime.
 	///
 	/// Should only be called if you know what you are doing and outside of the runtime block
@@ -1474,7 +1501,7 @@ impl<T: Config> Pallet<T> {
 	/// Set the block number to something in particular. Can be used as an alternative to
 	/// `initialize` for tests that don't need to bother with the other environment entries.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
-	pub fn set_block_number(n: T::BlockNumber) {
+	pub fn set_block_number(n: BlockNumberFor<T>) {
 		<Number<T>>::put(n);
 	}
 
@@ -1540,13 +1567,13 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Retrieve the account transaction counter from storage.
-	pub fn account_nonce(who: impl EncodeLike<T::AccountId>) -> T::Index {
+	pub fn account_nonce(who: impl EncodeLike<T::AccountId>) -> T::Nonce {
 		Account::<T>::get(who).nonce
 	}
 
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_nonce(who: impl EncodeLike<T::AccountId>) {
-		Account::<T>::mutate(who, |a| a.nonce += T::Index::one());
+		Account::<T>::mutate(who, |a| a.nonce += T::Nonce::one());
 	}
 
 	/// Note what the extrinsic data of the current extrinsic index is.
@@ -1602,7 +1629,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// An account is being created.
-	pub fn on_created_account(who: T::AccountId, _a: &mut AccountInfo<T::Index, T::AccountData>) {
+	pub fn on_created_account(who: T::AccountId, _a: &mut AccountInfo<T::Nonce, T::AccountData>) {
 		T::OnNewAccount::on_new_account(&who);
 		Self::deposit_event(Event::NewAccount { account: who });
 	}
@@ -1624,16 +1651,34 @@ impl<T: Config> Pallet<T> {
 			.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
 			.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?;
 
-		if new_version.spec_name != current_version.spec_name {
-			return Err(Error::<T>::InvalidSpecName.into())
-		}
+		cfg_if::cfg_if! {
+			if #[cfg(all(feature = "runtime-benchmarks", not(test)))] {
+					// Let's ensure the compiler doesn't optimize our fetching of the runtime version away.
+					core::hint::black_box((new_version, current_version));
+					Ok(())
+			} else {
+				if new_version.spec_name != current_version.spec_name {
+					return Err(Error::<T>::InvalidSpecName.into())
+				}
 
-		if new_version.spec_version <= current_version.spec_version {
-			return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
-		}
+				if new_version.spec_version <= current_version.spec_version {
+					return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
+				}
 
-		Ok(())
+				Ok(())
+			}
+		}
 	}
+}
+
+/// Returns a 32 byte datum which is guaranteed to be universally unique. `entropy` is provided
+/// as a facility to reduce the potential for precalculating results.
+pub fn unique(entropy: impl Encode) -> [u8; 32] {
+	let mut last = [0u8; 32];
+	sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut last[..], 0);
+	let next = (b"frame_system::unique", entropy, last).using_encoded(blake2_256);
+	sp_io::storage::set(well_known_keys::INTRABLOCK_ENTROPY, &next);
+	next
 }
 
 /// Event handler which registers a provider when created.
@@ -1674,15 +1719,11 @@ impl<T: Config> HandleLifetime<T::AccountId> for Consumer<T> {
 }
 
 impl<T: Config> BlockNumberProvider for Pallet<T> {
-	type BlockNumber = <T as Config>::BlockNumber;
+	type BlockNumber = BlockNumberFor<T>;
 
 	fn current_block_number() -> Self::BlockNumber {
 		Pallet::<T>::block_number()
 	}
-}
-
-fn is_providing<T: Default + Eq>(d: &T) -> bool {
-	d != &T::default()
 }
 
 /// Implement StoredMap for a simple single-item, provide-when-not-default system. This works fine
@@ -1700,23 +1741,14 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 		f: impl FnOnce(&mut Option<T::AccountData>) -> Result<R, E>,
 	) -> Result<R, E> {
 		let account = Account::<T>::get(k);
-		let was_providing = is_providing(&account.data);
-		let mut some_data = if was_providing { Some(account.data) } else { None };
+		let is_default = account.data == T::AccountData::default();
+		let mut some_data = if is_default { None } else { Some(account.data) };
 		let result = f(&mut some_data)?;
-		let is_providing = some_data.is_some();
-		if !was_providing && is_providing {
-			Self::inc_providers(k);
-		} else if was_providing && !is_providing {
-			match Self::dec_providers(k)? {
-				DecRefStatus::Reaped => return Ok(result),
-				DecRefStatus::Exists => {
-					// Update value as normal...
-				},
-			}
-		} else if !was_providing && !is_providing {
-			return Ok(result)
+		if Self::providers(k) > 0 || Self::sufficients(k) > 0 {
+			Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
+		} else {
+			Account::<T>::remove(k)
 		}
-		Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
 		Ok(result)
 	}
 }
@@ -1758,6 +1790,10 @@ pub mod pallet_prelude {
 	/// Type alias for the `Origin` associated type of system config.
 	pub type OriginFor<T> = <T as crate::Config>::RuntimeOrigin;
 
+	/// Type alias for the `Header`.
+	pub type HeaderFor<T> =
+		<<T as crate::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
+
 	/// Type alias for the `BlockNumber` associated type of system config.
-	pub type BlockNumberFor<T> = <T as crate::Config>::BlockNumber;
+	pub type BlockNumberFor<T> = <HeaderFor<T> as sp_runtime::traits::Header>::Number;
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -329,7 +329,7 @@ impl<T: pallet_balances::Config> WeighData<(&BalanceOf<T>,)> for WeightForSetDum
 		let multiplier = self.0;
 		// *target.0 is the amount passed into the extrinsic
 		let cents = *target.0 / <BalanceOf<T>>::from(MILLICENTS);
-		Weight::from_ref_time((cents * multiplier).saturated_into::<u64>())
+		Weight::from_parts((cents * multiplier).saturated_into::<u64>(), 0)
 	}
 }
 
@@ -379,7 +379,6 @@ pub mod pallet {
 	// Simple declaration of the `Pallet` type. It is placeholder we use to implement traits and
 	// method.
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	// Pallet implements [`Hooks`] trait to define some logic to execute in some context.
@@ -389,21 +388,21 @@ pub mod pallet {
 		// dispatched.
 		//
 		// This function must return the weight consumed by `on_initialize` and `on_finalize`.
-		fn on_initialize(_n: T::BlockNumber) -> Weight {
+		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			// Anything that needs to be done at the start of the block.
 			// We don't do anything here.
 			Weight::zero()
 		}
 
 		// `on_finalize` is executed at the end of block after all extrinsic are dispatched.
-		fn on_finalize(_n: T::BlockNumber) {
+		fn on_finalize(_n: BlockNumberFor<T>) {
 			// Perform necessary data/state clean up here.
 		}
 
 		// A runtime code run after every block and have access to extended set of APIs.
 		//
 		// For instance you can generate extrinsics for the upcoming produced block.
-		fn offchain_worker(_n: T::BlockNumber) {
+		fn offchain_worker(_n: BlockNumberFor<T>) {
 			// We don't do anything here.
 			// but we could dispatch extrinsic (transaction/unsigned/inherent) using
 			// sp_io::submit_extrinsic.
@@ -442,7 +441,7 @@ pub mod pallet {
 	// against them as the first thing you do in your function. There are three convenience calls
 	// in system that do the matching for you and return a convenient result: `ensure_signed`,
 	// `ensure_root` and `ensure_none`.
-	#[pallet::call]
+	#[pallet::call(weight(<T as Config>::WeightInfo))]
 	impl<T: Config> Pallet<T> {
 		/// This is your public interface. Be extremely careful.
 		/// This is just a simple example of how to interact with the pallet from the external
@@ -498,9 +497,6 @@ pub mod pallet {
 		// The weight for this extrinsic we rely on the auto-generated `WeightInfo` from the
 		// benchmark toolchain.
 		#[pallet::call_index(0)]
-		#[pallet::weight(
-			<T as pallet::Config>::WeightInfo::accumulate_dummy()
-		)]
 		pub fn accumulate_dummy(origin: OriginFor<T>, increase_by: T::Balance) -> DispatchResult {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
@@ -622,23 +618,16 @@ pub mod pallet {
 
 	// The genesis config type.
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub dummy: T::Balance,
 		pub bar: Vec<(T::AccountId, T::Balance)>,
 		pub foo: T::Balance,
 	}
 
-	// The default value for the genesis config type.
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { dummy: Default::default(), bar: Default::default(), foo: Default::default() }
-		}
-	}
-
 	// The build of genesis for the pallet.
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			<Dummy<T>>::put(&self.dummy);
 			for (a, b) in &self.bar {

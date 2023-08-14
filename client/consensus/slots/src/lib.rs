@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -41,7 +41,7 @@ use sp_arithmetic::traits::BaseArithmetic;
 use sp_consensus::{Proposal, Proposer, SelectChain, SyncOracle};
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::CreateInherentDataProviders;
-use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT};
+use sp_runtime::traits::{Block as BlockT, HashingFor, Header as HeaderT};
 use std::{
 	fmt::Debug,
 	ops::Deref,
@@ -54,7 +54,7 @@ const LOG_TARGET: &str = "slots";
 ///
 /// See [`sp_state_machine::StorageChanges`] for more information.
 pub type StorageChanges<Transaction, Block> =
-	sp_state_machine::StorageChanges<Transaction, HashFor<Block>>;
+	sp_state_machine::StorageChanges<Transaction, HashingFor<Block>>;
 
 /// The result of [`SlotWorker::on_slot`].
 #[derive(Debug, Clone)]
@@ -150,7 +150,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		body: Vec<B::Extrinsic>,
 		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 		public: Self::Claim,
-		epoch: Self::AuxData,
+		aux_data: Self::AuxData,
 	) -> Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
 		sp_consensus::Error,
@@ -190,7 +190,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		proposer: Self::Proposer,
 		claim: &Self::Claim,
 		slot_info: SlotInfo<B>,
-		proposing_remaining: Delay,
+		end_proposing_at: Instant,
 	) -> Option<
 		Proposal<
 			B,
@@ -202,9 +202,11 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let telemetry = self.telemetry();
 		let log_target = self.logging_target();
 
-		let inherent_data = Self::create_inherent_data(&slot_info, &log_target).await?;
+		let inherent_data =
+			Self::create_inherent_data(&slot_info, &log_target, end_proposing_at).await?;
 
-		let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
+		let proposing_remaining_duration =
+			end_proposing_at.saturating_duration_since(Instant::now());
 		let logs = self.pre_digest_data(slot, claim);
 
 		// deadline our production to 98% of the total time left for proposing. As we deadline
@@ -215,11 +217,16 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				inherent_data,
 				sp_runtime::generic::Digest { logs },
 				proposing_remaining_duration.mul_f32(0.98),
-				None,
+				slot_info.block_size_limit,
 			)
 			.map_err(|e| sp_consensus::Error::ClientImport(e.to_string()));
 
-		let proposal = match futures::future::select(proposing, proposing_remaining).await {
+		let proposal = match futures::future::select(
+			proposing,
+			Delay::new(proposing_remaining_duration),
+		)
+		.await
+		{
 			Either::Left((Ok(p), _)) => p,
 			Either::Left((Err(err), _)) => {
 				warn!(target: log_target, "Proposing failed: {}", err);
@@ -255,8 +262,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	async fn create_inherent_data(
 		slot_info: &SlotInfo<B>,
 		logging_target: &str,
+		end_proposing_at: Instant,
 	) -> Option<sp_inherents::InherentData> {
-		let remaining_duration = slot_info.ends_at.saturating_duration_since(Instant::now());
+		let remaining_duration = end_proposing_at.saturating_duration_since(Instant::now());
 		let delay = Delay::new(remaining_duration);
 		let cid = slot_info.create_inherent_data.create_inherent_data();
 		let inherent_data = match futures::future::select(delay, cid).await {
@@ -300,7 +308,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 		let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
 
-		let proposing_remaining = if proposing_remaining_duration == Duration::default() {
+		let end_proposing_at = if proposing_remaining_duration == Duration::default() {
 			debug!(
 				target: logging_target,
 				"Skipping proposal slot {} since there's no time left to propose", slot,
@@ -308,7 +316,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 			return None
 		} else {
-			Delay::new(proposing_remaining_duration)
+			Instant::now() + proposing_remaining_duration
 		};
 
 		let aux_data = match self.aux_data(&slot_info.chain_head, slot) {
@@ -379,7 +387,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			},
 		};
 
-		let proposal = self.propose(proposer, &claim, slot_info, proposing_remaining).await?;
+		let proposal = self.propose(proposer, &claim, slot_info, end_proposing_at).await?;
 
 		let (block, storage_proof) = (proposal.block, proposal.proof);
 		let (header, body) = block.deconstruct();
@@ -424,7 +432,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		);
 
 		let header = block_import_params.post_header();
-		match self.block_import().import_block(block_import_params, Default::default()).await {
+		match self.block_import().import_block(block_import_params).await {
 			Ok(res) => {
 				res.handle_justification(
 					&header.hash(),

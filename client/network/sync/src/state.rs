@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -150,7 +150,7 @@ where
 				} else {
 					values.key_values
 				};
-				let mut entry = self.state.entry(values.state_root).or_default();
+				let entry = self.state.entry(values.state_root).or_default();
 				if entry.0.len() > 0 && entry.1.len() > 1 {
 					// Already imported child_trie with same root.
 					// Warning this will not work with parallel download.

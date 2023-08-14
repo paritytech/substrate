@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 
 use crate::Error;
 use clap::Parser;
-use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
+use libp2p_identity::{ed25519, Keypair};
 use std::{
 	fs,
 	io::{self, Write},
@@ -35,13 +35,11 @@ use std::{
 )]
 pub struct GenerateNodeKeyCmd {
 	/// Name of file to save secret key to.
-	///
 	/// If not given, the secret key is printed to stdout.
 	#[arg(long)]
 	file: Option<PathBuf>,
 
 	/// The output is in raw binary format.
-	///
 	/// If not given, the output is written as an hex encoded string.
 	#[arg(long)]
 	bin: bool,
@@ -50,14 +48,14 @@ pub struct GenerateNodeKeyCmd {
 impl GenerateNodeKeyCmd {
 	/// Run the command
 	pub fn run(&self) -> Result<(), Error> {
-		let keypair = libp2p_ed25519::Keypair::generate();
+		let keypair = ed25519::Keypair::generate();
 
 		let secret = keypair.secret();
 
 		let file_data = if self.bin {
 			secret.as_ref().to_owned()
 		} else {
-			array_bytes::bytes2hex("", secret.as_ref()).into_bytes()
+			array_bytes::bytes2hex("", secret).into_bytes()
 		};
 
 		match &self.file {
@@ -65,7 +63,7 @@ impl GenerateNodeKeyCmd {
 			None => io::stdout().lock().write_all(&file_data)?,
 		}
 
-		eprintln!("{}", PublicKey::Ed25519(keypair.public()).to_peer_id());
+		eprintln!("{}", Keypair::from(keypair).public().to_peer_id());
 
 		Ok(())
 	}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -105,14 +105,18 @@ fn add_sufficients<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 
 fn add_approvals<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 	let asset_id = default_asset_id::<T, I>();
-	T::Currency::deposit_creating(&minter, T::ApprovalDeposit::get() * n.into());
+	T::Currency::deposit_creating(
+		&minter,
+		T::ApprovalDeposit::get() * n.into() + T::Currency::minimum_balance(),
+	);
 	let minter_lookup = T::Lookup::unlookup(minter.clone());
 	let origin = SystemOrigin::Signed(minter);
 	Assets::<T, I>::mint(origin.clone().into(), asset_id, minter_lookup, (100 * (n + 1)).into())
 		.unwrap();
+	let enough = T::Currency::minimum_balance();
 	for i in 0..n {
 		let target = account("approval", i, SEED);
-		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
+		T::Currency::make_free_balance_be(&target, enough);
 		let target_lookup = T::Lookup::unlookup(target);
 		Assets::<T, I>::approve_transfer(
 			origin.clone().into(),
@@ -137,10 +141,10 @@ benchmarks_instance_pallet! {
 		let asset_id = default_asset_id::<T, I>();
 		let origin = T::CreateOrigin::try_successful_origin(&asset_id.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
-		let caller = T::CreateOrigin::ensure_origin(origin, &asset_id.into()).unwrap();
+		let caller = T::CreateOrigin::ensure_origin(origin.clone(), &asset_id.into()).unwrap();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	}: _(SystemOrigin::Signed(caller.clone()), asset_id, caller_lookup, 1u32.into())
+	}: _<T::RuntimeOrigin>(origin, asset_id, caller_lookup, 1u32.into())
 	verify {
 		assert_last_event::<T, I>(Event::Created { asset_id: asset_id.into(), creator: caller.clone(), owner: caller }.into());
 	}
@@ -469,6 +473,82 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Signed(caller.clone()), asset_id, caller_lookup, delegate_lookup)
 	verify {
 		assert_last_event::<T, I>(Event::ApprovalCancelled { asset_id: asset_id.into(), owner: caller, delegate }.into());
+	}
+
+	set_min_balance {
+		let (asset_id, caller, caller_lookup) = create_default_asset::<T, I>(false);
+	}: _(SystemOrigin::Signed(caller.clone()), asset_id, 50u32.into())
+	verify {
+		assert_last_event::<T, I>(Event::AssetMinBalanceChanged { asset_id: asset_id.into(), new_min_balance: 50u32.into() }.into());
+	}
+
+	touch {
+		let (asset_id, asset_owner, asset_owner_lookup) = create_default_asset::<T, I>(false);
+		let new_account: T::AccountId = account("newaccount", 1, SEED);
+		T::Currency::make_free_balance_be(&new_account, DepositBalanceOf::<T, I>::max_value());
+		assert_ne!(asset_owner, new_account);
+		assert!(!Account::<T, I>::contains_key(asset_id.into(), &new_account));
+	}: _(SystemOrigin::Signed(new_account.clone()), asset_id)
+	verify {
+		assert!(Account::<T, I>::contains_key(asset_id.into(), &new_account));
+	}
+
+	touch_other {
+		let (asset_id, asset_owner, asset_owner_lookup) = create_default_asset::<T, I>(false);
+		let new_account: T::AccountId = account("newaccount", 1, SEED);
+		let new_account_lookup = T::Lookup::unlookup(new_account.clone());
+		T::Currency::make_free_balance_be(&asset_owner, DepositBalanceOf::<T, I>::max_value());
+		assert_ne!(asset_owner, new_account);
+		assert!(!Account::<T, I>::contains_key(asset_id.into(), &new_account));
+	}: _(SystemOrigin::Signed(asset_owner.clone()), asset_id, new_account_lookup)
+	verify {
+		assert!(Account::<T, I>::contains_key(asset_id.into(), &new_account));
+	}
+
+	refund {
+		let (asset_id, asset_owner, asset_owner_lookup) = create_default_asset::<T, I>(false);
+		let new_account: T::AccountId = account("newaccount", 1, SEED);
+		T::Currency::make_free_balance_be(&new_account, DepositBalanceOf::<T, I>::max_value());
+		assert_ne!(asset_owner, new_account);
+		assert!(Assets::<T, I>::touch(
+			SystemOrigin::Signed(new_account.clone()).into(),
+			asset_id
+		).is_ok());
+		// `touch` should reserve balance of the caller according to the `AssetAccountDeposit` amount...
+		assert_eq!(T::Currency::reserved_balance(&new_account), T::AssetAccountDeposit::get());
+		// ...and also create an `Account` entry.
+		assert!(Account::<T, I>::contains_key(asset_id.into(), &new_account));
+	}: _(SystemOrigin::Signed(new_account.clone()), asset_id, true)
+	verify {
+		// `refund`ing should of course repatriate the reserve
+		assert!(T::Currency::reserved_balance(&new_account).is_zero());
+	}
+
+	refund_other {
+		let (asset_id, asset_owner, asset_owner_lookup) = create_default_asset::<T, I>(false);
+		let new_account: T::AccountId = account("newaccount", 1, SEED);
+		let new_account_lookup = T::Lookup::unlookup(new_account.clone());
+		T::Currency::make_free_balance_be(&asset_owner, DepositBalanceOf::<T, I>::max_value());
+		assert_ne!(asset_owner, new_account);
+		assert!(Assets::<T, I>::touch_other(
+			SystemOrigin::Signed(asset_owner.clone()).into(),
+			asset_id,
+			new_account_lookup.clone()
+		).is_ok());
+		// `touch` should reserve balance of the caller according to the `AssetAccountDeposit` amount...
+		assert_eq!(T::Currency::reserved_balance(&asset_owner), T::AssetAccountDeposit::get());
+		assert!(Account::<T, I>::contains_key(asset_id.into(), &new_account));
+	}: _(SystemOrigin::Signed(asset_owner.clone()), asset_id, new_account_lookup.clone())
+	verify {
+		// this should repatriate the reserved balance of the freezer
+		assert!(T::Currency::reserved_balance(&asset_owner).is_zero());
+	}
+
+	block {
+		let (asset_id, caller, caller_lookup) = create_default_minted_asset::<T, I>(true, 100u32.into());
+	}: _(SystemOrigin::Signed(caller.clone()), asset_id, caller_lookup)
+	verify {
+		assert_last_event::<T, I>(Event::Blocked { asset_id: asset_id.into(), who: caller }.into());
 	}
 
 	impl_benchmark_test_suite!(Assets, crate::mock::new_test_ext(), crate::mock::Test)

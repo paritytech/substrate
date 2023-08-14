@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,18 +18,13 @@
 use sp_api::{
 	decl_runtime_apis, impl_runtime_apis, mock_impl_runtime_apis, ApiError, ApiExt, RuntimeApiInfo,
 };
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, GetNodeBlockType},
-};
-use substrate_test_runtime_client::runtime::Block;
+use sp_runtime::traits::Block as BlockT;
 
-/// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
-/// trait are done by the `construct_runtime!` macro in a real runtime.
+use substrate_test_runtime_client::runtime::{Block, Hash};
+
+/// The declaration of the `Runtime` type is done by the `construct_runtime!` macro in a real
+/// runtime.
 pub struct Runtime {}
-impl GetNodeBlockType for Runtime {
-	type NodeBlock = Block;
-}
 
 decl_runtime_apis! {
 	pub trait Api {
@@ -119,13 +114,13 @@ mock_impl_runtime_apis! {
 		}
 
 		#[advanced]
-		fn same_name(_: &BlockId<Block>) -> Result<(), ApiError> {
+		fn same_name(_: <Block as BlockT>::Hash) -> Result<(), ApiError> {
 			Ok(().into())
 		}
 
 		#[advanced]
-		fn wild_card(at: &BlockId<Block>, _: u32) -> Result<(), ApiError> {
-			if let BlockId::Number(1337) = at {
+		fn wild_card(at: <Block as BlockT>::Hash, _: u32) -> Result<(), ApiError> {
+			if Hash::repeat_byte(0x0f) == at {
 				// yeah
 				Ok(().into())
 			} else {
@@ -150,35 +145,35 @@ type TestClient = substrate_test_runtime_client::client::Client<
 fn test_client_side_function_signature() {
 	let _test: fn(
 		&RuntimeApiImpl<Block, TestClient>,
-		&BlockId<Block>,
+		<Block as BlockT>::Hash,
 		u64,
 	) -> Result<(), ApiError> = RuntimeApiImpl::<Block, TestClient>::test;
 	let _something_with_block: fn(
 		&RuntimeApiImpl<Block, TestClient>,
-		&BlockId<Block>,
+		<Block as BlockT>::Hash,
 		Block,
 	) -> Result<Block, ApiError> = RuntimeApiImpl::<Block, TestClient>::something_with_block;
 
 	#[allow(deprecated)]
 	let _same_name_before_version_2: fn(
 		&RuntimeApiImpl<Block, TestClient>,
-		&BlockId<Block>,
+		<Block as BlockT>::Hash,
 	) -> Result<String, ApiError> = RuntimeApiImpl::<Block, TestClient>::same_name_before_version_2;
 }
 
 #[test]
 fn check_runtime_api_info() {
-	assert_eq!(&<dyn Api::<Block>>::ID, &runtime_decl_for_Api::ID);
-	assert_eq!(<dyn Api::<Block>>::VERSION, runtime_decl_for_Api::VERSION);
+	assert_eq!(&<dyn Api::<Block>>::ID, &runtime_decl_for_api::ID);
+	assert_eq!(<dyn Api::<Block>>::VERSION, runtime_decl_for_api::VERSION);
 	assert_eq!(<dyn Api::<Block>>::VERSION, 1);
 
 	assert_eq!(
 		<dyn ApiWithCustomVersion::<Block>>::VERSION,
-		runtime_decl_for_ApiWithCustomVersion::VERSION,
+		runtime_decl_for_api_with_custom_version::VERSION,
 	);
 	assert_eq!(
 		&<dyn ApiWithCustomVersion::<Block>>::ID,
-		&runtime_decl_for_ApiWithCustomVersion::ID,
+		&runtime_decl_for_api_with_custom_version::ID,
 	);
 	assert_eq!(<dyn ApiWithCustomVersion::<Block>>::VERSION, 2);
 
@@ -204,8 +199,8 @@ fn check_runtime_api_versions() {
 fn mock_runtime_api_has_api() {
 	let mock = MockApi { block: None };
 
-	assert!(mock.has_api::<dyn ApiWithCustomVersion<Block>>(&BlockId::Number(0)).unwrap());
-	assert!(mock.has_api::<dyn Api<Block>>(&BlockId::Number(0)).unwrap());
+	assert!(mock.has_api::<dyn ApiWithCustomVersion<Block>>(Hash::default()).unwrap());
+	assert!(mock.has_api::<dyn Api<Block>>(Hash::default()).unwrap());
 }
 
 #[test]
@@ -214,17 +209,17 @@ fn mock_runtime_api_panics_on_calling_old_version() {
 	let mock = MockApi { block: None };
 
 	#[allow(deprecated)]
-	let _ = mock.same_name_before_version_2(&BlockId::Number(0));
+	let _ = mock.same_name_before_version_2(Hash::default());
 }
 
 #[test]
 fn mock_runtime_api_works_with_advanced() {
 	let mock = MockApi { block: None };
 
-	Api::<Block>::same_name(&mock, &BlockId::Number(0)).unwrap();
-	mock.wild_card(&BlockId::Number(1337), 1).unwrap();
+	Api::<Block>::same_name(&mock, Hash::default()).unwrap();
+	mock.wild_card(Hash::repeat_byte(0x0f), 1).unwrap();
 	assert_eq!(
 		"Test error".to_string(),
-		mock.wild_card(&BlockId::Number(1336), 1).unwrap_err().to_string(),
+		mock.wild_card(Hash::repeat_byte(0x01), 1).unwrap_err().to_string(),
 	);
 }

@@ -1,47 +1,47 @@
 error: Duplicate storage prefixes found for `Foo`
-  --> $DIR/duplicate_storage_prefix.rs:16:29
+  --> $DIR/duplicate_storage_prefix.rs:15:29
    |
-16 |     #[pallet::storage_prefix = "Foo"]
+15 |     #[pallet::storage_prefix = "Foo"]
    |                                ^^^^^
 
 error: Duplicate storage prefixes found for `Foo`
-  --> $DIR/duplicate_storage_prefix.rs:13:7
+  --> $DIR/duplicate_storage_prefix.rs:12:7
    |
-13 |     type Foo<T> = StorageValue<_, u8>;
+12 |     type Foo<T> = StorageValue<_, u8>;
    |          ^^^
 
 error: Duplicate storage prefixes found for `CounterForBar`, used for counter associated to counted storage map
-  --> $DIR/duplicate_storage_prefix.rs:23:7
+  --> $DIR/duplicate_storage_prefix.rs:22:7
    |
-23 |     type Bar<T> = CountedStorageMap<_, Twox64Concat, u16, u16>;
+22 |     type Bar<T> = CountedStorageMap<_, Twox64Concat, u16, u16>;
    |          ^^^
 
 error: Duplicate storage prefixes found for `CounterForBar`
-  --> $DIR/duplicate_storage_prefix.rs:20:7
+  --> $DIR/duplicate_storage_prefix.rs:19:7
    |
-20 |     type CounterForBar<T> = StorageValue<_, u16>;
+19 |     type CounterForBar<T> = StorageValue<_, u16>;
    |          ^^^^^^^^^^^^^
 
 error[E0412]: cannot find type `_GeneratedPrefixForStorageFoo` in this scope
-  --> $DIR/duplicate_storage_prefix.rs:13:7
+  --> $DIR/duplicate_storage_prefix.rs:12:7
    |
-13 |     type Foo<T> = StorageValue<_, u8>;
+12 |     type Foo<T> = StorageValue<_, u8>;
    |          ^^^ not found in this scope
 
 error[E0412]: cannot find type `_GeneratedPrefixForStorageNotFoo` in this scope
-  --> $DIR/duplicate_storage_prefix.rs:17:7
+  --> $DIR/duplicate_storage_prefix.rs:16:7
    |
-17 |     type NotFoo<T> = StorageValue<_, u16>;
+16 |     type NotFoo<T> = StorageValue<_, u16>;
    |          ^^^^^^ not found in this scope
 
 error[E0412]: cannot find type `_GeneratedPrefixForStorageCounterForBar` in this scope
-  --> $DIR/duplicate_storage_prefix.rs:20:7
+  --> $DIR/duplicate_storage_prefix.rs:19:7
    |
-20 |     type CounterForBar<T> = StorageValue<_, u16>;
+19 |     type CounterForBar<T> = StorageValue<_, u16>;
    |          ^^^^^^^^^^^^^ not found in this scope
 
 error[E0412]: cannot find type `_GeneratedPrefixForStorageBar` in this scope
-  --> $DIR/duplicate_storage_prefix.rs:23:7
+  --> $DIR/duplicate_storage_prefix.rs:22:7
    |
-23 |     type Bar<T> = CountedStorageMap<_, Twox64Concat, u16, u16>;
+22 |     type Bar<T> = CountedStorageMap<_, Twox64Concat, u16, u16>;
    |          ^^^ not found in this scope

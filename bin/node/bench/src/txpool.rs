@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@
 
 use std::borrow::Cow;
 
-use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes, Profile};
+use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes};
 
 use sc_transaction_pool::BasicPool;
 use sc_transaction_pool_api::{TransactionPool, TransactionSource};
@@ -57,11 +57,11 @@ impl core::BenchmarkDescription for PoolBenchmarkDescription {
 
 impl core::Benchmark for PoolBenchmark {
 	fn run(&mut self, mode: Mode) -> std::time::Duration {
-		let context = self.database.create_context(Profile::Wasm);
+		let context = self.database.create_context();
 
 		let _ = context
 			.client
-			.runtime_version_at(&BlockId::Number(0))
+			.runtime_version_at(context.client.chain_info().genesis_hash)
 			.expect("Failed to get runtime version")
 			.spec_version;
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,8 +53,8 @@ use sp_std::{marker::PhantomData, prelude::*};
 use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResultWithPostInfo, PostDispatchInfo},
-	ensure,
-	traits::{EnsureOrigin, PollStatus, Polling, VoteTally},
+	ensure, impl_ensure_origin_with_arg_ignoring_arg,
+	traits::{EnsureOrigin, EnsureOriginWithArg, PollStatus, Polling, RankedMembers, VoteTally},
 	CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 
@@ -112,36 +112,39 @@ impl<T: Config<I>, I: 'static, M: GetMaxVoters> Tally<T, I, M> {
 
 pub type TallyOf<T, I = ()> = Tally<T, I, Pallet<T, I>>;
 pub type PollIndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Index;
+pub type ClassOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Class;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
-impl<T: Config<I>, I: 'static, M: GetMaxVoters> VoteTally<Votes, Rank> for Tally<T, I, M> {
-	fn new(_: Rank) -> Self {
+impl<T: Config<I>, I: 'static, M: GetMaxVoters<Class = ClassOf<T, I>>>
+	VoteTally<Votes, ClassOf<T, I>> for Tally<T, I, M>
+{
+	fn new(_: ClassOf<T, I>) -> Self {
 		Self { bare_ayes: 0, ayes: 0, nays: 0, dummy: PhantomData }
 	}
-	fn ayes(&self, _: Rank) -> Votes {
+	fn ayes(&self, _: ClassOf<T, I>) -> Votes {
 		self.bare_ayes
 	}
-	fn support(&self, class: Rank) -> Perbill {
+	fn support(&self, class: ClassOf<T, I>) -> Perbill {
 		Perbill::from_rational(self.bare_ayes, M::get_max_voters(class))
 	}
-	fn approval(&self, _: Rank) -> Perbill {
+	fn approval(&self, _: ClassOf<T, I>) -> Perbill {
 		Perbill::from_rational(self.ayes, 1.max(self.ayes + self.nays))
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn unanimity(class: Rank) -> Self {
+	fn unanimity(class: ClassOf<T, I>) -> Self {
 		Self {
-			bare_ayes: M::get_max_voters(class),
+			bare_ayes: M::get_max_voters(class.clone()),
 			ayes: M::get_max_voters(class),
 			nays: 0,
 			dummy: PhantomData,
 		}
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn rejection(class: Rank) -> Self {
+	fn rejection(class: ClassOf<T, I>) -> Self {
 		Self { bare_ayes: 0, ayes: 0, nays: M::get_max_voters(class), dummy: PhantomData }
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn from_requirements(support: Perbill, approval: Perbill, class: Rank) -> Self {
+	fn from_requirements(support: Perbill, approval: Perbill, class: ClassOf<T, I>) -> Self {
 		let c = M::get_max_voters(class);
 		let ayes = support * c;
 		let nays = ((ayes as u64) * 1_000_000_000u64 / approval.deconstruct() as u64) as u32 - ayes;
@@ -149,14 +152,17 @@ impl<T: Config<I>, I: 'static, M: GetMaxVoters> VoteTally<Votes, Rank> for Tally
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn setup(class: Rank, granularity: Perbill) {
-		if M::get_max_voters(class) == 0 {
+	fn setup(class: ClassOf<T, I>, granularity: Perbill) {
+		if M::get_max_voters(class.clone()) == 0 {
 			let max_voters = granularity.saturating_reciprocal_mul(1u32);
 			for i in 0..max_voters {
 				let who: T::AccountId =
 					frame_benchmarking::account("ranked_collective_benchmarking", i, 0);
-				crate::Pallet::<T, I>::do_add_member_to_rank(who, class)
-					.expect("could not add members for benchmarks");
+				crate::Pallet::<T, I>::do_add_member_to_rank(
+					who,
+					T::MinRankOfClass::convert(class.clone()),
+				)
+				.expect("could not add members for benchmarks");
 			}
 			assert_eq!(M::get_max_voters(class), max_voters);
 		}
@@ -168,6 +174,13 @@ impl<T: Config<I>, I: 'static, M: GetMaxVoters> VoteTally<Votes, Rank> for Tally
 pub struct MemberRecord {
 	/// The rank of the member.
 	rank: Rank,
+}
+
+impl MemberRecord {
+	// Constructs a new instance of [`MemberRecord`].
+	pub fn new(rank: Rank) -> Self {
+		Self { rank }
+	}
 }
 
 /// Record needed for every vote.
@@ -227,14 +240,17 @@ impl Convert<Rank, Votes> for Geometric {
 	}
 }
 
-/// Trait for getting the maximum number of voters for a given rank.
+/// Trait for getting the maximum number of voters for a given poll class.
 pub trait GetMaxVoters {
-	/// Return the maximum number of voters for the rank `r`.
-	fn get_max_voters(r: Rank) -> MemberIndex;
+	/// Poll class type.
+	type Class;
+	/// Return the maximum number of voters for the poll class `c`.
+	fn get_max_voters(c: Self::Class) -> MemberIndex;
 }
 impl<T: Config<I>, I: 'static> GetMaxVoters for Pallet<T, I> {
-	fn get_max_voters(r: Rank) -> MemberIndex {
-		MemberCount::<T, I>::get(r)
+	type Class = ClassOf<T, I>;
+	fn get_max_voters(c: Self::Class) -> MemberIndex {
+		MemberCount::<T, I>::get(T::MinRankOfClass::convert(c))
 	}
 }
 
@@ -247,7 +263,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	type Success = Rank;
 
 	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
-		let who = frame_system::EnsureSigned::try_origin(o)?;
+		let who = <frame_system::EnsureSigned<_> as EnsureOrigin<_>>::try_origin(o)?;
 		match Members::<T, I>::get(&who) {
 			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok(rank),
 			_ => Err(frame_system::RawOrigin::Signed(who).into()),
@@ -256,7 +272,36 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
-		EnsureRankedMember::<T, I, MIN_RANK>::try_successful_origin()
+		<EnsureRankedMember<T, I, MIN_RANK> as EnsureOrigin<_>>::try_successful_origin()
+	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl<{ T: Config<I>, I: 'static, const MIN_RANK: u16, A }>
+		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureRanked<T, I, MIN_RANK>
+	{}
+}
+
+/// Guard to ensure that the given origin is a member of the collective. The rank of the member is
+/// the `Success` value.
+pub struct EnsureOfRank<T, I>(PhantomData<(T, I)>);
+impl<T: Config<I>, I: 'static> EnsureOriginWithArg<T::RuntimeOrigin, Rank> for EnsureOfRank<T, I> {
+	type Success = (T::AccountId, Rank);
+
+	fn try_origin(o: T::RuntimeOrigin, min_rank: &Rank) -> Result<Self::Success, T::RuntimeOrigin> {
+		let who = <frame_system::EnsureSigned<_> as EnsureOrigin<_>>::try_origin(o)?;
+		match Members::<T, I>::get(&who) {
+			Some(MemberRecord { rank, .. }) if rank >= *min_rank => Ok((who, rank)),
+			_ => Err(frame_system::RawOrigin::Signed(who).into()),
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin(min_rank: &Rank) -> Result<T::RuntimeOrigin, ()> {
+		let who = frame_benchmarking::account::<T::AccountId>("successful_origin", 0, 0);
+		crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), *min_rank)
+			.expect("Could not add members for benchmarks");
+		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
 }
 
@@ -269,7 +314,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	type Success = T::AccountId;
 
 	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
-		let who = frame_system::EnsureSigned::try_origin(o)?;
+		let who = <frame_system::EnsureSigned<_> as EnsureOrigin<_>>::try_origin(o)?;
 		match Members::<T, I>::get(&who) {
 			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok(who),
 			_ => Err(frame_system::RawOrigin::Signed(who).into()),
@@ -278,8 +323,14 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
-		EnsureRankedMember::<T, I, MIN_RANK>::try_successful_origin()
+		<EnsureRankedMember<T, I, MIN_RANK> as EnsureOrigin<_>>::try_successful_origin()
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl<{ T: Config<I>, I: 'static, const MIN_RANK: u16, A }>
+		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureMember<T, I, MIN_RANK>
+	{}
 }
 
 /// Guard to ensure that the given origin is a member of the collective. The pair of both the
@@ -291,7 +342,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	type Success = (T::AccountId, Rank);
 
 	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
-		let who = frame_system::EnsureSigned::try_origin(o)?;
+		let who = <frame_system::EnsureSigned<_> as EnsureOrigin<_>>::try_origin(o)?;
 		match Members::<T, I>::get(&who) {
 			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok((who, rank)),
 			_ => Err(frame_system::RawOrigin::Signed(who).into()),
@@ -307,6 +358,12 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	}
 }
 
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl<{ T: Config<I>, I: 'static, const MIN_RANK: u16, A }>
+		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureRankedMember<T, I, MIN_RANK>
+	{}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -314,7 +371,6 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -335,12 +391,12 @@ pub mod pallet {
 		type DemoteOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Rank>;
 
 		/// The polling system used for our voting.
-		type Polls: Polling<TallyOf<Self, I>, Votes = Votes, Moment = Self::BlockNumber>;
+		type Polls: Polling<TallyOf<Self, I>, Votes = Votes, Moment = BlockNumberFor<Self>>;
 
 		/// Convert the tally class into the minimum rank required to vote on the poll. If
 		/// `Polls::Class` is the same type as `Rank`, then `Identity` can be used here to mean
 		/// "a rank of at least the poll class".
-		type MinRankOfClass: Convert<<Self::Polls as Polling<TallyOf<Self, I>>>::Class, Rank>;
+		type MinRankOfClass: Convert<ClassOf<Self, I>, Rank>;
 
 		/// Convert a rank_delta into a number of votes the rank gets.
 		///
@@ -465,24 +521,7 @@ pub mod pallet {
 		pub fn demote_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let max_rank = T::DemoteOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
-			let mut record = Self::ensure_member(&who)?;
-			let rank = record.rank;
-			ensure!(max_rank >= rank, Error::<T, I>::NoPermission);
-
-			Self::remove_from_rank(&who, rank)?;
-			let maybe_rank = rank.checked_sub(1);
-			match maybe_rank {
-				None => {
-					Members::<T, I>::remove(&who);
-					Self::deposit_event(Event::MemberRemoved { who, rank: 0 });
-				},
-				Some(rank) => {
-					record.rank = rank;
-					Members::<T, I>::insert(&who, &record);
-					Self::deposit_event(Event::RankChanged { who, rank });
-				},
-			}
-			Ok(())
+			Self::do_demote_member(who, Some(max_rank))
 		}
 
 		/// Remove the member entirely.
@@ -652,7 +691,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Promotes a member in the ranked collective into the next role.
+		/// Promotes a member in the ranked collective into the next higher rank.
 		///
 		/// A `maybe_max_rank` may be provided to check that the member does not get promoted beyond
 		/// a certain rank. Is `None` is provided, then the rank will be incremented without checks.
@@ -674,6 +713,33 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Demotes a member in the ranked collective into the next lower rank.
+		///
+		/// A `maybe_max_rank` may be provided to check that the member does not get demoted from
+		/// a certain rank. Is `None` is provided, then the rank will be decremented without checks.
+		fn do_demote_member(who: T::AccountId, maybe_max_rank: Option<Rank>) -> DispatchResult {
+			let mut record = Self::ensure_member(&who)?;
+			let rank = record.rank;
+			if let Some(max_rank) = maybe_max_rank {
+				ensure!(max_rank >= rank, Error::<T, I>::NoPermission);
+			}
+
+			Self::remove_from_rank(&who, rank)?;
+			let maybe_rank = rank.checked_sub(1);
+			match maybe_rank {
+				None => {
+					Members::<T, I>::remove(&who);
+					Self::deposit_event(Event::MemberRemoved { who, rank: 0 });
+				},
+				Some(rank) => {
+					record.rank = rank;
+					Members::<T, I>::insert(&who, &record);
+					Self::deposit_event(Event::RankChanged { who, rank });
+				},
+			}
+			Ok(())
+		}
+
 		/// Add a member to the rank collective, and continue to promote them until a certain rank
 		/// is reached.
 		pub fn do_add_member_to_rank(who: T::AccountId, rank: Rank) -> DispatchResult {
@@ -682,6 +748,40 @@ pub mod pallet {
 				Self::do_promote_member(who.clone(), None)?;
 			}
 			Ok(())
+		}
+
+		/// Determine the rank of the account behind the `Signed` origin `o`, `None` if the account
+		/// is unknown to this collective or `o` is not `Signed`.
+		pub fn as_rank(
+			o: &<T::RuntimeOrigin as frame_support::traits::OriginTrait>::PalletsOrigin,
+		) -> Option<u16> {
+			use frame_support::traits::CallerTrait;
+			o.as_signed().and_then(Self::rank_of)
+		}
+	}
+
+	impl<T: Config<I>, I: 'static> RankedMembers for Pallet<T, I> {
+		type AccountId = T::AccountId;
+		type Rank = Rank;
+
+		fn min_rank() -> Self::Rank {
+			0
+		}
+
+		fn rank_of(who: &Self::AccountId) -> Option<Self::Rank> {
+			Some(Self::ensure_member(&who).ok()?.rank)
+		}
+
+		fn induct(who: &Self::AccountId) -> DispatchResult {
+			Self::do_add_member(who.clone())
+		}
+
+		fn promote(who: &Self::AccountId) -> DispatchResult {
+			Self::do_promote_member(who.clone(), None)
+		}
+
+		fn demote(who: &Self::AccountId) -> DispatchResult {
+			Self::do_demote_member(who.clone(), None)
 		}
 	}
 }

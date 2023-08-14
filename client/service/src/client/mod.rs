@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -47,13 +47,12 @@
 mod block_rules;
 mod call_executor;
 mod client;
-pub mod genesis;
 mod wasm_override;
 mod wasm_substitutes;
 
 pub use self::{
 	call_executor::LocalCallExecutor,
-	client::{resolve_state_version_from_wasm, Client, ClientConfig},
+	client::{Client, ClientConfig},
 };
 
 #[cfg(feature = "test-helpers")]

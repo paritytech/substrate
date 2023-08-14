@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,6 +37,17 @@ frame_benchmarking::benchmarks! {
 		Value::<T>::put(123);
 	}: {
 		assert_eq!(Value::<T>::get(), Some(123));
+	}
+
+	#[pov_mode = MaxEncodedLen {
+		Pov::Value2: Ignored
+	}]
+	storage_single_value_ignored_some_read {
+		Value::<T>::put(123);
+		Value2::<T>::put(123);
+	}: {
+		assert_eq!(Value::<T>::get(), Some(123));
+		assert_eq!(Value2::<T>::get(), Some(123));
 	}
 
 	storage_single_value_read_twice {
@@ -181,6 +192,7 @@ frame_benchmarking::benchmarks! {
 
 	// Same as above, but we still expect a mathematical worst case PoV size for the bounded one.
 	storage_value_bounded_and_unbounded_read {
+		(0..1024).for_each(|i| Map1M::<T>::insert(i, i));
 	}: {
 		assert!(UnboundedValue::<T>::get().is_none());
 		assert!(BoundedValue::<T>::get().is_none());
@@ -305,6 +317,19 @@ frame_benchmarking::benchmarks! {
 		call.dispatch_bypass_filter(RawOrigin::Root.into()).unwrap();
 	}
 
+	storage_iteration {
+		for i in 0..65000 {
+			UnboundedMapTwox::<T>::insert(i, sp_std::vec![0; 64]);
+		}
+	}: {
+		for (key, value) in UnboundedMapTwox::<T>::iter() {
+			unsafe {
+				core::ptr::read_volatile(&key);
+				core::ptr::read_volatile(value.as_ptr());
+			}
+		}
+	}
+
 	impl_benchmark_test_suite!(
 		Pallet,
 		mock::new_test_ext(),
@@ -314,22 +339,17 @@ frame_benchmarking::benchmarks! {
 
 #[cfg(test)]
 mod mock {
-	use sp_runtime::testing::H256;
+	use sp_runtime::{testing::H256, BuildStorage};
 
 	type AccountId = u64;
-	type AccountIndex = u32;
-	type BlockNumber = u64;
+	type Nonce = u32;
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
+		pub enum Test
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Baseline: crate::{Pallet, Call, Storage, Event<T>},
 		}
 	);
@@ -340,14 +360,13 @@ mod mock {
 		type BlockLength = ();
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
-		type Index = AccountIndex;
-		type BlockNumber = BlockNumber;
+		type Nonce = Nonce;
 		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = AccountId;
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
-		type Header = sp_runtime::testing::Header;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ();
 		type Version = ();
@@ -366,6 +385,6 @@ mod mock {
 	}
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
-		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+		frame_system::GenesisConfig::<Test>::default().build_storage().unwrap().into()
 	}
 }

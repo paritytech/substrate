@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +34,7 @@ fn nay(x: u8, balance: u64) -> AccountVote<u64> {
 }
 
 fn the_lock(amount: u64) -> BalanceLock<u64> {
-	BalanceLock { id: DEMOCRACY_ID, amount, reasons: pallet_balances::Reasons::Misc }
+	BalanceLock { id: DEMOCRACY_ID, amount, reasons: pallet_balances::Reasons::All }
 }
 
 #[test]

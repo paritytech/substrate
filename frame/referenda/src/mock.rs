@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,19 +31,14 @@ use frame_support::{
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-	DispatchResult, Perbill,
+	traits::{BlakeTwo256, Hash, IdentityLookup},
+	BuildStorage, DispatchResult, Perbill,
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		Balances: pallet_balances,
@@ -57,7 +52,7 @@ frame_support::construct_runtime!(
 pub struct BaseFilter;
 impl Contains<RuntimeCall> for BaseFilter {
 	fn contains(call: &RuntimeCall) -> bool {
-		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::set_balance { .. }))
+		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::force_set_balance { .. }))
 	}
 }
 
@@ -70,14 +65,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -120,6 +114,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 parameter_types! {
 	pub static AlarmInterval: u64 = 1;
@@ -227,23 +225,32 @@ impl Config for Test {
 	type Tracks = TestTracksInfo;
 	type Preimages = Preimage;
 }
+pub struct ExtBuilder {}
 
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	let balances = vec![(1, 100), (2, 100), (3, 100), (4, 100), (5, 100), (6, 100)];
-	pallet_balances::GenesisConfig::<Test> { balances }
-		.assimilate_storage(&mut t)
-		.unwrap();
-	let mut ext = sp_io::TestExternalities::new(t);
-	ext.execute_with(|| System::set_block_number(1));
-	ext
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self {}
+	}
 }
 
-/// Execute the function two times, with `true` and with `false`.
-#[allow(dead_code)]
-pub fn new_test_ext_execute_with_cond(execute: impl FnOnce(bool) -> () + Clone) {
-	new_test_ext().execute_with(|| (execute.clone())(false));
-	new_test_ext().execute_with(|| execute(true));
+impl ExtBuilder {
+	pub fn build(self) -> sp_io::TestExternalities {
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		let balances = vec![(1, 100), (2, 100), (3, 100), (4, 100), (5, 100), (6, 100)];
+		pallet_balances::GenesisConfig::<Test> { balances }
+			.assimilate_storage(&mut t)
+			.unwrap();
+		let mut ext = sp_io::TestExternalities::new(t);
+		ext.execute_with(|| System::set_block_number(1));
+		ext
+	}
+
+	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		self.build().execute_with(|| {
+			test();
+			Referenda::do_try_state().unwrap();
+		})
+	}
 }
 
 #[derive(Encode, Debug, Decode, TypeInfo, Eq, PartialEq, Clone, MaxEncodedLen)]
@@ -295,19 +302,14 @@ impl<Class> VoteTally<u32, Class> for Tally {
 }
 
 pub fn set_balance_proposal(value: u64) -> Vec<u8> {
-	RuntimeCall::Balances(pallet_balances::Call::set_balance {
-		who: 42,
-		new_free: value,
-		new_reserved: 0,
-	})
-	.encode()
+	RuntimeCall::Balances(pallet_balances::Call::force_set_balance { who: 42, new_free: value })
+		.encode()
 }
 
 pub fn set_balance_proposal_bounded(value: u64) -> BoundedCallOf<Test, ()> {
-	let c = RuntimeCall::Balances(pallet_balances::Call::set_balance {
+	let c = RuntimeCall::Balances(pallet_balances::Call::force_set_balance {
 		who: 42,
 		new_free: value,
-		new_reserved: 0,
 	});
 	<Preimage as StorePreimage>::bound(c).unwrap()
 }
@@ -469,4 +471,16 @@ impl RefState {
 		}
 		index
 	}
+}
+
+/// note a new preimage without registering.
+pub fn note_preimage(who: u64) -> PreimageHash {
+	use std::sync::atomic::{AtomicU8, Ordering};
+	// note a new preimage on every function invoke.
+	static COUNTER: AtomicU8 = AtomicU8::new(0);
+	let data = vec![COUNTER.fetch_add(1, Ordering::Relaxed)];
+	assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(who), data.clone()));
+	let hash = BlakeTwo256::hash(&data);
+	assert!(!Preimage::is_requested(&hash));
+	hash
 }

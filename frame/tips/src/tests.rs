@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,16 +21,13 @@
 
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
 	BuildStorage, Perbill, Permill,
 };
 use sp_storage::Storage;
 
 use frame_support::{
-	assert_noop, assert_ok,
-	pallet_prelude::GenesisBuild,
-	parameter_types,
+	assert_noop, assert_ok, parameter_types,
 	storage::StoragePrefixedMap,
 	traits::{ConstU32, ConstU64, SortedMembers, StorageVersion},
 	PalletId,
@@ -39,19 +36,15 @@ use frame_support::{
 use super::*;
 use crate::{self as pallet_tips, Event as TipEvent};
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Treasury: pallet_treasury::{Pallet, Call, Storage, Config, Event<T>},
-		Treasury1: pallet_treasury::<Instance1>::{Pallet, Call, Storage, Config, Event<T>},
+		Treasury: pallet_treasury::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Treasury1: pallet_treasury::<Instance1>::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Tips: pallet_tips::{Pallet, Call, Storage, Event<T>},
 		Tips1: pallet_tips::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
@@ -66,14 +59,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u128; // u64 is not enough to hold bytes used to generate bounty account
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -97,6 +89,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 parameter_types! {
 	static TenToFourteenTestValue: Vec<u128> = vec![10,11,12,13,14];
@@ -192,7 +188,7 @@ impl Config<Instance1> for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = GenesisConfig {
+	let mut ext: sp_io::TestExternalities = RuntimeGenesisConfig {
 		system: frame_system::GenesisConfig::default(),
 		balances: pallet_balances::GenesisConfig { balances: vec![(0, 100), (1, 98), (2, 1)] },
 		treasury: Default::default(),
@@ -566,7 +562,7 @@ fn test_migration_v4() {
 
 #[test]
 fn genesis_funding_works() {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let initial_funding = 100;
 	pallet_balances::GenesisConfig::<Test> {
 		// Total issuance will be 200 with treasury account initialized with 100.
@@ -574,7 +570,9 @@ fn genesis_funding_works() {
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
-	GenesisBuild::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t).unwrap();
+	pallet_treasury::GenesisConfig::<Test>::default()
+		.assimilate_storage(&mut t)
+		.unwrap();
 	let mut t: sp_io::TestExternalities = t.into();
 
 	t.execute_with(|| {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,3 +21,6 @@
 /// before calling this migration. After calling this migration, it will get replaced with
 /// own storage identifier.
 pub mod v4;
+
+/// A migration that unreserves all funds held in the context of this pallet.
+pub mod unreserve_deposits;

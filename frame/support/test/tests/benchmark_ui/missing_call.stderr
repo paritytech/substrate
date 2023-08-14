@@ -1,5 +1,8 @@
 error: No valid #[extrinsic_call] or #[block] annotation could be found in benchmark function body.
   --> tests/benchmark_ui/missing_call.rs:10:13
    |
-10 |     fn bench() {}
-   |                ^^
+10 |       fn bench() {
+   |  ________________^
+11 | |         assert_eq!(2 + 2, 4);
+12 | |     }
+   | |_____^

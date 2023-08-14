@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -91,9 +91,13 @@ const LOCAL_NODE_CACHE_MAX_INLINE_SIZE: usize = 512 * 1024;
 const LOCAL_VALUE_CACHE_MAX_INLINE_SIZE: usize = 512 * 1024;
 
 /// The maximum size of the memory allocated on the heap by the local cache, in bytes.
-const LOCAL_NODE_CACHE_MAX_HEAP_SIZE: usize = 2 * 1024 * 1024;
+///
+/// The size of the node cache should always be bigger than the value cache. The value
+/// cache is only holding weak references to the actual values found in the nodes and
+/// we account for the size of the node as part of the node cache.
+const LOCAL_NODE_CACHE_MAX_HEAP_SIZE: usize = 8 * 1024 * 1024;
 /// Same as [`LOCAL_NODE_CACHE_MAX_HEAP_SIZE`].
-const LOCAL_VALUE_CACHE_MAX_HEAP_SIZE: usize = 4 * 1024 * 1024;
+const LOCAL_VALUE_CACHE_MAX_HEAP_SIZE: usize = 2 * 1024 * 1024;
 
 /// The size of the shared cache.
 #[derive(Debug, Clone, Copy)]
@@ -438,8 +442,8 @@ enum ValueCache<'a, H: Hasher> {
 
 impl<H: Hasher> ValueCache<'_, H> {
 	/// Get the value for the given `key`.
-	fn get<'a>(
-		&'a mut self,
+	fn get(
+		&mut self,
 		key: &[u8],
 		shared_cache: &SharedTrieCache<H>,
 		stats: &HitStats,
@@ -525,7 +529,7 @@ impl<'a, H: Hasher> TrieCache<'a, H> {
 	/// `storage_root` is the new storage root that was obtained after finishing all operations
 	/// using the [`TrieDBMut`](trie_db::TrieDBMut).
 	pub fn merge_into(self, local: &LocalTrieCache<H>, storage_root: H::Out) {
-		let cache = if let ValueCache::Fresh(cache) = self.value_cache { cache } else { return };
+		let ValueCache::Fresh(cache) = self.value_cache else { return };
 
 		if !cache.is_empty() {
 			let mut value_cache = local.value_cache.lock();

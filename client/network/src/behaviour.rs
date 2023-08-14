@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,50 +18,42 @@
 
 use crate::{
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
+	event::DhtEvent,
 	peer_info,
+	peer_store::PeerStoreHandle,
 	protocol::{CustomMessageOutcome, NotificationsSink, Protocol},
-	request_responses,
+	request_responses::{self, IfDisconnected, ProtocolConfig, RequestFailure},
+	types::ProtocolName,
+	ReputationChange,
 };
 
 use bytes::Bytes;
 use futures::channel::oneshot;
 use libp2p::{
-	core::{Multiaddr, PeerId, PublicKey},
-	identify::Info as IdentifyInfo,
-	kad::record,
-	swarm::NetworkBehaviour,
+	connection_limits::ConnectionLimits, core::Multiaddr, identify::Info as IdentifyInfo,
+	identity::PublicKey, kad::RecordKey, swarm::NetworkBehaviour, PeerId,
 };
 
-use sc_network_common::{
-	protocol::{
-		event::DhtEvent,
-		role::{ObservedRole, Roles},
-		ProtocolName,
-	},
-	request_responses::{IfDisconnected, ProtocolConfig, RequestFailure},
-};
-use sc_peerset::{PeersetHandle, ReputationChange};
-use sp_blockchain::HeaderBackend;
+use parking_lot::Mutex;
+use sc_network_common::role::{ObservedRole, Roles};
 use sp_runtime::traits::Block as BlockT;
-use std::{collections::HashSet, time::Duration};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 pub use crate::request_responses::{InboundFailure, OutboundFailure, RequestId, ResponseFailure};
 
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "BehaviourOut")]
-pub struct Behaviour<B, Client>
-where
-	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
-{
+#[behaviour(to_swarm = "BehaviourOut")]
+pub struct Behaviour<B: BlockT> {
 	/// All the substrate-specific protocols.
-	substrate: Protocol<B, Client>,
+	substrate: Protocol<B>,
 	/// Periodically pings and identifies the nodes we are connected to, and store information in a
 	/// cache.
 	peer_info: peer_info::PeerInfoBehaviour,
 	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour,
+	/// Connection limits.
+	connection_limits: libp2p::connection_limits::Behaviour,
 	/// Generic request-response protocols.
 	request_responses: request_responses::RequestResponsesBehaviour,
 }
@@ -118,6 +110,8 @@ pub enum BehaviourOut {
 		notifications_sink: NotificationsSink,
 		/// Role of the remote.
 		role: ObservedRole,
+		/// Received handshake.
+		received_handshake: Vec<u8>,
 	},
 
 	/// The [`NotificationsSink`] object used to send notifications with the given peer must be
@@ -151,12 +145,6 @@ pub enum BehaviourOut {
 		messages: Vec<(ProtocolName, Bytes)>,
 	},
 
-	/// Now connected to a new peer for syncing purposes.
-	SyncConnected(PeerId),
-
-	/// No longer connected to a peer for syncing purposes.
-	SyncDisconnected(PeerId),
-
 	/// We have obtained identity information from a peer, including the addresses it is listening
 	/// on.
 	PeerIdentify {
@@ -177,27 +165,30 @@ pub enum BehaviourOut {
 	None,
 }
 
-impl<B, Client> Behaviour<B, Client>
-where
-	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
-{
+impl<B: BlockT> Behaviour<B> {
 	/// Builds a new `Behaviour`.
 	pub fn new(
-		substrate: Protocol<B, Client>,
+		substrate: Protocol<B>,
 		user_agent: String,
 		local_public_key: PublicKey,
 		disco_config: DiscoveryConfig,
 		request_response_protocols: Vec<ProtocolConfig>,
-		peerset: PeersetHandle,
+		peer_store_handle: PeerStoreHandle,
+		connection_limits: ConnectionLimits,
+		external_addresses: Arc<Mutex<HashSet<Multiaddr>>>,
 	) -> Result<Self, request_responses::RegisterError> {
 		Ok(Self {
 			substrate,
-			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
+			peer_info: peer_info::PeerInfoBehaviour::new(
+				user_agent,
+				local_public_key,
+				external_addresses,
+			),
 			discovery: disco_config.finish(),
+			connection_limits: libp2p::connection_limits::Behaviour::new(connection_limits),
 			request_responses: request_responses::RequestResponsesBehaviour::new(
 				request_response_protocols.into_iter(),
-				peerset,
+				Box::new(peer_store_handle),
 			)?,
 		})
 	}
@@ -252,12 +243,12 @@ where
 	}
 
 	/// Returns a shared reference to the user protocol.
-	pub fn user_protocol(&self) -> &Protocol<B, Client> {
+	pub fn user_protocol(&self) -> &Protocol<B> {
 		&self.substrate
 	}
 
 	/// Returns a mutable reference to the user protocol.
-	pub fn user_protocol_mut(&mut self) -> &mut Protocol<B, Client> {
+	pub fn user_protocol_mut(&mut self) -> &mut Protocol<B> {
 		&mut self.substrate
 	}
 
@@ -266,7 +257,7 @@ where
 	pub fn add_self_reported_address_to_dht(
 		&mut self,
 		peer_id: &PeerId,
-		supported_protocols: &[impl AsRef<[u8]>],
+		supported_protocols: &[impl AsRef<str>],
 		addr: Multiaddr,
 	) {
 		self.discovery.add_self_reported_address(peer_id, supported_protocols, addr);
@@ -274,13 +265,13 @@ where
 
 	/// Start querying a record from the DHT. Will later produce either a `ValueFound` or a
 	/// `ValueNotFound` event.
-	pub fn get_value(&mut self, key: record::Key) {
+	pub fn get_value(&mut self, key: RecordKey) {
 		self.discovery.get_value(key);
 	}
 
 	/// Starts putting a record into DHT. Will later produce either a `ValuePut` or a
 	/// `ValuePutFailed` event.
-	pub fn put_value(&mut self, key: record::Key, value: Vec<u8>) {
+	pub fn put_value(&mut self, key: RecordKey, value: Vec<u8>) {
 		self.discovery.put_value(key, value);
 	}
 }
@@ -295,20 +286,22 @@ fn reported_roles_to_observed_role(roles: Roles) -> ObservedRole {
 	}
 }
 
-impl<B: BlockT> From<CustomMessageOutcome<B>> for BehaviourOut {
-	fn from(event: CustomMessageOutcome<B>) -> Self {
+impl From<CustomMessageOutcome> for BehaviourOut {
+	fn from(event: CustomMessageOutcome) -> Self {
 		match event {
 			CustomMessageOutcome::NotificationStreamOpened {
 				remote,
 				protocol,
 				negotiated_fallback,
 				roles,
+				received_handshake,
 				notifications_sink,
 			} => BehaviourOut::NotificationStreamOpened {
 				remote,
 				protocol,
 				negotiated_fallback,
 				role: reported_roles_to_observed_role(roles),
+				received_handshake,
 				notifications_sink,
 			},
 			CustomMessageOutcome::NotificationStreamReplaced {
@@ -320,10 +313,6 @@ impl<B: BlockT> From<CustomMessageOutcome<B>> for BehaviourOut {
 				BehaviourOut::NotificationStreamClosed { remote, protocol },
 			CustomMessageOutcome::NotificationsReceived { remote, messages } =>
 				BehaviourOut::NotificationsReceived { remote, messages },
-			CustomMessageOutcome::PeerNewBest(_peer_id, _number) => BehaviourOut::None,
-			CustomMessageOutcome::SyncConnected(peer_id) => BehaviourOut::SyncConnected(peer_id),
-			CustomMessageOutcome::SyncDisconnected(peer_id) =>
-				BehaviourOut::SyncDisconnected(peer_id),
 			CustomMessageOutcome::None => BehaviourOut::None,
 		}
 	}
@@ -370,5 +359,11 @@ impl From<DiscoveryOut> for BehaviourOut {
 				BehaviourOut::Dht(DhtEvent::ValuePutFailed(key), duration),
 			DiscoveryOut::RandomKademliaStarted => BehaviourOut::RandomKademliaStarted,
 		}
+	}
+}
+
+impl From<void::Void> for BehaviourOut {
+	fn from(e: void::Void) -> Self {
+		void::unreachable(e)
 	}
 }

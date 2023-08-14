@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -24,11 +24,12 @@ pub mod error;
 use async_trait::async_trait;
 use futures::{Future, Stream};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use sp_core::offchain::TransactionPoolExt;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member, NumberFor},
 };
-use std::{collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
+use std::{collections::HashMap, hash::Hash, marker::PhantomData, pin::Pin, sync::Arc};
 
 const LOG_TARGET: &str = "txpool::api";
 
@@ -305,6 +306,20 @@ pub enum ChainEvent<B: BlockT> {
 	},
 }
 
+impl<B: BlockT> ChainEvent<B> {
+	/// Returns the block hash associated to the event.
+	pub fn hash(&self) -> B::Hash {
+		match self {
+			Self::NewBestBlock { hash, .. } | Self::Finalized { hash, .. } => *hash,
+		}
+	}
+
+	/// Is `self == Self::Finalized`?
+	pub fn is_finalized(&self) -> bool {
+		matches!(self, Self::Finalized { .. })
+	}
+}
+
 /// Trait for transaction pool maintenance.
 #[async_trait]
 pub trait MaintainedTransactionPool: TransactionPool {
@@ -329,29 +344,43 @@ pub trait LocalTransactionPool: Send + Sync {
 	/// `TransactionSource::Local`.
 	fn submit_local(
 		&self,
-		at: &BlockId<Self::Block>,
+		at: <Self::Block as BlockT>::Hash,
 		xt: LocalTransactionFor<Self>,
 	) -> Result<Self::Hash, Self::Error>;
 }
 
-/// An abstraction for transaction pool.
+impl<T: LocalTransactionPool> LocalTransactionPool for Arc<T> {
+	type Block = T::Block;
+
+	type Hash = T::Hash;
+
+	type Error = T::Error;
+
+	fn submit_local(
+		&self,
+		at: <Self::Block as BlockT>::Hash,
+		xt: LocalTransactionFor<Self>,
+	) -> Result<Self::Hash, Self::Error> {
+		(**self).submit_local(at, xt)
+	}
+}
+
+/// An abstraction for [`LocalTransactionPool`]
 ///
-/// This trait is used by offchain calls to be able to submit transactions.
-/// The main use case is for offchain workers, to feed back the results of computations,
-/// but since the transaction pool access is a separate `ExternalitiesExtension` it can
-/// be also used in context of other offchain calls. For one may generate and submit
-/// a transaction for some misbehavior reports (say equivocation).
-pub trait OffchainSubmitTransaction<Block: BlockT>: Send + Sync {
+/// We want to use a transaction pool in [`OffchainTransactionPoolFactory`] in a `Arc` without
+/// bleeding the associated types besides the `Block`. Thus, this abstraction here exists to achieve
+/// the wrapping in a `Arc`.
+trait OffchainSubmitTransaction<Block: BlockT>: Send + Sync {
 	/// Submit transaction.
 	///
 	/// The transaction will end up in the pool and be propagated to others.
-	fn submit_at(&self, at: &BlockId<Block>, extrinsic: Block::Extrinsic) -> Result<(), ()>;
+	fn submit_at(&self, at: Block::Hash, extrinsic: Block::Extrinsic) -> Result<(), ()>;
 }
 
 impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
 	fn submit_at(
 		&self,
-		at: &BlockId<TPool::Block>,
+		at: <TPool::Block as BlockT>::Hash,
 		extrinsic: <TPool::Block as BlockT>::Extrinsic,
 	) -> Result<(), ()> {
 		log::debug!(
@@ -369,6 +398,54 @@ impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TP
 				e
 			)
 		})
+	}
+}
+
+/// Factory for creating [`TransactionPoolExt`]s.
+///
+/// This provides an easy way for creating [`TransactionPoolExt`] extensions for registering them in
+/// the wasm execution environment to send transactions from an offchain call to the  runtime.
+#[derive(Clone)]
+pub struct OffchainTransactionPoolFactory<Block: BlockT> {
+	pool: Arc<dyn OffchainSubmitTransaction<Block>>,
+}
+
+impl<Block: BlockT> OffchainTransactionPoolFactory<Block> {
+	/// Creates a new instance using the given `tx_pool`.
+	pub fn new<T: LocalTransactionPool<Block = Block> + 'static>(tx_pool: T) -> Self {
+		Self { pool: Arc::new(tx_pool) as Arc<_> }
+	}
+
+	/// Returns an instance of [`TransactionPoolExt`] bound to the given `block_hash`.
+	///
+	/// Transactions that are being submitted by this instance will be submitted with `block_hash`
+	/// as context for validation.
+	pub fn offchain_transaction_pool(&self, block_hash: Block::Hash) -> TransactionPoolExt {
+		TransactionPoolExt::new(OffchainTransactionPool { pool: self.pool.clone(), block_hash })
+	}
+}
+
+/// Wraps a `pool` and `block_hash` to implement [`sp_core::offchain::TransactionPool`].
+struct OffchainTransactionPool<Block: BlockT> {
+	block_hash: Block::Hash,
+	pool: Arc<dyn OffchainSubmitTransaction<Block>>,
+}
+
+impl<Block: BlockT> sp_core::offchain::TransactionPool for OffchainTransactionPool<Block> {
+	fn submit_transaction(&mut self, extrinsic: Vec<u8>) -> Result<(), ()> {
+		let extrinsic = match codec::Decode::decode(&mut &extrinsic[..]) {
+			Ok(t) => t,
+			Err(e) => {
+				log::error!(
+					target: LOG_TARGET,
+					"Failed to decode extrinsic in `OffchainTransactionPool::submit_transaction`: {e:?}"
+				);
+
+				return Err(())
+			},
+		};
+
+		self.pool.submit_at(self.block_hash, extrinsic)
 	}
 }
 
@@ -392,6 +469,29 @@ mod v1_compatible {
 	{
 		let hash: H = serde::Deserialize::deserialize(deserializer)?;
 		Ok((hash, 0))
+	}
+}
+
+/// Transaction pool that rejects all submitted transactions.
+///
+/// Could be used for example in tests.
+pub struct RejectAllTxPool<Block>(PhantomData<Block>);
+
+impl<Block> Default for RejectAllTxPool<Block> {
+	fn default() -> Self {
+		Self(PhantomData)
+	}
+}
+
+impl<Block: BlockT> LocalTransactionPool for RejectAllTxPool<Block> {
+	type Block = Block;
+
+	type Hash = Block::Hash;
+
+	type Error = error::Error;
+
+	fn submit_local(&self, _: Block::Hash, _: Block::Extrinsic) -> Result<Self::Hash, Self::Error> {
+		Err(error::Error::ImmediatelyDropped)
 	}
 }
 

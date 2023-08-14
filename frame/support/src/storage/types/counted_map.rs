@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 //! Storage counted map type.
 
 use crate::{
-	metadata::StorageEntryMetadata,
+	metadata_ir::StorageEntryMetadataIR,
 	storage::{
 		generator::StorageMap as _,
 		types::{
@@ -459,7 +459,7 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadataIR>) {
 		<Self as MapWrapper>::Map::build_metadata(docs, entries);
 		CounterFor::<Prefix>::build_metadata(
 			if cfg!(feature = "no-metadata-docs") {
@@ -512,7 +512,7 @@ mod test {
 	use super::*;
 	use crate::{
 		hash::*,
-		metadata::{StorageEntryModifier, StorageEntryType, StorageHasher},
+		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
 		storage::{bounded_vec::BoundedVec, types::ValueQuery},
 		traits::ConstU32,
 	};
@@ -542,6 +542,16 @@ mod test {
 		fn get() -> u32 {
 			97
 		}
+	}
+	#[crate::storage_alias]
+	type ExampleCountedMap = CountedStorageMap<Prefix, Twox64Concat, u16, u32>;
+
+	#[test]
+	fn storage_alias_works() {
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(ExampleCountedMap::count(), 0);
+			ExampleCountedMap::insert(3, 10);
+		})
 	}
 
 	#[test]
@@ -602,8 +612,9 @@ mod test {
 			assert_eq!(A::count(), 2);
 
 			// Insert an existing key, shouldn't increment counted values.
-			A::insert(3, 11);
+			A::insert(3, 12);
 
+			assert_eq!(A::try_get(3), Ok(12));
 			assert_eq!(A::count(), 2);
 
 			// Remove non-existing.
@@ -696,17 +707,17 @@ mod test {
 			// Try succeed mutate existing to existing.
 			A::try_mutate_exists(1, |query| {
 				assert_eq!(*query, Some(43));
-				*query = Some(43);
+				*query = Some(45);
 				Result::<(), ()>::Ok(())
 			})
 			.unwrap();
 
-			assert_eq!(A::try_get(1), Ok(43));
+			assert_eq!(A::try_get(1), Ok(45));
 			assert_eq!(A::count(), 4);
 
 			// Try succeed mutate existing to non-existing.
 			A::try_mutate_exists(1, |query| {
-				assert_eq!(*query, Some(43));
+				assert_eq!(*query, Some(45));
 				*query = None;
 				Result::<(), ()>::Ok(())
 			})
@@ -1137,21 +1148,21 @@ mod test {
 		assert_eq!(
 			entries,
 			vec![
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "foo",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Twox64Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Twox64Concat],
 						key: scale_info::meta_type::<u16>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: 97u32.encode(),
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "counter_for_foo",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0, 0, 0, 0],
 					docs: if cfg!(feature = "no-metadata-docs") {
 						vec![]

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,12 +19,14 @@
 use crate::{MessageIntent, Network, ValidationResult, Validator, ValidatorContext};
 
 use ahash::AHashSet;
-use libp2p::PeerId;
-use lru::LruCache;
+use libp2p_identity::PeerId;
+use schnellru::{ByLength, LruMap};
+
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
-use sc_network_common::protocol::{role::ObservedRole, ProtocolName};
-use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
-use std::{collections::HashMap, iter, num::NonZeroUsize, sync::Arc, time, time::Instant};
+use sc_network::types::ProtocolName;
+use sc_network_common::role::ObservedRole;
+use sp_runtime::traits::{Block as BlockT, Hash, HashingFor};
+use std::{collections::HashMap, iter, sync::Arc, time, time::Instant};
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 // NOTE: The current value is adjusted based on largest production network deployment (Kusama) and
@@ -35,14 +37,14 @@ use std::{collections::HashMap, iter, num::NonZeroUsize, sync::Arc, time, time::
 //
 // Assuming that each known message is tracked with a 32 byte hash (common for `Block::Hash`), then
 // this cache should take about 256 KB of memory.
-const KNOWN_MESSAGES_CACHE_SIZE: usize = 8192;
+const KNOWN_MESSAGES_CACHE_SIZE: u32 = 8192;
 
 const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_millis(750);
 
 pub(crate) const PERIODIC_MAINTENANCE_INTERVAL: time::Duration = time::Duration::from_millis(1100);
 
 mod rep {
-	use sc_peerset::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 	/// Reputation change when a peer sends us a gossip message that we didn't know about.
 	pub const GOSSIP_SUCCESS: Rep = Rep::new(1 << 4, "Successful gossip");
 	/// Reputation change when a peer sends us a gossip message that we already knew about.
@@ -154,7 +156,7 @@ where
 pub struct ConsensusGossip<B: BlockT> {
 	peers: HashMap<PeerId, PeerConsensus<B::Hash>>,
 	messages: Vec<MessageEntry<B>>,
-	known_messages: LruCache<B::Hash, ()>,
+	known_messages: LruMap<B::Hash, ()>,
 	protocol: ProtocolName,
 	validator: Arc<dyn Validator<B>>,
 	next_broadcast: Instant,
@@ -180,11 +182,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		ConsensusGossip {
 			peers: HashMap::new(),
 			messages: Default::default(),
-			known_messages: {
-				let cap = NonZeroUsize::new(KNOWN_MESSAGES_CACHE_SIZE)
-					.expect("cache capacity is not zero");
-				LruCache::new(cap)
-			},
+			known_messages: { LruMap::new(ByLength::new(KNOWN_MESSAGES_CACHE_SIZE)) },
 			protocol,
 			validator,
 			next_broadcast: Instant::now() + REBROADCAST_INTERVAL,
@@ -215,7 +213,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		message: Vec<u8>,
 		sender: Option<PeerId>,
 	) {
-		if self.known_messages.put(message_hash, ()).is_none() {
+		if self.known_messages.insert(message_hash, ()) {
 			self.messages.push(MessageEntry { message_hash, topic, message, sender });
 
 			if let Some(ref metrics) = self.metrics {
@@ -230,7 +228,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// message is already expired it should be dropped on the next garbage
 	/// collection.
 	pub fn register_message(&mut self, topic: B::Hash, message: Vec<u8>) {
-		let message_hash = HashFor::<B>::hash(&message[..]);
+		let message_hash = HashingFor::<B>::hash(&message[..]);
 		self.register_message_hashed(message_hash, topic, message, None);
 	}
 
@@ -312,7 +310,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		);
 
 		for (_, ref mut peer) in self.peers.iter_mut() {
-			peer.known_messages.retain(|h| known_messages.contains(h));
+			peer.known_messages.retain(|h| known_messages.get(h).is_some());
 		}
 	}
 
@@ -345,16 +343,24 @@ impl<B: BlockT> ConsensusGossip<B> {
 		}
 
 		for message in messages {
-			let message_hash = HashFor::<B>::hash(&message[..]);
+			let message_hash = HashingFor::<B>::hash(&message[..]);
 
-			if self.known_messages.contains(&message_hash) {
+			if self.known_messages.get(&message_hash).is_some() {
 				tracing::trace!(
 					target: "gossip",
 					%who,
 					protocol = %self.protocol,
 					"Ignored already known message",
 				);
-				network.report_peer(who, rep::DUPLICATE_GOSSIP);
+
+				// If the peer already send us the message once, let's report them.
+				if self
+					.peers
+					.get_mut(&who)
+					.map_or(false, |p| !p.known_messages.insert(message_hash))
+				{
+					network.report_peer(who, rep::DUPLICATE_GOSSIP);
+				}
 				continue
 			}
 
@@ -450,7 +456,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		message: Vec<u8>,
 		force: bool,
 	) {
-		let message_hash = HashFor::<B>::hash(&message);
+		let message_hash = HashingFor::<B>::hash(&message);
 		self.register_message_hashed(message_hash, topic, message.clone(), None);
 		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
 		propagate(
@@ -471,7 +477,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			Some(peer) => peer,
 		};
 
-		let message_hash = HashFor::<B>::hash(&message);
+		let message_hash = HashingFor::<B>::hash(&message);
 
 		tracing::trace!(
 			target: "gossip",
@@ -515,17 +521,13 @@ impl Metrics {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::multiaddr::Multiaddr;
 	use futures::prelude::*;
-	use sc_network_common::{
-		config::MultiaddrWithPeerId,
-		protocol::event::Event,
-		service::{
-			NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
-			NotificationSender, NotificationSenderError,
-		},
+	use multiaddr::Multiaddr;
+	use sc_network::{
+		config::MultiaddrWithPeerId, event::Event, NetworkBlock, NetworkEventStream,
+		NetworkNotification, NetworkPeers, NotificationSenderError,
+		NotificationSenderT as NotificationSender, ReputationChange,
 	};
-	use sc_peerset::ReputationChange;
 	use sp_runtime::{
 		testing::{Block as RawBlock, ExtrinsicWrapper, H256},
 		traits::NumberFor,
@@ -540,7 +542,7 @@ mod tests {
 
 	macro_rules! push_msg {
 		($consensus:expr, $topic:expr, $hash: expr, $m:expr) => {
-			if $consensus.known_messages.put($hash, ()).is_none() {
+			if $consensus.known_messages.insert($hash, ()) {
 				$consensus.messages.push(MessageEntry {
 					message_hash: $hash,
 					topic: $topic,
@@ -638,17 +640,11 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {}
-
-		fn add_to_peers_set(
+		fn remove_peers_from_reserved_set(
 			&self,
 			_protocol: ProtocolName,
-			_peers: HashSet<Multiaddr>,
+			_peers: Vec<PeerId>,
 		) -> Result<(), String> {
-			unimplemented!();
-		}
-
-		fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
 			unimplemented!();
 		}
 
@@ -673,6 +669,10 @@ mod tests {
 			_target: PeerId,
 			_protocol: ProtocolName,
 		) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
+			unimplemented!();
+		}
+
+		fn set_notification_handshake(&self, _protocol: ProtocolName, _handshake: Vec<u8>) {
 			unimplemented!();
 		}
 	}
@@ -723,8 +723,8 @@ mod tests {
 
 		push_msg!(consensus, prev_hash, m1_hash, m1);
 		push_msg!(consensus, best_hash, m2_hash, m2);
-		consensus.known_messages.put(m1_hash, ());
-		consensus.known_messages.put(m2_hash, ());
+		consensus.known_messages.insert(m1_hash, ());
+		consensus.known_messages.insert(m2_hash, ());
 
 		consensus.collect_garbage();
 		assert_eq!(consensus.messages.len(), 2);
@@ -737,7 +737,7 @@ mod tests {
 		assert_eq!(consensus.messages.len(), 1);
 		// known messages are only pruned based on size.
 		assert_eq!(consensus.known_messages.len(), 2);
-		assert!(consensus.known_messages.contains(&m2_hash));
+		assert!(consensus.known_messages.get(&m2_hash).is_some());
 	}
 
 	#[test]
@@ -746,7 +746,7 @@ mod tests {
 
 		// Register message.
 		let message = vec![4, 5, 6];
-		let topic = HashFor::<Block>::hash(&[1, 2, 3]);
+		let topic = HashingFor::<Block>::hash(&[1, 2, 3]);
 		consensus.register_message(topic, message.clone());
 
 		assert_eq!(
@@ -812,6 +812,32 @@ mod tests {
 			to_forward.is_empty(),
 			"Expected `on_incoming` to ignore message from unregistered peer but got {:?}",
 			to_forward,
+		);
+	}
+
+	// Two peers can send us the same gossip message. We should not report the second peer
+	// sending the gossip message as long as its the first time the peer send us this message.
+	#[test]
+	fn do_not_report_peer_for_first_time_duplicate_gossip_message() {
+		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into(), None);
+
+		let mut network = NoOpNetwork::default();
+
+		let peer_id = PeerId::random();
+		consensus.new_peer(&mut network, peer_id, ObservedRole::Full);
+		assert!(consensus.peers.contains_key(&peer_id));
+
+		let peer_id2 = PeerId::random();
+		consensus.new_peer(&mut network, peer_id2, ObservedRole::Full);
+		assert!(consensus.peers.contains_key(&peer_id2));
+
+		let message = vec![vec![1, 2, 3]];
+		consensus.on_incoming(&mut network, peer_id, message.clone());
+		consensus.on_incoming(&mut network, peer_id2, message.clone());
+
+		assert_eq!(
+			vec![(peer_id, rep::GOSSIP_SUCCESS)],
+			network.inner.lock().unwrap().peer_reports
 		);
 	}
 }

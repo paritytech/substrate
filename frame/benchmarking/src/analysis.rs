@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -161,7 +161,7 @@ fn raw_linear_regression(
 		data.extend(xs);
 	}
 	let model = linregress::fit_low_level_regression_model(&data, ys.len(), x_vars + 2).ok()?;
-	Some((model.parameters[0], model.parameters[1..].to_vec(), model.se))
+	Some((model.parameters()[0], model.parameters()[1..].to_vec(), model.se().to_vec()))
 }
 
 fn linear_regression(

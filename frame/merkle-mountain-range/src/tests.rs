@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,9 +23,10 @@ use sp_core::{
 	H256,
 };
 use sp_mmr_primitives::{mmr_lib::helper, utils, Compact, Proof};
+use sp_runtime::BuildStorage;
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+	frame_system::GenesisConfig::<Test>::default().build_storage().unwrap().into()
 }
 
 fn register_offchain_ext(ext: &mut sp_io::TestExternalities) {
@@ -53,7 +54,7 @@ pub(crate) fn hex(s: &str) -> H256 {
 	s.parse().unwrap()
 }
 
-type BlockNumber = <Test as frame_system::Config>::BlockNumber;
+type BlockNumber = frame_system::pallet_prelude::BlockNumberFor<Test>;
 
 fn decode_node(
 	v: Vec<u8>,

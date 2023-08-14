@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,6 +24,13 @@
 /// Should be used together with the [`crate::defer!`] macro.
 #[must_use]
 pub struct DeferGuard<F: FnOnce()>(pub Option<F>);
+
+impl<F: FnOnce()> DeferGuard<F> {
+	/// Creates a new `DeferGuard` with the given closure.
+	pub fn new(f: F) -> Self {
+		Self(Some(f))
+	}
+}
 
 impl<F: FnOnce()> Drop for DeferGuard<F> {
 	fn drop(&mut self) {

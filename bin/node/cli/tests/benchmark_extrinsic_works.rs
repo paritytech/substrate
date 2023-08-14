@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -32,13 +32,14 @@ fn benchmark_extrinsic_works() {
 fn benchmark_extrinsic(pallet: &str, extrinsic: &str) {
 	let base_dir = tempdir().expect("could not create a temp dir");
 
-	let status = Command::new(cargo_bin("substrate"))
+	let status = Command::new(cargo_bin("substrate-node"))
 		.args(&["benchmark", "extrinsic", "--dev"])
 		.arg("-d")
 		.arg(base_dir.path())
 		.args(&["--pallet", pallet, "--extrinsic", extrinsic])
 		// Run with low repeats for faster execution.
 		.args(["--warmup=10", "--repeat=10", "--max-ext-per-block=10"])
+		.args(["--wasm-execution=compiled"])
 		.status()
 		.unwrap();
 

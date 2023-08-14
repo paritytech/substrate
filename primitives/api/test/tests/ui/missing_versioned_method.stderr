@@ -1,8 +1,8 @@
 error[E0046]: not all trait items implemented, missing: `test3`
-  --> tests/ui/missing_versioned_method.rs:21:2
+  --> tests/ui/missing_versioned_method.rs:18:2
    |
-15 |         fn test3();
+12 |         fn test3();
    |         ----------- `test3` from trait
 ...
-21 |     impl self::Api<Block> for Runtime {
+18 |     impl self::Api<Block> for Runtime {
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `test3` in implementation

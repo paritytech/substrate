@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -70,7 +70,7 @@
 //!
 //! 	#[pallet::call]
 //! 	impl<T: Config> Pallet<T> {
-//! 		#[pallet::weight(0)]
+//! 		#[pallet::weight({0})]
 //! 		pub fn candidate(origin: OriginFor<T>) -> DispatchResult {
 //! 			let who = ensure_signed(origin)?;
 //!
@@ -135,7 +135,6 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
@@ -171,7 +170,7 @@ pub mod pallet {
 		/// Every `Period` blocks the `Members` are filled with the highest scoring
 		/// members in the `Pool`.
 		#[pallet::constant]
-		type Period: Get<Self::BlockNumber>;
+		type Period: Get<BlockNumberFor<Self>>;
 
 		/// The receiver of the signal for when the membership has been initialized.
 		/// This happens pre-genesis and will usually be the same as `MembershipChanged`.
@@ -250,20 +249,14 @@ pub mod pallet {
 	pub(crate) type MemberCount<T, I = ()> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub pool: PoolT<T, I>,
 		pub member_count: u32,
 	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
-		fn default() -> Self {
-			Self { pool: Default::default(), member_count: Default::default() }
-		}
-	}
-
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			let mut pool = self.pool.clone();
 
@@ -289,7 +282,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		/// Every `Period` blocks the `Members` set is refreshed from the
 		/// highest scoring members in the pool.
-		fn on_initialize(n: T::BlockNumber) -> Weight {
+		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
 			if n % T::Period::get() == Zero::zero() {
 				let pool = <Pool<T, I>>::get();
 				<Pallet<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);
@@ -312,7 +305,7 @@ pub mod pallet {
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
 		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn submit_candidacy(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(!<CandidateExists<T, I>>::contains_key(&who), Error::<T, I>::AlreadyInPool);
@@ -342,7 +335,7 @@ pub mod pallet {
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
 		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn withdraw_candidacy(origin: OriginFor<T>, index: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -361,7 +354,7 @@ pub mod pallet {
 		/// The `index` parameter of this function must be set to
 		/// the index of `dest` in the `Pool`.
 		#[pallet::call_index(2)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn kick(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -386,7 +379,7 @@ pub mod pallet {
 		/// The `index` parameter of this function must be set to
 		/// the index of the `dest` in the `Pool`.
 		#[pallet::call_index(3)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn score(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -426,7 +419,7 @@ pub mod pallet {
 		///
 		/// May only be called from root.
 		#[pallet::call_index(4)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn change_member_count(origin: OriginFor<T>, count: u32) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::update_member_count(count).map_err(Into::into)

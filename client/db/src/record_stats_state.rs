@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,12 +21,12 @@
 use crate::stats::StateUsageStats;
 use sp_core::storage::ChildInfo;
 use sp_runtime::{
-	traits::{Block as BlockT, HashFor},
+	traits::{Block as BlockT, HashingFor},
 	StateVersion,
 };
 use sp_state_machine::{
 	backend::{AsTrieBackend, Backend as StateBackend},
-	TrieBackend,
+	IterArgs, StorageIterator, StorageKey, StorageValue, TrieBackend,
 };
 use std::sync::Arc;
 
@@ -56,7 +56,7 @@ impl<S, B: BlockT> Drop for RecordStatsState<S, B> {
 	}
 }
 
-impl<S: StateBackend<HashFor<B>>, B: BlockT> RecordStatsState<S, B> {
+impl<S: StateBackend<HashingFor<B>>, B: BlockT> RecordStatsState<S, B> {
 	/// Create a new instance wrapping generic State and shared cache.
 	pub(crate) fn new(
 		state: S,
@@ -73,10 +73,45 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> RecordStatsState<S, B> {
 	}
 }
 
-impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for RecordStatsState<S, B> {
+pub struct RawIter<S, B>
+where
+	S: StateBackend<HashingFor<B>>,
+	B: BlockT,
+{
+	inner: <S as StateBackend<HashingFor<B>>>::RawIter,
+}
+
+impl<S, B> StorageIterator<HashingFor<B>> for RawIter<S, B>
+where
+	S: StateBackend<HashingFor<B>>,
+	B: BlockT,
+{
+	type Backend = RecordStatsState<S, B>;
+	type Error = S::Error;
+
+	fn next_key(&mut self, backend: &Self::Backend) -> Option<Result<StorageKey, Self::Error>> {
+		self.inner.next_key(&backend.state)
+	}
+
+	fn next_pair(
+		&mut self,
+		backend: &Self::Backend,
+	) -> Option<Result<(StorageKey, StorageValue), Self::Error>> {
+		self.inner.next_pair(&backend.state)
+	}
+
+	fn was_complete(&self) -> bool {
+		self.inner.was_complete()
+	}
+}
+
+impl<S: StateBackend<HashingFor<B>>, B: BlockT> StateBackend<HashingFor<B>>
+	for RecordStatsState<S, B>
+{
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
+	type RawIter = RawIter<S, B>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		let value = self.state.storage(key)?;
@@ -122,28 +157,6 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Record
 		self.state.exists_child_storage(child_info, key)
 	}
 
-	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		f: F,
-		allow_missing: bool,
-	) -> Result<bool, Self::Error> {
-		self.state
-			.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
-	}
-
-	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
-		&self,
-		child_info: Option<&ChildInfo>,
-		prefix: Option<&[u8]>,
-		start_at: Option<&[u8]>,
-		f: F,
-	) {
-		self.state.apply_to_keys_while(child_info, prefix, start_at, f)
-	}
-
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.next_storage_key(key)
 	}
@@ -156,31 +169,11 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Record
 		self.state.next_child_storage_key(child_info, key)
 	}
 
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.state.for_keys_with_prefix(prefix, f)
-	}
-
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.state.for_key_values_with_prefix(prefix, f)
-	}
-
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-		f: F,
-	) {
-		self.state.for_child_keys_with_prefix(child_info, prefix, f)
-	}
-
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, Self::Transaction)
-	where
-		B::Hash: Ord,
-	{
+	) -> (B::Hash, Self::Transaction) {
 		self.state.storage_root(delta, state_version)
 	}
 
@@ -189,23 +182,12 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Record
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, Self::Transaction)
-	where
-		B::Hash: Ord,
-	{
+	) -> (B::Hash, bool, Self::Transaction) {
 		self.state.child_storage_root(child_info, delta, state_version)
 	}
 
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.state.pairs()
-	}
-
-	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.state.keys(prefix)
-	}
-
-	fn child_keys(&self, child_info: &ChildInfo, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.state.child_keys(child_info, prefix)
+	fn raw_iter(&self, args: IterArgs) -> Result<Self::RawIter, Self::Error> {
+		self.state.raw_iter(args).map(|inner| RawIter { inner })
 	}
 
 	fn register_overlay_stats(&self, stats: &sp_state_machine::StateMachineStats) {
@@ -219,12 +201,12 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Record
 	}
 }
 
-impl<S: StateBackend<HashFor<B>> + AsTrieBackend<HashFor<B>>, B: BlockT> AsTrieBackend<HashFor<B>>
-	for RecordStatsState<S, B>
+impl<S: StateBackend<HashingFor<B>> + AsTrieBackend<HashingFor<B>>, B: BlockT>
+	AsTrieBackend<HashingFor<B>> for RecordStatsState<S, B>
 {
-	type TrieBackendStorage = <S as AsTrieBackend<HashFor<B>>>::TrieBackendStorage;
+	type TrieBackendStorage = <S as AsTrieBackend<HashingFor<B>>>::TrieBackendStorage;
 
-	fn as_trie_backend(&self) -> &TrieBackend<Self::TrieBackendStorage, HashFor<B>> {
+	fn as_trie_backend(&self) -> &TrieBackend<Self::TrieBackendStorage, HashingFor<B>> {
 		self.state.as_trie_backend()
 	}
 }

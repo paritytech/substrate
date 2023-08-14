@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -150,7 +150,7 @@ pub enum Error {
 	#[error("Transaction pool not ready for block production.")]
 	TransactionPoolNotReady,
 
-	#[error("Database")]
+	#[error("Database error: {0}")]
 	DatabaseError(#[from] sp_database::error::DatabaseError),
 
 	#[error("Failed to get header for hash {0}")]
@@ -158,6 +158,9 @@ pub enum Error {
 
 	#[error("State Database error: {0}")]
 	StateDatabase(String),
+
+	#[error("Statement store error: {0}")]
+	StatementStore(String),
 
 	#[error("Failed to set the chain head to a block that's too old.")]
 	SetHeadTooOld,

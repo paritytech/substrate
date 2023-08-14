@@ -12,11 +12,12 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-array-bytes = "4.1"
+async-channel = "1.8.0"
+array-bytes = "6.1"
 fdlimit = "0.2.1"
 futures = "0.3.21"
 log = "0.4.17"
-parity-scale-codec = "3.2.2"
+parity-scale-codec = "3.6.1"
 parking_lot = "0.12.1"
 tempfile = "3.1.0"
 tokio = { version = "1.22.0", features = ["time"] }
@@ -26,18 +27,18 @@ sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../..
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sc-executor = { version = "0.10.0-dev", path = "../../executor" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
-sc-network-common = { version = "0.10.0-dev", path = "../../network/common" }
+sc-network-sync = { version = "0.10.0-dev", path = "../../network/sync" }
 sc-service = { version = "0.10.0-dev", features = ["test-helpers"], path = "../../service" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
-sp-state-machine = { version = "0.13.0", path = "../../../primitives/state-machine" }
-sp-storage = { version = "7.0.0", path = "../../../primitives/storage" }
-sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
-sp-trie = { version = "7.0.0", path = "../../../primitives/trie" }
-sp-io = { version = "7.0.0", path = "../../../primitives/io" }
+sp-core = { version = "21.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }
+sp-state-machine = { version = "0.28.0", path = "../../../primitives/state-machine" }
+sp-storage = { version = "13.0.0", path = "../../../primitives/storage" }
+sp-tracing = { version = "10.0.0", path = "../../../primitives/tracing" }
+sp-trie = { version = "22.0.0", path = "../../../primitives/trie" }
+sp-io = { version = "23.0.0", path = "../../../primitives/io" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

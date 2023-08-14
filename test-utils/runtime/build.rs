@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+const BUILD_NO_GENESIS_BUILDER_SUPPORT_ENV: &str = "BUILD_NO_GENESIS_BUILDER_SUPPORT";
+
 fn main() {
 	#[cfg(feature = "std")]
 	{
@@ -28,6 +30,19 @@ fn main() {
 			.import_memory()
 			.build();
 	}
+
+	#[cfg(feature = "std")]
+	if std::env::var(BUILD_NO_GENESIS_BUILDER_SUPPORT_ENV).is_ok() {
+		substrate_wasm_builder::WasmBuilder::new()
+			.with_current_project()
+			.export_heap_base()
+			.append_to_rust_flags("-Clink-arg=-zstack-size=1048576")
+			.set_file_name("wasm_binary_no_genesis_builder")
+			.import_memory()
+			.enable_feature("disable-genesis-builder")
+			.build();
+	}
+	println!("cargo:rerun-if-env-changed={}", BUILD_NO_GENESIS_BUILDER_SUPPORT_ENV);
 
 	#[cfg(feature = "std")]
 	{

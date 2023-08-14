@@ -19,19 +19,19 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../..
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../../session" }
 pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../staking" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
-codec = { package = "parity-scale-codec", version = "3.2.2", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.6.1", features = ["derive"] }
 scale-info = "2.1.1"
 frame-election-provider-support = { version = "4.0.0-dev", path = "../../election-provider-support" }
 pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-io = { version = "7.0.0", path = "../../../primitives/io" }
+sp-core = { version = "21.0.0", path = "../../../primitives/core" }
+sp-io = { version = "23.0.0", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]
@@ -45,8 +45,20 @@ std = [
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-std/std",
+	"frame-election-provider-support/std",
+	"pallet-balances/std",
+	"pallet-timestamp/std",
+	"sp-core/std",
+	"sp-io/std"
 ]
 
 runtime-benchmarks = [
 	"pallet-staking/runtime-benchmarks",
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-election-provider-support/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
+	"pallet-timestamp/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks"
 ]

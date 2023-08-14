@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -187,8 +187,10 @@ pub trait ChildBountyManager<Balance> {
 pub mod pallet {
 	use super::*;
 
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
+
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
@@ -199,11 +201,11 @@ pub mod pallet {
 
 		/// The delay period for which a bounty beneficiary need to wait before claim the payout.
 		#[pallet::constant]
-		type BountyDepositPayoutDelay: Get<Self::BlockNumber>;
+		type BountyDepositPayoutDelay: Get<BlockNumberFor<Self>>;
 
 		/// Bounty duration in blocks.
 		#[pallet::constant]
-		type BountyUpdatePeriod: Get<Self::BlockNumber>;
+		type BountyUpdatePeriod: Get<BlockNumberFor<Self>>;
 
 		/// The curator deposit is calculated as a percentage of the curator fee.
 		///
@@ -303,7 +305,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		BountyIndex,
-		Bounty<T::AccountId, BalanceOf<T, I>, T::BlockNumber>,
+		Bounty<T::AccountId, BalanceOf<T, I>, BlockNumberFor<T>>,
 	>;
 
 	/// The description of each bounty.
@@ -349,9 +351,8 @@ pub mod pallet {
 		///
 		/// May only be called from `T::SpendOrigin`.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::approve_bounty())]
 		pub fn approve_bounty(
@@ -360,7 +361,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
-				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
+				let bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 				ensure!(
 					bounty.value <= max_amount,
 					pallet_treasury::Error::<T, I>::InsufficientPermission
@@ -381,9 +382,8 @@ pub mod pallet {
 		///
 		/// May only be called from `T::SpendOrigin`.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::propose_curator())]
 		pub fn propose_curator(
@@ -396,7 +396,7 @@ pub mod pallet {
 
 			let curator = T::Lookup::lookup(curator)?;
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
-				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
+				let bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 				ensure!(
 					bounty.value <= max_amount,
 					pallet_treasury::Error::<T, I>::InsufficientPermission
@@ -431,9 +431,8 @@ pub mod pallet {
 		/// anyone in the community to call out that a curator is not doing their due diligence, and
 		/// we should pick a new curator. In this case the curator should also be slashed.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(3)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::unassign_curator())]
 		pub fn unassign_curator(
@@ -445,7 +444,7 @@ pub mod pallet {
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
-				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
+				let bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 
 				let slash_curator = |curator: &T::AccountId,
 				                     curator_deposit: &mut BalanceOf<T, I>| {
@@ -517,9 +516,8 @@ pub mod pallet {
 		///
 		/// May only be called from the curator.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(4)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::accept_curator())]
 		pub fn accept_curator(
@@ -529,7 +527,7 @@ pub mod pallet {
 			let signer = ensure_signed(origin)?;
 
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
-				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
+				let bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 
 				match bounty.status {
 					BountyStatus::CuratorProposed { ref curator } => {
@@ -560,9 +558,8 @@ pub mod pallet {
 		/// - `bounty_id`: Bounty ID to award.
 		/// - `beneficiary`: The beneficiary account whom will receive the payout.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(5)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::award_bounty())]
 		pub fn award_bounty(
@@ -574,7 +571,7 @@ pub mod pallet {
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
-				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
+				let bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 
 				// Ensure no active child bounties before processing the call.
 				ensure!(
@@ -608,9 +605,8 @@ pub mod pallet {
 		///
 		/// - `bounty_id`: Bounty ID to claim.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(6)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::claim_bounty())]
 		pub fn claim_bounty(
@@ -672,9 +668,8 @@ pub mod pallet {
 		///
 		/// - `bounty_id`: Bounty ID to cancel.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(7)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::close_bounty_proposed()
 			.max(<T as Config<I>>::WeightInfo::close_bounty_active()))]
@@ -764,9 +759,8 @@ pub mod pallet {
 		/// - `bounty_id`: Bounty ID to extend.
 		/// - `remark`: additional information.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// # </weight>
 		#[pallet::call_index(8)]
 		#[pallet::weight(<T as Config<I>>::WeightInfo::extend_bounty_expiry())]
 		pub fn extend_bounty_expiry(

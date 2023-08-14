@@ -2,11 +2,11 @@ version: 2
 updates:
   - package-ecosystem: "cargo"
     directory: "/"
-    labels: ["A2-insubstantial", "B0-silent", "C1-low 📌"]
+    labels: ["A2-insubstantial", "B0-silent", "C1-low", "E2-dependencies"]
     schedule:
       interval: "daily"
   - package-ecosystem: github-actions
     directory: '/'
-    labels: ["A2-insubstantial", "B0-silent", "C1-low 📌", "E3-dependencies"]
+    labels: ["A2-insubstantial", "B0-silent", "C1-low", "E2-dependencies"]
     schedule:
       interval: daily

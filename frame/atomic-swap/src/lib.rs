@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,6 +50,7 @@ use frame_support::{
 	weights::Weight,
 	RuntimeDebugNoBound,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::RuntimeDebug;
@@ -69,7 +70,7 @@ pub struct PendingSwap<T: Config> {
 	/// Action of this swap.
 	pub action: T::SwapAction,
 	/// End block of the lock.
-	pub end_block: T::BlockNumber,
+	pub end_block: BlockNumberFor<T>,
 }
 
 /// Hashed proof type.
@@ -184,8 +185,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::storage]
 	pub type PendingSwaps<T: Config> = StorageDoubleMap<
@@ -250,7 +250,7 @@ pub mod pallet {
 			target: T::AccountId,
 			hashed_proof: HashedProof,
 			action: T::SwapAction,
-			duration: T::BlockNumber,
+			duration: BlockNumberFor<T>,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			ensure!(

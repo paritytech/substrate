@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +25,10 @@ pub use sc_executor::NativeElseWasmExecutor;
 pub struct ExecutorDispatch;
 
 impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
-	type ExtendHostFunctions = frame_benchmarking::benchmarking::HostFunctions;
+	type ExtendHostFunctions = (
+		frame_benchmarking::benchmarking::HostFunctions,
+		sp_statement_store::runtime_api::HostFunctions,
+	);
 
 	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
 		kitchensink_runtime::api::dispatch(method, data)

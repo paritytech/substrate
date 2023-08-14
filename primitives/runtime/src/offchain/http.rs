@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -343,10 +343,10 @@ impl Response {
 /// A buffered byte iterator over response body.
 ///
 /// Note that reading the body may return `None` in following cases:
-/// 1. Either the deadline you've set is reached (check via `#error`;
-/// 	   In such case you can resume the reader by setting a new deadline)
-/// 2. Or because of IOError. In such case the reader is not resumable and will keep
-///    returning `None`.
+/// 1. Either the deadline you've set is reached (check via `#error`; In such case you can resume
+///    the reader by setting a new deadline)
+/// 2. Or because of IOError. In such case the reader is not resumable and will keep returning
+///    `None`.
 /// 3. The body has been returned. The reader will keep returning `None`.
 #[derive(Clone)]
 pub struct ResponseBody {
@@ -450,7 +450,7 @@ impl Headers {
 	/// and collect them on your own.
 	pub fn find(&self, name: &str) -> Option<&str> {
 		let raw = name.as_bytes();
-		for &(ref key, ref val) in &self.raw {
+		for (key, val) in &self.raw {
 			if &**key == raw {
 				return str::from_utf8(val).ok()
 			}

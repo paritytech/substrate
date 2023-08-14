@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -87,8 +87,6 @@
 //!
 //! The following multiplexing protocols are supported:
 //!
-//! - [Mplex](https://github.com/libp2p/specs/tree/master/mplex). Support for mplex will likely
-//! be deprecated in the future.
 //! - [Yamux](https://github.com/hashicorp/yamux/blob/master/spec.md).
 //!
 //! ## Substreams
@@ -212,7 +210,7 @@
 //! `sc-network` automatically tries to open a substream towards each node for which the legacy
 //! Substream substream is open. The handshake is then performed automatically.
 //!
-//! For example, the `sc-finality-grandpa` crate registers the `/paritytech/grandpa/1`
+//! For example, the `sc-consensus-grandpa` crate registers the `/paritytech/grandpa/1`
 //! notifications protocol.
 //!
 //! At the moment, for backwards-compatibility, notification protocols are tied to the legacy
@@ -245,44 +243,49 @@
 //! More precise usage details are still being worked on and will likely change in the future.
 
 mod behaviour;
-mod discovery;
-mod peer_info;
 mod protocol;
-mod request_responses;
 mod service;
-mod transport;
+
+#[cfg(test)]
+mod mock;
 
 pub mod config;
+pub mod discovery;
+pub mod error;
+pub mod event;
 pub mod network_state;
+pub mod peer_info;
+pub mod peer_store;
+pub mod protocol_controller;
+pub mod request_responses;
+pub mod transport;
+pub mod types;
+pub mod utils;
 
+pub use event::{DhtEvent, Event, SyncEvent};
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-pub use protocol::PeerInfo;
-use sc_consensus::{JustificationSyncLink, Link};
+pub use request_responses::{Config, IfDisconnected, RequestFailure};
 pub use sc_network_common::{
-	protocol::{
-		event::{DhtEvent, Event},
-		role::ObservedRole,
-		ProtocolName,
-	},
-	request_responses::{IfDisconnected, RequestFailure},
-	service::{
-		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkRequest, NetworkSigner,
-		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest, Signature,
-		SigningError,
-	},
+	role::ObservedRole,
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
-		StateDownloadProgress, SyncState,
+		ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState, SyncStatusProvider,
 	},
+	types::ReputationChange,
 };
 pub use service::{
-	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender,
-	NotificationSenderReady, OutboundFailure, PublicKey,
+	signature::Signature,
+	traits::{
+		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkEventStream, NetworkNotification,
+		NetworkPeers, NetworkRequest, NetworkSigner, NetworkStateInfo, NetworkStatus,
+		NetworkStatusProvider, NetworkSyncForkRequest, NotificationSender as NotificationSenderT,
+		NotificationSenderError, NotificationSenderReady,
+	},
+	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender, NotificationsSink,
+	OutboundFailure, PublicKey,
 };
-use sp_runtime::traits::{Block as BlockT, NumberFor};
-
-pub use sc_peerset::ReputationChange;
+pub use types::ProtocolName;
 
 /// The maximum allowed number of established connections per peer.
 ///
@@ -295,18 +298,3 @@ const MAX_CONNECTIONS_PER_PEER: usize = 2;
 
 /// The maximum number of concurrent established connections that were incoming.
 const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
-
-/// Abstraction over syncing-related services
-pub trait ChainSyncInterface<B: BlockT>:
-	NetworkSyncForkRequest<B::Hash, NumberFor<B>> + JustificationSyncLink<B> + Link<B> + Send + Sync
-{
-}
-
-impl<T, B: BlockT> ChainSyncInterface<B> for T where
-	T: NetworkSyncForkRequest<B::Hash, NumberFor<B>>
-		+ JustificationSyncLink<B>
-		+ Link<B>
-		+ Send
-		+ Sync
-{
-}

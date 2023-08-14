@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,22 +23,23 @@ use frame_benchmarking::{
 };
 use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
-use sc_cli::{
-	execution_method_from_cli, CliConfiguration, ExecutionStrategy, Result, SharedParams,
-};
+use sc_cli::{execution_method_from_cli, CliConfiguration, Result, SharedParams};
 use sc_client_db::BenchmarkingState;
-use sc_executor::NativeElseWasmExecutor;
-use sc_service::{Configuration, NativeExecutionDispatch};
+use sc_executor::WasmExecutor;
+use sc_service::Configuration;
 use serde::Serialize;
-use sp_core::offchain::{
-	testing::{TestOffchainExt, TestTransactionPoolExt},
-	OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
+use sp_core::{
+	offchain::{
+		testing::{TestOffchainExt, TestTransactionPoolExt},
+		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
+	},
+	traits::{CallContext, ReadRuntimeVersionExt},
 };
 use sp_externalities::Extensions;
-use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
+use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_state_machine::StateMachine;
-use std::{collections::HashMap, fmt::Debug, fs, str::FromStr, sync::Arc, time};
+use std::{collections::HashMap, fmt::Debug, fs, str::FromStr, time};
 
 /// Logging target
 const LOG_TARGET: &'static str = "frame::benchmark::pallet";
@@ -140,13 +141,22 @@ not created by a node that was compiled with the flag";
 
 impl PalletCmd {
 	/// Runs the command and benchmarks the chain.
-	pub fn run<BB, ExecDispatch>(&self, config: Configuration) -> Result<()>
+	pub fn run<BB, ExtraHostFunctions>(&self, config: Configuration) -> Result<()>
 	where
 		BB: BlockT + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
-		ExecDispatch: NativeExecutionDispatch + 'static,
+		ExtraHostFunctions: sp_wasm_interface::HostFunctions,
 	{
+		let _d = self.execution.as_ref().map(|exec| {
+			// We print the warning at the end, since there is often A LOT of output.
+			sp_core::defer::DeferGuard::new(move || {
+				log::warn!(
+					target: LOG_TARGET,
+					"⚠️  Argument `--execution` is deprecated. Its value of `{exec}` has on effect.",
+				)
+			})
+		});
+
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
 				return Err("Output file or path is invalid!".into())
@@ -180,7 +190,6 @@ impl PalletCmd {
 		}
 
 		let spec = config.chain_spec;
-		let strategy = self.execution.unwrap_or(ExecutionStrategy::Native);
 		let pallet = self.pallet.clone().unwrap_or_default();
 		let pallet = pallet.as_bytes();
 		let extrinsic = self.extrinsic.clone().unwrap_or_default();
@@ -206,21 +215,30 @@ impl PalletCmd {
 			// Do not enable storage tracking
 			false,
 		)?;
-		let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
-			execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy),
-			self.heap_pages,
-			2, // The runtime instances cache size.
-			2, // The runtime cache size
-		);
+
+		let method =
+			execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy);
+
+		let executor = WasmExecutor::<(
+			sp_io::SubstrateHostFunctions,
+			frame_benchmarking::benchmarking::HostFunctions,
+			ExtraHostFunctions,
+		)>::builder()
+		.with_execution_method(method)
+		.with_max_runtime_instances(2)
+		.with_runtime_cache_size(2)
+		.build();
 
 		let extensions = || -> Extensions {
 			let mut extensions = Extensions::default();
-			extensions.register(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
 			let (offchain, _) = TestOffchainExt::new();
 			let (pool, _) = TestTransactionPoolExt::new();
+			let keystore = MemoryKeystore::new();
+			extensions.register(KeystoreExt::new(keystore));
 			extensions.register(OffchainWorkerExt::new(offchain.clone()));
 			extensions.register(OffchainDbExt::new(offchain));
 			extensions.register(TransactionPoolExt::new(pool));
+			extensions.register(ReadRuntimeVersionExt::new(executor.clone()));
 			extensions
 		};
 
@@ -232,11 +250,11 @@ impl PalletCmd {
 			&executor,
 			"Benchmark_benchmark_metadata",
 			&(self.extra).encode(),
-			extensions(),
+			&mut extensions(),
 			&sp_state_machine::backend::BackendRuntimeCode::new(state).runtime_code()?,
-			sp_core::testing::TaskExecutor::new(),
+			CallContext::Offchain,
 		)
-		.execute(strategy.into())
+		.execute()
 		.map_err(|e| format!("{}: {}", ERROR_METADATA_NOT_FOUND, e))?;
 
 		let (list, storage_info) =
@@ -368,12 +386,12 @@ impl PalletCmd {
 							1,    // no need to do internal repeats
 						)
 							.encode(),
-						extensions(),
+						&mut extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
-						sp_core::testing::TaskExecutor::new(),
+						CallContext::Offchain,
 					)
-					.execute(strategy.into())
+					.execute()
 					.map_err(|e| {
 						format!("Error executing and verifying runtime benchmark: {}", e)
 					})?;
@@ -408,12 +426,12 @@ impl PalletCmd {
 							self.repeat,
 						)
 							.encode(),
-						extensions(),
+						&mut extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
-						sp_core::testing::TaskExecutor::new(),
+						CallContext::Offchain,
 					)
-					.execute(strategy.into())
+					.execute()
 					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;
 
 					let batch =
@@ -440,12 +458,12 @@ impl PalletCmd {
 							self.repeat,
 						)
 							.encode(),
-						extensions(),
+						&mut extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
-						sp_core::testing::TaskExecutor::new(),
+						CallContext::Offchain,
 					)
-					.execute(strategy.into())
+					.execute()
 					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;
 
 					let batch =
@@ -463,7 +481,7 @@ impl PalletCmd {
 
 							log::info!(
 								target: LOG_TARGET,
-								"Running Benchmark: {}.{}({} args) {}/{} {}/{}",
+								"Running  benchmark: {}.{}({} args) {}/{} {}/{}",
 								String::from_utf8(pallet.clone())
 									.expect("Encoded from String; qed"),
 								String::from_utf8(extrinsic.clone())
@@ -613,12 +631,6 @@ impl PalletCmd {
 				println!("Raw Storage Info\n========");
 				for comment in comments {
 					println!("{}", comment);
-				}
-				println!();
-
-				println!("-- Proof Sizes --\n");
-				for result in batch.db_results.iter() {
-					println!("{} bytes", result.proof_size);
 				}
 				println!();
 			}

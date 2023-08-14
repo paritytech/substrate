@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -65,11 +65,10 @@ impl log::Log for RuntimeLogger {
 
 #[cfg(test)]
 mod tests {
-	use sp_api::{BlockId, ProvideRuntimeApi};
+	use sp_api::ProvideRuntimeApi;
 	use std::{env, str::FromStr};
 	use substrate_test_runtime_client::{
-		runtime::TestAPI, DefaultTestClientBuilderExt, ExecutionStrategy, TestClientBuilder,
-		TestClientBuilderExt,
+		runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
 	};
 
 	#[test]
@@ -78,12 +77,11 @@ mod tests {
 			sp_tracing::try_init_simple();
 			log::set_max_level(log::LevelFilter::from_str(&env::var("RUST_LOG").unwrap()).unwrap());
 
-			let client = TestClientBuilder::new()
-				.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
-				.build();
+			let client = TestClientBuilder::new().build();
 			let runtime_api = client.runtime_api();
-			let block_id = BlockId::Number(0);
-			runtime_api.do_trace_log(&block_id).expect("Logging should not fail");
+			runtime_api
+				.do_trace_log(client.chain_info().genesis_hash)
+				.expect("Logging should not fail");
 		} else {
 			for (level, should_print) in &[("trace", true), ("info", false)] {
 				let executable = std::env::current_exe().unwrap();

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -299,7 +299,7 @@ fn close_works() {
 				})),
 				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Executed {
 					proposal_hash: hash,
-					result: Err(DispatchError::BadOrigin),
+					result: Ok(()),
 				}))
 			]
 		);
@@ -628,4 +628,13 @@ fn remove_unscrupulous_items_works() {
 		));
 		assert_eq!(Alliance::unscrupulous_accounts(), Vec::<u64>::new());
 	});
+}
+
+#[test]
+fn weights_sane() {
+	let info = crate::Call::<Test>::join_alliance {}.get_dispatch_info();
+	assert_eq!(<() as crate::WeightInfo>::join_alliance(), info.weight);
+
+	let info = crate::Call::<Test>::nominate_ally { who: 10 }.get_dispatch_info();
+	assert_eq!(<() as crate::WeightInfo>::nominate_ally(), info.weight);
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -31,16 +31,17 @@ use sc_transaction_pool_api::TransactionStatus;
 use sp_core::{
 	blake2_256,
 	bytes::to_hex,
-	crypto::{ByteArray, CryptoTypePublicPair, Pair},
-	ed25519, sr25519,
+	crypto::{ByteArray, Pair},
+	ed25519,
 	testing::{ED25519, SR25519},
 	H256,
 };
-use sp_keystore::testing::KeyStore;
+use sp_keystore::{testing::MemoryKeystore, Keystore};
+use sp_runtime::Perbill;
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	self,
-	runtime::{Block, Extrinsic, SessionKeys, Transfer},
+	runtime::{Block, Extrinsic, ExtrinsicBuilder, SessionKeys, Transfer},
 	AccountKeyring, Backend, Client, DefaultTestClientBuilderExt, TestClientBuilderExt,
 };
 
@@ -51,22 +52,21 @@ fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 		from: sender.into(),
 		to: AccountKeyring::Bob.into(),
 	};
-	tx.into_signed_tx()
+	ExtrinsicBuilder::new_transfer(tx).build()
 }
 
 type FullTransactionPool = BasicPool<FullChainApi<Client<Backend>, Block>, Block>;
 
 struct TestSetup {
 	pub client: Arc<Client<Backend>>,
-	pub keystore: Arc<KeyStore>,
+	pub keystore: Arc<MemoryKeystore>,
 	pub pool: Arc<FullTransactionPool>,
 }
 
 impl Default for TestSetup {
 	fn default() -> Self {
-		let keystore = Arc::new(KeyStore::new());
-		let client_builder = substrate_test_runtime_client::TestClientBuilder::new();
-		let client = Arc::new(client_builder.set_keystore(keystore.clone()).build());
+		let keystore = Arc::new(MemoryKeystore::new());
+		let client = Arc::new(substrate_test_runtime_client::TestClientBuilder::new().build());
 
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool =
@@ -111,7 +111,13 @@ async fn author_submit_transaction_should_not_cause_error() {
 #[tokio::test]
 async fn author_should_watch_extrinsic() {
 	let api = TestSetup::into_rpc();
-	let xt = to_hex(&uxt(AccountKeyring::Alice, 0).encode(), true);
+	let xt = to_hex(
+		&ExtrinsicBuilder::new_call_with_priority(0)
+			.signer(AccountKeyring::Alice.into())
+			.build()
+			.encode(),
+		true,
+	);
 
 	let mut sub = api.subscribe("author_submitAndWatchExtrinsic", [xt]).await.unwrap();
 	let (tx, sub_id) = timeout_secs(10, sub.next::<TransactionStatus<H256, Block>>())
@@ -125,15 +131,11 @@ async fn author_should_watch_extrinsic() {
 
 	// Replace the extrinsic and observe the subscription is notified.
 	let (xt_replacement, xt_hash) = {
-		let tx = Transfer {
-			amount: 5,
-			nonce: 0,
-			from: AccountKeyring::Alice.into(),
-			to: AccountKeyring::Bob.into(),
-		};
-		let tx = tx.into_signed_tx().encode();
+		let tx = ExtrinsicBuilder::new_call_with_priority(1)
+			.signer(AccountKeyring::Alice.into())
+			.build()
+			.encode();
 		let hash = blake2_256(&tx);
-
 		(to_hex(&tx, true), hash)
 	};
 
@@ -152,10 +154,10 @@ async fn author_should_watch_extrinsic() {
 async fn author_should_return_watch_validation_error() {
 	const METHOD: &'static str = "author_submitAndWatchExtrinsic";
 
+	let invalid_xt = ExtrinsicBuilder::new_fill_block(Perbill::from_percent(100)).build();
+
 	let api = TestSetup::into_rpc();
-	let failed_sub = api
-		.subscribe(METHOD, [to_hex(&uxt(AccountKeyring::Alice, 179).encode(), true)])
-		.await;
+	let failed_sub = api.subscribe(METHOD, [to_hex(&invalid_xt.encode(), true)]).await;
 
 	assert_matches!(
 		failed_sub,
@@ -225,11 +227,9 @@ async fn author_should_insert_key() {
 		keypair.public().0.to_vec().into(),
 	);
 	api.call::<_, ()>("author_insertKey", params).await.unwrap();
-	let pubkeys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
+	let pubkeys = setup.keystore.keys(ED25519).unwrap();
 
-	assert!(
-		pubkeys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, keypair.public().to_raw_vec()))
-	);
+	assert!(pubkeys.contains(&keypair.public().to_raw_vec()));
 }
 
 #[tokio::test]
@@ -240,12 +240,10 @@ async fn author_should_rotate_keys() {
 	let new_pubkeys: Bytes = api.call("author_rotateKeys", EmptyParams::new()).await.unwrap();
 	let session_keys =
 		SessionKeys::decode(&mut &new_pubkeys[..]).expect("SessionKeys decode successfully");
-	let ed25519_pubkeys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
-	let sr25519_pubkeys = SyncCryptoStore::keys(&*setup.keystore, SR25519).unwrap();
-	assert!(ed25519_pubkeys
-		.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, session_keys.ed25519.to_raw_vec())));
-	assert!(sr25519_pubkeys
-		.contains(&CryptoTypePublicPair(sr25519::CRYPTO_ID, session_keys.sr25519.to_raw_vec())));
+	let ed25519_pubkeys = setup.keystore.keys(ED25519).unwrap();
+	let sr25519_pubkeys = setup.keystore.keys(SR25519).unwrap();
+	assert!(ed25519_pubkeys.contains(&session_keys.ed25519.to_raw_vec()));
+	assert!(sr25519_pubkeys.contains(&session_keys.sr25519.to_raw_vec()));
 }
 
 #[tokio::test]

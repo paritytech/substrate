@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -26,11 +26,17 @@ use frame_benchmarking_cli::*;
 use kitchensink_runtime::{ExistentialDeposit, RuntimeApi};
 use node_executor::ExecutorDispatch;
 use node_primitives::Block;
-use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
+use sc_cli::{Result, SubstrateCli};
 use sc_service::PartialComponents;
 use sp_keyring::Sr25519Keyring;
 
 use std::sync::Arc;
+
+#[cfg(feature = "try-runtime")]
+use {
+	kitchensink_runtime::constants::time::SLOT_DURATION,
+	try_runtime_cli::block_building_info::substrate_info,
+};
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -73,10 +79,6 @@ impl SubstrateCli for Cli {
 		};
 		Ok(spec)
 	}
-
-	fn native_runtime_version(_: &Box<dyn ChainSpec>) -> &'static RuntimeVersion {
-		&kitchensink_runtime::VERSION
-	}
 }
 
 /// Parse command line arguments into service configuration.
@@ -111,7 +113,7 @@ pub fn run() -> Result<()> {
 							)
 						}
 
-						cmd.run::<Block, ExecutorDispatch>(config)
+						cmd.run::<Block, sp_statement_store::runtime_api::HostFunctions>(config)
 					},
 					BenchmarkCmd::Block(cmd) => {
 						// ensure that we keep the task manager alive
@@ -236,11 +238,13 @@ pub fn run() -> Result<()> {
 					sc_service::TaskManager::new(config.tokio_handle.clone(), registry)
 						.map_err(|e| sc_cli::Error::Service(sc_service::Error::Prometheus(e)))?;
 
+				let info_provider = substrate_info(SLOT_DURATION);
+
 				Ok((
 					cmd.run::<Block, ExtendedHostFunctions<
 						sp_io::SubstrateHostFunctions,
 						<ExecutorDispatch as NativeExecutionDispatch>::ExtendHostFunctions,
-					>>(),
+					>, _>(Some(info_provider)),
 					task_manager,
 				))
 			})

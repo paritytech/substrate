@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,15 +25,16 @@ use crate::{
 };
 
 use futures::{channel::mpsc::channel, executor::LocalPool, task::LocalSpawn};
-use libp2p::core::{
-	multiaddr::{Multiaddr, Protocol},
+use libp2p::{
+	core::multiaddr::{Multiaddr, Protocol},
+	identity::ed25519,
 	PeerId,
 };
 use std::{collections::HashSet, sync::Arc};
 
 use sp_authority_discovery::AuthorityId;
 use sp_core::crypto::key_types;
-use sp_keystore::{testing::KeyStore, CryptoStore};
+use sp_keystore::{testing::MemoryKeystore, Keystore};
 
 #[test]
 fn get_addresses_and_authority_id() {
@@ -42,12 +43,11 @@ fn get_addresses_and_authority_id() {
 
 	let mut pool = LocalPool::new();
 
-	let key_store = KeyStore::new();
+	let key_store = MemoryKeystore::new();
 
 	let remote_authority_id: AuthorityId = pool.run_until(async {
 		key_store
 			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
-			.await
 			.unwrap()
 			.into()
 	});
@@ -56,7 +56,7 @@ fn get_addresses_and_authority_id() {
 	let remote_addr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333"
 		.parse::<Multiaddr>()
 		.unwrap()
-		.with(Protocol::P2p(remote_peer_id.into()));
+		.with(Protocol::P2p(remote_peer_id));
 
 	let test_api = Arc::new(TestApi { authorities: vec![] });
 
@@ -87,18 +87,16 @@ fn get_addresses_and_authority_id() {
 fn cryptos_are_compatible() {
 	use sp_core::crypto::Pair;
 
-	let libp2p_secret = libp2p::identity::Keypair::generate_ed25519();
-	let libp2p_public = libp2p_secret.public();
+	let libp2p_keypair = ed25519::Keypair::generate();
+	let libp2p_public = libp2p_keypair.public();
 
-	let sp_core_secret = {
-		let libp2p::identity::Keypair::Ed25519(libp2p_ed_secret) = libp2p_secret.clone();
-		sp_core::ed25519::Pair::from_seed_slice(&libp2p_ed_secret.secret().as_ref()).unwrap()
-	};
+	let sp_core_secret =
+		{ sp_core::ed25519::Pair::from_seed_slice(&libp2p_keypair.secret().as_ref()).unwrap() };
 	let sp_core_public = sp_core_secret.public();
 
 	let message = b"we are more powerful than not to be better";
 
-	let libp2p_signature = libp2p_secret.sign(message).unwrap();
+	let libp2p_signature = libp2p_keypair.sign(message);
 	let sp_core_signature = sp_core_secret.sign(message); // no error expected...
 
 	assert!(sp_core::ed25519::Pair::verify(

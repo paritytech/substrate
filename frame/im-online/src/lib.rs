@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,8 +26,7 @@
 //! in the current era or session.
 //!
 //! The heartbeat is a signed transaction, which was signed using the session key
-//! and includes the recent best block number of the local validators chain as well
-//! as the [NetworkState](../../client/offchain/struct.NetworkState.html).
+//! and includes the recent best block number of the local validators chain.
 //! It is submitted as an Unsigned Transaction via off-chain workers.
 //!
 //! - [`Config`]
@@ -78,30 +77,34 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
+pub mod migration;
 mod mock;
 mod tests;
 pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
+	pallet_prelude::*,
 	traits::{
 		EstimateNextSessionRotation, Get, OneSessionHandler, ValidatorSet,
-		ValidatorSetWithIdentification, WrapperOpaque,
+		ValidatorSetWithIdentification,
 	},
 	BoundedSlice, WeakBoundedVec,
 };
-use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
+use frame_system::{
+	offchain::{SendTransactionTypes, SubmitTransaction},
+	pallet_prelude::*,
+};
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
-use sp_core::offchain::OpaqueNetworkState;
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
 	traits::{AtLeast32BitUnsigned, Convert, Saturating, TrailingZeroInput},
 	PerThing, Perbill, Permill, RuntimeDebug, SaturatedConversion,
 };
 use sp_staking::{
-	offence::{Kind, Offence, ReportOffence},
+	offence::{DisableStrategy, Kind, Offence, ReportOffence},
 	SessionIndex,
 };
 use sp_std::prelude::*;
@@ -190,7 +193,6 @@ enum OffchainErr<BlockNumber> {
 	AlreadyOnline(u32),
 	FailedSigning,
 	FailedToAcquireLock,
-	NetworkState,
 	SubmitTransaction,
 }
 
@@ -206,7 +208,6 @@ impl<BlockNumber: sp_std::fmt::Debug> sp_std::fmt::Debug for OffchainErr<BlockNu
 			},
 			OffchainErr::FailedSigning => write!(fmt, "Failed to sign heartbeat"),
 			OffchainErr::FailedToAcquireLock => write!(fmt, "Failed to acquire lock"),
-			OffchainErr::NetworkState => write!(fmt, "Failed to fetch network state"),
 			OffchainErr::SubmitTransaction => write!(fmt, "Failed to submit transaction"),
 		}
 	}
@@ -222,72 +223,12 @@ where
 {
 	/// Block number at the time heartbeat is created..
 	pub block_number: BlockNumber,
-	/// A state of local network (peer id and external addresses)
-	pub network_state: OpaqueNetworkState,
 	/// Index of the current session.
 	pub session_index: SessionIndex,
 	/// An index of the authority on the list of validators.
 	pub authority_index: AuthIndex,
 	/// The length of session validator set
 	pub validators_len: u32,
-}
-
-/// A type that is the same as [`OpaqueNetworkState`] but with [`Vec`] replaced with
-/// [`WeakBoundedVec<Limit>`] where Limit is the respective size limit
-/// `PeerIdEncodingLimit` represents the size limit of the encoding of `PeerId`
-/// `MultiAddrEncodingLimit` represents the size limit of the encoding of `MultiAddr`
-/// `AddressesLimit` represents the size limit of the vector of peers connected
-#[derive(Clone, Eq, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-#[codec(mel_bound())]
-#[scale_info(skip_type_params(PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit))]
-pub struct BoundedOpaqueNetworkState<PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit>
-where
-	PeerIdEncodingLimit: Get<u32>,
-	MultiAddrEncodingLimit: Get<u32>,
-	AddressesLimit: Get<u32>,
-{
-	/// PeerId of the local node in SCALE encoded.
-	pub peer_id: WeakBoundedVec<u8, PeerIdEncodingLimit>,
-	/// List of addresses the node knows it can be reached as.
-	pub external_addresses:
-		WeakBoundedVec<WeakBoundedVec<u8, MultiAddrEncodingLimit>, AddressesLimit>,
-}
-
-impl<PeerIdEncodingLimit: Get<u32>, MultiAddrEncodingLimit: Get<u32>, AddressesLimit: Get<u32>>
-	BoundedOpaqueNetworkState<PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit>
-{
-	fn force_from(ons: &OpaqueNetworkState) -> Self {
-		let peer_id = WeakBoundedVec::<_, PeerIdEncodingLimit>::force_from(
-			ons.peer_id.0.clone(),
-			Some(
-				"Warning: The size of the encoding of PeerId \
-  				is bigger than expected. A runtime configuration \
-  				adjustment may be needed.",
-			),
-		);
-
-		let external_addresses = WeakBoundedVec::<_, AddressesLimit>::force_from(
-			ons.external_addresses
-				.iter()
-				.map(|x| {
-					WeakBoundedVec::<_, MultiAddrEncodingLimit>::force_from(
-						x.0.clone(),
-						Some(
-							"Warning: The size of the encoding of MultiAddr \
-  							is bigger than expected. A runtime configuration \
-  							adjustment may be needed.",
-						),
-					)
-				})
-				.collect(),
-			Some(
-				"Warning: The network has more peers than expected \
-  				A runtime configuration adjustment may be needed.",
-			),
-		);
-
-		Self { peer_id, external_addresses }
-	}
 }
 
 /// A type for representing the validator id in a session.
@@ -304,16 +245,17 @@ pub type IdentificationTuple<T> = (
 	>>::Identification,
 );
 
-type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Config>::BlockNumber>>;
+type OffchainResult<T, A> = Result<A, OffchainErr<BlockNumberFor<T>>>;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
+
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -332,10 +274,6 @@ pub mod pallet {
 		/// The maximum number of peers to be stored in `ReceivedHeartbeats`
 		type MaxPeerInHeartbeats: Get<u32>;
 
-		/// The maximum size of the encoding of `PeerId` and `MultiAddr` that are coming
-		/// from the hearbeat
-		type MaxPeerDataEncodingSize: Get<u32>;
-
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -349,7 +287,7 @@ pub mod pallet {
 		/// rough time when we should start considering sending heartbeats, since the workers
 		/// avoids sending them at the very beginning of the session, assuming there is a
 		/// chance the authority will produce a block and they won't be necessary.
-		type NextSessionRotation: EstimateNextSessionRotation<Self::BlockNumber>;
+		type NextSessionRotation: EstimateNextSessionRotation<BlockNumberFor<Self>>;
 
 		/// A type that gives us the ability to submit unresponsiveness offence reports.
 		type ReportUnresponsiveness: ReportOffence<
@@ -401,38 +339,25 @@ pub mod pallet {
 	/// more accurate then the value we calculate for `HeartbeatAfter`.
 	#[pallet::storage]
 	#[pallet::getter(fn heartbeat_after)]
-	pub(crate) type HeartbeatAfter<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub(super) type HeartbeatAfter<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// The current set of keys that may issue a heartbeat.
 	#[pallet::storage]
 	#[pallet::getter(fn keys)]
-	pub(crate) type Keys<T: Config> =
+	pub(super) type Keys<T: Config> =
 		StorageValue<_, WeakBoundedVec<T::AuthorityId, T::MaxKeys>, ValueQuery>;
 
-	/// For each session index, we keep a mapping of `SessionIndex` and `AuthIndex` to
-	/// `WrapperOpaque<BoundedOpaqueNetworkState>`.
+	/// For each session index, we keep a mapping of `SessionIndex` and `AuthIndex`.
 	#[pallet::storage]
 	#[pallet::getter(fn received_heartbeats)]
-	pub(crate) type ReceivedHeartbeats<T: Config> = StorageDoubleMap<
-		_,
-		Twox64Concat,
-		SessionIndex,
-		Twox64Concat,
-		AuthIndex,
-		WrapperOpaque<
-			BoundedOpaqueNetworkState<
-				T::MaxPeerDataEncodingSize,
-				T::MaxPeerDataEncodingSize,
-				T::MaxPeerInHeartbeats,
-			>,
-		>,
-	>;
+	pub(super) type ReceivedHeartbeats<T: Config> =
+		StorageDoubleMap<_, Twox64Concat, SessionIndex, Twox64Concat, AuthIndex, bool>;
 
 	/// For each session index, we keep a mapping of `ValidatorId<T>` to the
 	/// number of blocks authored by the given authority.
 	#[pallet::storage]
 	#[pallet::getter(fn authored_blocks)]
-	pub(crate) type AuthoredBlocks<T: Config> = StorageDoubleMap<
+	pub(super) type AuthoredBlocks<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		SessionIndex,
@@ -443,19 +368,13 @@ pub mod pallet {
 	>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub keys: Vec<T::AuthorityId>,
 	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			GenesisConfig { keys: Default::default() }
-		}
-	}
-
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			Pallet::<T>::initialize_keys(&self.keys);
 		}
@@ -463,25 +382,18 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// # <weight>
-		/// - Complexity: `O(K + E)` where K is length of `Keys` (heartbeat.validators_len) and E is
-		///   length of `heartbeat.network_state.external_address`
+		/// ## Complexity:
+		/// - `O(K)` where K is length of `Keys` (heartbeat.validators_len)
 		///   - `O(K)`: decoding of length `K`
-		///   - `O(E)`: decoding/encoding of length `E`
-		/// - DbReads: pallet_session `Validators`, pallet_session `CurrentIndex`, `Keys`,
-		///   `ReceivedHeartbeats`
-		/// - DbWrites: `ReceivedHeartbeats`
-		/// # </weight>
 		// NOTE: the weight includes the cost of validate_unsigned as it is part of the cost to
 		// import block with such an extrinsic.
 		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::validate_unsigned_and_then_heartbeat(
-			heartbeat.validators_len as u32,
-			heartbeat.network_state.external_addresses.len() as u32,
+			heartbeat.validators_len,
 		))]
 		pub fn heartbeat(
 			origin: OriginFor<T>,
-			heartbeat: Heartbeat<T::BlockNumber>,
+			heartbeat: Heartbeat<BlockNumberFor<T>>,
 			// since signature verification is done in `validate_unsigned`
 			// we can skip doing it here again.
 			_signature: <T::AuthorityId as RuntimeAppPublic>::Signature,
@@ -490,22 +402,13 @@ pub mod pallet {
 
 			let current_session = T::ValidatorSet::session_index();
 			let exists =
-				ReceivedHeartbeats::<T>::contains_key(&current_session, &heartbeat.authority_index);
+				ReceivedHeartbeats::<T>::contains_key(current_session, heartbeat.authority_index);
 			let keys = Keys::<T>::get();
 			let public = keys.get(heartbeat.authority_index as usize);
 			if let (false, Some(public)) = (exists, public) {
 				Self::deposit_event(Event::<T>::HeartbeatReceived { authority_id: public.clone() });
 
-				let network_state_bounded = BoundedOpaqueNetworkState::<
-					T::MaxPeerDataEncodingSize,
-					T::MaxPeerDataEncodingSize,
-					T::MaxPeerInHeartbeats,
-				>::force_from(&heartbeat.network_state);
-				ReceivedHeartbeats::<T>::insert(
-					&current_session,
-					&heartbeat.authority_index,
-					WrapperOpaque::from(network_state_bounded),
-				);
+				ReceivedHeartbeats::<T>::insert(current_session, heartbeat.authority_index, true);
 
 				Ok(())
 			} else if exists {
@@ -602,7 +505,7 @@ pub mod pallet {
 /// Keep track of number of authored blocks per authority, uncles are counted as
 /// well since they're a valid proof of being online.
 impl<T: Config + pallet_authorship::Config>
-	pallet_authorship::EventHandler<ValidatorId<T>, T::BlockNumber> for Pallet<T>
+	pallet_authorship::EventHandler<ValidatorId<T>, BlockNumberFor<T>> for Pallet<T>
 {
 	fn note_author(author: ValidatorId<T>) {
 		Self::note_authorship(author);
@@ -629,26 +532,26 @@ impl<T: Config> Pallet<T> {
 	fn is_online_aux(authority_index: AuthIndex, authority: &ValidatorId<T>) -> bool {
 		let current_session = T::ValidatorSet::session_index();
 
-		ReceivedHeartbeats::<T>::contains_key(&current_session, &authority_index) ||
-			AuthoredBlocks::<T>::get(&current_session, authority) != 0
+		ReceivedHeartbeats::<T>::contains_key(current_session, authority_index) ||
+			AuthoredBlocks::<T>::get(current_session, authority) != 0
 	}
 
 	/// Returns `true` if a heartbeat has been received for the authority at `authority_index` in
 	/// the authorities series, during the current session. Otherwise `false`.
 	pub fn received_heartbeat_in_current_session(authority_index: AuthIndex) -> bool {
 		let current_session = T::ValidatorSet::session_index();
-		ReceivedHeartbeats::<T>::contains_key(&current_session, &authority_index)
+		ReceivedHeartbeats::<T>::contains_key(current_session, authority_index)
 	}
 
 	/// Note that the given authority has authored a block in the current session.
 	fn note_authorship(author: ValidatorId<T>) {
 		let current_session = T::ValidatorSet::session_index();
 
-		AuthoredBlocks::<T>::mutate(&current_session, author, |authored| *authored += 1);
+		AuthoredBlocks::<T>::mutate(current_session, author, |authored| *authored += 1);
 	}
 
 	pub(crate) fn send_heartbeats(
-		block_number: T::BlockNumber,
+		block_number: BlockNumberFor<T>,
 	) -> OffchainResult<T, impl Iterator<Item = OffchainResult<T, ()>>> {
 		const START_HEARTBEAT_RANDOM_PERIOD: Permill = Permill::from_percent(10);
 		const START_HEARTBEAT_FINAL_PERIOD: Permill = Permill::from_percent(80);
@@ -711,20 +614,13 @@ impl<T: Config> Pallet<T> {
 		authority_index: u32,
 		key: T::AuthorityId,
 		session_index: SessionIndex,
-		block_number: T::BlockNumber,
+		block_number: BlockNumberFor<T>,
 		validators_len: u32,
 	) -> OffchainResult<T, ()> {
 		// A helper function to prepare heartbeat call.
 		let prepare_heartbeat = || -> OffchainResult<T, Call<T>> {
-			let network_state =
-				sp_io::offchain::network_state().map_err(|_| OffchainErr::NetworkState)?;
-			let heartbeat = Heartbeat {
-				block_number,
-				network_state,
-				session_index,
-				authority_index,
-				validators_len,
-			};
+			let heartbeat =
+				Heartbeat { block_number, session_index, authority_index, validators_len };
 
 			let signature = key.sign(&heartbeat.encode()).ok_or(OffchainErr::FailedSigning)?;
 
@@ -760,7 +656,7 @@ impl<T: Config> Pallet<T> {
 		//
 		// At index `idx`:
 		// 1. A (ImOnline) public key to be used by a validator at index `idx` to send im-online
-		//          heartbeats.
+		//    heartbeats.
 		let authorities = Keys::<T>::get();
 
 		// local keystore
@@ -781,7 +677,7 @@ impl<T: Config> Pallet<T> {
 	fn with_heartbeat_lock<R>(
 		authority_index: u32,
 		session_index: SessionIndex,
-		now: T::BlockNumber,
+		now: BlockNumberFor<T>,
 		f: impl FnOnce() -> OffchainResult<T, R>,
 	) -> OffchainResult<T, R> {
 		let key = {
@@ -791,7 +687,7 @@ impl<T: Config> Pallet<T> {
 		};
 		let storage = StorageValueRef::persistent(&key);
 		let res = storage.mutate(
-			|status: Result<Option<HeartbeatStatus<T::BlockNumber>>, StorageRetrievalError>| {
+			|status: Result<Option<HeartbeatStatus<BlockNumberFor<T>>>, StorageRetrievalError>| {
 				// Check if there is already a lock for that particular block.
 				// This means that the heartbeat has already been sent, and we are just waiting
 				// for it to be included. However if it doesn't get included for INCLUDE_THRESHOLD
@@ -898,9 +794,9 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		// current session, they have already been processed and won't be needed
 		// anymore.
 		#[allow(deprecated)]
-		ReceivedHeartbeats::<T>::remove_prefix(&T::ValidatorSet::session_index(), None);
+		ReceivedHeartbeats::<T>::remove_prefix(T::ValidatorSet::session_index(), None);
 		#[allow(deprecated)]
-		AuthoredBlocks::<T>::remove_prefix(&T::ValidatorSet::session_index(), None);
+		AuthoredBlocks::<T>::remove_prefix(T::ValidatorSet::session_index(), None);
 
 		if offenders.is_empty() {
 			Self::deposit_event(Event::<T>::AllGood);
@@ -953,6 +849,10 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 
 	fn time_slot(&self) -> Self::TimeSlot {
 		self.session_index
+	}
+
+	fn disable_strategy(&self) -> DisableStrategy {
+		DisableStrategy::Never
 	}
 
 	fn slash_fraction(&self, offenders: u32) -> Perbill {

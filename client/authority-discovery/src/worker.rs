@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -32,30 +32,27 @@ use std::{
 use futures::{channel::mpsc, future, stream::Fuse, FutureExt, Stream, StreamExt};
 
 use addr_cache::AddrCache;
-use codec::Decode;
+use codec::{Decode, Encode};
 use ip_network::IpNetwork;
-use libp2p::{
-	core::multiaddr,
-	multihash::{Multihash, MultihashDigest},
-	Multiaddr, PeerId,
-};
+use libp2p::{core::multiaddr, identity::PublicKey, Multiaddr};
+use multihash_codetable::{Code, MultihashDigest};
+
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
-use sc_network_common::{
-	protocol::event::DhtEvent,
-	service::{KademliaKey, NetworkDHTProvider, NetworkSigner, NetworkStateInfo, Signature},
+
+use sc_network::{
+	event::DhtEvent, KademliaKey, NetworkDHTProvider, NetworkSigner, NetworkStateInfo, Signature,
 };
 use sp_api::{ApiError, ProvideRuntimeApi};
 use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
 };
 use sp_blockchain::HeaderBackend;
-
-use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
-use sp_keystore::CryptoStore;
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_core::crypto::{key_types, ByteArray, Pair};
+use sp_keystore::{Keystore, KeystorePtr};
+use sp_runtime::traits::Block as BlockT;
 
 mod addr_cache;
 /// Dht payload schemas generated from Protobuf definitions via Prost crate in build.rs.
@@ -79,7 +76,7 @@ const MAX_IN_FLIGHT_LOOKUPS: usize = 8;
 /// Role an authority discovery [`Worker`] can run as.
 pub enum Role {
 	/// Publish own addresses and discover addresses of others.
-	PublishAndDiscover(Arc<dyn CryptoStore>),
+	PublishAndDiscover(KeystorePtr),
 	/// Discover addresses of others.
 	Discover,
 }
@@ -128,7 +125,7 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	publish_if_changed_interval: ExpIncInterval,
 	/// List of keys onto which addresses have been published at the latest publication.
 	/// Used to check whether they have changed.
-	latest_published_keys: HashSet<CryptoTypePublicPair>,
+	latest_published_keys: HashSet<AuthorityId>,
 	/// Same value as in the configuration.
 	publish_non_global_ips: bool,
 	/// Same value as in the configuration.
@@ -158,12 +155,15 @@ pub trait AuthorityDiscovery<Block: BlockT> {
 	/// Retrieve authority identifiers of the current and next authority set.
 	async fn authorities(&self, at: Block::Hash)
 		-> std::result::Result<Vec<AuthorityId>, ApiError>;
+
+	/// Retrieve best block hash
+	async fn best_hash(&self) -> std::result::Result<Block::Hash, Error>;
 }
 
 #[async_trait::async_trait]
 impl<Block, T> AuthorityDiscovery<Block> for T
 where
-	T: ProvideRuntimeApi<Block> + Send + Sync,
+	T: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync,
 	T::Api: AuthorityDiscoveryApi<Block>,
 	Block: BlockT,
 {
@@ -171,7 +171,11 @@ where
 		&self,
 		at: Block::Hash,
 	) -> std::result::Result<Vec<AuthorityId>, ApiError> {
-		self.runtime_api().authorities(&BlockId::Hash(at))
+		self.runtime_api().authorities(at)
+	}
+
+	async fn best_hash(&self) -> std::result::Result<Block::Hash, Error> {
+		Ok(self.info().best_hash)
 	}
 }
 
@@ -179,7 +183,7 @@ impl<Client, Network, Block, DhtEventStream> Worker<Client, Network, Block, DhtE
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: AuthorityDiscovery<Block> + HeaderBackend<Block> + 'static,
+	Client: AuthorityDiscovery<Block> + 'static,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	/// Construct a [`Worker`].
@@ -300,7 +304,7 @@ where
 	}
 
 	fn addresses_to_publish(&self) -> impl Iterator<Item = Multiaddr> {
-		let peer_id: Multihash = self.network.local_peer_id().into();
+		let peer_id = self.network.local_peer_id();
 		let publish_non_global_ips = self.publish_non_global_ips;
 		self.network
 			.external_addresses()
@@ -340,7 +344,7 @@ where
 		let keys = Worker::<Client, Network, Block, DhtEventStream>::get_own_public_keys_within_authority_set(
 			key_store.clone(),
 			self.client.as_ref(),
-		).await?.into_iter().map(Into::into).collect::<HashSet<_>>();
+		).await?.into_iter().collect::<HashSet<_>>();
 
 		if only_if_changed && keys == self.latest_published_keys {
 			return Ok(())
@@ -365,8 +369,7 @@ where
 			Some(peer_signature),
 			key_store.as_ref(),
 			keys_vec,
-		)
-		.await?;
+		)?;
 
 		for (key, value) in kv_pairs.into_iter() {
 			self.network.put_value(key, value);
@@ -378,12 +381,11 @@ where
 	}
 
 	async fn refill_pending_lookups_queue(&mut self) -> Result<()> {
-		let best_hash = self.client.info().best_hash;
+		let best_hash = self.client.best_hash().await?;
 
 		let local_keys = match &self.role {
 			Role::PublishAndDiscover(key_store) => key_store
 				.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
-				.await
 				.into_iter()
 				.collect::<HashSet<_>>(),
 			Role::Discover => HashSet::new(),
@@ -527,7 +529,7 @@ where
 					.map_err(Error::ParsingMultiaddress)?;
 
 				let get_peer_id = |a: &Multiaddr| match a.iter().last() {
-					Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key).ok(),
+					Some(multiaddr::Protocol::P2p(peer_id)) => Some(peer_id),
 					_ => None,
 				};
 
@@ -547,10 +549,8 @@ where
 				// properly signed by the owner of the PeerId
 
 				if let Some(peer_signature) = peer_signature {
-					let public_key = libp2p::identity::PublicKey::from_protobuf_encoding(
-						&peer_signature.public_key,
-					)
-					.map_err(Error::ParsingLibp2pIdentity)?;
+					let public_key = PublicKey::try_decode_protobuf(&peer_signature.public_key)
+						.map_err(Error::ParsingLibp2pIdentity)?;
 					let signature = Signature { public_key, bytes: peer_signature.signature };
 
 					if !signature.verify(record, &remote_peer_id) {
@@ -589,16 +589,15 @@ where
 	// next authority set with two keys. The function does not return all of the local authority
 	// discovery public keys, but only the ones intersecting with the current or next authority set.
 	async fn get_own_public_keys_within_authority_set(
-		key_store: Arc<dyn CryptoStore>,
+		key_store: KeystorePtr,
 		client: &Client,
 	) -> Result<HashSet<AuthorityId>> {
 		let local_pub_keys = key_store
 			.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
-			.await
 			.into_iter()
 			.collect::<HashSet<_>>();
 
-		let best_hash = client.info().best_hash;
+		let best_hash = client.best_hash().await?;
 		let authorities = client
 			.authorities(best_hash)
 			.await
@@ -622,7 +621,7 @@ pub trait NetworkProvider: NetworkDHTProvider + NetworkStateInfo + NetworkSigner
 impl<T> NetworkProvider for T where T: NetworkDHTProvider + NetworkStateInfo + NetworkSigner {}
 
 fn hash_authority_id(id: &[u8]) -> KademliaKey {
-	KademliaKey::new(&libp2p::multihash::Code::Sha2_256.digest(id).digest())
+	KademliaKey::new(&Code::Sha2_256.digest(id).digest())
 }
 
 // Makes sure all values are the same and returns it
@@ -658,39 +657,39 @@ fn sign_record_with_peer_id(
 ) -> Result<schema::PeerSignature> {
 	let signature = network
 		.sign_with_local_identity(serialized_record)
-		.map_err(|_| Error::Signing)?;
-	let public_key = signature.public_key.to_protobuf_encoding();
+		.map_err(|e| Error::CannotSign(format!("{} (network packet)", e)))?;
+	let public_key = signature.public_key.encode_protobuf();
 	let signature = signature.bytes;
 	Ok(schema::PeerSignature { signature, public_key })
 }
 
-async fn sign_record_with_authority_ids(
+fn sign_record_with_authority_ids(
 	serialized_record: Vec<u8>,
 	peer_signature: Option<schema::PeerSignature>,
-	key_store: &dyn CryptoStore,
-	keys: Vec<CryptoTypePublicPair>,
+	key_store: &dyn Keystore,
+	keys: Vec<AuthorityId>,
 ) -> Result<Vec<(KademliaKey, Vec<u8>)>> {
-	let signatures = key_store
-		.sign_with_all(key_types::AUTHORITY_DISCOVERY, keys.clone(), &serialized_record)
-		.await
-		.map_err(|_| Error::Signing)?;
+	let mut result = Vec::with_capacity(keys.len());
 
-	let mut result = vec![];
-	for (sign_result, key) in signatures.into_iter().zip(keys.iter()) {
-		let mut signed_record = vec![];
+	for key in keys.iter() {
+		let auth_signature = key_store
+			.sr25519_sign(key_types::AUTHORITY_DISCOVERY, key.as_ref(), &serialized_record)
+			.map_err(|e| Error::CannotSign(format!("{}. Key: {:?}", e, key)))?
+			.ok_or_else(|| {
+				Error::CannotSign(format!("Could not find key in keystore. Key: {:?}", key))
+			})?;
 
-		// Verify that all signatures exist for all provided keys.
-		let auth_signature =
-			sign_result.ok().flatten().ok_or_else(|| Error::MissingSignature(key.clone()))?;
-		schema::SignedAuthorityRecord {
+		// Scale encode
+		let auth_signature = auth_signature.encode();
+
+		let signed_record = schema::SignedAuthorityRecord {
 			record: serialized_record.clone(),
 			auth_signature,
 			peer_signature: peer_signature.clone(),
 		}
-		.encode(&mut signed_record)
-		.map_err(Error::EncodingProto)?;
+		.encode_to_vec();
 
-		result.push((hash_authority_id(key.1.as_ref()), signed_record));
+		result.push((hash_authority_id(key.as_slice()), signed_record));
 	}
 
 	Ok(result)

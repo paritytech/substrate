@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +25,7 @@ use super::*;
 #[derive(
 	Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default,
 )]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Weight {
 	#[codec(compact)]
 	/// The weight of computational time used based on some reference hardware.
@@ -33,12 +33,6 @@ pub struct Weight {
 	#[codec(compact)]
 	/// The weight of storage space used by proof of validity.
 	proof_size: u64,
-}
-
-impl From<OldWeight> for Weight {
-	fn from(old: OldWeight) -> Self {
-		Weight::from_ref_time(old.0)
-	}
 }
 
 impl Weight {
@@ -74,6 +68,7 @@ impl Weight {
 		&mut self.proof_size
 	}
 
+	/// The maximal weight in all dimensions.
 	pub const MAX: Self = Self { ref_time: u64::MAX, proof_size: u64::MAX };
 
 	/// Get the conservative min of `self` and `other` weight.
@@ -100,16 +95,6 @@ impl Weight {
 		} else {
 			Some(total)
 		}
-	}
-
-	/// Construct [`Weight`] with reference time weight and 0 storage size weight.
-	pub const fn from_ref_time(ref_time: u64) -> Self {
-		Self { ref_time, proof_size: 0 }
-	}
-
-	/// Construct [`Weight`] with storage size weight and 0 reference time weight.
-	pub const fn from_proof_size(proof_size: u64) -> Self {
-		Self { ref_time: 0, proof_size }
 	}
 
 	/// Construct [`Weight`] from weight parts, namely reference time and proof size weights.
@@ -232,6 +217,38 @@ impl Weight {
 		Some(Self { ref_time, proof_size })
 	}
 
+	/// Calculates how many `other` fit into `self`.
+	///
+	/// Divides each component of `self` against the same component of `other`. Returns the minimum
+	/// of all those divisions. Returns `None` in case **all** components of `other` are zero.
+	///
+	/// This returns `Some` even if some components of `other` are zero as long as there is at least
+	/// one non-zero component in `other`. The division for this particular component will then
+	/// yield the maximum value (e.g u64::MAX). This is because we assume not every operation and
+	/// hence each `Weight` will necessarily use each resource.
+	pub const fn checked_div_per_component(self, other: &Self) -> Option<u64> {
+		let mut all_zero = true;
+		let ref_time = match self.ref_time.checked_div(other.ref_time) {
+			Some(ref_time) => {
+				all_zero = false;
+				ref_time
+			},
+			None => u64::MAX,
+		};
+		let proof_size = match self.proof_size.checked_div(other.proof_size) {
+			Some(proof_size) => {
+				all_zero = false;
+				proof_size
+			},
+			None => u64::MAX,
+		};
+		if all_zero {
+			None
+		} else {
+			Some(if ref_time < proof_size { ref_time } else { proof_size })
+		}
+	}
+
 	/// Try to increase `self` by `amount` via checked addition.
 	pub fn checked_accrue(&mut self, amount: Self) -> Option<()> {
 		self.checked_add(&amount).map(|new_self| *self = new_self)
@@ -247,18 +264,32 @@ impl Weight {
 		Self { ref_time: 0, proof_size: 0 }
 	}
 
-	/// Constant version of Add with u64.
+	/// Constant version of Add for `ref_time` component with u64.
 	///
 	/// Is only overflow safe when evaluated at compile-time.
-	pub const fn add(self, scalar: u64) -> Self {
-		Self { ref_time: self.ref_time + scalar, proof_size: self.proof_size + scalar }
+	pub const fn add_ref_time(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time + scalar, proof_size: self.proof_size }
 	}
 
-	/// Constant version of Sub with u64.
+	/// Constant version of Add for `proof_size` component with u64.
 	///
 	/// Is only overflow safe when evaluated at compile-time.
-	pub const fn sub(self, scalar: u64) -> Self {
-		Self { ref_time: self.ref_time - scalar, proof_size: self.proof_size - scalar }
+	pub const fn add_proof_size(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time, proof_size: self.proof_size + scalar }
+	}
+
+	/// Constant version of Sub for `ref_time` component with u64.
+	///
+	/// Is only overflow safe when evaluated at compile-time.
+	pub const fn sub_ref_time(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time - scalar, proof_size: self.proof_size }
+	}
+
+	/// Constant version of Sub for `proof_size` component with u64.
+	///
+	/// Is only overflow safe when evaluated at compile-time.
+	pub const fn sub_proof_size(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time, proof_size: self.proof_size - scalar }
 	}
 
 	/// Constant version of Div with u64.
@@ -567,5 +598,49 @@ mod tests {
 		assert_eq!(weight, Weight::from_parts(0, 18));
 		assert!(weight.checked_reduce(Weight::from_parts(0, 18)).is_some());
 		assert!(weight.is_zero());
+	}
+
+	#[test]
+	fn checked_div_per_component_works() {
+		assert_eq!(
+			Weight::from_parts(10, 20).checked_div_per_component(&Weight::from_parts(2, 10)),
+			Some(2)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(2, 10)),
+			Some(5)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(1, 10)),
+			Some(10)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(2, 1)),
+			Some(5)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(0, 10)),
+			Some(20)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(1, 0)),
+			Some(10)
+		);
+		assert_eq!(
+			Weight::from_parts(0, 200).checked_div_per_component(&Weight::from_parts(2, 3)),
+			Some(0)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 0).checked_div_per_component(&Weight::from_parts(2, 3)),
+			Some(0)
+		);
+		assert_eq!(
+			Weight::from_parts(10, 200).checked_div_per_component(&Weight::from_parts(0, 0)),
+			None,
+		);
+		assert_eq!(
+			Weight::from_parts(0, 0).checked_div_per_component(&Weight::from_parts(0, 0)),
+			None,
+		);
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 //!
 //! Given a committee `A` and an edge weight vector `w`, a balanced solution is one that
 //!
-//! 1.  it maximizes the sum of member supports, i.e `Argmax { sum(support(c)) }`. for all `c` in
+//! 1. it maximizes the sum of member supports, i.e `Argmax { sum(support(c)) }`. for all `c` in
 //! `A`.
 //! 2. it minimizes the sum of supports squared, i.e `Argmin { sum(support(c).pow(2)) }` for all `c`
 //! in `A`.

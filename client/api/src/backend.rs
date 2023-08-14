@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,36 +18,47 @@
 
 //! Substrate Client data backend
 
-use crate::{
-	blockchain::{well_known_cache_keys, Backend as BlockchainBackend},
-	UsageInfo,
-};
+use std::collections::HashSet;
+
 use parking_lot::RwLock;
-use sp_blockchain;
+
 use sp_consensus::BlockOrigin;
 use sp_core::offchain::OffchainStorage;
 use sp_runtime::{
-	traits::{Block as BlockT, HashFor, NumberFor},
+	traits::{Block as BlockT, HashingFor, NumberFor},
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
-	backend::AsTrieBackend, ChildStorageCollection, IndexOperation, OffchainChangesCollection,
-	StorageCollection,
+	backend::AsTrieBackend, ChildStorageCollection, IndexOperation, IterArgs,
+	OffchainChangesCollection, StorageCollection, StorageIterator,
 };
 use sp_storage::{ChildInfo, StorageData, StorageKey};
-use std::collections::{HashMap, HashSet};
+
+use crate::{blockchain::Backend as BlockchainBackend, UsageInfo};
 
 pub use sp_state_machine::{Backend as StateBackend, KeyValueStates};
-use std::marker::PhantomData;
 
 /// Extracts the state backend type for the given backend.
 pub type StateBackendFor<B, Block> = <B as Backend<Block>>::State;
 
 /// Extracts the transaction for the given state backend.
-pub type TransactionForSB<B, Block> = <B as StateBackend<HashFor<Block>>>::Transaction;
+pub type TransactionForSB<B, Block> = <B as StateBackend<HashingFor<Block>>>::Transaction;
 
 /// Extracts the transaction for the given backend.
 pub type TransactionFor<B, Block> = TransactionForSB<StateBackendFor<B, Block>, Block>;
+
+/// Describes which block import notification stream should be notified.
+#[derive(Debug, Clone, Copy)]
+pub enum ImportNotificationAction {
+	/// Notify only when the node has synced to the tip or there is a re-org.
+	RecentBlock,
+	/// Notify for every single block no matter what the sync state is.
+	EveryBlock,
+	/// Both block import notifications above should be fired.
+	Both,
+	/// No block import notification should be fired.
+	None,
+}
 
 /// Import operation summary.
 ///
@@ -68,6 +79,8 @@ pub struct ImportSummary<Block: BlockT> {
 	///
 	/// If `None`, there was no re-org while importing.
 	pub tree_route: Option<sp_blockchain::TreeRoute<Block>>,
+	/// What notify action to take for this import.
+	pub import_notification_action: ImportNotificationAction,
 }
 
 /// Finalization operation summary.
@@ -148,7 +161,7 @@ impl NewBlockState {
 /// Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation<Block: BlockT> {
 	/// Associated state backend type.
-	type State: StateBackend<HashFor<Block>>;
+	type State: StateBackend<HashingFor<Block>>;
 
 	/// Returns pending state.
 	///
@@ -164,9 +177,6 @@ pub trait BlockImportOperation<Block: BlockT> {
 		justifications: Option<Justifications>,
 		state: NewBlockState,
 	) -> sp_blockchain::Result<()>;
-
-	/// Update cached data.
-	fn update_cache(&mut self, cache: HashMap<well_known_cache_keys::Id, Vec<u8>>);
 
 	/// Inject storage data into the database.
 	fn update_db_storage(
@@ -303,58 +313,109 @@ pub trait AuxStore {
 }
 
 /// An `Iterator` that iterates keys in a given block under a prefix.
-pub struct KeyIterator<State, Block> {
+pub struct KeysIter<State, Block>
+where
+	State: StateBackend<HashingFor<Block>>,
+	Block: BlockT,
+{
+	inner: <State as StateBackend<HashingFor<Block>>>::RawIter,
 	state: State,
-	child_storage: Option<ChildInfo>,
-	prefix: Option<StorageKey>,
-	current_key: Vec<u8>,
-	_phantom: PhantomData<Block>,
 }
 
-impl<State, Block> KeyIterator<State, Block> {
-	/// create a KeyIterator instance
-	pub fn new(state: State, prefix: Option<StorageKey>, current_key: Vec<u8>) -> Self {
-		Self { state, child_storage: None, prefix, current_key, _phantom: PhantomData }
+impl<State, Block> KeysIter<State, Block>
+where
+	State: StateBackend<HashingFor<Block>>,
+	Block: BlockT,
+{
+	/// Create a new iterator over storage keys.
+	pub fn new(
+		state: State,
+		prefix: Option<&StorageKey>,
+		start_at: Option<&StorageKey>,
+	) -> Result<Self, State::Error> {
+		let mut args = IterArgs::default();
+		args.prefix = prefix.as_ref().map(|prefix| prefix.0.as_slice());
+		args.start_at = start_at.as_ref().map(|start_at| start_at.0.as_slice());
+		args.start_at_exclusive = true;
+
+		Ok(Self { inner: state.raw_iter(args)?, state })
 	}
 
-	/// Create a `KeyIterator` instance for a child storage.
+	/// Create a new iterator over a child storage's keys.
 	pub fn new_child(
 		state: State,
 		child_info: ChildInfo,
-		prefix: Option<StorageKey>,
-		current_key: Vec<u8>,
-	) -> Self {
-		Self { state, child_storage: Some(child_info), prefix, current_key, _phantom: PhantomData }
+		prefix: Option<&StorageKey>,
+		start_at: Option<&StorageKey>,
+	) -> Result<Self, State::Error> {
+		let mut args = IterArgs::default();
+		args.prefix = prefix.as_ref().map(|prefix| prefix.0.as_slice());
+		args.start_at = start_at.as_ref().map(|start_at| start_at.0.as_slice());
+		args.child_info = Some(child_info);
+		args.start_at_exclusive = true;
+
+		Ok(Self { inner: state.raw_iter(args)?, state })
 	}
 }
 
-impl<State, Block> Iterator for KeyIterator<State, Block>
+impl<State, Block> Iterator for KeysIter<State, Block>
 where
 	Block: BlockT,
-	State: StateBackend<HashFor<Block>>,
+	State: StateBackend<HashingFor<Block>>,
 {
 	type Item = StorageKey;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let next_key = if let Some(child_info) = self.child_storage.as_ref() {
-			self.state.next_child_storage_key(child_info, &self.current_key)
-		} else {
-			self.state.next_storage_key(&self.current_key)
-		}
-		.ok()
-		.flatten()?;
-		// this terminates the iterator the first time it fails.
-		if let Some(ref prefix) = self.prefix {
-			if !next_key.starts_with(&prefix.0[..]) {
-				return None
-			}
-		}
-		self.current_key = next_key.clone();
-		Some(StorageKey(next_key))
+		self.inner.next_key(&self.state)?.ok().map(StorageKey)
 	}
 }
 
-/// Provides acess to storage primitives
+/// An `Iterator` that iterates keys and values in a given block under a prefix.
+pub struct PairsIter<State, Block>
+where
+	State: StateBackend<HashingFor<Block>>,
+	Block: BlockT,
+{
+	inner: <State as StateBackend<HashingFor<Block>>>::RawIter,
+	state: State,
+}
+
+impl<State, Block> Iterator for PairsIter<State, Block>
+where
+	Block: BlockT,
+	State: StateBackend<HashingFor<Block>>,
+{
+	type Item = (StorageKey, StorageData);
+
+	fn next(&mut self) -> Option<Self::Item> {
+		self.inner
+			.next_pair(&self.state)?
+			.ok()
+			.map(|(key, value)| (StorageKey(key), StorageData(value)))
+	}
+}
+
+impl<State, Block> PairsIter<State, Block>
+where
+	State: StateBackend<HashingFor<Block>>,
+	Block: BlockT,
+{
+	/// Create a new iterator over storage key and value pairs.
+	pub fn new(
+		state: State,
+		prefix: Option<&StorageKey>,
+		start_at: Option<&StorageKey>,
+	) -> Result<Self, State::Error> {
+		let mut args = IterArgs::default();
+		args.prefix = prefix.as_ref().map(|prefix| prefix.0.as_slice());
+		args.start_at = start_at.as_ref().map(|start_at| start_at.0.as_slice());
+		args.start_at_exclusive = true;
+
+		Ok(Self { inner: state.raw_iter(args)?, state })
+	}
+}
+
+/// Provides access to storage primitives
 pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	/// Given a block's `Hash` and a key, return the value under the key in that block.
 	fn storage(
@@ -363,13 +424,6 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>>;
 
-	/// Given a block's `Hash` and a key prefix, return the matching storage keys in that block.
-	fn storage_keys(
-		&self,
-		hash: Block::Hash,
-		key_prefix: &StorageKey,
-	) -> sp_blockchain::Result<Vec<StorageKey>>;
-
 	/// Given a block's `Hash` and a key, return the value under the hash in that block.
 	fn storage_hash(
 		&self,
@@ -377,22 +431,23 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>>;
 
-	/// Given a block's `Hash` and a key prefix, return the matching child storage keys and values
-	/// in that block.
-	fn storage_pairs(
-		&self,
-		hash: Block::Hash,
-		key_prefix: &StorageKey,
-	) -> sp_blockchain::Result<Vec<(StorageKey, StorageData)>>;
-
-	/// Given a block's `Hash` and a key prefix, return a `KeyIterator` iterates matching storage
+	/// Given a block's `Hash` and a key prefix, returns a `KeysIter` iterates matching storage
 	/// keys in that block.
-	fn storage_keys_iter(
+	fn storage_keys(
 		&self,
 		hash: Block::Hash,
 		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
-	) -> sp_blockchain::Result<KeyIterator<B::State, Block>>;
+	) -> sp_blockchain::Result<KeysIter<B::State, Block>>;
+
+	/// Given a block's `Hash` and a key prefix, returns an iterator over the storage keys and
+	/// values in that block.
+	fn storage_pairs(
+		&self,
+		hash: <Block as BlockT>::Hash,
+		prefix: Option<&StorageKey>,
+		start_key: Option<&StorageKey>,
+	) -> sp_blockchain::Result<PairsIter<B::State, Block>>;
 
 	/// Given a block's `Hash`, a key and a child storage key, return the value under the key in
 	/// that block.
@@ -403,24 +458,15 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>>;
 
-	/// Given a block's `Hash`, a key prefix, and a child storage key, return the matching child
-	/// storage keys.
-	fn child_storage_keys(
-		&self,
-		hash: Block::Hash,
-		child_info: &ChildInfo,
-		key_prefix: &StorageKey,
-	) -> sp_blockchain::Result<Vec<StorageKey>>;
-
 	/// Given a block's `Hash` and a key `prefix` and a child storage key,
-	/// return a `KeyIterator` that iterates matching storage keys in that block.
-	fn child_storage_keys_iter(
+	/// returns a `KeysIter` that iterates matching storage keys in that block.
+	fn child_storage_keys(
 		&self,
 		hash: Block::Hash,
 		child_info: ChildInfo,
 		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
-	) -> sp_blockchain::Result<KeyIterator<B::State, Block>>;
+	) -> sp_blockchain::Result<KeysIter<B::State, Block>>;
 
 	/// Given a block's `Hash`, a key and a child storage key, return the hash under the key in that
 	/// block.
@@ -460,11 +506,11 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Associated blockchain backend type.
 	type Blockchain: BlockchainBackend<Block>;
 	/// Associated state backend type.
-	type State: StateBackend<HashFor<Block>>
+	type State: StateBackend<HashingFor<Block>>
 		+ Send
 		+ AsTrieBackend<
-			HashFor<Block>,
-			TrieBackendStorage = <Self::State as StateBackend<HashFor<Block>>>::TrieBackendStorage,
+			HashingFor<Block>,
+			TrieBackendStorage = <Self::State as StateBackend<HashingFor<Block>>>::TrieBackendStorage,
 		>;
 	/// Offchain workers local storage.
 	type OffchainStorage: OffchainStorage;

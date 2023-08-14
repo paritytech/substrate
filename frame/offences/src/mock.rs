@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,9 +29,8 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	Perbill,
+	BuildStorage, Perbill,
 };
 use sp_staking::{
 	offence::{self, DisableStrategy, Kind, OffenceDetails},
@@ -66,16 +65,12 @@ pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> 
 	OnOffencePerbill::mutate(|fractions| f(fractions))
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub struct Runtime
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Offences: offences::{Pallet, Storage, Event},
 	}
 );
@@ -86,14 +81,13 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -114,7 +108,7 @@ impl Config for Runtime {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
@@ -134,17 +128,17 @@ pub fn offence_reports(kind: Kind, time_slot: u128) -> Vec<OffenceDetails<u64, u
 }
 
 #[derive(Clone)]
-pub struct Offence<T> {
+pub struct Offence {
 	pub validator_set_count: u32,
-	pub offenders: Vec<T>,
+	pub offenders: Vec<u64>,
 	pub time_slot: u128,
 }
 
-impl<T: Clone> offence::Offence<T> for Offence<T> {
+impl offence::Offence<u64> for Offence {
 	const ID: offence::Kind = KIND;
 	type TimeSlot = u128;
 
-	fn offenders(&self) -> Vec<T> {
+	fn offenders(&self) -> Vec<u64> {
 		self.offenders.clone()
 	}
 
@@ -163,9 +157,4 @@ impl<T: Clone> offence::Offence<T> for Offence<T> {
 	fn slash_fraction(&self, offenders_count: u32) -> Perbill {
 		Perbill::from_percent(5 + offenders_count * 100 / self.validator_set_count)
 	}
-}
-
-/// Create the report id for the given `offender` and `time_slot` combination.
-pub fn report_id(time_slot: u128, offender: u64) -> H256 {
-	Offences::report_id::<Offence<u64>>(&time_slot, &offender)
 }

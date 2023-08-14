@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -84,7 +84,6 @@ pub(crate) async fn follow_chain<Block, HostFns>(
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT<Hash = H256> + DeserializeOwned,
-	Block::Hash: FromStr,
 	Block::Header: DeserializeOwned,
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,
@@ -108,10 +107,12 @@ where
 				.or_else(|e| {
 					if matches!(e, substrate_rpc_client::Error::ParseError(_)) {
 						log::error!(
+							target: LOG_TARGET,
 							"failed to parse the block format of remote against the local \
-						codebase. The block format has changed, and follow-chain cannot run in \
-						this case. Try running this command in a branch of your codebase that has \
-						the same block format as the remote chain. For now, we replace the block with an empty one"
+							codebase. The block format has changed, and follow-chain cannot run in \
+							this case. Try running this command in a branch of your codebase that
+							has the same block format as the remote chain. For now, we replace the \
+							block with an empty one."
 						);
 					}
 					Err(rpc_err_handler(e))
@@ -148,8 +149,10 @@ where
 			state_ext,
 			&executor,
 			"TryRuntime_execute_block",
-			(block, command.state_root_check, command.try_state.clone()).encode().as_ref(),
-			full_extensions(),
+			(block, command.state_root_check, true, command.try_state.clone())
+				.encode()
+				.as_ref(),
+			full_extensions(executor.clone()),
 			shared
 				.export_proof
 				.as_ref()

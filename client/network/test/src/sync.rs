@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -414,7 +414,7 @@ async fn can_sync_small_non_best_forks() {
 	// poll until the two nodes connect, otherwise announcing the block will not work
 	futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
-		if net.peer(0).num_peers() == 0 {
+		if net.peer(0).num_peers() == 0 || net.peer(1).num_peers() == 0 {
 			Poll::Pending
 		} else {
 			Poll::Ready(())
@@ -550,7 +550,10 @@ async fn can_sync_explicit_forks() {
 	.await;
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+// TODO: for unknown reason, this test is flaky on a multithreaded runtime, so we run it
+//       in a single-threaded mode.
+//       See issue https://github.com/paritytech/substrate/issues/14622.
+#[tokio::test]
 async fn syncs_header_only_forks() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(0);
@@ -652,12 +655,12 @@ async fn imports_stale_once() {
 	// check that NEW block is imported from announce message
 	let new_hash = net.peer(0).push_blocks(1, false).pop().unwrap();
 	import_with_announce(&mut net, new_hash).await;
-	assert_eq!(net.peer(1).num_downloaded_blocks(), 1);
+	assert_eq!(net.peer(1).num_downloaded_blocks().await, 1);
 
 	// check that KNOWN STALE block is imported from announce message
 	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true).pop().unwrap();
 	import_with_announce(&mut net, known_stale_hash).await;
-	assert_eq!(net.peer(1).num_downloaded_blocks(), 2);
+	assert_eq!(net.peer(1).num_downloaded_blocks().await, 2);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -820,7 +823,7 @@ async fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() 
 	assert!(!net.peer(1).has_block(block_hash));
 
 	// Make sync protocol aware of the best block
-	net.peer(0).network_service().new_best_block_imported(block_hash, 3);
+	net.peer(0).sync_service().new_best_block_imported(block_hash, 3);
 	net.run_until_idle().await;
 
 	// Connect another node that should now sync to the tip
@@ -865,8 +868,8 @@ async fn sync_to_tip_when_we_sync_together_with_multiple_peers() {
 
 	assert!(!net.peer(2).has_block(block_hash));
 
-	net.peer(0).network_service().new_best_block_imported(block_hash, 10_000);
-	net.peer(0).network_service().announce_block(block_hash, None);
+	net.peer(0).sync_service().new_best_block_imported(block_hash, 10_000);
+	net.peer(0).sync_service().announce_block(block_hash, None);
 
 	while !net.peer(2).has_block(block_hash) && !net.peer(1).has_block(block_hash) {
 		net.run_until_idle().await;
@@ -1045,14 +1048,17 @@ async fn syncs_all_forks_from_single_peer() {
 	let branch1 = net.peer(0).push_blocks_at(BlockId::Number(10), 2, true).pop().unwrap();
 
 	// Wait till peer 1 starts downloading
-	futures::future::poll_fn::<(), _>(|cx| {
-		net.poll(cx);
-		if net.peer(1).network().best_seen_block() != Some(12) {
-			return Poll::Pending
+	loop {
+		futures::future::poll_fn::<(), _>(|cx| {
+			net.poll(cx);
+			Poll::Ready(())
+		})
+		.await;
+
+		if net.peer(1).sync_service().best_seen_block().await.unwrap() == Some(12) {
+			break
 		}
-		Poll::Ready(())
-	})
-	.await;
+	}
 
 	// Peer 0 produces and announces another fork
 	let branch2 = net.peer(0).push_blocks_at(BlockId::Number(10), 2, false).pop().unwrap();
@@ -1129,7 +1135,7 @@ async fn syncs_state() {
 		let mut config_two = FullPeerConfig::default();
 		config_two.extra_storage = Some(genesis_storage);
 		config_two.sync_mode =
-			SyncMode::Fast { skip_proofs: *skip_proofs, storage_chain_mode: false };
+			SyncMode::LightState { skip_proofs: *skip_proofs, storage_chain_mode: false };
 		net.add_full_peer_with_config(config_two);
 		let hashes = net.peer(0).push_blocks(64, false);
 		// Wait for peer 1 to sync header chain.
@@ -1172,7 +1178,7 @@ async fn syncs_indexed_blocks() {
 	net.add_full_peer_with_config(FullPeerConfig { storage_chain: true, ..Default::default() });
 	net.add_full_peer_with_config(FullPeerConfig {
 		storage_chain: true,
-		sync_mode: SyncMode::Fast { skip_proofs: false, storage_chain_mode: true },
+		sync_mode: SyncMode::LightState { skip_proofs: false, storage_chain_mode: true },
 		..Default::default()
 	});
 	net.peer(0).generate_blocks_at(
@@ -1180,7 +1186,7 @@ async fn syncs_indexed_blocks() {
 		64,
 		BlockOrigin::Own,
 		|mut builder| {
-			let ex = Extrinsic::Store(n.to_le_bytes().to_vec());
+			let ex = ExtrinsicBuilder::new_indexed_call(n.to_le_bytes().to_vec()).nonce(n).build();
 			n += 1;
 			builder.push(ex).unwrap();
 			builder.build().unwrap().block
@@ -1250,6 +1256,44 @@ async fn warp_sync() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn warp_sync_to_target_block() {
+	sp_tracing::try_init_simple();
+	let mut net = TestNet::new(0);
+	// Create 3 synced peers and 1 peer trying to warp sync.
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(Default::default());
+
+	let blocks = net.peer(0).push_blocks(64, false);
+	let target = blocks[63];
+	net.peer(1).push_blocks(64, false);
+	net.peer(2).push_blocks(64, false);
+
+	let target_block = net.peer(0).client.header(target).unwrap().unwrap();
+
+	net.add_full_peer_with_config(FullPeerConfig {
+		sync_mode: SyncMode::Warp,
+		target_block: Some(target_block),
+		..Default::default()
+	});
+
+	net.run_until_sync().await;
+	assert!(net.peer(3).client().has_state_at(&BlockId::Number(64)));
+
+	// Wait for peer 1 download block history
+	futures::future::poll_fn::<(), _>(|cx| {
+		net.poll(cx);
+		let peer = net.peer(3);
+		if blocks.iter().all(|b| peer.has_body(*b)) {
+			Poll::Ready(())
+		} else {
+			Poll::Pending
+		}
+	})
+	.await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn syncs_huge_blocks() {
 	use sp_core::storage::well_known_keys::HEAP_PAGES;
 	use sp_runtime::codec::Encode;
@@ -1264,11 +1308,13 @@ async fn syncs_huge_blocks() {
 		builder.build().unwrap().block
 	});
 
+	let mut nonce = 0;
 	net.peer(0).generate_blocks(32, BlockOrigin::Own, |mut builder| {
 		// Add 32 extrinsics 32k each = 1MiB total
-		for _ in 0..32 {
-			let ex = Extrinsic::IncludeData([42u8; 32 * 1024].to_vec());
+		for _ in 0..32u64 {
+			let ex = ExtrinsicBuilder::new_include_data(vec![42u8; 32 * 1024]).nonce(nonce).build();
 			builder.push(ex).unwrap();
+			nonce += 1;
 		}
 		builder.build().unwrap().block
 	});

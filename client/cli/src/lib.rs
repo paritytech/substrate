@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -17,6 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate CLI library.
+//!
+//! To see a full list of commands available, see [`commands`].
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
@@ -26,11 +28,12 @@ use clap::{CommandFactory, FromArgMatches, Parser};
 use sc_service::Configuration;
 
 pub mod arg_enums;
-mod commands;
+pub mod commands;
 mod config;
 mod error;
 mod params;
 mod runner;
+mod signals;
 
 pub use arg_enums::*;
 pub use clap;
@@ -41,6 +44,7 @@ pub use params::*;
 pub use runner::*;
 pub use sc_service::{ChainSpec, Role};
 pub use sc_tracing::logging::LoggerBuilder;
+pub use signals::Signals;
 pub use sp_version::RuntimeVersion;
 
 /// Substrate client CLI
@@ -197,10 +201,15 @@ pub trait SubstrateCli: Sized {
 		command: &T,
 	) -> error::Result<Runner<Self>> {
 		let tokio_runtime = build_runtime()?;
+
+		// `capture` needs to be called in a tokio context.
+		// Also capture them as early as possible.
+		let signals = tokio_runtime.block_on(async { Signals::capture() })?;
+
 		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
 
 		command.init(&Self::support_url(), &Self::impl_version(), |_, _| {}, &config)?;
-		Runner::new(config, tokio_runtime)
+		Runner::new(config, tokio_runtime, signals)
 	}
 
 	/// Create a runner for the command provided in argument. The `logger_hook` can be used to setup
@@ -231,11 +240,14 @@ pub trait SubstrateCli: Sized {
 		F: FnOnce(&mut LoggerBuilder, &Configuration),
 	{
 		let tokio_runtime = build_runtime()?;
+
+		// `capture` needs to be called in a tokio context.
+		// Also capture them as early as possible.
+		let signals = tokio_runtime.block_on(async { Signals::capture() })?;
+
 		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
 
 		command.init(&Self::support_url(), &Self::impl_version(), logger_hook, &config)?;
-		Runner::new(config, tokio_runtime)
+		Runner::new(config, tokio_runtime, signals)
 	}
-	/// Native runtime version.
-	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
 }

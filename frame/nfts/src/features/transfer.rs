@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,7 +30,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		let collection_details =
 			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+
 		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::ItemLocked);
+		ensure!(
+			!Self::has_system_attribute(&collection, &item, PalletAttributes::TransferDisabled)?,
+			Error::<T, I>::ItemLocked
+		);
 
 		let collection_config = Self::get_collection_config(&collection)?;
 		ensure!(
@@ -47,16 +52,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let mut details =
 			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		with_details(&collection_details, &mut details)?;
-
-		if details.deposit.account == details.owner {
-			// Move the deposit to the new owner.
-			T::Currency::repatriate_reserved(
-				&details.owner,
-				&dest,
-				details.deposit.amount,
-				Reserved,
-			)?;
-		}
 
 		Account::<T, I>::remove((&details.owner, &collection, &item));
 		Account::<T, I>::insert((&dest, &collection, &item), ());

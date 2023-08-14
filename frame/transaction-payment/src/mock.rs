@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,10 +19,7 @@ use super::*;
 use crate as pallet_transaction_payment;
 
 use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 use frame_support::{
 	dispatch::DispatchClass,
@@ -33,23 +30,19 @@ use frame_support::{
 use frame_system as system;
 use pallet_balances::Call as BalancesCall;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub struct Runtime
 	{
-		System: system::{Pallet, Call, Config, Storage, Event<T>},
+		System: system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
 	}
 );
 
 pub(crate) const CALL: &<Runtime as frame_system::Config>::RuntimeCall =
-	&RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+	&RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 2, value: 69 });
 
 parameter_types! {
 	pub(crate) static ExtrinsicBaseWeight: Weight = Weight::zero();
@@ -64,7 +57,7 @@ impl Get<frame_system::limits::BlockWeights> for BlockWeights {
 				weights.base_extrinsic = ExtrinsicBaseWeight::get().into();
 			})
 			.for_class(DispatchClass::non_mandatory(), |weights| {
-				weights.max_total = Weight::from_ref_time(1024).set_proof_size(u64::MAX).into();
+				weights.max_total = Weight::from_parts(1024, u64::MAX).into();
 			})
 			.build_or_panic()
 	}
@@ -82,14 +75,13 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -113,6 +105,10 @@ impl pallet_balances::Config for Runtime {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 
 impl WeightToFeeT for WeightToFee {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -59,7 +59,7 @@
 //! 	use frame_system::pallet_prelude::*;
 //!
 //! 	#[pallet::pallet]
-//! 	pub struct Pallet<T>(PhantomData<T>);
+//! 	pub struct Pallet<T>(_);
 //!
 //! 	#[pallet::config]
 //! 	pub trait Config: frame_system::Config {}
@@ -110,6 +110,11 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+pub mod weights;
+pub use weights::WeightInfo;
+
 pub use extension::CheckOnlySudoAccount;
 pub use pallet::*;
 
@@ -130,11 +135,13 @@ pub mod pallet {
 		type RuntimeCall: Parameter
 			+ UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
 			+ GetDispatchInfo;
+
+		/// Type representing the weight of this pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -142,16 +149,15 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB write (event).
-		/// - Weight of derivative `call` execution + 10,000.
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
-			(dispatch_info.weight, dispatch_info.class)
+			(
+				T::WeightInfo::sudo().saturating_add(dispatch_info.weight),
+				dispatch_info.class
+			)
 		})]
 		pub fn sudo(
 			origin: OriginFor<T>,
@@ -173,10 +179,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// - The weight of this call is defined by the caller.
-		/// # </weight>
 		#[pallet::call_index(1)]
 		#[pallet::weight((*_weight, call.get_dispatch_info().class))]
 		pub fn sudo_unchecked_weight(
@@ -199,13 +203,10 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB change.
-		/// # </weight>
 		#[pallet::call_index(2)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_key())]
 		pub fn set_key(
 			origin: OriginFor<T>,
 			new: AccountIdLookupOf<T>,
@@ -226,19 +227,13 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB write (event).
-		/// - Weight of derivative `call` execution + 10,000.
-		/// # </weight>
 		#[pallet::call_index(3)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
-				dispatch_info.weight
-					// AccountData for inner call origin accountdata.
-					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+				T::WeightInfo::sudo_as().saturating_add(dispatch_info.weight),
 				dispatch_info.class,
 			)
 		})]
@@ -287,20 +282,14 @@ pub mod pallet {
 	pub(super) type Key<T: Config> = StorageValue<_, T::AccountId, OptionQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		/// The `AccountId` of the sudo key.
 		pub key: Option<T::AccountId>,
 	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { key: None }
-		}
-	}
-
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			if let Some(ref key) = self.key {
 				Key::<T>::put(key);

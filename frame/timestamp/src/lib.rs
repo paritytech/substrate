@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -130,7 +130,7 @@ pub mod pallet {
 		type Moment: Parameter
 			+ Default
 			+ AtLeast32Bit
-			+ Scale<Self::BlockNumber, Output = Self::Moment>
+			+ Scale<BlockNumberFor<Self>, Output = Self::Moment>
 			+ Copy
 			+ MaxEncodedLen
 			+ scale_info::StaticTypeInfo;
@@ -151,8 +151,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	/// Current time for the current block.
 	#[pallet::storage]
@@ -171,10 +170,8 @@ pub mod pallet {
 			T::WeightInfo::on_finalize()
 		}
 
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`
-		/// - 1 storage deletion (codec `O(1)`).
-		/// # </weight>
 		fn on_finalize(_n: BlockNumberFor<T>) {
 			assert!(DidUpdate::<T>::take(), "Timestamp must be updated once in the block");
 		}
@@ -192,12 +189,11 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be `Inherent`.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)` (Note that implementations of `OnTimestampSet` must also be `O(1)`)
 		/// - 1 storage read and 1 storage mutation (codec `O(1)`). (because of `DidUpdate::take` in
 		///   `on_finalize`)
 		/// - 1 event handler `on_timestamp_set`. Must be `O(1)`.
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight((
 			T::WeightInfo::set(),
@@ -258,7 +254,7 @@ pub mod pallet {
 			if t > *(data + MAX_TIMESTAMP_DRIFT_MILLIS) {
 				Err(InherentError::TooFarInFuture)
 			} else if t < minimum {
-				Err(InherentError::ValidAtTimestamp(minimum.into()))
+				Err(InherentError::TooEarly)
 			} else {
 				Ok(())
 			}

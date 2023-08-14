@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,15 +18,17 @@
 
 use futures::channel::oneshot;
 use libp2p::{Multiaddr, PeerId};
+
 use sc_consensus::{BlockImportError, BlockImportStatus};
-use sc_network_common::{
+use sc_network::{
 	config::MultiaddrWithPeerId,
-	protocol::ProtocolName,
 	request_responses::{IfDisconnected, RequestFailure},
-	service::{NetworkPeers, NetworkRequest, NetworkSyncForkRequest},
+	types::ProtocolName,
+	NetworkNotification, NetworkPeers, NetworkRequest, NetworkSyncForkRequest,
+	NotificationSenderError, NotificationSenderT, ReputationChange,
 };
-use sc_peerset::ReputationChange;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
+
 use std::collections::HashSet;
 
 mockall::mock! {
@@ -97,13 +99,11 @@ mockall::mock! {
 			protocol: ProtocolName,
 			peers: HashSet<Multiaddr>,
 		) -> Result<(), String>;
-		fn remove_peers_from_reserved_set(&self, protocol: ProtocolName, peers: Vec<PeerId>);
-		fn add_to_peers_set(
+		fn remove_peers_from_reserved_set(
 			&self,
 			protocol: ProtocolName,
-			peers: HashSet<Multiaddr>,
+			peers: Vec<PeerId>
 		) -> Result<(), String>;
-		fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>);
 		fn sync_num_connected(&self) -> usize;
 	}
 
@@ -124,5 +124,15 @@ mockall::mock! {
 			tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 			connect: IfDisconnected,
 		);
+	}
+
+	impl NetworkNotification for Network {
+		fn write_notification(&self, target: PeerId, protocol: ProtocolName, message: Vec<u8>);
+		fn notification_sender(
+			&self,
+			target: PeerId,
+			protocol: ProtocolName,
+		) -> Result<Box<dyn NotificationSenderT>, NotificationSenderError>;
+		fn set_notification_handshake(&self, protocol: ProtocolName, handshake: Vec<u8>);
 	}
 }

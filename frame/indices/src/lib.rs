@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -75,8 +75,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -90,14 +89,8 @@ pub mod pallet {
 		///
 		/// Emits `IndexAssigned` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - One reserve operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight: 1 Read/Write (Accounts)
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::claim())]
 		pub fn claim(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
@@ -122,16 +115,8 @@ pub mod pallet {
 		///
 		/// Emits `IndexAssigned` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - One transfer operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight:
-		///    - Reads: Indices Accounts, System Account (recipient)
-		///    - Writes: Indices Accounts, System Account (recipient)
-		/// # </weight>
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
@@ -165,14 +150,8 @@ pub mod pallet {
 		///
 		/// Emits `IndexFreed` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - One reserve operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight: 1 Read/Write (Accounts)
-		/// # </weight>
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::free())]
 		pub fn free(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
@@ -200,16 +179,8 @@ pub mod pallet {
 		///
 		/// Emits `IndexAssigned` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - Up to one reserve operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight:
-		///    - Reads: Indices Accounts, System Account (original owner)
-		///    - Writes: Indices Accounts, System Account (original owner)
-		/// # </weight>
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
@@ -241,14 +212,8 @@ pub mod pallet {
 		///
 		/// Emits `IndexFrozen` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - Up to one slash operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight: 1 Read/Write (Accounts)
-		/// # </weight>
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::freeze())]
 		pub fn freeze(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
@@ -298,19 +263,13 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, T::AccountIndex, (T::AccountId, BalanceOf<T>, bool)>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub indices: Vec<(T::AccountIndex, T::AccountId)>,
 	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { indices: Default::default() }
-		}
-	}
-
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			for (a, b) in &self.indices {
 				<Accounts<T>>::insert(a, (b, <BalanceOf<T>>::zero(), false))

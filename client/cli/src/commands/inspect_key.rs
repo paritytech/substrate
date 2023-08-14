@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,12 +34,9 @@ use std::str::FromStr;
 pub struct InspectKeyCmd {
 	/// A Key URI to be inspected. May be a secret seed, secret URI
 	/// (with derivation paths and password), SS58, public URI or a hex encoded public key.
-	///
 	/// If it is a hex encoded public key, `--public` needs to be given as argument.
-	///
 	/// If the given value is a file, the file content will be used
 	/// as URI.
-	///
 	/// If omitted, you will be prompted for the URI.
 	uri: Option<String>,
 
@@ -64,12 +61,10 @@ pub struct InspectKeyCmd {
 	pub crypto_scheme: CryptoSchemeFlag,
 
 	/// Expect that `--uri` has the given public key/account-id.
-	///
 	/// If `--uri` has any derivations, the public key is checked against the base `uri`, i.e. the
 	/// `uri` without any derivation applied. However, if `uri` has a password or there is one
 	/// given by `--password`, it will be used to decrypt `uri` before comparing the public
 	/// key/account-id.
-	///
 	/// If there is no derivation in `--uri`, the public key will be checked against the public key
 	/// of `--uri` directly.
 	#[arg(long, conflicts_with = "public")]

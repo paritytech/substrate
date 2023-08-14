@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -44,7 +44,7 @@ pub enum Error {
 }
 
 /// Base error code for all dev errors.
-const BASE_ERROR: i32 = 6000;
+const BASE_ERROR: i32 = crate::error::base::DEV;
 
 impl From<Error> for JsonRpseeError {
 	fn from(e: Error) -> Self {

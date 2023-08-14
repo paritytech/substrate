@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -76,21 +76,29 @@ pub use codec::{self, Decode, DecodeLimit, Encode};
 #[cfg(feature = "std")]
 pub use hash_db::Hasher;
 #[doc(hidden)]
+pub use scale_info;
+#[doc(hidden)]
+pub use sp_core::offchain;
+#[doc(hidden)]
 #[cfg(not(feature = "std"))]
 pub use sp_core::to_substrate_wasm_fn_return_value;
+#[doc(hidden)]
+#[cfg(feature = "std")]
+pub use sp_core::traits::CallContext;
 use sp_core::OpaqueMetadata;
 #[doc(hidden)]
-pub use sp_core::{offchain, ExecutionContext};
+#[cfg(feature = "std")]
+pub use sp_externalities::{Extension, Extensions};
+#[doc(hidden)]
+#[cfg(feature = "frame-metadata")]
+pub use sp_metadata_ir::{self as metadata_ir, frame_metadata as metadata};
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_runtime::StateVersion;
 #[doc(hidden)]
 pub use sp_runtime::{
 	generic::BlockId,
-	traits::{
-		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, Hash as HashT, HashFor,
-		Header as HeaderT, NumberFor,
-	},
+	traits::{Block as BlockT, Hash as HashT, HashingFor, Header as HeaderT, NumberFor},
 	transaction_validity::TransactionValidity,
 	RuntimeString, TransactionOutcome,
 };
@@ -101,7 +109,7 @@ pub use sp_state_machine::{
 	StorageProof, TrieBackend, TrieBackendBuilder,
 };
 #[doc(hidden)]
-pub use sp_std::{mem, slice};
+pub use sp_std::{mem, slice, vec};
 #[doc(hidden)]
 pub use sp_version::{create_apis_vec, ApiId, ApisVec, RuntimeVersion};
 #[cfg(feature = "std")]
@@ -115,7 +123,7 @@ pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 /// The macro will create two declarations, one for using on the client side and one for using
 /// on the runtime side. The declaration for the runtime side is hidden in its own module.
 /// The client side declaration gets two extra parameters per function,
-/// `&self` and `at: &BlockId<Block>`. The runtime side declaration will match the given trait
+/// `&self` and `at: Block::Hash`. The runtime side declaration will match the given trait
 /// declaration. Besides one exception, the macro adds an extra generic parameter `Block:
 /// BlockT` to the client side and the runtime side. This generic parameter is usable by the
 /// user.
@@ -182,7 +190,7 @@ pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 /// ```
 ///
 /// To check if a given runtime implements a runtime api trait, the `RuntimeVersion` has the
-/// function `has_api<A>()`. Also the `ApiExt` provides a function `has_api<A>(at: &BlockId)`
+/// function `has_api<A>()`. Also the `ApiExt` provides a function `has_api<A>(at: Hash)`
 /// to check if the runtime at the given block id implements the requested runtime api trait.
 ///
 /// # Declaring multiple api versions
@@ -259,15 +267,12 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// ```rust
 /// use sp_version::create_runtime_str;
 /// #
-/// # use sp_runtime::traits::{GetNodeBlockType, Block as BlockT};
+/// # use sp_runtime::traits::Block as BlockT;
 /// # use sp_test_primitives::Block;
 /// #
-/// # /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
-/// # /// trait are done by the `construct_runtime!` macro in a real runtime.
+/// # /// The declaration of the `Runtime` type is done by the `construct_runtime!` macro
+/// # /// in a real runtime.
 /// # pub struct Runtime {}
-/// # impl GetNodeBlockType for Runtime {
-/// #     type NodeBlock = Block;
-/// # }
 /// #
 /// # sp_api::decl_runtime_apis! {
 /// #     /// Declare the api trait.
@@ -400,16 +405,16 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 ///
 /// This attribute can be placed above individual function in the mock implementation to
 /// request more control over the function declaration. From the client side each runtime api
-/// function is called with the `at` parameter that is a [`BlockId`](sp_api::BlockId). When
-/// using the `advanced` attribute, the macro expects that the first parameter of the function
-/// is this `at` parameter. Besides that the macro also doesn't do the automatic return value
-/// rewrite, which means that full return value must be specified. The full return value is
-/// constructed like [`Result`]`<<ReturnValue>, Error>` while `ReturnValue` being the return
-/// value that is specified in the trait declaration.
+/// function is called with the `at` parameter that is a [`Hash`](sp_runtime::traits::Hash).
+/// When using the `advanced` attribute, the macro expects that the first parameter of the
+/// function is this `at` parameter. Besides that the macro also doesn't do the automatic
+/// return value rewrite, which means that full return value must be specified. The full return
+/// value is constructed like [`Result`]`<<ReturnValue>, Error>` while `ReturnValue` being the
+/// return value that is specified in the trait declaration.
 ///
 /// ## Example
 /// ```rust
-/// # use sp_runtime::{traits::Block as BlockT, generic::BlockId};
+/// # use sp_runtime::traits::Block as BlockT;
 /// # use sp_test_primitives::Block;
 /// # use codec;
 /// #
@@ -429,16 +434,14 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 /// sp_api::mock_impl_runtime_apis! {
 ///     impl Balance<Block> for MockApi {
 ///         #[advanced]
-///         fn get_balance(&self, at: &BlockId<Block>) -> Result<u64, sp_api::ApiError> {
+///         fn get_balance(&self, at: <Block as BlockT>::Hash) -> Result<u64, sp_api::ApiError> {
 ///             println!("Being called at: {}", at);
 ///
 ///             Ok(self.balance.into())
 ///         }
 ///         #[advanced]
-///         fn set_balance(at: &BlockId<Block>, val: u64) -> Result<(), sp_api::ApiError> {
-///             if let BlockId::Number(1) = at {
-///                 println!("Being called to set balance to: {}", val);
-///             }
+///         fn set_balance(at: <Block as BlockT>::Hash, val: u64) -> Result<(), sp_api::ApiError> {
+///             println!("Being called at: {}", at);
 ///
 ///             Ok(().into())
 ///         }
@@ -451,19 +454,19 @@ pub use sp_api_proc_macro::mock_impl_runtime_apis;
 
 /// A type that records all accessed trie nodes and generates a proof out of it.
 #[cfg(feature = "std")]
-pub type ProofRecorder<B> = sp_trie::recorder::Recorder<HashFor<B>>;
+pub type ProofRecorder<B> = sp_trie::recorder::Recorder<HashingFor<B>>;
 
 /// A type that is used as cache for the storage transactions.
 #[cfg(feature = "std")]
 pub type StorageTransactionCache<Block, Backend> = sp_state_machine::StorageTransactionCache<
-	<Backend as StateBackend<HashFor<Block>>>::Transaction,
-	HashFor<Block>,
+	<Backend as StateBackend<HashingFor<Block>>>::Transaction,
+	HashingFor<Block>,
 >;
 
 #[cfg(feature = "std")]
 pub type StorageChanges<SBackend, Block> = sp_state_machine::StorageChanges<
-	<SBackend as StateBackend<HashFor<Block>>>::Transaction,
-	HashFor<Block>,
+	<SBackend as StateBackend<HashingFor<Block>>>::Transaction,
+	HashingFor<Block>,
 >;
 
 /// Extract the state backend type for a type that implements `ProvideRuntimeApi`.
@@ -474,7 +477,7 @@ pub type StateBackendFor<P, Block> =
 /// Extract the state backend transaction type for a type that implements `ProvideRuntimeApi`.
 #[cfg(feature = "std")]
 pub type TransactionFor<P, Block> =
-	<StateBackendFor<P, Block> as StateBackend<HashFor<Block>>>::Transaction;
+	<StateBackendFor<P, Block> as StateBackend<HashingFor<Block>>>::Transaction;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
@@ -521,13 +524,15 @@ pub enum ApiError {
 	Application(#[from] Box<dyn std::error::Error + Send + Sync>),
 	#[error("Api called for an unknown Block: {0}")]
 	UnknownBlock(String),
+	#[error("Using the same api instance to call into multiple independent blocks.")]
+	UsingSameInstanceForDifferentBlocks,
 }
 
 /// Extends the runtime api implementation with some common functionality.
 #[cfg(feature = "std")]
 pub trait ApiExt<Block: BlockT> {
 	/// The state backend that is used to store the block states.
-	type StateBackend: StateBackend<HashFor<Block>>;
+	type StateBackend: StateBackend<HashingFor<Block>>;
 
 	/// Execute the given closure inside a new transaction.
 	///
@@ -539,14 +544,14 @@ pub trait ApiExt<Block: BlockT> {
 		Self: Sized;
 
 	/// Checks if the given api is implemented and versions match.
-	fn has_api<A: RuntimeApiInfo + ?Sized>(&self, at: &BlockId<Block>) -> Result<bool, ApiError>
+	fn has_api<A: RuntimeApiInfo + ?Sized>(&self, at_hash: Block::Hash) -> Result<bool, ApiError>
 	where
 		Self: Sized;
 
 	/// Check if the given api is implemented and the version passes a predicate.
 	fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
 		&self,
-		at: &BlockId<Block>,
+		at_hash: Block::Hash,
 		pred: P,
 	) -> Result<bool, ApiError>
 	where
@@ -555,7 +560,7 @@ pub trait ApiExt<Block: BlockT> {
 	/// Returns the version of the given api.
 	fn api_version<A: RuntimeApiInfo + ?Sized>(
 		&self,
-		at: &BlockId<Block>,
+		at_hash: Block::Hash,
 	) -> Result<Option<u32>, ApiError>
 	where
 		Self: Sized;
@@ -584,13 +589,19 @@ pub trait ApiExt<Block: BlockT> {
 	) -> Result<StorageChanges<Self::StateBackend, Block>, String>
 	where
 		Self: Sized;
+
+	/// Set the [`CallContext`] to be used by the runtime api calls done by this instance.
+	fn set_call_context(&mut self, call_context: CallContext);
+
+	/// Register an [`Extension`] that will be accessible while executing a runtime api call.
+	fn register_extension<E: Extension>(&mut self, extension: E);
 }
 
 /// Parameters for [`CallApiAt::call_api_at`].
 #[cfg(feature = "std")]
-pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashFor<Block>>> {
+pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashingFor<Block>>> {
 	/// The block id that determines the state that should be setup when calling the function.
-	pub at: &'a BlockId<Block>,
+	pub at: Block::Hash,
 	/// The name of the function that should be called.
 	pub function: &'static str,
 	/// The encoded arguments of the function.
@@ -599,17 +610,19 @@ pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashFor<Bloc
 	pub overlayed_changes: &'a RefCell<OverlayedChanges>,
 	/// The cache for storage transactions.
 	pub storage_transaction_cache: &'a RefCell<StorageTransactionCache<Block, Backend>>,
-	/// The context this function is executed in.
-	pub context: ExecutionContext,
+	/// The call context of this call.
+	pub call_context: CallContext,
 	/// The optional proof recorder for recording storage accesses.
 	pub recorder: &'a Option<ProofRecorder<Block>>,
+	/// The extensions that should be used for this call.
+	pub extensions: &'a RefCell<Extensions>,
 }
 
 /// Something that can call into the an api at a given block.
 #[cfg(feature = "std")]
 pub trait CallApiAt<Block: BlockT> {
 	/// The state backend that is used to store the block states.
-	type StateBackend: StateBackend<HashFor<Block>> + AsTrieBackend<HashFor<Block>>;
+	type StateBackend: StateBackend<HashingFor<Block>> + AsTrieBackend<HashingFor<Block>>;
 
 	/// Calls the given api function with the given encoded arguments at the given block and returns
 	/// the encoded result.
@@ -619,10 +632,17 @@ pub trait CallApiAt<Block: BlockT> {
 	) -> Result<Vec<u8>, ApiError>;
 
 	/// Returns the runtime version at the given block.
-	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, ApiError>;
+	fn runtime_version_at(&self, at_hash: Block::Hash) -> Result<RuntimeVersion, ApiError>;
 
 	/// Get the state `at` the given block.
-	fn state_at(&self, at: &BlockId<Block>) -> Result<Self::StateBackend, ApiError>;
+	fn state_at(&self, at: Block::Hash) -> Result<Self::StateBackend, ApiError>;
+
+	/// Initialize the `extensions` for the given block `at` by using the global extensions factory.
+	fn initialize_extensions(
+		&self,
+		at: Block::Hash,
+		extensions: &mut Extensions,
+	) -> Result<(), ApiError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
@@ -731,8 +751,23 @@ decl_runtime_apis! {
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.
+	#[api_version(2)]
 	pub trait Metadata {
 		/// Returns the metadata of a runtime.
 		fn metadata() -> OpaqueMetadata;
+
+		/// Returns the metadata at a given version.
+		///
+		/// If the given `version` isn't supported, this will return `None`.
+		/// Use [`Self::metadata_versions`] to find out about supported metadata version of the runtime.
+		fn metadata_at_version(version: u32) -> Option<OpaqueMetadata>;
+
+		/// Returns the supported metadata versions.
+		///
+		/// This can be used to call `metadata_at_version`.
+		fn metadata_versions() -> sp_std::vec::Vec<u32>;
 	}
 }
+
+sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);
+sp_core::generate_feature_enabled_macro!(std_disabled, not(feature = "std"), $);

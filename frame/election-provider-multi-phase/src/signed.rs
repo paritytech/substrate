@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,6 +27,7 @@ use frame_election_provider_support::NposSolution;
 use frame_support::traits::{
 	defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_core::bounded::BoundedVec;
 use sp_npos_elections::ElectionScore;
@@ -100,10 +101,8 @@ pub type SignedSubmissionOf<T> = SignedSubmission<
 
 /// Always sorted vector of a score, submitted at the given block number, which can be found at the
 /// given index (`u32`) of the `SignedSubmissionsMap`.
-pub type SubmissionIndicesOf<T> = BoundedVec<
-	(ElectionScore, <T as frame_system::Config>::BlockNumber, u32),
-	<T as Config>::SignedMaxSubmissions,
->;
+pub type SubmissionIndicesOf<T> =
+	BoundedVec<(ElectionScore, BlockNumberFor<T>, u32), <T as Config>::SignedMaxSubmissions>;
 
 /// Outcome of [`SignedSubmissions::insert`].
 pub enum InsertResult<T: Config> {
@@ -216,7 +215,7 @@ impl<T: Config> SignedSubmissions<T> {
 	fn swap_out_submission(
 		&mut self,
 		remove_pos: usize,
-		insert: Option<(ElectionScore, T::BlockNumber, u32)>,
+		insert: Option<(ElectionScore, BlockNumberFor<T>, u32)>,
 	) -> Option<SignedSubmissionOf<T>> {
 		if remove_pos >= self.indices.len() {
 			return None
@@ -462,7 +461,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Infallible
 	pub fn finalize_signed_phase_accept_solution(
-		ready_solution: ReadySolution<T>,
+		ready_solution: ReadySolution<T::AccountId, T::MaxWinners>,
 		who: &T::AccountId,
 		deposit: BalanceOf<T>,
 		call_fee: BalanceOf<T>,
@@ -537,7 +536,10 @@ impl<T: Config> Pallet<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{mock::*, ElectionCompute, ElectionError, Error, Event, Perbill, Phase};
+	use crate::{
+		mock::*, ElectionBoundsBuilder, ElectionCompute, ElectionError, Error, Event, Perbill,
+		Phase,
+	};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
 	#[test]
@@ -554,6 +556,11 @@ mod tests {
 				MultiPhase::submit(RuntimeOrigin::signed(10), Box::new(solution)),
 				Error::<Runtime>::PreDispatchEarlySubmission,
 			);
+
+			// make sure invariants hold true and post-test try state checks to pass.
+			<crate::Snapshot<Runtime>>::kill();
+			<crate::SnapshotMetadata<Runtime>>::kill();
+			<crate::DesiredTargets<Runtime>>::kill();
 		})
 	}
 
@@ -561,13 +568,14 @@ mod tests {
 	fn data_provider_should_respect_target_limits() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given a reduced expectation of maximum electable targets
-			MaxElectableTargets::set(2);
+			let new_bounds = ElectionBoundsBuilder::default().targets_count(2.into()).build();
+			ElectionsBounds::set(new_bounds);
 			// and a data provider that does not respect limits
 			DataProviderAllowBadData::set(true);
 
 			assert_noop!(
 				MultiPhase::create_snapshot(),
-				ElectionError::DataProvider("Snapshot too big for submission."),
+				ElectionError::DataProvider("Ensure targets bounds: bounds exceeded."),
 			);
 		})
 	}
@@ -576,13 +584,14 @@ mod tests {
 	fn data_provider_should_respect_voter_limits() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given a reduced expectation of maximum electing voters
-			MaxElectingVoters::set(2);
+			let new_bounds = ElectionBoundsBuilder::default().voters_count(2.into()).build();
+			ElectionsBounds::set(new_bounds);
 			// and a data provider that does not respect limits
 			DataProviderAllowBadData::set(true);
 
 			assert_noop!(
 				MultiPhase::create_snapshot(),
-				ElectionError::DataProvider("Snapshot too big for submission."),
+				ElectionError::DataProvider("Ensure voters bounds: bounds exceeded."),
 			);
 		})
 	}
@@ -1254,7 +1263,7 @@ mod tests {
 	#[test]
 	fn cannot_consume_too_much_future_weight() {
 		ExtBuilder::default()
-			.signed_weight(Weight::from_ref_time(40).set_proof_size(u64::MAX))
+			.signed_weight(Weight::from_parts(40, u64::MAX))
 			.mock_weight_info(MockedWeightInfo::Basic)
 			.build_and_execute(|| {
 				roll_to_signed();
@@ -1268,16 +1277,16 @@ mod tests {
 					raw.solution.unique_targets().len() as u32,
 				);
 				// default solution will have 5 edges (5 * 5 + 10)
-				assert_eq!(solution_weight, Weight::from_ref_time(35));
+				assert_eq!(solution_weight, Weight::from_parts(35, 0));
 				assert_eq!(raw.solution.voter_count(), 5);
 				assert_eq!(
 					<Runtime as Config>::SignedMaxWeight::get(),
-					Weight::from_ref_time(40).set_proof_size(u64::MAX)
+					Weight::from_parts(40, u64::MAX)
 				);
 
 				assert_ok!(MultiPhase::submit(RuntimeOrigin::signed(99), Box::new(raw.clone())));
 
-				<SignedMaxWeight>::set(Weight::from_ref_time(30).set_proof_size(u64::MAX));
+				<SignedMaxWeight>::set(Weight::from_parts(30, u64::MAX));
 
 				// note: resubmitting the same solution is technically okay as long as the queue has
 				// space.

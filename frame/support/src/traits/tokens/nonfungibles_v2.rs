@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,10 +27,7 @@
 //! Implementations of these traits may be converted to implementations of corresponding
 //! `nonfungible` traits by using the `nonfungible::ItemOf` type adapter.
 
-use crate::{
-	dispatch::{DispatchError, DispatchResult},
-	traits::tokens::misc::AttributeNamespace,
-};
+use crate::dispatch::{DispatchError, DispatchResult, Parameter};
 use codec::{Decode, Encode};
 use sp_runtime::TokenError;
 use sp_std::prelude::*;
@@ -38,11 +35,11 @@ use sp_std::prelude::*;
 /// Trait for providing an interface to many read-only NFT-like sets of items.
 pub trait Inspect<AccountId> {
 	/// Type for identifying an item.
-	type ItemId;
+	type ItemId: Parameter;
 
 	/// Type for identifying a collection (an identifier for an independent collection of
 	/// items).
-	type CollectionId;
+	type CollectionId: Parameter;
 
 	/// Returns the owner of `item` of `collection`, or `None` if the item doesn't exist
 	/// (or somehow has no owner).
@@ -61,7 +58,29 @@ pub trait Inspect<AccountId> {
 	fn attribute(
 		_collection: &Self::CollectionId,
 		_item: &Self::ItemId,
-		_namespace: &AttributeNamespace<AccountId>,
+		_key: &[u8],
+	) -> Option<Vec<u8>> {
+		None
+	}
+
+	/// Returns the custom attribute value of `item` of `collection` corresponding to `key`.
+	///
+	/// By default this is `None`; no attributes are defined.
+	fn custom_attribute(
+		_account: &AccountId,
+		_collection: &Self::CollectionId,
+		_item: &Self::ItemId,
+		_key: &[u8],
+	) -> Option<Vec<u8>> {
+		None
+	}
+
+	/// Returns the system attribute value of `item` of `collection` corresponding to `key`.
+	///
+	/// By default this is `None`; no attributes are defined.
+	fn system_attribute(
+		_collection: &Self::CollectionId,
+		_item: &Self::ItemId,
 		_key: &[u8],
 	) -> Option<Vec<u8>> {
 		None
@@ -74,10 +93,36 @@ pub trait Inspect<AccountId> {
 	fn typed_attribute<K: Encode, V: Decode>(
 		collection: &Self::CollectionId,
 		item: &Self::ItemId,
-		namespace: &AttributeNamespace<AccountId>,
 		key: &K,
 	) -> Option<V> {
-		key.using_encoded(|d| Self::attribute(collection, item, namespace, d))
+		key.using_encoded(|d| Self::attribute(collection, item, d))
+			.and_then(|v| V::decode(&mut &v[..]).ok())
+	}
+
+	/// Returns the strongly-typed custom attribute value of `item` of `collection` corresponding to
+	/// `key`.
+	///
+	/// By default this just attempts to use `custom_attribute`.
+	fn typed_custom_attribute<K: Encode, V: Decode>(
+		account: &AccountId,
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &K,
+	) -> Option<V> {
+		key.using_encoded(|d| Self::custom_attribute(account, collection, item, d))
+			.and_then(|v| V::decode(&mut &v[..]).ok())
+	}
+
+	/// Returns the strongly-typed system attribute value of `item` of `collection` corresponding to
+	/// `key`.
+	///
+	/// By default this just attempts to use `system_attribute`.
+	fn typed_system_attribute<K: Encode, V: Decode>(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		key: &K,
+	) -> Option<V> {
+		key.using_encoded(|d| Self::system_attribute(collection, item, d))
 			.and_then(|v| V::decode(&mut &v[..]).ok())
 	}
 
@@ -135,6 +180,16 @@ pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
 	) -> Self::OwnedInCollectionIterator;
 }
 
+/// Trait for providing an interface to check the account's role within the collection.
+pub trait InspectRole<AccountId>: Inspect<AccountId> {
+	/// Returns `true` if `who` is the issuer of the `collection`.
+	fn is_issuer(collection: &Self::CollectionId, who: &AccountId) -> bool;
+	/// Returns `true` if `who` is the admin of the `collection`.
+	fn is_admin(collection: &Self::CollectionId, who: &AccountId) -> bool;
+	/// Returns `true` if `who` is the freezer of the `collection`.
+	fn is_freezer(collection: &Self::CollectionId, who: &AccountId) -> bool;
+}
+
 /// Trait for providing the ability to create collections of nonfungible items.
 pub trait Create<AccountId, CollectionConfig>: Inspect<AccountId> {
 	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin`.
@@ -143,12 +198,19 @@ pub trait Create<AccountId, CollectionConfig>: Inspect<AccountId> {
 		admin: &AccountId,
 		config: &CollectionConfig,
 	) -> Result<Self::CollectionId, DispatchError>;
+
+	fn create_collection_with_id(
+		collection: Self::CollectionId,
+		who: &AccountId,
+		admin: &AccountId,
+		config: &CollectionConfig,
+	) -> Result<(), DispatchError>;
 }
 
 /// Trait for providing the ability to destroy collections of nonfungible items.
 pub trait Destroy<AccountId>: Inspect<AccountId> {
 	/// The witness data needed to destroy an item.
-	type DestroyWitness;
+	type DestroyWitness: Parameter;
 
 	/// Provide the appropriate witness data needed to destroy an item.
 	fn get_destroy_witness(collection: &Self::CollectionId) -> Option<Self::DestroyWitness>;
@@ -293,4 +355,18 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 		item: &Self::ItemId,
 		destination: &AccountId,
 	) -> DispatchResult;
+
+	/// Disable the `item` of `collection` transfer.
+	///
+	/// By default, this is not a supported operation.
+	fn disable_transfer(_collection: &Self::CollectionId, _item: &Self::ItemId) -> DispatchResult {
+		Err(TokenError::Unsupported.into())
+	}
+
+	/// Re-enable the `item` of `collection` transfer.
+	///
+	/// By default, this is not a supported operation.
+	fn enable_transfer(_collection: &Self::CollectionId, _item: &Self::ItemId) -> DispatchResult {
+		Err(TokenError::Unsupported.into())
+	}
 }

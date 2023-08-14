@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This file is part of Substrate.
-# Copyright (C) 2022 Parity Technologies (UK) Ltd.
+# Copyright (C) Parity Technologies (UK) Ltd.
 # SPDX-License-Identifier: Apache-2.0
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ done
 if [ "$skip_build" != true ]
 then
   echo "[+] Compiling Substrate benchmarks..."
-  cargo build --profile=production --locked --features=runtime-benchmarks
+  cargo build --profile=production --locked --features=runtime-benchmarks --bin substrate
 fi
 
 # The executable to use.
@@ -119,7 +119,6 @@ for PALLET in "${PALLETS[@]}"; do
     --repeat=20 \
     --pallet="$PALLET" \
     --extrinsic="*" \
-    --execution=wasm \
     --wasm-execution=compiled \
     --heap-pages=4096 \
     --output="$WEIGHT_FILE" \
@@ -137,7 +136,6 @@ echo "[+] Benchmarking block and extrinsic overheads..."
 OUTPUT=$(
   $SUBSTRATE benchmark overhead \
   --chain=dev \
-  --execution=wasm \
   --wasm-execution=compiled \
   --weight-path="./frame/support/src/weights/" \
   --header="./HEADER-APACHE2" \

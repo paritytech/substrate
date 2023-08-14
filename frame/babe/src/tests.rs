@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,15 +21,16 @@ use super::{Call, *};
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	dispatch::{GetDispatchInfo, Pays},
-	traits::{Currency, EstimateNextSessionRotation, OnFinalize},
+	traits::{Currency, EstimateNextSessionRotation, KeyOwnerProofSystem, OnFinalize},
 };
 use mock::*;
 use pallet_session::ShouldEndSession;
-use sp_consensus_babe::{AllowedSlots, BabeEpochConfiguration, Slot};
-use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
+use sp_consensus_babe::{
+	AllowedSlots, BabeEpochConfiguration, Slot, VrfSignature, RANDOMNESS_LENGTH,
+};
 use sp_core::crypto::Pair;
 
-const EMPTY_RANDOMNESS: [u8; 32] = [
+const EMPTY_RANDOMNESS: [u8; RANDOMNESS_LENGTH] = [
 	74, 25, 49, 128, 53, 97, 244, 49, 222, 202, 176, 2, 231, 66, 95, 10, 133, 49, 213, 228, 86,
 	161, 164, 127, 217, 153, 138, 37, 48, 192, 248, 0,
 ];
@@ -62,10 +63,10 @@ fn first_block_epoch_zero_start() {
 
 	ext.execute_with(|| {
 		let genesis_slot = Slot::from(100);
-		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+		let (vrf_signature, vrf_randomness) =
+			make_vrf_signature_and_randomness(genesis_slot, &pairs[0]);
 
-		let first_vrf = vrf_output;
-		let pre_digest = make_primary_pre_digest(0, genesis_slot, first_vrf.clone(), vrf_proof);
+		let pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_signature);
 
 		assert_eq!(Babe::genesis_slot(), Slot::from(0));
 		System::reset_events();
@@ -111,8 +112,9 @@ fn current_slot_is_processed_on_initialization() {
 
 	ext.execute_with(|| {
 		let genesis_slot = Slot::from(10);
-		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
-		let pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
+		let (vrf_signature, vrf_randomness) =
+			make_vrf_signature_and_randomness(genesis_slot, &pairs[0]);
+		let pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_signature);
 
 		System::reset_events();
 		System::initialize(&1, &Default::default(), &pre_digest);
@@ -134,14 +136,15 @@ fn current_slot_is_processed_on_initialization() {
 
 fn test_author_vrf_output<F>(make_pre_digest: F)
 where
-	F: Fn(sp_consensus_babe::AuthorityIndex, Slot, VRFOutput, VRFProof) -> sp_runtime::Digest,
+	F: Fn(sp_consensus_babe::AuthorityIndex, Slot, VrfSignature) -> sp_runtime::Digest,
 {
 	let (pairs, mut ext) = new_test_ext_with_pairs(1);
 
 	ext.execute_with(|| {
 		let genesis_slot = Slot::from(10);
-		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
-		let pre_digest = make_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
+		let (vrf_signature, vrf_randomness) =
+			make_vrf_signature_and_randomness(genesis_slot, &pairs[0]);
+		let pre_digest = make_pre_digest(0, genesis_slot, vrf_signature);
 
 		System::reset_events();
 		System::initialize(&1, &Default::default(), &pre_digest);
@@ -812,7 +815,7 @@ fn report_equivocation_has_valid_weight() {
 	// the weight depends on the size of the validator set,
 	// but there's a lower bound of 100 validators.
 	assert!((1..=100)
-		.map(<Test as Config>::WeightInfo::report_equivocation)
+		.map(|validators| <Test as Config>::WeightInfo::report_equivocation(validators, 1000))
 		.collect::<Vec<_>>()
 		.windows(2)
 		.all(|w| w[0] == w[1]));
@@ -820,10 +823,60 @@ fn report_equivocation_has_valid_weight() {
 	// after 100 validators the weight should keep increasing
 	// with every extra validator.
 	assert!((100..=1000)
-		.map(<Test as Config>::WeightInfo::report_equivocation)
+		.map(|validators| <Test as Config>::WeightInfo::report_equivocation(validators, 1000))
 		.collect::<Vec<_>>()
 		.windows(2)
 		.all(|w| w[0].ref_time() < w[1].ref_time()));
+}
+
+#[test]
+fn report_equivocation_after_skipped_epochs_works() {
+	let (pairs, mut ext) = new_test_ext_with_pairs(3);
+
+	ext.execute_with(|| {
+		let epoch_duration: u64 = <Test as Config>::EpochDuration::get();
+
+		// this sets the genesis slot to 100;
+		let genesis_slot = 100;
+		go_to_block(1, genesis_slot);
+		assert_eq!(EpochIndex::<Test>::get(), 0);
+
+		// skip from epoch #0 to epoch #10
+		go_to_block(System::block_number() + 1, genesis_slot + epoch_duration * 10);
+
+		assert_eq!(EpochIndex::<Test>::get(), 10);
+		assert_eq!(SkippedEpochs::<Test>::get(), vec![(10, 1)]);
+
+		// generate an equivocation proof for validator at index 1
+		let authorities = Babe::authorities();
+		let offending_validator_index = 1;
+		let offending_authority_pair = pairs
+			.into_iter()
+			.find(|p| p.public() == authorities[offending_validator_index].0)
+			.unwrap();
+
+		let equivocation_proof = generate_equivocation_proof(
+			offending_validator_index as u32,
+			&offending_authority_pair,
+			CurrentSlot::<Test>::get(),
+		);
+
+		// create the key ownership proof
+		let key = (sp_consensus_babe::KEY_TYPE, &offending_authority_pair.public());
+		let key_owner_proof = Historical::prove(key).unwrap();
+
+		// which is for session index 1 (while current epoch index is 10)
+		assert_eq!(key_owner_proof.session, 1);
+
+		// report the equivocation, in order for the validation to pass the mapping
+		// between epoch index and session index must be checked.
+		assert!(Babe::report_equivocation_unsigned(
+			RuntimeOrigin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof
+		)
+		.is_ok());
+	})
 }
 
 #[test]
@@ -977,5 +1030,17 @@ fn skipping_over_epochs_works() {
 
 		assert_eq!(EpochIndex::<Test>::get(), 4);
 		assert_eq!(Randomness::<Test>::get(), randomness_for_epoch_2);
+
+		// after skipping epochs the information is registered on-chain so that
+		// we can map epochs to sessions
+		assert_eq!(SkippedEpochs::<Test>::get(), vec![(4, 2)]);
+
+		// before epochs are skipped the mapping should be one to one
+		assert_eq!(Babe::session_index_for_epoch(0), 0);
+		assert_eq!(Babe::session_index_for_epoch(1), 1);
+
+		// otherwise the session index is offset by the number of skipped epochs
+		assert_eq!(Babe::session_index_for_epoch(4), 2);
+		assert_eq!(Babe::session_index_for_epoch(5), 3);
 	});
 }

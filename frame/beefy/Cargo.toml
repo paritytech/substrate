@@ -9,32 +9,62 @@ description = "BEEFY FRAME pallet"
 homepage = "https://substrate.io"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
-scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-serde = { version = "1.0.136", optional = true }
-beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../primitives/beefy", package = "sp-beefy" }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
+scale-info = { version = "2.5.0", default-features = false, features = ["derive", "serde"] }
+serde = { version = "1.0.163", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-consensus-beefy = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/beefy", features = ["serde"] }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime", features = ["serde"] }
+sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking", features = ["serde"] }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-io = { version = "7.0.0", path = "../../primitives/io" }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+pallet-offences = { version = "4.0.0-dev", path = "../offences" }
+pallet-staking = { version = "4.0.0-dev", path = "../staking" }
+pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
+pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
+sp-core = { version = "21.0.0", path = "../../primitives/core" }
+sp-io = { version = "23.0.0", path = "../../primitives/io" }
 sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
 
 [features]
 default = ["std"]
 std = [
-	"beefy-primitives/std",
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",
+	"pallet-authorship/std",
 	"pallet-session/std",
 	"scale-info/std",
-	"serde",
+	"serde/std",
+	"sp-consensus-beefy/std",
 	"sp-runtime/std",
+	"sp-session/std",
+	"sp-staking/std",
 	"sp-std/std",
+	"frame-election-provider-support/std",
+	"pallet-balances/std",
+	"pallet-offences/std",
+	"pallet-staking/std",
+	"pallet-timestamp/std",
+	"sp-core/std",
+	"sp-io/std"
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-election-provider-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-authorship/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-offences/try-runtime",
+	"pallet-session/try-runtime",
+	"pallet-staking/try-runtime",
+	"pallet-timestamp/try-runtime",
+	"sp-runtime/try-runtime"
+]

@@ -20,7 +20,7 @@
 				(i32.const 0)	;; Pointer to the text buffer
 				(i32.const 12)	;; The size of the buffer
 			)
-			(i32.const 9)	;; LoggingDisabled return code
+			(i32.const 0)	;; Success return code
 		)
 	)
 

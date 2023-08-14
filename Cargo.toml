@@ -1,3 +1,45 @@
+[package]
+name = "substrate"
+description = "Next-generation framework for blockchain innovation"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+version = "0.0.0"
+
+# This list of dependencies is for documentation purposes only.
+[dependencies]
+aquamarine = "0.3.2"
+
+subkey = { path = "bin/utils/subkey" }
+chain-spec-builder = { path = "bin/utils/chain-spec-builder" }
+
+sc-service = { path = "client/service" }
+sc-cli = { path = "client/cli" }
+sc-consensus-aura = { path = "client/consensus/aura" }
+sc-consensus-babe = { path = "client/consensus/babe" }
+sc-consensus-grandpa = { path = "client/consensus/grandpa" }
+sc-consensus-beefy = { path = "client/consensus/beefy" }
+sc-consensus-manual-seal = { path = "client/consensus/manual-seal" }
+sc-consensus-pow = { path = "client/consensus/pow" }
+
+sp-runtime = { path = "primitives/runtime" }
+frame-support = { path = "frame/support" }
+
+node-cli = { path = "bin/node/cli" }
+
+# Exists here to be backwards compatible and to support `cargo run` in the workspace.
+#
+# Just uses the `node-cli` main binary. `node-cli` itself also again exposes the node as
+# `substrate-node`.
+
+# `cargo run` on its own doesn't support features. To use features you must explicitly use
+# `node-cli` in your command, e.g. `cargo run -p node-cli --features try-runtime ...`.
+[[bin]]
+name = "substrate"
+path = "bin/node/cli/bin/main.rs"
+
 [workspace]
 resolver = "2"
 
@@ -18,8 +60,6 @@ members = [
 	"client/api",
 	"client/authority-discovery",
 	"client/basic-authorship",
-	"client/beefy",
-	"client/beefy/rpc",
 	"client/block-builder",
 	"client/chain-spec",
 	"client/chain-spec/derive",
@@ -27,8 +67,12 @@ members = [
 	"client/consensus/aura",
 	"client/consensus/babe",
 	"client/consensus/babe/rpc",
+	"client/consensus/beefy",
+	"client/consensus/beefy/rpc",
 	"client/consensus/common",
 	"client/consensus/epochs",
+	"client/consensus/grandpa",
+	"client/consensus/grandpa/rpc",
 	"client/consensus/manual-seal",
 	"client/consensus/pow",
 	"client/consensus/slots",
@@ -36,16 +80,14 @@ members = [
 	"client/executor",
 	"client/executor/common",
 	"client/executor/runtime-test",
-	"client/executor/wasmi",
 	"client/executor/wasmtime",
-	"client/finality-grandpa",
-	"client/finality-grandpa/rpc",
 	"client/informant",
 	"client/keystore",
 	"client/merkle-mountain-range",
 	"client/merkle-mountain-range/rpc",
 	"client/network",
 	"client/network/transactions",
+	"client/network/statement",
 	"client/network-gossip",
 	"client/network/bitswap",
 	"client/network/common",
@@ -53,7 +95,6 @@ members = [
 	"client/network/sync",
 	"client/network/test",
 	"client/offchain",
-	"client/peerset",
 	"client/allocator",
 	"client/proposer-metrics",
 	"client/rpc",
@@ -63,6 +104,7 @@ members = [
 	"client/service",
 	"client/service/test",
 	"client/state-db",
+	"client/statement-store",
 	"client/storage-monitor",
 	"client/sysinfo",
 	"client/sync-state-rpc",
@@ -73,6 +115,7 @@ members = [
 	"client/transaction-pool/api",
 	"client/utils",
 	"frame/alliance",
+	"frame/asset-conversion",
 	"frame/assets",
 	"frame/atomic-swap",
 	"frame/aura",
@@ -94,17 +137,24 @@ members = [
 	"frame/contracts/proc-macro",
 	"frame/contracts/primitives",
 	"frame/conviction-voting",
+	"frame/core-fellowship",
 	"frame/democracy",
 	"frame/fast-unstake",
 	"frame/try-runtime",
 	"frame/elections-phragmen",
 	"frame/election-provider-multi-phase",
+	"frame/election-provider-multi-phase/test-staking-e2e",
 	"frame/election-provider-support",
 	"frame/election-provider-support/benchmarking",
 	"frame/election-provider-support/solution-type",
 	"frame/election-provider-support/solution-type/fuzzer",
+	"frame/examples",
 	"frame/examples/basic",
 	"frame/examples/offchain-worker",
+	"frame/examples/kitchensink",
+	"frame/examples/dev-mode",
+	"frame/examples/split",
+	"frame/examples/default-config",
 	"frame/executive",
 	"frame/nis",
 	"frame/grandpa",
@@ -123,16 +173,21 @@ members = [
 	"frame/proxy",
 	"frame/message-queue",
 	"frame/nfts",
+	"frame/nfts/runtime-api",
+	"frame/nft-fractionalization",
 	"frame/nomination-pools",
 	"frame/nomination-pools/fuzzer",
 	"frame/nomination-pools/benchmarking",
 	"frame/nomination-pools/test-staking",
 	"frame/nomination-pools/runtime-api",
-	"frame/randomness-collective-flip",
+	"frame/paged-list",
+	"frame/paged-list/fuzzer",
+	"frame/insecure-randomness-collective-flip",
 	"frame/ranked-collective",
 	"frame/recovery",
 	"frame/referenda",
 	"frame/remark",
+	"frame/salary",
 	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",
@@ -141,10 +196,12 @@ members = [
 	"frame/staking",
 	"frame/staking/reward-curve",
 	"frame/staking/reward-fn",
+	"frame/staking/runtime-api",
 	"frame/state-trie-migration",
 	"frame/sudo",
 	"frame/root-offences",
 	"frame/root-testing",
+	"frame/statement",
 	"frame/support",
 	"frame/support/procedural",
 	"frame/support/procedural/tools",
@@ -157,15 +214,18 @@ members = [
 	"frame/system/rpc/runtime-api",
 	"frame/timestamp",
 	"frame/transaction-payment",
+	"frame/transaction-payment/asset-conversion-tx-payment",
 	"frame/transaction-payment/asset-tx-payment",
 	"frame/transaction-payment/rpc",
 	"frame/transaction-payment/rpc/runtime-api",
 	"frame/transaction-storage",
 	"frame/treasury",
+	"frame/asset-rate",
 	"frame/tips",
 	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
+	"frame/glutton",
 	"frame/whitelist",
 	"primitives/api",
 	"primitives/api/proc-macro",
@@ -175,28 +235,30 @@ members = [
 	"primitives/arithmetic",
 	"primitives/arithmetic/fuzzer",
 	"primitives/authority-discovery",
-	"primitives/beefy",
 	"primitives/block-builder",
 	"primitives/blockchain",
 	"primitives/consensus/aura",
 	"primitives/consensus/babe",
+	"primitives/consensus/beefy",
 	"primitives/consensus/common",
+	"primitives/consensus/grandpa",
 	"primitives/consensus/pow",
 	"primitives/consensus/slots",
-	"primitives/consensus/vrf",
 	"primitives/core",
 	"primitives/core/hashing",
 	"primitives/core/hashing/proc-macro",
+	"primitives/crypto/ec-utils",
 	"primitives/database",
 	"primitives/debug-derive",
 	"primitives/externalities",
-	"primitives/finality-grandpa",
+	"primitives/genesis-builder",
 	"primitives/inherents",
 	"primitives/io",
 	"primitives/keyring",
 	"primitives/keystore",
 	"primitives/maybe-compressed-blob",
 	"primitives/merkle-mountain-range",
+	"primitives/metadata-ir",
 	"primitives/npos-elections",
 	"primitives/npos-elections/fuzzer",
 	"primitives/offchain",
@@ -208,10 +270,10 @@ members = [
 	"primitives/runtime-interface/test",
 	"primitives/runtime-interface/test-wasm",
 	"primitives/runtime-interface/test-wasm-deprecated",
-	"primitives/serializer",
 	"primitives/session",
 	"primitives/staking",
 	"primitives/state-machine",
+	"primitives/statement-store",
 	"primitives/std",
 	"primitives/storage",
 	"primitives/test-primitives",
@@ -224,7 +286,9 @@ members = [
 	"primitives/version/proc-macro",
 	"primitives/wasm-interface",
 	"primitives/weights",
+	"scripts/ci/node-template-release",
 	"test-utils",
+	"test-utils/cli",
 	"test-utils/client",
 	"test-utils/derive",
 	"test-utils/runtime",

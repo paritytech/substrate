@@ -19,7 +19,10 @@ default = ["rocksdb"]
 rocksdb = ["sc-client-db/rocksdb"]
 # exposes the client type
 test-helpers = []
-runtime-benchmarks = ["sc-client-db/runtime-benchmarks"]
+runtime-benchmarks = [
+	"sc-client-db/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks"
+]
 
 [dependencies]
 jsonrpsee = { version = "0.16.2", features = ["server"] }
@@ -31,22 +34,22 @@ log = "0.4.17"
 futures-timer = "3.0.1"
 exit-future = "0.2.0"
 pin-project = "1.0.12"
-serde = "1.0.136"
+serde = "1.0.163"
 serde_json = "1.0.85"
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
-sp-trie = { version = "7.0.0", path = "../../primitives/trie" }
-sp-externalities = { version = "0.13.0", path = "../../primitives/externalities" }
+sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }
+sp-trie = { version = "22.0.0", path = "../../primitives/trie" }
+sp-externalities = { version = "0.19.0", path = "../../primitives/externalities" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-version = { version = "5.0.0", path = "../../primitives/version" }
+sp-version = { version = "22.0.0", path = "../../primitives/version" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
+sp-core = { version = "21.0.0", path = "../../primitives/core" }
+sp-keystore = { version = "0.27.0", path = "../../primitives/keystore" }
 sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
-sp-state-machine = { version = "0.13.0", path = "../../primitives/state-machine" }
+sp-state-machine = { version = "0.28.0", path = "../../primitives/state-machine" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../client/consensus/common" }
-sp-storage = { version = "7.0.0", path = "../../primitives/storage" }
+sp-storage = { version = "13.0.0", path = "../../primitives/storage" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-network-bitswap = { version = "0.10.0-dev", path = "../network/bitswap" }
 sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
@@ -57,7 +60,7 @@ sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../db" }
-codec = { package = "parity-scale-codec", version = "3.2.2" }
+codec = { package = "parity-scale-codec", version = "3.6.1" }
 sc-executor = { version = "0.10.0-dev", path = "../executor" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transaction-pool" }
@@ -69,11 +72,9 @@ sc-rpc-spec-v2 = { version = "0.10.0-dev", path = "../rpc-spec-v2" }
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sc-informant = { version = "0.10.0-dev", path = "../informant" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
-sc-offchain = { version = "4.0.0-dev", path = "../offchain" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../sysinfo" }
-sc-storage-monitor = { version = "0.1.0", path = "../storage-monitor" }
 tracing = "0.1.29"
 tracing-futures = { version = "0.2.4" }
 async-trait = "0.1.57"

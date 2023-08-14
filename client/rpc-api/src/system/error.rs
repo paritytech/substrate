@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -39,7 +39,7 @@ pub enum Error {
 }
 
 // Base code for all system errors.
-const BASE_ERROR: i32 = 2000;
+const BASE_ERROR: i32 = crate::error::base::SYSTEM;
 // Provided block range couldn't be resolved to a list of blocks.
 const NOT_HEALTHY_ERROR: i32 = BASE_ERROR + 1;
 // Peer argument is malformatted.

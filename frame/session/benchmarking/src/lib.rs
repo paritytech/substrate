@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,11 +31,11 @@ use frame_support::{
 	codec::Decode,
 	traits::{Get, KeyOwnerProofSystem, OnInitialize},
 };
-use frame_system::RawOrigin;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::{historical::Pallet as Historical, Pallet as Session, *};
 use pallet_staking::{
 	benchmarking::create_validator_with_nominators, testing_utils::create_validators,
-	RewardDestination,
+	MaxNominationsOf, RewardDestination,
 };
 
 const MAX_VALIDATORS: u32 = 1000;
@@ -46,19 +46,20 @@ pub trait Config:
 {
 }
 
-impl<T: Config> OnInitialize<T::BlockNumber> for Pallet<T> {
-	fn on_initialize(n: T::BlockNumber) -> frame_support::weights::Weight {
+impl<T: Config> OnInitialize<BlockNumberFor<T>> for Pallet<T> {
+	fn on_initialize(n: BlockNumberFor<T>) -> frame_support::weights::Weight {
 		pallet_session::Pallet::<T>::on_initialize(n)
 	}
 }
 
 benchmarks! {
 	set_keys {
-		let n = <T as pallet_staking::Config>::MaxNominations::get();
+		let n = MaxNominationsOf::<T>::get();
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
-			<T as pallet_staking::Config>::MaxNominations::get(),
+			MaxNominationsOf::<T>::get(),
 			false,
+			true,
 			RewardDestination::Staked,
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
@@ -71,12 +72,13 @@ benchmarks! {
 	}: _(RawOrigin::Signed(v_controller), keys, proof)
 
 	purge_keys {
-		let n = <T as pallet_staking::Config>::MaxNominations::get();
+		let n = MaxNominationsOf::<T>::get();
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
-			<T as pallet_staking::Config>::MaxNominations::get(),
+			MaxNominationsOf::<T>::get(),
 			false,
-			RewardDestination::Staked
+			true,
+			RewardDestination::Staked,
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::decode(&mut TrailingZeroInput::zeroes()).unwrap();
@@ -154,7 +156,7 @@ fn check_membership_proof_setup<T: Config>(
 		Session::<T>::set_keys(RawOrigin::Signed(controller).into(), keys, proof).unwrap();
 	}
 
-	Pallet::<T>::on_initialize(T::BlockNumber::one());
+	Pallet::<T>::on_initialize(frame_system::pallet_prelude::BlockNumberFor::<T>::one());
 
 	// skip sessions until the new validator set is enacted
 	while Session::<T>::validators().len() < n as usize {

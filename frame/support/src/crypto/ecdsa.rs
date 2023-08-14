@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,5 +45,21 @@ impl ECDSAExt for Public {
 			)
 			.map_err(drop)
 		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sp_core::{ecdsa, Pair};
+
+	#[test]
+	fn to_eth_address_works() {
+		let pair = ecdsa::Pair::from_string("//Alice//password", None).unwrap();
+		let eth_address = pair.public().to_eth_address().unwrap();
+		assert_eq!(
+			array_bytes::bytes2hex("0x", &eth_address),
+			"0xdc1cce4263956850a3c8eb349dc6fc3f7792cb27"
+		);
 	}
 }

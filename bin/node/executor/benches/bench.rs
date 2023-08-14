@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,19 +19,19 @@ use codec::{Decode, Encode};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use frame_support::Hashable;
 use kitchensink_runtime::{
-	constants::currency::*, Block, BuildStorage, CheckedExtrinsic, GenesisConfig, Header,
-	RuntimeCall, UncheckedExtrinsic,
+	constants::currency::*, Block, BuildStorage, CheckedExtrinsic, Header, RuntimeCall,
+	RuntimeGenesisConfig, UncheckedExtrinsic,
 };
 use node_executor::ExecutorDispatch;
 use node_primitives::{BlockNumber, Hash};
 use node_testing::keyring::*;
 use sc_executor::{
-	Externalities, NativeElseWasmExecutor, RuntimeVersionOf, WasmExecutionMethod,
+	Externalities, NativeElseWasmExecutor, RuntimeVersionOf, WasmExecutionMethod, WasmExecutor,
 	WasmtimeInstantiationStrategy,
 };
 use sp_core::{
 	storage::well_known_keys,
-	traits::{CodeExecutor, RuntimeCode},
+	traits::{CallContext, CodeExecutor, RuntimeCode},
 };
 use sp_runtime::traits::BlakeTwo256;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
@@ -67,7 +67,7 @@ fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 	node_testing::keyring::sign(xt, SPEC_VERSION, TRANSACTION_VERSION, GENESIS_HASH)
 }
 
-fn new_test_ext(genesis_config: &GenesisConfig) -> TestExternalities<BlakeTwo256> {
+fn new_test_ext(genesis_config: &RuntimeGenesisConfig) -> TestExternalities<BlakeTwo256> {
 	let mut test_ext = TestExternalities::new_with_code(
 		compact_code_unwrap(),
 		genesis_config.build_storage().unwrap(),
@@ -112,20 +112,41 @@ fn construct_block<E: Externalities>(
 
 	// execute the block to get the real header.
 	executor
-		.call(ext, &runtime_code, "Core_initialize_block", &header.encode(), true)
+		.call(
+			ext,
+			&runtime_code,
+			"Core_initialize_block",
+			&header.encode(),
+			true,
+			CallContext::Offchain,
+		)
 		.0
 		.unwrap();
 
 	for i in extrinsics.iter() {
 		executor
-			.call(ext, &runtime_code, "BlockBuilder_apply_extrinsic", &i.encode(), true)
+			.call(
+				ext,
+				&runtime_code,
+				"BlockBuilder_apply_extrinsic",
+				&i.encode(),
+				true,
+				CallContext::Offchain,
+			)
 			.0
 			.unwrap();
 	}
 
 	let header = Header::decode(
 		&mut &executor
-			.call(ext, &runtime_code, "BlockBuilder_finalize_block", &[0u8; 0], true)
+			.call(
+				ext,
+				&runtime_code,
+				"BlockBuilder_finalize_block",
+				&[0u8; 0],
+				true,
+				CallContext::Offchain,
+			)
 			.0
 			.unwrap()[..],
 	)
@@ -136,7 +157,7 @@ fn construct_block<E: Externalities>(
 }
 
 fn test_blocks(
-	genesis_config: &GenesisConfig,
+	genesis_config: &RuntimeGenesisConfig,
 	executor: &NativeElseWasmExecutor<ExecutorDispatch>,
 ) -> Vec<(Vec<u8>, Hash)> {
 	let mut test_ext = new_test_ext(genesis_config);
@@ -146,7 +167,7 @@ fn test_blocks(
 	}];
 	block1_extrinsics.extend((0..20).map(|i| CheckedExtrinsic {
 		signed: Some((alice(), signed_extra(i, 0))),
-		function: RuntimeCall::Balances(pallet_balances::Call::transfer {
+		function: RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 			dest: bob().into(),
 			value: 1 * DOLLARS,
 		}),
@@ -161,7 +182,6 @@ fn bench_execute_block(c: &mut Criterion) {
 	let mut group = c.benchmark_group("execute blocks");
 	let execution_methods = vec![
 		ExecutionMethod::Native,
-		ExecutionMethod::Wasm(WasmExecutionMethod::Interpreted),
 		ExecutionMethod::Wasm(WasmExecutionMethod::Compiled {
 			instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
 		}),
@@ -170,12 +190,13 @@ fn bench_execute_block(c: &mut Criterion) {
 	for strategy in execution_methods {
 		group.bench_function(format!("{:?}", strategy), |b| {
 			let genesis_config = node_testing::genesis::config(Some(compact_code_unwrap()));
-			let (use_native, wasm_method) = match strategy {
-				ExecutionMethod::Native => (true, WasmExecutionMethod::Interpreted),
-				ExecutionMethod::Wasm(wasm_method) => (false, wasm_method),
+			let use_native = match strategy {
+				ExecutionMethod::Native => true,
+				ExecutionMethod::Wasm(..) => false,
 			};
 
-			let executor = NativeElseWasmExecutor::new(wasm_method, None, 8, 2);
+			let executor =
+				NativeElseWasmExecutor::new_with_wasm_executor(WasmExecutor::builder().build());
 			let runtime_code = RuntimeCode {
 				code_fetcher: &sp_core::traits::WrappedRuntimeCode(compact_code_unwrap().into()),
 				hash: vec![1, 2, 3],
@@ -201,6 +222,7 @@ fn bench_execute_block(c: &mut Criterion) {
 								"Core_execute_block",
 								&block.0,
 								use_native,
+								CallContext::Offchain,
 							)
 							.0
 							.unwrap();

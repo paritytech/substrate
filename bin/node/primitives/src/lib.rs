@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,7 +46,7 @@ pub type Balance = u128;
 pub type Moment = u64;
 
 /// Index of a transaction in the chain.
-pub type Index = u32;
+pub type Nonce = u32;
 
 /// A hash of some data used by the chain.
 pub type Hash = sp_core::H256;

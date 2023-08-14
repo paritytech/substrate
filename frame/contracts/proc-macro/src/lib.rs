@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Procedural macroses used in the contracts module.
+//! Procedural macros used in the contracts module.
 //!
 //! Most likely you should use the [`#[define_env]`][`macro@define_env`] attribute macro which hides
 //! boilerplate of defining external environment for a wasm module.
@@ -25,10 +25,12 @@
 extern crate alloc;
 
 use alloc::{
+	collections::BTreeMap,
 	format,
 	string::{String, ToString},
 	vec::Vec,
 };
+use core::cmp::Reverse;
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned, ToTokens};
@@ -160,7 +162,7 @@ struct EnvDef {
 /// Parsed host function definition.
 struct HostFn {
 	item: syn::ItemFn,
-	module: String,
+	version: u8,
 	name: String,
 	returns: HostFnReturn,
 	is_stable: bool,
@@ -207,21 +209,20 @@ impl HostFn {
 			"only #[version(<u8>)], #[unstable], #[prefixed_alias] and #[deprecated] attributes are allowed.";
 		let span = item.span();
 		let mut attrs = item.attrs.clone();
-		attrs.retain(|a| !a.path.is_ident("doc"));
-		let mut maybe_module = None;
+		attrs.retain(|a| !a.path().is_ident("doc"));
+		let mut maybe_version = None;
 		let mut is_stable = true;
 		let mut alias_to = None;
 		let mut not_deprecated = true;
 		while let Some(attr) = attrs.pop() {
-			let ident = attr.path.get_ident().ok_or(err(span, msg))?.to_string();
+			let ident = attr.path().get_ident().ok_or(err(span, msg))?.to_string();
 			match ident.as_str() {
 				"version" => {
-					if maybe_module.is_some() {
+					if maybe_version.is_some() {
 						return Err(err(span, "#[version] can only be specified once"))
 					}
-					let ver: u8 =
-						attr.parse_args::<syn::LitInt>().and_then(|lit| lit.base10_parse())?;
-					maybe_module = Some(format!("seal{}", ver));
+					maybe_version =
+						Some(attr.parse_args::<syn::LitInt>().and_then(|lit| lit.base10_parse())?);
 				},
 				"unstable" => {
 					if !is_stable {
@@ -341,7 +342,7 @@ impl HostFn {
 
 						Ok(Self {
 							item,
-							module: maybe_module.unwrap_or_else(|| "seal0".to_string()),
+							version: maybe_version.unwrap_or_default(),
 							name,
 							returns,
 							is_stable,
@@ -354,6 +355,10 @@ impl HostFn {
 			},
 			_ => Err(err(span, &msg)),
 		}
+	}
+
+	fn module(&self) -> String {
+		format!("seal{}", self.version)
 	}
 }
 
@@ -372,7 +377,7 @@ impl EnvDef {
 			_ => None,
 		};
 
-		let selector = |a: &syn::Attribute| a.path.is_ident("prefixed_alias");
+		let selector = |a: &syn::Attribute| a.path().is_ident("prefixed_alias");
 
 		let aliases = items
 			.iter()
@@ -396,7 +401,7 @@ impl EnvDef {
 }
 
 fn is_valid_special_arg(idx: usize, arg: &FnArg) -> bool {
-	let pat = if let FnArg::Typed(pat) = arg { pat } else { return false };
+	let FnArg::Typed(pat) = arg else { return false };
 	let ident = if let syn::Pat::Ident(ref ident) = *pat.pat { &ident.ident } else { return false };
 	let name_ok = match idx {
 		0 => ident == "ctx" || ident == "_ctx",
@@ -409,109 +414,143 @@ fn is_valid_special_arg(idx: usize, arg: &FnArg) -> bool {
 	matches!(*pat.ty, syn::Type::Infer(_))
 }
 
-/// Expands documentation for host functions.
-fn expand_docs(def: &mut EnvDef) -> TokenStream2 {
-	let mut modules = def.host_funcs.iter().map(|f| f.module.clone()).collect::<Vec<_>>();
-	modules.sort();
-	modules.dedup();
-
-	let doc_selector = |a: &syn::Attribute| a.path.is_ident("doc");
-	let docs = modules.iter().map(|m| {
-		let funcs = def.host_funcs.iter_mut().map(|f| {
-			if *m == f.module {
-				// Remove auxiliary args: `ctx: _` and `memory: _`
-				f.item.sig.inputs = f
-					.item
-					.sig
-					.inputs
-					.iter()
-					.skip(2)
-					.map(|p| p.clone())
-					.collect::<Punctuated<FnArg, Comma>>();
-				let func_decl = f.item.sig.to_token_stream();
-				let func_doc = if let Some(origin_fn) = &f.alias_to {
-					let alias_doc = format!(
-						"This is just an alias function to [`{0}()`][`Self::{0}`] with backwards-compatible prefixed identifier.",
-						origin_fn,
-					);
-					quote! { #[doc = #alias_doc] }
-
-				} else {
-					let func_docs = f.item.attrs.iter().filter(|a| doc_selector(a)).map(|d| {
-						let docs = d.to_token_stream();
-						quote! { #docs }
-					});
-					let unstable_notice = if !f.is_stable {
-						let warning = "\n # Unstable\n\n \
-									    This function is unstable and it is a subject to change (or removal) in the future.\n \
-									    Do not deploy a contract using it to a production chain.";
-						quote! { #[doc = #warning] }
-					} else {
-						quote! {}
-					};
-					quote! {
-						#( #func_docs )*
-						#unstable_notice
-					}
-				};
-				quote! {
-					#func_doc
-					#func_decl;
-				}
-			} else {
-				quote! {}
-			}
-		});
-
-		let module = Ident::new(m, Span::call_site());
-		let module_doc = format!(
-			"Documentation of the API available to contracts by importing `{}` WASM module.",
-			module
-		);
-
+fn expand_func_doc(func: &HostFn) -> TokenStream2 {
+	// Remove auxiliary args: `ctx: _` and `memory: _`
+	let func_decl = {
+		let mut sig = func.item.sig.clone();
+		sig.inputs = sig
+			.inputs
+			.iter()
+			.skip(2)
+			.map(|p| p.clone())
+			.collect::<Punctuated<FnArg, Comma>>();
+		sig.to_token_stream()
+	};
+	let func_doc = {
+		let func_docs = if let Some(origin_fn) = &func.alias_to {
+			let alias_doc = format!(
+				"This is just an alias function to [`{0}()`][`Self::{0}`] with backwards-compatible prefixed identifier.",
+				origin_fn,
+			);
+			quote! { #[doc = #alias_doc] }
+		} else {
+			let docs = func.item.attrs.iter().filter(|a| a.path().is_ident("doc")).map(|d| {
+				let docs = d.to_token_stream();
+				quote! { #docs }
+			});
+			quote! { #( #docs )* }
+		};
+		let deprecation_notice = if !func.not_deprecated {
+			let warning = "\n # Deprecated\n\n \
+								This function is deprecated and will be removed in future versions.\n \
+								No new code or contracts with this API can be deployed.";
+			quote! { #[doc = #warning] }
+		} else {
+			quote! {}
+		};
+		let import_notice = {
+			let info = format!(
+				"\n# Wasm Import Statement\n```wat\n(import \"seal{}\" \"{}\" (func ...))\n```",
+				func.version, func.name,
+			);
+			quote! { #[doc = #info] }
+		};
+		let unstable_notice = if !func.is_stable {
+			let warning = "\n # Unstable\n\n \
+								This function is unstable and it is a subject to change (or removal) in the future.\n \
+								Do not deploy a contract using it to a production chain.";
+			quote! { #[doc = #warning] }
+		} else {
+			quote! {}
+		};
 		quote! {
-			#[doc = #module_doc]
-			pub mod #module {
-				use crate::wasm::runtime::{TrapReason, ReturnCode};
-				/// Every function in this trait represents (at least) one function that can be imported by a contract.
-				///
-				/// The function's identifier is to be set as the name in the import definition.
-				/// Where it is specifically indicated, an _alias_ function having `seal_`-prefixed identifier and
-				/// just the same signature and body, is also available (for backwards-compatibility purposes).
-				pub trait Api {
-					#( #funcs )*
-				}
-			}
+			#deprecation_notice
+			#func_docs
+			#import_notice
+			#unstable_notice
 		}
-	});
+	};
 	quote! {
-		  #( #docs )*
+		#func_doc
+		#func_decl;
 	}
 }
 
-/// Expands environment definiton.
+/// Expands documentation for host functions.
+fn expand_docs(def: &EnvDef) -> TokenStream2 {
+	// Create the `Current` trait with only the newest versions
+	// we sort so that only the newest versions make it into `docs`
+	let mut current_docs = BTreeMap::new();
+	let mut funcs: Vec<_> = def.host_funcs.iter().filter(|f| f.alias_to.is_none()).collect();
+	funcs.sort_unstable_by_key(|func| Reverse(func.version));
+	for func in funcs {
+		if current_docs.contains_key(&func.name) {
+			continue
+		}
+		current_docs.insert(func.name.clone(), expand_func_doc(&func));
+	}
+	let current_docs = current_docs.values();
+
+	// Create the `legacy` module with all functions
+	// Maps from version to list of functions that have this version
+	let mut legacy_doc = BTreeMap::<u8, Vec<TokenStream2>>::new();
+	for func in def.host_funcs.iter() {
+		legacy_doc.entry(func.version).or_default().push(expand_func_doc(&func));
+	}
+	let legacy_doc = legacy_doc.into_iter().map(|(version, funcs)| {
+		let doc = format!("All functions available in the **seal{}** module", version);
+		let version = Ident::new(&format!("Version{version}"), Span::call_site());
+		quote! {
+			#[doc = #doc]
+			pub trait #version {
+				#( #funcs )*
+			}
+		}
+	});
+
+	quote! {
+		/// Contains only the latest version of each function.
+		///
+		/// In reality there are more functions available but they are all obsolete: When a function
+		/// is updated a new **version** is added and the old versions stays available as-is.
+		/// We only list the newest version here. Some functions are available under additional
+		/// names (aliases) for historic reasons which are omitted here.
+		///
+		/// If you want an overview of all the functions available to a contact all you need
+		/// to look at is this trait. It contains only the latest version of each
+		/// function and no aliases. If you are writing a contract(language) from scratch
+		/// this is where you should look at.
+		pub trait Current {
+			#( #current_docs )*
+		}
+		#( #legacy_doc )*
+	}
+}
+
+/// Expands environment definition.
 /// Should generate source code for:
 ///  - implementations of the host functions to be added to the wasm runtime environment (see
 ///    `expand_impls()`).
-fn expand_env(def: &mut EnvDef, docs: bool) -> TokenStream2 {
+fn expand_env(def: &EnvDef, docs: bool) -> TokenStream2 {
 	let impls = expand_impls(def);
 	let docs = docs.then_some(expand_docs(def)).unwrap_or(TokenStream2::new());
 
 	quote! {
 		pub struct Env;
 		#impls
-		/// Contains the documentation of the API available to contracts.
+		/// Documentation of the API (host functions) available to contracts.
 		///
-		/// In order to generate this documentation, pass `doc` attribute to the [`#[define_env]`][`macro@define_env`] macro:
-		/// `#[define_env(doc)]`, and then run `cargo doc`.
+		/// The `Current` trait might be the most useful doc to look at. The versioned
+		/// traits only exist for reference: If trying to find out if a specific version of
+		/// `pallet-contracts` contains a certain function.
 		///
-		/// This module is not meant to be used by any code. Rather, it is meant to be consumed by humans through rustdoc.
+		/// # Note
 		///
-		/// Every function described in this module's sub module's traits uses this sub module's identifier
-		/// as its imported module name. The identifier of the function is the function's imported name.
-		/// According to the [WASM spec of imports](https://webassembly.github.io/spec/core/text/modules.html#text-import).
+		/// This module is not meant to be used by any code. Rather, it is meant to be
+		/// consumed by humans through rustdoc.
 		#[cfg(doc)]
 		pub mod api_doc {
+			use super::{TrapReason, ReturnCode};
 			#docs
 		}
 	}
@@ -520,7 +559,7 @@ fn expand_env(def: &mut EnvDef, docs: bool) -> TokenStream2 {
 /// Generates for every host function:
 ///   - real implementation, to register it in the contract execution environment;
 ///   - dummy implementation, to be used as mocks for contract validation step.
-fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
+fn expand_impls(def: &EnvDef) -> TokenStream2 {
 	let impls = expand_functions(def, true, quote! { crate::wasm::Runtime<E> });
 	let dummy_impls = expand_functions(def, false, quote! { () });
 
@@ -553,16 +592,13 @@ fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 	}
 }
 
-fn expand_functions(
-	def: &mut EnvDef,
-	expand_blocks: bool,
-	host_state: TokenStream2,
-) -> TokenStream2 {
+fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2) -> TokenStream2 {
 	let impls = def.host_funcs.iter().map(|f| {
 		// skip the context and memory argument
 		let params = f.item.sig.inputs.iter().skip(2);
+
 		let (module, name, body, wasm_output, output) = (
-			&f.module,
+			f.module(),
 			&f.name,
 			&f.item.block,
 			f.returns.to_wasm_sig(),
@@ -571,6 +607,35 @@ fn expand_functions(
 		let is_stable = f.is_stable;
 		let not_deprecated = f.not_deprecated;
 
+		// wrapped host function body call with host function traces
+		// see https://github.com/paritytech/substrate/tree/master/frame/contracts#host-function-tracing
+		let wrapped_body_with_trace = {
+			let trace_fmt_args = params.clone().filter_map(|arg| match arg {
+				syn::FnArg::Receiver(_) => None,
+				syn::FnArg::Typed(p) => {
+					match *p.pat.clone() {
+						syn::Pat::Ident(ref pat_ident) => Some(pat_ident.ident.clone()),
+						_ => None,
+					}
+				},
+			});
+
+			let params_fmt_str = trace_fmt_args.clone().map(|s| format!("{s}: {{:?}}")).collect::<Vec<_>>().join(", ");
+			let trace_fmt_str = format!("{}::{}({}) = {{:?}}\n", module, name, params_fmt_str);
+
+			quote! {
+				let result = #body;
+				if ::log::log_enabled!(target: "runtime::contracts::strace", ::log::Level::Trace) {
+						use sp_std::fmt::Write;
+						let mut w = sp_std::Writer::default();
+						let _ = core::write!(&mut w, #trace_fmt_str, #( #trace_fmt_args, )* result);
+						let msg = core::str::from_utf8(&w.inner()).unwrap_or_default();
+						ctx.ext().append_debug_buffer(msg);
+				}
+				result
+			}
+		};
+
 		// If we don't expand blocks (implementing for `()`) we change a few things:
 		// - We replace any code by unreachable!
 		// - Allow unused variables as the code that uses is not expanded
@@ -578,11 +643,11 @@ fn expand_functions(
 		let inner = if expand_blocks {
 			quote! { || #output {
 				let (memory, ctx) = __caller__
-					.host_data()
+					.data()
 					.memory()
 					.expect("Memory must be set when setting up host data; qed")
 					.data_and_store_mut(&mut __caller__);
-				#body
+				#wrapped_body_with_trace
 			} }
 		} else {
 			quote! { || -> #wasm_output {
@@ -592,10 +657,10 @@ fn expand_functions(
 				::core::unreachable!()
 			} }
 		};
-		let map_err = if expand_blocks {
+		let into_host = if expand_blocks {
 			quote! {
 				|reason| {
-					::wasmi::core::Trap::host(reason)
+					::wasmi::core::Trap::from(reason)
 				}
 			}
 		} else {
@@ -608,6 +673,43 @@ fn expand_functions(
 		} else {
 			quote! { #[allow(unused_variables)] }
 		};
+		let sync_gas_before = if expand_blocks {
+			quote! {
+				// Gas left in the gas meter right before switching to engine execution.
+				let __gas_before__ = {
+					let engine_consumed_total =
+						__caller__.fuel_consumed().expect("Fuel metering is enabled; qed");
+					let gas_meter = __caller__.data_mut().ext().gas_meter_mut();
+					gas_meter
+						.charge_fuel(engine_consumed_total)
+						.map_err(TrapReason::from)
+						.map_err(#into_host)?
+						.ref_time()
+				};
+			}
+		} else {
+			quote! { }
+		};
+		// Gas left in the gas meter right after returning from engine execution.
+		let sync_gas_after = if expand_blocks {
+			quote! {
+				let mut gas_after = __caller__.data_mut().ext().gas_meter().gas_left().ref_time();
+				let mut host_consumed = __gas_before__.saturating_sub(gas_after);
+				// Possible undercharge of at max 1 fuel here, if host consumed less than `instruction_weights.base`
+				// Not a problem though, as soon as host accounts its spent gas properly.
+				let fuel_consumed = host_consumed
+					.checked_div(__caller__.data_mut().ext().schedule().instruction_weights.base as u64)
+					.ok_or(Error::<E::T>::InvalidSchedule)
+					.map_err(TrapReason::from)
+					.map_err(#into_host)?;
+				 __caller__
+					 .consume_fuel(fuel_consumed)
+					 .map_err(|_| TrapReason::from(Error::<E::T>::OutOfGas))
+					 .map_err(#into_host)?;
+			}
+		} else {
+			quote! { }
+		};
 
 		quote! {
 			// We need to allow all interfaces when runtime benchmarks are performed because
@@ -619,10 +721,11 @@ fn expand_functions(
 			{
 				#allow_unused
 				linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
+ 					#sync_gas_before
 					let mut func = #inner;
-					func()
-						.map_err(#map_err)
-						.map(::core::convert::Into::into)
+					let result = func().map_err(#into_host).map(::core::convert::Into::into);
+					#sync_gas_after
+					result
 				}))?;
 			}
 		}
@@ -743,7 +846,7 @@ fn expand_functions(
 #[proc_macro_attribute]
 pub fn define_env(attr: TokenStream, item: TokenStream) -> TokenStream {
 	if !attr.is_empty() && !(attr.to_string() == "doc".to_string()) {
-		let msg = r#"Invalid `define_env` attribute macro: expected either no attributes or a single `doc` attibute:
+		let msg = r#"Invalid `define_env` attribute macro: expected either no attributes or a single `doc` attribute:
 					 - `#[define_env]`
 					 - `#[define_env(doc)]`"#;
 		let span = TokenStream2::from(attr).span();

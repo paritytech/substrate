@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -141,12 +141,11 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(n: T::BlockNumber) -> Weight {
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			// Drop obsolete roots. The proof for `obsolete` will be checked later
 			// in this block, so we drop `obsolete` - 1.
 			let period = <StoragePeriod<T>>::get();
@@ -159,7 +158,7 @@ pub mod pallet {
 			T::DbWeight::get().reads_writes(2, 4)
 		}
 
-		fn on_finalize(n: T::BlockNumber) {
+		fn on_finalize(n: BlockNumberFor<T>) {
 			assert!(
 				<ProofChecked<T>>::take() || {
 					// Proof is not required for early or empty blocks.
@@ -184,10 +183,9 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Index and store data off chain. Minimum data size is 1 bytes, maximum is
 		/// `MaxTransactionSize`. Data will be removed after `STORAGE_PERIOD` blocks, unless `renew`
-		/// is called. # <weight>
-		/// - n*log(n) of data size, as all data is pushed to an in-memory trie.
-		/// Additionally contains a DB write.
-		/// # </weight>
+		/// is called.
+		/// ## Complexity
+		/// - O(n*log(n)) of data size, as all data is pushed to an in-memory trie.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::store(data.len() as u32))]
 		pub fn store(origin: OriginFor<T>, data: Vec<u8>) -> DispatchResult {
@@ -234,14 +232,13 @@ pub mod pallet {
 		/// previous `store` or `renew` call and transaction index within that block.
 		/// Transaction index is emitted in the `Stored` or `Renewed` event.
 		/// Applies same fees as `store`.
-		/// # <weight>
-		/// - Constant.
-		/// # </weight>
+		/// ## Complexity
+		/// - O(1).
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::renew())]
 		pub fn renew(
 			origin: OriginFor<T>,
-			block: T::BlockNumber,
+			block: BlockNumberFor<T>,
 			index: u32,
 		) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
@@ -277,12 +274,10 @@ pub mod pallet {
 
 		/// Check storage proof for block number `block_number() - StoragePeriod`.
 		/// If such block does not exist the proof is expected to be `None`.
-		/// # <weight>
+		/// ## Complexity
 		/// - Linear w.r.t the number of indexed transactions in the proved block for random
 		///   probing.
 		/// There's a DB read for each transaction.
-		/// Here we assume a maximum of 100 probed transactions.
-		/// # </weight>
 		#[pallet::call_index(2)]
 		#[pallet::weight((T::WeightInfo::check_proof_max(), DispatchClass::Mandatory))]
 		pub fn check_proof(
@@ -347,7 +342,7 @@ pub mod pallet {
 	pub(super) type Transactions<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
-		T::BlockNumber,
+		BlockNumberFor<T>,
 		BoundedVec<TransactionInfo, T::MaxBlockTransactions>,
 		OptionQuery,
 	>;
@@ -355,7 +350,7 @@ pub mod pallet {
 	/// Count indexed chunks for each block.
 	#[pallet::storage]
 	pub(super) type ChunkCount<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::BlockNumber, u32, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, BlockNumberFor<T>, u32, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn byte_fee)]
@@ -370,7 +365,7 @@ pub mod pallet {
 	/// Storage period for data in blocks. Should match `sp_storage_proof::DEFAULT_STORAGE_PERIOD`
 	/// for block authoring.
 	#[pallet::storage]
-	pub(super) type StoragePeriod<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub(super) type StoragePeriod<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	// Intermediates
 	#[pallet::storage]
@@ -385,10 +380,9 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub byte_fee: BalanceOf<T>,
 		pub entry_fee: BalanceOf<T>,
-		pub storage_period: T::BlockNumber,
+		pub storage_period: BlockNumberFor<T>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
@@ -400,7 +394,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			<ByteFee<T>>::put(&self.byte_fee);
 			<EntryFee<T>>::put(&self.entry_fee);

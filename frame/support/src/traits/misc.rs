@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 //! Smaller traits used in FRAME which don't need their own file.
 
-use crate::dispatch::Parameter;
+use crate::dispatch::{DispatchResult, Parameter};
 use codec::{CompactLen, Decode, DecodeLimit, Encode, EncodeLike, Input, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
@@ -49,7 +49,7 @@ macro_rules! defensive {
 		);
 		debug_assert!(false, "{}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR);
 	};
-	($error:tt) => {
+	($error:expr $(,)?) => {
 		frame_support::log::error!(
 			target: "runtime",
 			"{}: {:?}",
@@ -58,7 +58,7 @@ macro_rules! defensive {
 		);
 		debug_assert!(false, "{}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error);
 	};
-	($error:tt, $proof:tt) => {
+	($error:expr, $proof:expr $(,)?) => {
 		frame_support::log::error!(
 			target: "runtime",
 			"{}: {:?}: {:?}",
@@ -68,6 +68,25 @@ macro_rules! defensive {
 		);
 		debug_assert!(false, "{}: {:?}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error, $proof);
 	}
+}
+
+/// Trigger a defensive failure if a condition is not met.
+///
+/// Similar to [`assert!`] but will print an error without `debug_assertions` instead of silently
+/// ignoring it. Only accepts one instead of variable formatting arguments.
+///
+/// # Example
+///
+/// ```should_panic
+/// frame_support::defensive_assert!(1 == 0, "Must fail")
+/// ```
+#[macro_export]
+macro_rules! defensive_assert {
+	($cond:expr $(, $proof:expr )? $(,)?) => {
+		if !($cond) {
+			$crate::defensive!(::core::stringify!($cond) $(, $proof )?);
+		}
+	};
 }
 
 /// Prelude module for all defensive traits to be imported at once.
@@ -874,7 +893,8 @@ pub trait ExtrinsicCall: sp_runtime::traits::Extrinsic {
 #[cfg(feature = "std")]
 impl<Call, Extra> ExtrinsicCall for sp_runtime::testing::TestXt<Call, Extra>
 where
-	Call: codec::Codec + Sync + Send,
+	Call: codec::Codec + Sync + Send + TypeInfo,
+	Extra: TypeInfo,
 {
 	fn call(&self) -> &Self::Call {
 		&self.call
@@ -884,7 +904,10 @@ where
 impl<Address, Call, Signature, Extra> ExtrinsicCall
 	for sp_runtime::generic::UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
-	Extra: sp_runtime::traits::SignedExtension,
+	Address: TypeInfo,
+	Call: TypeInfo,
+	Signature: TypeInfo,
+	Extra: sp_runtime::traits::SignedExtension + TypeInfo,
 {
 	fn call(&self) -> &Self::Call {
 		&self.function
@@ -1135,11 +1158,45 @@ impl<Hash> PreimageRecipient<Hash> for () {
 	fn unnote_preimage(_: &Hash) {}
 }
 
+/// Trait for creating an asset account with a deposit taken from a designated depositor specified
+/// by the client.
+pub trait AccountTouch<AssetId, AccountId> {
+	/// The type for currency units of the deposit.
+	type Balance;
+
+	/// The deposit amount of a native currency required for creating an account of the `asset`.
+	fn deposit_required(asset: AssetId) -> Self::Balance;
+
+	/// Create an account for `who` of the `asset` with a deposit taken from the `depositor`.
+	fn touch(asset: AssetId, who: AccountId, depositor: AccountId) -> DispatchResult;
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
 	use sp_core::bounded::{BoundedSlice, BoundedVec};
 	use sp_std::marker::PhantomData;
+
+	#[test]
+	fn defensive_assert_works() {
+		defensive_assert!(true);
+		defensive_assert!(true,);
+		defensive_assert!(true, "must work");
+		defensive_assert!(true, "must work",);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(expected = "Defensive failure has been triggered!: \"1 == 0\": \"Must fail\"")]
+	fn defensive_assert_panics() {
+		defensive_assert!(1 == 0, "Must fail");
+	}
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_assert_does_not_panic() {
+		defensive_assert!(1 == 0, "Must fail");
+	}
 
 	#[test]
 	#[cfg(not(debug_assertions))]

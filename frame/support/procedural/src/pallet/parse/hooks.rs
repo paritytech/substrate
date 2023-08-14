@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -71,7 +71,7 @@ impl HooksDef {
 		}
 
 		let has_runtime_upgrade = item.items.iter().any(|i| match i {
-			syn::ImplItem::Method(method) => method.sig.ident == "on_runtime_upgrade",
+			syn::ImplItem::Fn(method) => method.sig.ident == "on_runtime_upgrade",
 			_ => false,
 		});
 

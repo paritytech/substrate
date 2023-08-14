@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,6 +40,12 @@ pub trait Extension: Send + Any {
 	///
 	/// This is a trick to make the trait type castable into an `Any`.
 	fn as_mut_any(&mut self) -> &mut dyn Any;
+}
+
+impl Extension for Box<dyn Extension> {
+	fn as_mut_any(&mut self) -> &mut dyn Any {
+		(**self).as_mut_any()
+	}
 }
 
 /// Macro for declaring an extension that usable with [`Extensions`].
@@ -189,6 +195,14 @@ impl Extensions {
 	/// Returns a mutable iterator over all extensions.
 	pub fn iter_mut(&mut self) -> impl Iterator<Item = (&TypeId, &mut Box<dyn Extension>)> {
 		self.extensions.iter_mut()
+	}
+
+	/// Merge `other` into `self`.
+	///
+	/// If both contain the same extension, the extension instance of `other` will overwrite the
+	/// instance found in `self`.
+	pub fn merge(&mut self, other: Self) {
+		self.extensions.extend(other.extensions);
 	}
 }
 

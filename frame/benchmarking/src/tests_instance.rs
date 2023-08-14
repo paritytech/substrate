@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@
 use super::*;
 use frame_support::traits::ConstU32;
 use sp_runtime::{
-	testing::{Header, H256},
+	testing::H256,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
@@ -34,7 +34,6 @@ mod pallet_test {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	pub trait OtherConfig {
@@ -50,7 +49,6 @@ mod pallet_test {
 	}
 
 	#[pallet::storage]
-	#[pallet::getter(fn value)]
 	pub(crate) type Value<T: Config<I>, I: 'static = ()> = StorageValue<_, u32, OptionQuery>;
 
 	#[pallet::event]
@@ -62,7 +60,7 @@ mod pallet_test {
 		<T as OtherConfig>::OtherEvent: Into<<T as Config<I>>::RuntimeEvent>,
 	{
 		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn set_value(origin: OriginFor<T>, n: u32) -> DispatchResult {
 			let _sender = ensure_signed(origin)?;
 			Value::<T, I>::put(n);
@@ -70,7 +68,7 @@ mod pallet_test {
 		}
 
 		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn dummy(origin: OriginFor<T>, _n: u32) -> DispatchResult {
 			let _sender = ensure_none(origin)?;
 			Ok(())
@@ -78,16 +76,12 @@ mod pallet_test {
 	}
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		TestPallet: pallet_test::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -98,13 +92,12 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type DbWeight = ();
@@ -130,7 +123,7 @@ impl pallet_test::OtherConfig for Test {
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	GenesisConfig::default().build_storage().unwrap().into()
+	RuntimeGenesisConfig::default().build_storage().unwrap().into()
 }
 
 mod benchmarks {

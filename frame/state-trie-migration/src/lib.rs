@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -439,7 +439,6 @@ pub mod pallet {
 
 	/// The outer Pallet struct.
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	pub struct Pallet<T>(_);
 
 	/// Configurations of this pallet.
@@ -1063,20 +1062,16 @@ mod mock {
 	};
 	use sp_runtime::{
 		traits::{BlakeTwo256, Header as _, IdentityLookup},
-		StorageChild,
+		BuildStorage, StorageChild,
 	};
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-	type Block = frame_system::mocking::MockBlock<Test>;
+	type Block = frame_system::mocking::MockBlockU32<Test>;
 
 	// Configure a mock runtime to test the pallet.
 	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
+		pub enum Test
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
 			StateTrieMigration: pallet_state_trie_migration::{Pallet, Call, Storage, Event<T>},
 		}
@@ -1092,13 +1087,12 @@ mod mock {
 		type BlockLength = ();
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
-		type Index = u64;
-		type BlockNumber = u32;
+		type Nonce = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = sp_runtime::generic::Header<Self::BlockNumber, BlakeTwo256>;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU32<250>;
 		type DbWeight = ();
@@ -1129,6 +1123,10 @@ mod mock {
 		type MaxReserves = ();
 		type ReserveIdentifier = [u8; 8];
 		type WeightInfo = ();
+		type FreezeIdentifier = ();
+		type MaxFreezes = ();
+		type RuntimeHoldReason = ();
+		type MaxHolds = ();
 	}
 
 	/// Test only Weights for state migration.
@@ -1136,25 +1134,25 @@ mod mock {
 
 	impl WeightInfo for StateMigrationTestWeight {
 		fn process_top_key(_: u32) -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn continue_migrate() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn continue_migrate_wrong_witness() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn migrate_custom_top_fail() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn migrate_custom_top_success() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn migrate_custom_child_fail() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 		fn migrate_custom_child_success() -> Weight {
-			Weight::from_ref_time(1000000)
+			Weight::from_parts(1000000, 0)
 		}
 	}
 
@@ -1238,8 +1236,8 @@ mod mock {
 		};
 
 		if with_pallets {
-			frame_system::GenesisConfig::default()
-				.assimilate_storage::<Test>(&mut custom_storage)
+			frame_system::GenesisConfig::<Test>::default()
+				.assimilate_storage(&mut custom_storage)
 				.unwrap();
 			pallet_balances::GenesisConfig::<Test> { balances: vec![(1, 1000)] }
 				.assimilate_storage(&mut custom_storage)
@@ -1616,18 +1614,18 @@ pub(crate) mod remote_tests {
 		traits::{Get, Hooks},
 		weights::Weight,
 	};
-	use frame_system::Pallet as System;
+	use frame_system::{pallet_prelude::BlockNumberFor, Pallet as System};
 	use remote_externalities::Mode;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{Block as BlockT, HashFor, Header as _, One, Zero},
+		traits::{Block as BlockT, HashingFor, Header as _, One, Zero},
 		DeserializeOwned,
 	};
 	use thousands::Separable;
 
 	#[allow(dead_code)]
 	fn run_to_block<Runtime: crate::Config<Hash = H256>>(
-		n: <Runtime as frame_system::Config>::BlockNumber,
+		n: BlockNumberFor<Runtime>,
 	) -> (H256, Weight) {
 		let mut root = Default::default();
 		let mut weight_sum = Weight::zero();
@@ -1667,7 +1665,7 @@ pub(crate) mod remote_tests {
 			frame_system::Pallet::<Runtime>::block_number()
 		});
 
-		let mut duration: <Runtime as frame_system::Config>::BlockNumber = Zero::zero();
+		let mut duration: BlockNumberFor<Runtime> = Zero::zero();
 		// set the version to 1, as if the upgrade happened.
 		ext.state_version = sp_core::storage::StateVersion::V1;
 
@@ -1700,7 +1698,7 @@ pub(crate) mod remote_tests {
 			});
 
 			let compact_proof =
-				proof.clone().into_compact_proof::<HashFor<Block>>(last_state_root).unwrap();
+				proof.clone().into_compact_proof::<HashingFor<Block>>(last_state_root).unwrap();
 			log::info!(
 				target: LOG_TARGET,
 				"proceeded to #{}, weight: [{} / {}], proof: [{} / {} / {}]",

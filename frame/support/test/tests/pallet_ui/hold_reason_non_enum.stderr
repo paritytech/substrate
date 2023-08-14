@@ -1,0 +1,5 @@
+error: Invalid pallet::composite_enum, expected enum item
+  --> tests/pallet_ui/hold_reason_non_enum.rs:10:2
+   |
+10 |     pub struct HoldReason;
+   |     ^^^

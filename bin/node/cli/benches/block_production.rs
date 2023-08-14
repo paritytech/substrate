@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughpu
 use kitchensink_runtime::{constants::currency::*, BalancesCall};
 use node_cli::service::{create_extrinsic, FullClient};
 use sc_block_builder::{BlockBuilderProvider, BuiltBlock, RecordProof};
-use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_consensus::{
 	block_import::{BlockImportParams, ForkChoiceStrategy},
 	BlockImport, StateAction,
@@ -37,7 +36,6 @@ use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed}
 use sp_consensus::BlockOrigin;
 use sp_keyring::Sr25519Keyring;
 use sp_runtime::{
-	generic::BlockId,
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	AccountId32, MultiAddress, OpaqueExtrinsic,
 };
@@ -57,9 +55,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 
 	let spec = Box::new(node_cli::chain_spec::development_config());
 
-	// NOTE: We enforce the use of the WASM runtime to benchmark block production using WASM.
-	let execution_strategy = sc_client_api::ExecutionStrategy::AlwaysWasm;
-
 	let config = Configuration {
 		impl_name: "BenchmarkImpl".into(),
 		impl_version: "1.0".into(),
@@ -70,7 +65,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore: KeystoreConfig::InMemory,
-		keystore_remote: Default::default(),
 		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
 		trie_cache_maximum_size: Some(64 * 1024 * 1024),
 		state_pruning: Some(PruningMode::ArchiveAll),
@@ -79,38 +73,30 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		wasm_method: WasmExecutionMethod::Compiled {
 			instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
 		},
-		execution_strategies: ExecutionStrategies {
-			syncing: execution_strategy,
-			importing: execution_strategy,
-			block_construction: execution_strategy,
-			offchain_worker: execution_strategy,
-			other: execution_strategy,
-		},
-		rpc_http: None,
-		rpc_ws: None,
-		rpc_ipc: None,
-		rpc_ws_max_connections: None,
+		rpc_addr: None,
+		rpc_max_connections: Default::default(),
 		rpc_cors: None,
 		rpc_methods: Default::default(),
-		rpc_max_payload: None,
-		rpc_max_request_size: None,
-		rpc_max_response_size: None,
-		rpc_id_provider: None,
-		rpc_max_subs_per_conn: None,
-		ws_max_out_buffer_capacity: None,
+		rpc_max_request_size: Default::default(),
+		rpc_max_response_size: Default::default(),
+		rpc_id_provider: Default::default(),
+		rpc_max_subs_per_conn: Default::default(),
+		rpc_port: 9944,
 		prometheus_config: None,
 		telemetry_endpoints: None,
 		default_heap_pages: None,
 		offchain_worker: OffchainWorkerConfig { enabled: true, indexing_enabled: false },
 		force_authoring: false,
 		disable_grandpa: false,
+		disable_beefy: false,
 		dev_key_seed: Some(Sr25519Keyring::Alice.to_seed()),
 		tracing_targets: None,
 		tracing_receiver: Default::default(),
 		max_runtime_instances: 8,
 		runtime_cache_size: 2,
 		announce_block: true,
-		base_path: Some(base_path),
+		data_path: base_path.path().into(),
+		base_path,
 		informant_output_format: Default::default(),
 		wasm_runtime_overrides: None,
 	};
@@ -138,7 +124,7 @@ fn import_block(
 	params.state_action =
 		StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(built.storage_changes));
 	params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-	futures::executor::block_on(client.import_block(params, Default::default()))
+	futures::executor::block_on(client.import_block(params))
 		.expect("importing a block doesn't fail");
 }
 
@@ -163,7 +149,7 @@ fn prepare_benchmark(client: &FullClient) -> (usize, Vec<OpaqueExtrinsic>) {
 		let extrinsic: OpaqueExtrinsic = create_extrinsic(
 			client,
 			src.clone(),
-			BalancesCall::transfer { dest: dst.clone(), value: 1 * DOLLARS },
+			BalancesCall::transfer_allow_death { dest: dst.clone(), value: 1 * DOLLARS },
 			Some(nonce),
 		)
 		.into();
@@ -206,14 +192,14 @@ fn block_production(c: &mut Criterion) {
 	group.sample_size(10);
 	group.throughput(Throughput::Elements(max_transfer_count as u64));
 
-	let block_id = BlockId::Hash(client.chain_info().best_hash);
+	let best_hash = client.chain_info().best_hash;
 
 	group.bench_function(format!("{} transfers (no proof)", max_transfer_count), |b| {
 		b.iter_batched(
 			|| extrinsics.clone(),
 			|extrinsics| {
 				let mut block_builder =
-					client.new_block_at(&block_id, Default::default(), RecordProof::No).unwrap();
+					client.new_block_at(best_hash, Default::default(), RecordProof::No).unwrap();
 				for extrinsic in extrinsics {
 					block_builder.push(extrinsic).unwrap();
 				}
@@ -228,7 +214,7 @@ fn block_production(c: &mut Criterion) {
 			|| extrinsics.clone(),
 			|extrinsics| {
 				let mut block_builder =
-					client.new_block_at(&block_id, Default::default(), RecordProof::Yes).unwrap();
+					client.new_block_at(best_hash, Default::default(), RecordProof::Yes).unwrap();
 				for extrinsic in extrinsics {
 					block_builder.push(extrinsic).unwrap();
 				}

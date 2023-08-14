@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,12 +40,12 @@ pub mod v1 {
 	pub fn migrate<T: Config>() -> Weight {
 		let mut reads_writes = 0;
 
-		Vesting::<T>::translate::<VestingInfo<BalanceOf<T>, T::BlockNumber>, _>(
+		Vesting::<T>::translate::<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>, _>(
 			|_key, vesting_info| {
 				reads_writes += 1;
 				let v: Option<
 					BoundedVec<
-						VestingInfo<BalanceOf<T>, T::BlockNumber>,
+						VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
 						MaxVestingSchedulesGet<T>,
 					>,
 				> = vec![vesting_info].try_into().ok();

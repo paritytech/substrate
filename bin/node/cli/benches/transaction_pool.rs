@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -23,11 +23,10 @@ use futures::{future, StreamExt};
 use kitchensink_runtime::{constants::currency::*, BalancesCall, SudoCall};
 use node_cli::service::{create_extrinsic, fetch_nonce, FullClient, TransactionPool};
 use node_primitives::AccountId;
-use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{
 		BlocksPruning, DatabaseSource, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
-		PruningMode, TransactionPoolOptions, WasmExecutionMethod,
+		PruningMode, TransactionPoolOptions,
 	},
 	BasePath, Configuration, Role,
 };
@@ -64,46 +63,36 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		},
 		network: network_config,
 		keystore: KeystoreConfig::InMemory,
-		keystore_remote: Default::default(),
 		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
 		trie_cache_maximum_size: Some(64 * 1024 * 1024),
 		state_pruning: Some(PruningMode::ArchiveAll),
 		blocks_pruning: BlocksPruning::KeepAll,
 		chain_spec: spec,
-		wasm_method: WasmExecutionMethod::Interpreted,
-		// NOTE: we enforce the use of the native runtime to make the errors more debuggable
-		execution_strategies: ExecutionStrategies {
-			syncing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-			importing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-			block_construction: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-			offchain_worker: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-			other: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-		},
-		rpc_http: None,
-		rpc_ws: None,
-		rpc_ipc: None,
-		rpc_ws_max_connections: None,
+		wasm_method: Default::default(),
+		rpc_addr: None,
+		rpc_max_connections: Default::default(),
 		rpc_cors: None,
 		rpc_methods: Default::default(),
-		rpc_max_payload: None,
-		rpc_max_request_size: None,
-		rpc_max_response_size: None,
-		rpc_id_provider: None,
-		rpc_max_subs_per_conn: None,
-		ws_max_out_buffer_capacity: None,
+		rpc_max_request_size: Default::default(),
+		rpc_max_response_size: Default::default(),
+		rpc_id_provider: Default::default(),
+		rpc_max_subs_per_conn: Default::default(),
+		rpc_port: 9944,
 		prometheus_config: None,
 		telemetry_endpoints: None,
 		default_heap_pages: None,
 		offchain_worker: OffchainWorkerConfig { enabled: true, indexing_enabled: false },
 		force_authoring: false,
 		disable_grandpa: false,
+		disable_beefy: false,
 		dev_key_seed: Some(Sr25519Keyring::Alice.to_seed()),
 		tracing_targets: None,
 		tracing_receiver: Default::default(),
 		max_runtime_instances: 8,
 		runtime_cache_size: 2,
 		announce_block: true,
-		base_path: Some(base_path),
+		data_path: base_path.path().into(),
+		base_path,
 		informant_output_format: Default::default(),
 		wasm_runtime_overrides: None,
 	};
@@ -140,10 +129,9 @@ fn create_account_extrinsics(
 					Sr25519Keyring::Alice.pair(),
 					SudoCall::sudo {
 						call: Box::new(
-							BalancesCall::set_balance {
+							BalancesCall::force_set_balance {
 								who: AccountId::from(a.public()).into(),
 								new_free: 0,
-								new_reserved: 0,
 							}
 							.into(),
 						),
@@ -156,10 +144,9 @@ fn create_account_extrinsics(
 					Sr25519Keyring::Alice.pair(),
 					SudoCall::sudo {
 						call: Box::new(
-							BalancesCall::set_balance {
+							BalancesCall::force_set_balance {
 								who: AccountId::from(a.public()).into(),
 								new_free: 1_000_000 * DOLLARS,
-								new_reserved: 0,
 							}
 							.into(),
 						),
@@ -184,7 +171,7 @@ fn create_benchmark_extrinsics(
 				create_extrinsic(
 					client,
 					account.clone(),
-					BalancesCall::transfer {
+					BalancesCall::transfer_allow_death {
 						dest: Sr25519Keyring::Bob.to_account_id().into(),
 						value: 1 * DOLLARS,
 					},

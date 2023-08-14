@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -47,32 +47,39 @@ impl From<u32> for MessageOrigin {
 	}
 }
 
-/// Processes any message and consumes (1, 1) weight per message.
-pub struct NoopMessageProcessor;
-impl ProcessMessage for NoopMessageProcessor {
-	type Origin = MessageOrigin;
+/// Processes any message and consumes `(REQUIRED_WEIGHT, REQUIRED_WEIGHT)` weight.
+///
+/// Returns [ProcessMessageError::Overweight] error if the weight limit is not sufficient.
+pub struct NoopMessageProcessor<Origin, const REQUIRED_WEIGHT: u64 = 1>(PhantomData<Origin>);
+impl<Origin, const REQUIRED_WEIGHT: u64> ProcessMessage
+	for NoopMessageProcessor<Origin, REQUIRED_WEIGHT>
+where
+	Origin: codec::FullCodec + MaxEncodedLen + Clone + Eq + PartialEq + TypeInfo + Debug,
+{
+	type Origin = Origin;
 
 	fn process_message(
 		_message: &[u8],
 		_origin: Self::Origin,
-		weight_limit: Weight,
-	) -> Result<(bool, Weight), ProcessMessageError> {
-		let weight = Weight::from_parts(1, 1);
+		meter: &mut WeightMeter,
+		_id: &mut [u8; 32],
+	) -> Result<bool, ProcessMessageError> {
+		let required = Weight::from_parts(REQUIRED_WEIGHT, REQUIRED_WEIGHT);
 
-		if weight.all_lte(weight_limit) {
-			Ok((true, weight))
+		if meter.try_consume(required).is_ok() {
+			Ok(true)
 		} else {
-			Err(ProcessMessageError::Overweight(weight))
+			Err(ProcessMessageError::Overweight(required))
 		}
 	}
 }
 
 /// Create a message from the given data.
-pub fn msg<N: Get<u32>>(x: &'static str) -> BoundedSlice<u8, N> {
+pub fn msg<N: Get<u32>>(x: &str) -> BoundedSlice<u8, N> {
 	BoundedSlice::defensive_truncate_from(x.as_bytes())
 }
 
-pub fn vmsg(x: &'static str) -> Vec<u8> {
+pub fn vmsg(x: &str) -> Vec<u8> {
 	x.as_bytes().to_vec()
 }
 
@@ -82,11 +89,11 @@ pub fn page<T: Config>(msg: &[u8]) -> PageOf<T> {
 }
 
 pub fn single_page_book<T: Config>() -> BookStateOf<T> {
-	BookState { begin: 0, end: 1, count: 1, ready_neighbours: None, message_count: 0, size: 0 }
+	BookState { begin: 0, end: 1, count: 1, ..Default::default() }
 }
 
 pub fn empty_book<T: Config>() -> BookStateOf<T> {
-	BookState { begin: 0, end: 1, count: 1, ready_neighbours: None, message_count: 0, size: 0 }
+	BookState { begin: 0, end: 1, count: 1, ..Default::default() }
 }
 
 /// Returns a full page of messages with their index as payload and the number of messages.
@@ -111,9 +118,9 @@ pub fn book_for<T: Config>(page: &PageOf<T>) -> BookStateOf<T> {
 		count: 1,
 		begin: 0,
 		end: 1,
-		ready_neighbours: None,
 		message_count: page.remaining.into() as u64,
 		size: page.remaining_size.into() as u64,
+		..Default::default()
 	}
 }
 

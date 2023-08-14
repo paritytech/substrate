@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,7 +41,7 @@ pub(crate) async fn create_snapshot<Block, HostFns>(
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
-	Block::Hash: FromStr + serde::de::DeserializeOwned,
+	Block::Hash: serde::de::DeserializeOwned,
 	Block::Header: serde::de::DeserializeOwned,
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,

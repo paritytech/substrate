@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -59,7 +59,6 @@ impl ExportStateCmd {
 		B: BlockT,
 		C: UsageProvider<B> + StorageProvider<B, BA> + HeaderBackend<B>,
 		BA: sc_client_api::backend::Backend<B>,
-		B::Hash: FromStr,
 		<B::Hash as FromStr>::Err: Debug,
 		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{

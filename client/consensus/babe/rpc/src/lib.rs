@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,28 +18,29 @@
 
 //! RPC api for babe.
 
+use std::{collections::HashMap, sync::Arc};
+
 use futures::TryFutureExt;
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
 	types::{error::CallError, ErrorObject},
 };
-
-use sc_consensus_babe::{authorship, Epoch};
-use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges};
-use sc_rpc_api::DenyUnsafe;
 use serde::{Deserialize, Serialize};
-use sp_api::{BlockId, ProvideRuntimeApi};
-use sp_application_crypto::AppKey;
+
+use sc_consensus_babe::{authorship, BabeWorkerHandle};
+use sc_consensus_epochs::Epoch as EpochT;
+use sc_rpc_api::DenyUnsafe;
+use sp_api::ProvideRuntimeApi;
+use sp_application_crypto::AppCrypto;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{Error as ConsensusError, SelectChain};
-use sp_consensus_babe::{
-	digests::PreDigest, AuthorityId, BabeApi as BabeRuntimeApi, BabeConfiguration,
-};
+use sp_consensus_babe::{digests::PreDigest, AuthorityId, BabeApi as BabeRuntimeApi};
 use sp_core::crypto::ByteArray;
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::traits::{Block as BlockT, Header as _};
-use std::{collections::HashMap, sync::Arc};
+
+const BABE_ERROR: i32 = 9000;
 
 /// Provides rpc methods for interacting with Babe.
 #[rpc(client, server)]
@@ -54,12 +55,10 @@ pub trait BabeApi {
 pub struct Babe<B: BlockT, C, SC> {
 	/// shared reference to the client.
 	client: Arc<C>,
-	/// shared reference to EpochChanges
-	shared_epoch_changes: SharedEpochChanges<B, Epoch>,
+	/// A handle to the BABE worker for issuing requests.
+	babe_worker_handle: BabeWorkerHandle<B>,
 	/// shared reference to the Keystore
-	keystore: SyncCryptoStorePtr,
-	/// config (actually holds the slot duration)
-	babe_config: BabeConfiguration,
+	keystore: KeystorePtr,
 	/// The SelectChain strategy
 	select_chain: SC,
 	/// Whether to deny unsafe calls
@@ -70,13 +69,12 @@ impl<B: BlockT, C, SC> Babe<B, C, SC> {
 	/// Creates a new instance of the Babe Rpc handler.
 	pub fn new(
 		client: Arc<C>,
-		shared_epoch_changes: SharedEpochChanges<B, Epoch>,
-		keystore: SyncCryptoStorePtr,
-		babe_config: BabeConfiguration,
+		babe_worker_handle: BabeWorkerHandle<B>,
+		keystore: KeystorePtr,
 		select_chain: SC,
 		deny_unsafe: DenyUnsafe,
 	) -> Self {
-		Self { client, shared_epoch_changes, keystore, babe_config, select_chain, deny_unsafe }
+		Self { client, babe_worker_handle, keystore, select_chain, deny_unsafe }
 	}
 }
 
@@ -93,21 +91,21 @@ where
 {
 	async fn epoch_authorship(&self) -> RpcResult<HashMap<AuthorityId, EpochAuthorship>> {
 		self.deny_unsafe.check_if_safe()?;
-		let header = self.select_chain.best_chain().map_err(Error::Consensus).await?;
+
+		let best_header = self.select_chain.best_chain().map_err(Error::SelectChain).await?;
+
 		let epoch_start = self
 			.client
 			.runtime_api()
-			.current_epoch_start(&BlockId::Hash(header.hash()))
-			.map_err(|err| Error::StringError(format!("{:?}", err)))?;
+			.current_epoch_start(best_header.hash())
+			.map_err(|_| Error::FetchEpoch)?;
 
-		let epoch = epoch_data(
-			&self.shared_epoch_changes,
-			&self.client,
-			&self.babe_config,
-			*epoch_start,
-			&self.select_chain,
-		)
-		.await?;
+		let epoch = self
+			.babe_worker_handle
+			.epoch_data_for_child_of(best_header.hash(), *best_header.number(), epoch_start)
+			.await
+			.map_err(|_| Error::FetchEpoch)?;
+
 		let (epoch_start, epoch_end) = (epoch.start_slot(), epoch.end_slot());
 		let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
 
@@ -117,10 +115,7 @@ where
 				.iter()
 				.enumerate()
 				.filter_map(|(i, a)| {
-					if SyncCryptoStore::has_keys(
-						&*self.keystore,
-						&[(a.0.to_raw_vec(), AuthorityId::ID)],
-					) {
+					if self.keystore.has_keys(&[(a.0.to_raw_vec(), AuthorityId::ID)]) {
 						Some((a.0.clone(), i))
 					} else {
 						None
@@ -162,81 +157,52 @@ pub struct EpochAuthorship {
 	secondary_vrf: Vec<u64>,
 }
 
-/// Errors encountered by the RPC
+/// Top-level error type for the RPC handler.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-	/// Consensus error
-	#[error(transparent)]
-	Consensus(#[from] ConsensusError),
-	/// Errors that can be formatted as a String
-	#[error("{0}")]
-	StringError(String),
+	/// Failed to fetch the current best header.
+	#[error("Failed to fetch the current best header: {0}")]
+	SelectChain(ConsensusError),
+	/// Failed to fetch epoch data.
+	#[error("Failed to fetch epoch data")]
+	FetchEpoch,
 }
 
 impl From<Error> for JsonRpseeError {
 	fn from(error: Error) -> Self {
+		let error_code = match error {
+			Error::SelectChain(_) => 1,
+			Error::FetchEpoch => 2,
+		};
+
 		JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
-			1234,
+			BABE_ERROR + error_code,
 			error.to_string(),
-			None::<()>,
+			Some(format!("{:?}", error)),
 		)))
 	}
-}
-
-/// Fetches the epoch data for a given slot.
-async fn epoch_data<B, C, SC>(
-	epoch_changes: &SharedEpochChanges<B, Epoch>,
-	client: &Arc<C>,
-	babe_config: &BabeConfiguration,
-	slot: u64,
-	select_chain: &SC,
-) -> Result<Epoch, Error>
-where
-	B: BlockT,
-	C: HeaderBackend<B> + HeaderMetadata<B, Error = BlockChainError> + 'static,
-	SC: SelectChain<B>,
-{
-	let parent = select_chain.best_chain().await?;
-	epoch_changes
-		.shared_data()
-		.epoch_data_for_child_of(
-			descendent_query(&**client),
-			&parent.hash(),
-			*parent.number(),
-			slot.into(),
-			|slot| Epoch::genesis(babe_config, slot),
-		)
-		.map_err(|e| Error::Consensus(ConsensusError::ChainLookup(e.to_string())))?
-		.ok_or(Error::Consensus(ConsensusError::InvalidAuthoritiesSet))
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_keystore::LocalKeystore;
-	use sp_application_crypto::AppPair;
-	use sp_core::crypto::key_types::BABE;
+	use sc_consensus_babe::ImportQueueParams;
+	use sc_transaction_pool_api::{OffchainTransactionPoolFactory, RejectAllTxPool};
+	use sp_consensus_babe::inherents::InherentDataProvider;
+	use sp_core::{crypto::key_types::BABE, testing::TaskExecutor};
 	use sp_keyring::Sr25519Keyring;
-	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+	use sp_keystore::{testing::MemoryKeystore, Keystore};
 	use substrate_test_runtime_client::{
 		runtime::Block, Backend, DefaultTestClientBuilderExt, TestClient, TestClientBuilder,
 		TestClientBuilderExt,
 	};
 
-	use sc_consensus_babe::{block_import, AuthorityPair};
-	use std::sync::Arc;
-
-	/// creates keystore backed by a temp file
-	fn create_temp_keystore<P: AppPair>(
-		authority: Sr25519Keyring,
-	) -> (SyncCryptoStorePtr, tempfile::TempDir) {
-		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore =
-			Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
-		SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(&authority.to_seed()))
+	fn create_keystore(authority: Sr25519Keyring) -> KeystorePtr {
+		let keystore = MemoryKeystore::new();
+		keystore
+			.sr25519_generate_new(BABE, Some(&authority.to_seed()))
 			.expect("Creates authority key");
-
-		(keystore, keystore_path)
+		keystore.into()
 	}
 
 	fn test_babe_rpc_module(
@@ -245,14 +211,38 @@ mod tests {
 		let builder = TestClientBuilder::new();
 		let (client, longest_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
+		let task_executor = TaskExecutor::new();
+		let keystore = create_keystore(Sr25519Keyring::Alice);
+
 		let config = sc_consensus_babe::configuration(&*client).expect("config available");
-		let (_, link) = block_import(config.clone(), client.clone(), client.clone())
-			.expect("can initialize block-import");
+		let slot_duration = config.slot_duration();
 
-		let epoch_changes = link.epoch_changes().clone();
-		let keystore = create_temp_keystore::<AuthorityPair>(Sr25519Keyring::Alice).0;
+		let (block_import, link) =
+			sc_consensus_babe::block_import(config.clone(), client.clone(), client.clone())
+				.expect("can initialize block-import");
 
-		Babe::new(client.clone(), epoch_changes, keystore, config, longest_chain, deny_unsafe)
+		let (_, babe_worker_handle) = sc_consensus_babe::import_queue(ImportQueueParams {
+			link: link.clone(),
+			block_import: block_import.clone(),
+			justification_import: None,
+			client: client.clone(),
+			select_chain: longest_chain.clone(),
+			create_inherent_data_providers: move |_, _| async move {
+				Ok((InherentDataProvider::from_timestamp_and_slot_duration(
+					0.into(),
+					slot_duration,
+				),))
+			},
+			spawner: &task_executor,
+			registry: None,
+			telemetry: None,
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
+		})
+		.unwrap();
+
+		Babe::new(client.clone(), babe_worker_handle, keystore, longest_chain, deny_unsafe)
 	}
 
 	#[tokio::test]

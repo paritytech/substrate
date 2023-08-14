@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -47,7 +47,7 @@ pub enum Error {
 	BadKeyType,
 	/// Some random issue with the key store. Shouldn't happen.
 	#[error("The key store is unavailable")]
-	KeyStoreUnavailable,
+	KeystoreUnavailable,
 	/// Invalid session keys encoding.
 	#[error("Session keys are not encoded correctly")]
 	InvalidSessionKeys,
@@ -57,7 +57,7 @@ pub enum Error {
 }
 
 /// Base code for all authorship errors.
-const BASE_ERROR: i32 = 1000;
+const BASE_ERROR: i32 = crate::error::base::AUTHOR;
 /// Extrinsic has an invalid format.
 const BAD_FORMAT: i32 = BASE_ERROR + 1;
 /// Error during transaction verification in runtime.

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,9 +29,9 @@
 //!
 //! Some resources about the above:
 //!
-//! 1. <https://docs.substrate.io/v3/tools/try-runtime>
+//! 1. <https://docs.substrate.io/reference/command-line-tools/try-runtime/>
 //! 2. <https://www.crowdcast.io/e/substrate-seminar/41>
-//! 3. <https://docs.substrate.io/v3/advanced/executor>
+//! 3. <https://docs.substrate.io/fundamentals/runtime-development/>
 //!
 //! ---
 //!
@@ -97,18 +97,6 @@
 //! > If anything, in most cases, we expect spec-versions to NOT match, because try-runtime is all
 //! > about testing unreleased runtimes.
 //!
-//! ## Note on nodes that respond to `try-runtime` requests.
-//!
-//! There are a number of flags that need to be preferably set on a running node in order to work
-//! well with try-runtime's expensive RPC queries:
-//!
-//! - set `--rpc-max-response-size 1000` and
-//! - `--rpc-max-request-size 1000` to ensure connections are not dropped in case the state is
-//!   large.
-//! - set `--rpc-cors all` to ensure ws connections can come through.
-//!
-//! Note that *none* of the try-runtime operations need unsafe RPCs.
-//!
 //! ## Note on signature and state-root checks
 //!
 //! All of the commands calling into `TryRuntime_execute_block` ([`Command::ExecuteBlock`] and
@@ -133,12 +121,11 @@
 //! given the right flag:
 //!
 //! ```ignore
-//! 
-//! #[cfg(feature = try-runtime)]
-//! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
+//! #[cfg(feature = "try-runtime")]
+//! fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {}
 //!
-//! #[cfg(feature = try-runtime)]
-//! fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {}
+//! #[cfg(feature = "try-runtime")]
+//! fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {}
 //! ```
 //!
 //! (The pallet macro syntax will support this simply as a part of `#[pallet::hooks]`).
@@ -152,9 +139,9 @@
 //!
 //! Similarly, each pallet can expose a function in `#[pallet::hooks]` section as follows:
 //!
-//! ```
-//! #[cfg(feature = try-runtime)]
-//! fn try_state(_) -> Result<(), &'static str> {}
+//! ```ignore
+//! #[cfg(feature = "try-runtime")]
+//! fn try_state(_: BlockNumber) -> Result<(), TryRuntimeError> {}
 //! ```
 //!
 //! which is called on numerous code paths in the try-runtime tool. These checks should ensure that
@@ -261,7 +248,7 @@
 //! # assuming there's `./substrate --dev --tmp --ws-port 9999` or similar running.
 //! ./substrate-try-runtime \
 //!     try-runtime \
-//!     --runtime kitchensink_runtime.wasm \
+//!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     on-runtime-upgrade \
 //!     live --uri ws://localhost:9999
@@ -273,7 +260,7 @@
 //! ```bash
 //! ./substrate-try-runtime \
 //!     try-runtime \
-//!     --runtime kitchensink_runtime.wasm \
+//!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     on-runtime-upgrade \
 //!     live --uri ws://localhost:9999 \
@@ -308,7 +295,7 @@
 //! Then, we can use it to have the same command as before, `on-runtime-upgrade`
 //!
 //! ```bash
-//! try-runtime \
+//! ./substrate-try-runtime try-runtime \
 //!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     on-runtime-upgrade \
@@ -322,7 +309,7 @@
 //!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     execute-block live \
-//!     --uri ws://localhost:999
+//!     --uri ws://localhost:9999
 //! ```
 //!
 //! This can still be customized at a given block with `--at`. If you want to use a snapshot, you
@@ -333,15 +320,22 @@
 //!
 //! ```bash
 //! ./substrate-try-runtime try-runtime \
-//!     --runtime runtime-try-runtime.wasm \
-//!     -lruntime=debug \
-//!     execute-block live \
-//!     --try-state System,Staking \
-//!     --uri ws://localhost:999
+//!    --runtime runtime-try-runtime.wasm \
+//!    -lruntime=debug \
+//!    execute-block \
+//!    --try-state System,Staking \
+//!    live \
+//!    --uri ws://localhost:9999 \
+//!    --pallet System Staking
 //! ```
 //!
-//! Will only run the `try-state` of the two given pallets. See
-//! [`frame_try_runtime::TryStateSelect`] for more information.
+//! Will only run the `try-state` of the two given pallets. When running `try-state` against
+//! some real chain data it can take a long time for the command to execute since it has to
+//! query all the key-value pairs. In scenarios like above where we only want to run the
+//! `try-state` for some specific pallets, we can use the `--pallet` option to specify from
+//! which pallets we want to query the state. This will greatly decrease the execution time.
+//!
+//! See [`frame_try_runtime::TryStateSelect`] for more information.
 //!
 //! * Follow our live chain's blocks using `follow-chain`, whilst running the try-state of 3 pallets
 //!   in a round robin fashion
@@ -358,16 +352,20 @@
 
 #![cfg(feature = "try-runtime")]
 
+use crate::block_building_info::BlockBuildingInfoProvider;
 use parity_scale_codec::Decode;
 use remote_externalities::{
 	Builder, Mode, OfflineConfig, OnlineConfig, RemoteExternalities, SnapshotConfig,
 	TestExternalities,
 };
 use sc_cli::{
-	CliConfiguration, RuntimeVersion, WasmExecutionMethod, WasmtimeInstantiationStrategy,
-	DEFAULT_WASMTIME_INSTANTIATION_STRATEGY, DEFAULT_WASM_EXECUTION_METHOD,
+	execution_method_from_cli, CliConfiguration, RuntimeVersion, WasmExecutionMethod,
+	WasmtimeInstantiationStrategy, DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
+	DEFAULT_WASM_EXECUTION_METHOD,
 };
-use sc_executor::{sp_wasm_interface::HostFunctions, WasmExecutor};
+use sc_executor::{
+	sp_wasm_interface::HostFunctions, HeapAllocStrategy, WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY,
+};
 use sp_api::HashT;
 use sp_core::{
 	hexdisplay::HexDisplay,
@@ -376,20 +374,21 @@ use sp_core::{
 		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 	},
 	storage::well_known_keys,
-	testing::TaskExecutor,
-	traits::{ReadRuntimeVersion, TaskExecutorExt},
+	traits::{CallContext, ReadRuntimeVersion, ReadRuntimeVersionExt},
 	twox_128, H256,
 };
 use sp_externalities::Extensions;
-use sp_keystore::{testing::KeyStore, KeystoreExt};
+use sp_inherents::InherentData;
+use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, NumberFor},
-	DeserializeOwned,
+	DeserializeOwned, Digest,
 };
 use sp_state_machine::{CompactProof, OverlayedChanges, StateMachine, TrieBackendBuilder};
 use sp_version::StateVersion;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
+pub mod block_building_info;
 pub mod commands;
 pub(crate) mod parse;
 pub(crate) const LOG_TARGET: &str = "try-runtime::cli";
@@ -444,6 +443,15 @@ pub enum Command {
 	/// This can only work if the block format between the remote chain and the new runtime being
 	/// tested has remained the same, otherwise block decoding might fail.
 	FollowChain(commands::follow_chain::FollowChainCmd),
+
+	/// Produce a series of empty, consecutive blocks and execute them one-by-one.
+	///
+	/// To compare it with [`Command::FollowChain`]:
+	///  - we don't have the delay of the original blocktime (for Polkadot 6s), but instead, we
+	///    execute every block immediately
+	///  - the only data that will be put into blocks are pre-runtime digest items and inherent
+	///    extrinsics; both things should be defined in your node CLI handling level
+	FastForward(commands::fast_forward::FastForwardCmd),
 
 	/// Create a new snapshot file.
 	CreateSnapshot(commands::create_snapshot::CreateSnapshotCmd),
@@ -587,8 +595,6 @@ pub struct LiveState {
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum State {
 	/// Use a state snapshot as the source of runtime state.
-	///
-	/// This can be crated by passing a value to [`State::Live::snapshot_path`].
 	Snap {
 		#[arg(short, long)]
 		snapshot_path: PathBuf,
@@ -612,9 +618,7 @@ impl State {
 		try_runtime_check: bool,
 	) -> sc_cli::Result<RemoteExternalities<Block>>
 	where
-		Block::Hash: FromStr,
 		Block::Header: DeserializeOwned,
-		Block::Hash: DeserializeOwned,
 		<Block::Hash as FromStr>::Err: Debug,
 	{
 		let builder = match self {
@@ -719,16 +723,19 @@ impl State {
 }
 
 impl TryRuntimeCmd {
-	pub async fn run<Block, HostFns>(&self) -> sc_cli::Result<()>
+	pub async fn run<Block, HostFns, BBIP>(
+		&self,
+		block_building_info_provider: Option<BBIP>,
+	) -> sc_cli::Result<()>
 	where
 		Block: BlockT<Hash = H256> + DeserializeOwned,
 		Block::Header: DeserializeOwned,
-		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
 		<NumberFor<Block> as FromStr>::Err: Debug,
 		<NumberFor<Block> as TryInto<u64>>::Error: Debug,
 		NumberFor<Block>: FromStr,
 		HostFns: HostFunctions,
+		BBIP: BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>>,
 	{
 		match &self.command {
 			Command::OnRuntimeUpgrade(ref cmd) =>
@@ -753,6 +760,13 @@ impl TryRuntimeCmd {
 				commands::follow_chain::follow_chain::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
+				)
+				.await,
+			Command::FastForward(cmd) =>
+				commands::fast_forward::fast_forward::<Block, HostFns, BBIP>(
+					self.shared.clone(),
+					cmd.clone(),
+					block_building_info_provider,
 				)
 				.await,
 			Command::CreateSnapshot(cmd) =>
@@ -781,7 +795,6 @@ impl CliConfiguration for TryRuntimeCmd {
 /// Get the hash type of the generic `Block` from a `hash_str`.
 pub(crate) fn hash_of<Block: BlockT>(hash_str: &str) -> sc_cli::Result<Block::Hash>
 where
-	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
 {
 	hash_str
@@ -790,31 +803,34 @@ where
 }
 
 /// Build all extensions that we typically use.
-pub(crate) fn full_extensions() -> Extensions {
+pub(crate) fn full_extensions<H: HostFunctions>(wasm_executor: WasmExecutor<H>) -> Extensions {
 	let mut extensions = Extensions::default();
-	extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
 	let (offchain, _offchain_state) = TestOffchainExt::new();
 	let (pool, _pool_state) = TestTransactionPoolExt::new();
+	let keystore = MemoryKeystore::new();
 	extensions.register(OffchainDbExt::new(offchain.clone()));
 	extensions.register(OffchainWorkerExt::new(offchain));
-	extensions.register(KeystoreExt(std::sync::Arc::new(KeyStore::new())));
+	extensions.register(KeystoreExt::new(keystore));
 	extensions.register(TransactionPoolExt::new(pool));
+	extensions.register(ReadRuntimeVersionExt::new(wasm_executor));
 
 	extensions
 }
 
+/// Build wasm executor by default config.
 pub(crate) fn build_executor<H: HostFunctions>(shared: &SharedParams) -> WasmExecutor<H> {
-	let heap_pages = shared.heap_pages.or(Some(2048));
-	let max_runtime_instances = 8;
-	let runtime_cache_size = 2;
+	let heap_pages = shared
+		.heap_pages
+		.map_or(DEFAULT_HEAP_ALLOC_STRATEGY, |p| HeapAllocStrategy::Static { extra_pages: p as _ });
 
-	WasmExecutor::new(
-		sc_executor::WasmExecutionMethod::Interpreted,
-		heap_pages,
-		max_runtime_instances,
-		None,
-		runtime_cache_size,
-	)
+	WasmExecutor::builder()
+		.with_execution_method(execution_method_from_cli(
+			shared.wasm_method,
+			shared.wasmtime_instantiation_strategy,
+		))
+		.with_onchain_heap_alloc_strategy(heap_pages)
+		.with_offchain_heap_alloc_strategy(heap_pages)
+		.build()
 }
 
 /// Ensure that the given `ext` is compiled with `try-runtime`
@@ -842,7 +858,7 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
-	extensions: Extensions,
+	mut extensions: Extensions,
 ) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
 	let mut changes = Default::default();
 	let encoded_results = StateMachine::new(
@@ -851,11 +867,11 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 		executor,
 		method,
 		data,
-		extensions,
+		&mut extensions,
 		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend).runtime_code()?,
-		sp_core::testing::TaskExecutor::new(),
+		CallContext::Offchain,
 	)
-	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
+	.execute()
 	.map_err(|e| format!("failed to execute '{}': {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
@@ -871,7 +887,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
-	extensions: Extensions,
+	mut extensions: Extensions,
 	maybe_export_proof: Option<PathBuf>,
 ) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
 	use parity_scale_codec::Encode;
@@ -890,11 +906,11 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 		executor,
 		method,
 		data,
-		extensions,
+		&mut extensions,
 		&runtime_code,
-		sp_core::testing::TaskExecutor::new(),
+		CallContext::Offchain,
 	)
-	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
+	.execute()
 	.map_err(|e| format!("failed to execute {}: {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 

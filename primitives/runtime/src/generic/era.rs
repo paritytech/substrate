@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::codec::{Decode, Encode, Error, Input, Output};
@@ -30,7 +30,7 @@ pub type Phase = u64;
 
 /// An era to describe the longevity of a transaction.
 #[derive(PartialEq, Eq, Clone, Copy, sp_core::RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Era {
 	/// The transaction is valid forever. The genesis hash must be present in the signed content.
 	Immortal,

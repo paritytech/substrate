@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,17 +19,14 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use frame_support::traits::{ConstU32, ConstU64};
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	Perbill,
+	BuildStorage, Perbill,
 };
-
 #[frame_support::pallet]
 mod module {
 	use frame_support::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -44,16 +41,12 @@ mod module {
 	}
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub struct Runtime
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Module: module::{Pallet, Event},
 	}
 );
@@ -70,14 +63,13 @@ impl frame_system::Config for Runtime {
 	type BlockLength = BlockLength;
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -96,8 +88,8 @@ impl module::Config for Runtime {
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	frame_system::GenesisConfig::default()
-		.build_storage::<Runtime>()
+	frame_system::GenesisConfig::<Runtime>::default()
+		.build_storage()
 		.unwrap()
 		.into()
 }

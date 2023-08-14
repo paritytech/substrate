@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,21 +25,14 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_mmr_primitives::{Compact, LeafDataProvider};
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup, Keccak256},
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Keccak256};
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		MMR: pallet_mmr::{Pallet, Storage},
 	}
 );
@@ -48,13 +41,12 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = sp_core::sr25519::Public;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
@@ -75,7 +67,6 @@ impl Config for Test {
 	const INDEXING_PREFIX: &'static [u8] = b"mmr-";
 
 	type Hashing = Keccak256;
-	type Hash = H256;
 	type LeafData = Compact<Keccak256, (ParentNumberAndHash<Test>, LeafData)>;
 	type OnNewRoot = ();
 	type WeightInfo = ();

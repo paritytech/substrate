@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -328,6 +328,10 @@ where
 	}
 
 	fn on_event(&self, event: &Event<'_>, ctx: Context<S>) {
+		if !self.check_target(event.metadata().target(), &event.metadata().level()) {
+			return
+		}
+
 		let parent_id = event.parent().cloned().or_else(|| {
 			if event.is_contextual() {
 				ctx.lookup_current().map(|span| span.id())

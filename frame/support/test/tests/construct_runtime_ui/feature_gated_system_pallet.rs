@@ -1,13 +1,10 @@
 use frame_support::construct_runtime;
 
 construct_runtime! {
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub struct Runtime
 	{
 		#[cfg(test)]
-		System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+		System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
 }
 

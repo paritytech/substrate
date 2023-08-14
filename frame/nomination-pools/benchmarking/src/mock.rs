@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,11 +20,11 @@ use frame_election_provider_support::VoteWeight;
 use frame_support::{pallet_prelude::*, parameter_types, traits::ConstU64, PalletId};
 use sp_runtime::{
 	traits::{Convert, IdentityLookup},
-	FixedU128,
+	BuildStorage, FixedU128, Perbill,
 };
 
 type AccountId = u128;
-type AccountIndex = u32;
+type Nonce = u32;
 type BlockNumber = u64;
 type Balance = u128;
 
@@ -34,14 +34,13 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = AccountIndex;
-	type BlockNumber = BlockNumber;
+	type Nonce = Nonce;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_core::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = sp_runtime::testing::Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type Version = ();
@@ -75,6 +74,10 @@ impl pallet_balances::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 
 pallet_staking_reward_curve::build! {
@@ -91,11 +94,10 @@ parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
 }
 impl pallet_staking::Config for Runtime {
-	type MaxNominations = ConstU32<16>;
 	type Currency = Balances;
 	type CurrencyBalance = Balance;
 	type UnixTime = pallet_timestamp::Pallet<Self>;
-	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+	type CurrencyToVote = ();
 	type RewardRemainder = ();
 	type RuntimeEvent = RuntimeEvent;
 	type Slash = ();
@@ -114,9 +116,10 @@ impl pallet_staking::Config for Runtime {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = VoterList;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
+	type NominationsQuota = pallet_staking::FixedNominationsQuota<16>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = ConstU32<84>;
-	type OnStakerSlash = Pools;
+	type EventListeners = Pools;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
@@ -171,12 +174,9 @@ impl pallet_nomination_pools::Config for Runtime {
 impl crate::Config for Runtime {}
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
+
 frame_support::construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub struct Runtime
 	{
 		System: frame_system::{Pallet, Call, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
@@ -188,13 +188,14 @@ frame_support::construct_runtime!(
 );
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut storage = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 	let _ = pallet_nomination_pools::GenesisConfig::<Runtime> {
 		min_join_bond: 2,
 		min_create_bond: 2,
 		max_pools: Some(3),
 		max_members_per_pool: Some(3),
 		max_members: Some(3 * 3),
+		global_max_commission: Some(Perbill::from_percent(50)),
 	}
 	.assimilate_storage(&mut storage);
 	sp_io::TestExternalities::from(storage)

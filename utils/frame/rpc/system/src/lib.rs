@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,20 +32,20 @@ use sp_api::ApiExt;
 use sp_block_builder::BlockBuilder;
 use sp_blockchain::HeaderBackend;
 use sp_core::{hexdisplay::HexDisplay, Bytes};
-use sp_runtime::{generic::BlockId, legacy, traits};
+use sp_runtime::{legacy, traits};
 
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
 
 /// System RPC methods.
 #[rpc(client, server)]
-pub trait SystemApi<BlockHash, AccountId, Index> {
+pub trait SystemApi<BlockHash, AccountId, Nonce> {
 	/// Returns the next valid index (aka nonce) for given account.
 	///
 	/// This method takes into consideration all pending transactions
 	/// currently in the pool and if no transactions are found in the pool
 	/// it fallbacks to query the index from the runtime (aka. state nonce).
 	#[method(name = "system_accountNextIndex", aliases = ["account_nextIndex"])]
-	async fn nonce(&self, account: AccountId) -> RpcResult<Index>;
+	async fn nonce(&self, account: AccountId) -> RpcResult<Nonce>;
 
 	/// Dry run an extrinsic at a given block. Return SCALE encoded ApplyExtrinsicResult.
 	#[method(name = "system_dryRun", aliases = ["system_dryRunAt"])]
@@ -85,25 +85,24 @@ impl<P: TransactionPool, C, B> System<P, C, B> {
 }
 
 #[async_trait]
-impl<P, C, Block, AccountId, Index>
-	SystemApiServer<<Block as traits::Block>::Hash, AccountId, Index> for System<P, C, Block>
+impl<P, C, Block, AccountId, Nonce>
+	SystemApiServer<<Block as traits::Block>::Hash, AccountId, Nonce> for System<P, C, Block>
 where
 	C: sp_api::ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block>,
 	C: Send + Sync + 'static,
-	C::Api: AccountNonceApi<Block, AccountId, Index>,
+	C::Api: AccountNonceApi<Block, AccountId, Nonce>,
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
 	Block: traits::Block,
 	AccountId: Clone + Display + Codec + Send + 'static,
-	Index: Clone + Display + Codec + Send + traits::AtLeast32Bit + 'static,
+	Nonce: Clone + Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
-	async fn nonce(&self, account: AccountId) -> RpcResult<Index> {
+	async fn nonce(&self, account: AccountId) -> RpcResult<Nonce> {
 		let api = self.client.runtime_api();
 		let best = self.client.info().best_hash;
-		let at = BlockId::hash(best);
 
-		let nonce = api.account_nonce(&at, account.clone()).map_err(|e| {
+		let nonce = api.account_nonce(best, account.clone()).map_err(|e| {
 			CallError::Custom(ErrorObject::owned(
 				Error::RuntimeError.into(),
 				"Unable to query nonce.",
@@ -120,9 +119,9 @@ where
 	) -> RpcResult<Bytes> {
 		self.deny_unsafe.check_if_safe()?;
 		let api = self.client.runtime_api();
-		let at = BlockId::<Block>::hash(at.unwrap_or_else(||
+		let best_hash = at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
-			self.client.info().best_hash));
+			self.client.info().best_hash);
 
 		let uxt: <Block as traits::Block>::Extrinsic =
 			Decode::decode(&mut &*extrinsic).map_err(|e| {
@@ -134,7 +133,7 @@ where
 			})?;
 
 		let api_version = api
-			.api_version::<dyn BlockBuilder<Block>>(&at)
+			.api_version::<dyn BlockBuilder<Block>>(best_hash)
 			.map_err(|e| {
 				CallError::Custom(ErrorObject::owned(
 					Error::RuntimeError.into(),
@@ -146,13 +145,13 @@ where
 				CallError::Custom(ErrorObject::owned(
 					Error::RuntimeError.into(),
 					"Unable to dry run extrinsic.",
-					Some(format!("Could not find `BlockBuilder` api for block `{:?}`.", at)),
+					Some(format!("Could not find `BlockBuilder` api for block `{:?}`.", best_hash)),
 				))
 			})?;
 
 		let result = if api_version < 6 {
 			#[allow(deprecated)]
-			api.apply_extrinsic_before_version_6(&at, uxt)
+			api.apply_extrinsic_before_version_6(best_hash, uxt)
 				.map(legacy::byte_sized_error::convert_to_latest)
 				.map_err(|e| {
 					CallError::Custom(ErrorObject::owned(
@@ -162,7 +161,7 @@ where
 					))
 				})?
 		} else {
-			api.apply_extrinsic(&at, uxt).map_err(|e| {
+			api.apply_extrinsic(best_hash, uxt).map_err(|e| {
 				CallError::Custom(ErrorObject::owned(
 					Error::RuntimeError.into(),
 					"Unable to dry run extrinsic.",
@@ -177,11 +176,11 @@ where
 
 /// Adjust account nonce from state, so that tx with the nonce will be
 /// placed after all ready txpool transactions.
-fn adjust_nonce<P, AccountId, Index>(pool: &P, account: AccountId, nonce: Index) -> Index
+fn adjust_nonce<P, AccountId, Nonce>(pool: &P, account: AccountId, nonce: Nonce) -> Nonce
 where
 	P: TransactionPool,
 	AccountId: Clone + std::fmt::Display + Encode,
-	Index: Clone + std::fmt::Display + Encode + traits::AtLeast32Bit + 'static,
+	Nonce: Clone + std::fmt::Display + Encode + traits::AtLeast32Bit + 'static,
 {
 	log::debug!(target: "rpc", "State nonce for {}: {}", account, nonce);
 	// Now we need to query the transaction pool
@@ -220,6 +219,7 @@ mod tests {
 	use jsonrpsee::{core::Error as JsonRpseeError, types::error::CallError};
 	use sc_transaction_pool::BasicPool;
 	use sp_runtime::{
+		generic::BlockId,
 		transaction_validity::{InvalidTransaction, TransactionValidityError},
 		ApplyExtrinsicResult,
 	};
@@ -243,7 +243,7 @@ mod tests {
 				amount: 5,
 				nonce,
 			};
-			t.into_signed_tx()
+			t.into_unchecked_extrinsic()
 		};
 		// Populate the pool
 		let ext0 = new_transaction(0);
@@ -297,7 +297,7 @@ mod tests {
 			amount: 5,
 			nonce: 0,
 		}
-		.into_signed_tx();
+		.into_unchecked_extrinsic();
 
 		// when
 		let bytes = accounts.dry_run(tx.encode().into(), None).await.expect("Call is successful");
@@ -325,13 +325,13 @@ mod tests {
 			amount: 5,
 			nonce: 100,
 		}
-		.into_signed_tx();
+		.into_unchecked_extrinsic();
 
 		// when
 		let bytes = accounts.dry_run(tx.encode().into(), None).await.expect("Call is successful");
 
 		// then
 		let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_ref()).unwrap();
-		assert_eq!(apply_res, Err(TransactionValidityError::Invalid(InvalidTransaction::Stale)));
+		assert_eq!(apply_res, Err(TransactionValidityError::Invalid(InvalidTransaction::Future)));
 	}
 }

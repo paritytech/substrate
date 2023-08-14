@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,6 +18,8 @@
 mod call;
 mod config;
 mod constants;
+mod doc_only;
+mod documentation;
 mod error;
 mod event;
 mod genesis_build;
@@ -34,7 +36,6 @@ mod type_value;
 mod validate_unsigned;
 
 use crate::pallet::Def;
-use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
 
 /// Merge where clause together, `where` token span is taken from the first not none one.
@@ -52,6 +53,8 @@ pub fn merge_where_clauses(clauses: &[&Option<syn::WhereClause>]) -> Option<syn:
 /// * create some new types,
 /// * impl stuff on them.
 pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
+	// Remove the `pallet_doc` attribute first.
+	let metadata_docs = documentation::expand_documentation(&mut def);
 	let constants = constants::expand_constants(&mut def);
 	let pallet_struct = pallet_struct::expand_pallet_struct(&mut def);
 	let config = config::expand_config(&mut def);
@@ -69,19 +72,29 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	let origins = origin::expand_origins(&mut def);
 	let validate_unsigned = validate_unsigned::expand_validate_unsigned(&mut def);
 	let tt_default_parts = tt_default_parts::expand_tt_default_parts(&mut def);
+	let doc_only = doc_only::expand_doc_only(&mut def);
 
-	if get_doc_literals(&def.item.attrs).is_empty() {
-		def.item.attrs.push(syn::parse_quote!(
-			#[doc = r"
-			The module that hosts all the
-			[FRAME](https://docs.substrate.io/main-docs/build/events-errors/)
-			types needed to add this pallet to a
-			runtime.
-			"]
-		));
-	}
+	def.item.attrs.insert(
+		0,
+		syn::parse_quote!(
+			#[doc = r"The `pallet` module in each FRAME pallet hosts the most important items needed
+to construct this pallet.
+
+The main components of this pallet are:
+- [`Pallet`], which implements all of the dispatchable extrinsics of the pallet, among
+other public functions.
+	- The subset of the functions that are dispatchable can be identified either in the
+	[`dispatchables`] module or in the [`Call`] enum.
+- [`storage_types`], which contains the list of all types that are representing a
+storage item. Otherwise, all storage items are listed among [*Type Definitions*](#types).
+- [`Config`], which contains the configuration trait of this pallet.
+- [`Event`] and [`Error`], which are listed among the [*Enums*](#enums).
+		"]
+		),
+	);
 
 	let new_items = quote::quote!(
+		#metadata_docs
 		#constants
 		#pallet_struct
 		#config
@@ -99,6 +112,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 		#origins
 		#validate_unsigned
 		#tt_default_parts
+		#doc_only
 	);
 
 	def.item

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,8 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use libp2p::PeerId;
-use sc_network_common::protocol::role::ObservedRole;
+use libp2p_identity::PeerId;
+use sc_network_common::role::ObservedRole;
 use sp_runtime::traits::Block as BlockT;
 
 /// Validates consensus messages.

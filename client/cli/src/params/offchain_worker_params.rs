@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -33,7 +33,6 @@ use crate::{error, OffchainWorkerEnabled};
 #[derive(Debug, Clone, Args)]
 pub struct OffchainWorkerParams {
 	/// Should execute offchain workers on every block.
-	///
 	/// By default it's only enabled for nodes that are authoring new blocks.
 	#[arg(
 		long = "offchain-worker",
@@ -45,9 +44,7 @@ pub struct OffchainWorkerParams {
 	pub enabled: OffchainWorkerEnabled,
 
 	/// Enable Offchain Indexing API, which allows block import to write to Offchain DB.
-	///
-	/// Enables a runtime to write directly to a offchain workers
-	/// DB during block import.
+	/// Enables a runtime to write directly to a offchain workers DB during block import.
 	#[arg(long = "enable-offchain-indexing", value_name = "ENABLE_OFFCHAIN_INDEXING", default_value_t = false, action = ArgAction::Set)]
 	pub indexing_enabled: bool,
 }

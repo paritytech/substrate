@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,14 +43,14 @@
 //! ### Voting
 //!
 //! Voters can vote for a limited number of the candidates by providing a list of account ids,
-//! bounded by [`MAXIMUM_VOTE`]. Invalid votes (voting for non-candidates) and duplicate votes are
-//! ignored during election. Yet, a voter _might_ vote for a future candidate. Voters reserve a bond
-//! as they vote. Each vote defines a `value`. This amount is locked from the account of the voter
-//! and indicates the weight of the vote. Voters can update their votes at any time by calling
-//! `vote()` again. This can update the vote targets (which might update the deposit) or update the
-//! vote's stake ([`Voter::stake`]). After a round, votes are kept and might still be valid for
-//! further rounds. A voter is responsible for calling `remove_voter` once they are done to have
-//! their bond back and remove the lock.
+//! bounded by [`Config::MaxVotesPerVoter`]. Invalid votes (voting for non-candidates) and duplicate
+//! votes are ignored during election. Yet, a voter _might_ vote for a future candidate. Voters
+//! reserve a bond as they vote. Each vote defines a `value`. This amount is locked from the account
+//! of the voter and indicates the weight of the vote. Voters can update their votes at any time by
+//! calling `vote()` again. This can update the vote targets (which might update the deposit) or
+//! update the vote's stake ([`Voter::stake`]). After a round, votes are kept and might still be
+//! valid for further rounds. A voter is responsible for calling `remove_voter` once they are done
+//! to have their bond back and remove the lock.
 //!
 //! See [`Call::vote`], [`Call::remove_voter`].
 //!
@@ -101,9 +101,9 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	traits::{
-		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
-		CurrencyToVote, Get, InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced,
-		ReservableCurrency, SortedMembers, WithdrawReasons,
+		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency, Get,
+		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
+		SortedMembers, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -113,7 +113,11 @@ use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
 	DispatchError, Perbill, RuntimeDebug,
 };
+use sp_staking::currency_to_vote::CurrencyToVote;
 use sp_std::{cmp::Ordering, prelude::*};
+
+#[cfg(any(feature = "try-runtime", test))]
+use sp_runtime::TryRuntimeError;
 
 mod benchmarking;
 pub mod weights;
@@ -123,9 +127,6 @@ pub use weights::WeightInfo;
 pub mod migrations;
 
 const LOG_TARGET: &str = "runtime::elections-phragmen";
-
-/// The maximum votes allowed per voter.
-pub const MAXIMUM_VOTE: usize = 16;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -190,10 +191,9 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -204,7 +204,7 @@ pub mod pallet {
 		type PalletId: Get<LockIdentifier>;
 
 		/// The currency that people are electing with.
-		type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>
+		type Currency: LockableCurrency<Self::AccountId, Moment = BlockNumberFor<Self>>
 			+ ReservableCurrency<Self::AccountId>;
 
 		/// What to do when the members change.
@@ -250,22 +250,32 @@ pub mod pallet {
 		/// round will happen. If set to zero, no elections are ever triggered and the module will
 		/// be in passive mode.
 		#[pallet::constant]
-		type TermDuration: Get<Self::BlockNumber>;
+		type TermDuration: Get<BlockNumberFor<Self>>;
 
 		/// The maximum number of candidates in a phragmen election.
 		///
-		/// Warning: The election happens onchain, and this value will determine
-		/// the size of the election. When this limit is reached no more
-		/// candidates are accepted in the election.
+		/// Warning: This impacts the size of the election which is run onchain. Chose wisely, and
+		/// consider how it will impact `T::WeightInfo::election_phragmen`.
+		///
+		/// When this limit is reached no more candidates are accepted in the election.
 		#[pallet::constant]
 		type MaxCandidates: Get<u32>;
 
 		/// The maximum number of voters to allow in a phragmen election.
 		///
-		/// Warning: This impacts the size of the election which is run onchain.
+		/// Warning: This impacts the size of the election which is run onchain. Chose wisely, and
+		/// consider how it will impact `T::WeightInfo::election_phragmen`.
+		///
 		/// When the limit is reached the new voters are ignored.
 		#[pallet::constant]
 		type MaxVoters: Get<u32>;
+
+		/// Maximum numbers of votes per voter.
+		///
+		/// Warning: This impacts the size of the election which is run onchain. Chose wisely, and
+		/// consider how it will impact `T::WeightInfo::election_phragmen`.
+		#[pallet::constant]
+		type MaxVotesPerVoter: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -276,13 +286,53 @@ pub mod pallet {
 		/// What to do at the end of each block.
 		///
 		/// Checks if an election needs to happen or not.
-		fn on_initialize(n: T::BlockNumber) -> Weight {
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let term_duration = T::TermDuration::get();
 			if !term_duration.is_zero() && (n % term_duration).is_zero() {
 				Self::do_phragmen()
 			} else {
 				Weight::zero()
 			}
+		}
+
+		fn integrity_test() {
+			let block_weight = T::BlockWeights::get().max_block;
+			// mind the order.
+			let election_weight = T::WeightInfo::election_phragmen(
+				T::MaxCandidates::get(),
+				T::MaxVoters::get(),
+				T::MaxVotesPerVoter::get() * T::MaxVoters::get(),
+			);
+
+			let to_seconds = |w: &Weight| {
+				w.ref_time() as f32 /
+					frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND as f32
+			};
+
+			frame_support::log::debug!(
+				target: LOG_TARGET,
+				"election weight {}s ({:?}) // chain's block weight {}s ({:?})",
+				to_seconds(&election_weight),
+				election_weight,
+				to_seconds(&block_weight),
+				block_weight,
+			);
+			assert!(
+				election_weight.all_lt(block_weight),
+				"election weight {}s ({:?}) will exceed a {}s chain's block weight ({:?}) (MaxCandidates {}, MaxVoters {}, MaxVotesPerVoter {} -- tweak these parameters)",
+				election_weight,
+				to_seconds(&election_weight),
+				to_seconds(&block_weight),
+				block_weight,
+				T::MaxCandidates::get(),
+				T::MaxVoters::get(),
+				T::MaxVotesPerVoter::get(),
+			);
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
+			Self::do_try_state()
 		}
 	}
 
@@ -307,10 +357,6 @@ pub mod pallet {
 		///
 		/// It is the responsibility of the caller to **NOT** place all of their balance into the
 		/// lock and keep some for further operations.
-		///
-		/// # <weight>
-		/// We assume the maximum weight among all 3 cases: vote_equal, vote_more and vote_less.
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight(
 			T::WeightInfo::vote_more(votes.len() as u32)
@@ -324,8 +370,10 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			// votes should not be empty and more than `MAXIMUM_VOTE` in any case.
-			ensure!(votes.len() <= MAXIMUM_VOTE, Error::<T>::MaximumVotesExceeded);
+			ensure!(
+				votes.len() <= T::MaxVotesPerVoter::get() as usize,
+				Error::<T>::MaximumVotesExceeded
+			);
 			ensure!(!votes.is_empty(), Error::<T>::NoVotes);
 
 			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0);
@@ -395,9 +443,9 @@ pub mod pallet {
 		/// Even if a candidate ends up being a member, they must call [`Call::renounce_candidacy`]
 		/// to get their deposit back. Losing the spot in an election will always lead to a slash.
 		///
-		/// # <weight>
 		/// The number of current candidates must be provided as witness data.
-		/// # </weight>
+		/// ## Complexity
+		/// O(C + log(C)) where C is candidate_count.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::submit_candidacy(*candidate_count))]
 		pub fn submit_candidacy(
@@ -439,10 +487,12 @@ pub mod pallet {
 		///   next round.
 		///
 		/// The dispatch origin of this call must be signed, and have one of the above roles.
-		///
-		/// # <weight>
 		/// The type of renouncing must be provided as witness data.
-		/// # </weight>
+		///
+		/// ## Complexity
+		///   - Renouncing::Candidate(count): O(count + log(count))
+		///   - Renouncing::Member: O(1)
+		///   - Renouncing::RunnerUp: O(1)
 		#[pallet::call_index(3)]
 		#[pallet::weight(match *renouncing {
 			Renouncing::Candidate(count) => T::WeightInfo::renounce_candidacy_candidate(count),
@@ -502,10 +552,8 @@ pub mod pallet {
 		///
 		/// Note that this does not affect the designated block number of the next election.
 		///
-		/// # <weight>
-		/// If we have a replacement, we use a small weight. Else, since this is a root call and
-		/// will go into phragmen, we assume full block for now.
-		/// # </weight>
+		/// ## Complexity
+		/// - Check details of remove_and_replace_member() and do_phragmen().
 		#[pallet::call_index(4)]
 		#[pallet::weight(if *rerun_election {
 			T::WeightInfo::remove_member_without_replacement()
@@ -539,9 +587,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this call must be root.
 		///
-		/// # <weight>
-		/// The total number of voters and those that are defunct must be provided as witness data.
-		/// # </weight>
+		/// ## Complexity
+		/// - Check is_defunct_voter() details.
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::clean_defunct_voters(*_num_voters, *_num_defunct))]
 		pub fn clean_defunct_voters(
@@ -668,19 +715,13 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, T::AccountId, Voter<T::AccountId, BalanceOf<T>>, ValueQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub members: Vec<(T::AccountId, BalanceOf<T>)>,
 	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { members: Default::default() }
-		}
-	}
-
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			assert!(
 				self.members.len() as u32 <= T::DesiredMembers::get(),
@@ -703,7 +744,10 @@ pub mod pallet {
 					Members::<T>::mutate(|members| {
 						match members.binary_search_by(|m| m.who.cmp(member)) {
 							Ok(_) => {
-								panic!("Duplicate member in elections-phragmen genesis: {}", member)
+								panic!(
+									"Duplicate member in elections-phragmen genesis: {:?}",
+									member
+								)
 							},
 							Err(pos) => members.insert(
 								pos,
@@ -855,7 +899,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Get the members' account ids.
-	fn members_ids() -> Vec<T::AccountId> {
+	pub(crate) fn members_ids() -> Vec<T::AccountId> {
 		Self::members().into_iter().map(|m| m.who).collect::<Vec<T::AccountId>>()
 	}
 
@@ -1006,7 +1050,7 @@ impl<T: Config> Pallet<T> {
 					// count](https://en.wikipedia.org/wiki/Borda_count). We weigh everyone's vote for
 					// that new member by a multiplier based on the order of the votes. i.e. the
 					// first person a voter votes for gets a 16x multiplier, the next person gets a
-					// 15x multiplier, an so on... (assuming `MAXIMUM_VOTE` = 16)
+					// 15x multiplier, an so on... (assuming `T::MaxVotesPerVoter` = 16)
 					let mut prime_votes = new_members_sorted_by_id
 						.iter()
 						.map(|c| (&c.0, BalanceOf::<T>::zero()))
@@ -1014,7 +1058,7 @@ impl<T: Config> Pallet<T> {
 					for (_, stake, votes) in voters_and_stakes.into_iter() {
 						for (vote_multiplier, who) in
 							votes.iter().enumerate().map(|(vote_position, who)| {
-								((MAXIMUM_VOTE - vote_position) as u32, who)
+								((T::MaxVotesPerVoter::get() as usize - vote_position) as u32, who)
 							}) {
 							if let Ok(i) = prime_votes.binary_search_by_key(&who, |k| k.0) {
 								prime_votes[i].1 = prime_votes[i]
@@ -1154,6 +1198,106 @@ impl<T: Config> ContainsLengthBound for Pallet<T> {
 	}
 }
 
+#[cfg(any(feature = "try-runtime", test))]
+impl<T: Config> Pallet<T> {
+	fn do_try_state() -> Result<(), TryRuntimeError> {
+		Self::try_state_members()?;
+		Self::try_state_runners_up()?;
+		Self::try_state_candidates()?;
+		Self::try_state_candidates_runners_up_disjoint()?;
+		Self::try_state_members_disjoint()?;
+		Self::try_state_members_approval_stake()
+	}
+
+	/// [`Members`] state checks. Invariants:
+	///  - Members are always sorted based on account ID.
+	fn try_state_members() -> Result<(), TryRuntimeError> {
+		let mut members = Members::<T>::get().clone();
+		members.sort_by_key(|m| m.who.clone());
+
+		if Members::<T>::get() == members {
+			Ok(())
+		} else {
+			Err("try_state checks: Members must be always sorted by account ID".into())
+		}
+	}
+
+	// [`RunnersUp`] state checks. Invariants:
+	//  - Elements are sorted based on weight (worst to best).
+	fn try_state_runners_up() -> Result<(), TryRuntimeError> {
+		let mut sorted = RunnersUp::<T>::get();
+		// worst stake first
+		sorted.sort_by(|a, b| a.stake.cmp(&b.stake));
+
+		if RunnersUp::<T>::get() == sorted {
+			Ok(())
+		} else {
+			Err("try_state checks: Runners Up must always be sorted by stake (worst to best)"
+				.into())
+		}
+	}
+
+	// [`Candidates`] state checks. Invariants:
+	//  - Always sorted based on account ID.
+	fn try_state_candidates() -> Result<(), TryRuntimeError> {
+		let mut candidates = Candidates::<T>::get().clone();
+		candidates.sort_by_key(|(c, _)| c.clone());
+
+		if Candidates::<T>::get() == candidates {
+			Ok(())
+		} else {
+			Err("try_state checks: Candidates must be always sorted by account ID".into())
+		}
+	}
+	// [`Candidates`] and [`RunnersUp`] state checks. Invariants:
+	//  - Candidates and runners-ups sets are disjoint.
+	fn try_state_candidates_runners_up_disjoint() -> Result<(), TryRuntimeError> {
+		match Self::intersects(&Self::candidates_ids(), &Self::runners_up_ids()) {
+			true => Err("Candidates and runners up sets should always be disjoint".into()),
+			false => Ok(()),
+		}
+	}
+
+	// [`Members`], [`Candidates`] and [`RunnersUp`] state checks. Invariants:
+	//  - Members and candidates sets are disjoint;
+	//  - Members and runners-ups sets are disjoint.
+	fn try_state_members_disjoint() -> Result<(), TryRuntimeError> {
+		match Self::intersects(&Pallet::<T>::members_ids(), &Self::candidates_ids()) &&
+			Self::intersects(&Pallet::<T>::members_ids(), &Self::runners_up_ids())
+		{
+			true =>
+				Err("Members set should be disjoint from candidates and runners-up sets".into()),
+			false => Ok(()),
+		}
+	}
+
+	// [`Members`], [`RunnersUp`] and approval stake state checks. Invariants:
+	// - Selected members should have approval stake;
+	// - Selected RunnersUp should have approval stake.
+	fn try_state_members_approval_stake() -> Result<(), TryRuntimeError> {
+		match Members::<T>::get()
+			.iter()
+			.chain(RunnersUp::<T>::get().iter())
+			.all(|s| s.stake != BalanceOf::<T>::zero())
+		{
+			true => Ok(()),
+			false => Err("Members and RunnersUp must have approval stake".into()),
+		}
+	}
+
+	fn intersects<P: PartialEq>(a: &[P], b: &[P]) -> bool {
+		a.iter().any(|e| b.contains(e))
+	}
+
+	fn candidates_ids() -> Vec<T::AccountId> {
+		Pallet::<T>::candidates().iter().map(|(x, _)| x).cloned().collect::<Vec<_>>()
+	}
+
+	fn runners_up_ids() -> Vec<T::AccountId> {
+		Pallet::<T>::runners_up().into_iter().map(|r| r.who).collect::<Vec<_>>()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -1173,27 +1317,19 @@ mod tests {
 	};
 	use substrate_test_utils::assert_eq_uvec;
 
-	parameter_types! {
-		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(
-				frame_support::weights::Weight::from_ref_time(1024).set_proof_size(u64::MAX),
-			);
-	}
-
 	impl frame_system::Config for Test {
 		type BaseCallFilter = frame_support::traits::Everything;
-		type BlockWeights = BlockWeights;
+		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
-		type Index = u64;
-		type BlockNumber = u64;
+		type Nonce = u64;
 		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
@@ -1217,6 +1353,10 @@ mod tests {
 		type MaxReserves = ();
 		type ReserveIdentifier = [u8; 8];
 		type WeightInfo = ();
+		type FreezeIdentifier = ();
+		type MaxFreezes = ();
+		type RuntimeHoldReason = ();
+		type MaxHolds = ();
 	}
 
 	frame_support::parameter_types! {
@@ -1284,7 +1424,7 @@ mod tests {
 		type PalletId = ElectionsPhragmenPalletId;
 		type RuntimeEvent = RuntimeEvent;
 		type Currency = Balances;
-		type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+		type CurrencyToVote = ();
 		type ChangeMembers = TestChangeMembers;
 		type InitializeMembers = ();
 		type CandidacyBond = CandidacyBond;
@@ -1297,6 +1437,7 @@ mod tests {
 		type KickedMember = ();
 		type WeightInfo = ();
 		type MaxVoters = PhragmenMaxVoters;
+		type MaxVotesPerVoter = ConstU32<16>;
 		type MaxCandidates = PhragmenMaxCandidates;
 	}
 
@@ -1305,10 +1446,7 @@ mod tests {
 		sp_runtime::generic::UncheckedExtrinsic<u32, u64, RuntimeCall, ()>;
 
 	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic
+		pub enum Test
 		{
 			System: frame_system::{Pallet, Call, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
@@ -1362,7 +1500,7 @@ mod tests {
 			MEMBERS.with(|m| {
 				*m.borrow_mut() = self.genesis_members.iter().map(|(m, _)| *m).collect::<Vec<_>>()
 			});
-			let mut ext: sp_io::TestExternalities = GenesisConfig {
+			let mut ext: sp_io::TestExternalities = RuntimeGenesisConfig {
 				balances: pallet_balances::GenesisConfig::<Test> {
 					balances: vec![
 						(1, 10 * self.balance_factor),
@@ -1382,7 +1520,13 @@ mod tests {
 			.into();
 			ext.execute_with(pre_conditions);
 			ext.execute_with(test);
-			ext.execute_with(post_conditions)
+
+			#[cfg(feature = "try-runtime")]
+			ext.execute_with(|| {
+				assert_ok!(<Elections as frame_support::traits::Hooks<u64>>::try_state(
+					System::block_number()
+				));
+			});
 		}
 	}
 
@@ -1439,54 +1583,13 @@ mod tests {
 			.unwrap_or_default()
 	}
 
-	fn intersects<T: PartialEq>(a: &[T], b: &[T]) -> bool {
-		a.iter().any(|e| b.contains(e))
-	}
-
-	fn ensure_members_sorted() {
-		let mut members = Elections::members().clone();
-		members.sort_by_key(|m| m.who);
-		assert_eq!(Elections::members(), members);
-	}
-
-	fn ensure_candidates_sorted() {
-		let mut candidates = Elections::candidates().clone();
-		candidates.sort_by_key(|(c, _)| *c);
-		assert_eq!(Elections::candidates(), candidates);
-	}
-
 	fn locked_stake_of(who: &u64) -> u64 {
 		Voting::<Test>::get(who).stake
 	}
 
-	fn ensure_members_has_approval_stake() {
-		// we filter members that have no approval state. This means that even we have more seats
-		// than candidates, we will never ever chose a member with no votes.
-		assert!(Elections::members()
-			.iter()
-			.chain(Elections::runners_up().iter())
-			.all(|s| s.stake != u64::zero()));
-	}
-
-	fn ensure_member_candidates_runners_up_disjoint() {
-		// members, candidates and runners-up must always be disjoint sets.
-		assert!(!intersects(&members_ids(), &candidate_ids()));
-		assert!(!intersects(&members_ids(), &runners_up_ids()));
-		assert!(!intersects(&candidate_ids(), &runners_up_ids()));
-	}
-
 	fn pre_conditions() {
 		System::set_block_number(1);
-		ensure_members_sorted();
-		ensure_candidates_sorted();
-		ensure_member_candidates_runners_up_disjoint();
-	}
-
-	fn post_conditions() {
-		ensure_members_sorted();
-		ensure_candidates_sorted();
-		ensure_member_candidates_runners_up_disjoint();
-		ensure_members_has_approval_stake();
+		Elections::do_try_state().unwrap();
 	}
 
 	fn submit_candidacy(origin: RuntimeOrigin) -> sp_runtime::DispatchResult {
@@ -2089,7 +2192,8 @@ mod tests {
 			assert_ok!(submit_candidacy(RuntimeOrigin::signed(4)));
 
 			// User has 100 free and 50 reserved.
-			assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 100, 50));
+			assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 2, 150));
+			assert_ok!(Balances::reserve(&2, 50));
 			// User tries to vote with 150 tokens.
 			assert_ok!(vote(RuntimeOrigin::signed(2), vec![4, 5], 150));
 			// We truncate to only their free balance, after reserving additional for voting.

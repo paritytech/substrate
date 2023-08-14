@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 // limitations under the License.
 
 /// The error type used by the allocators.
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq)]
 pub enum Error {
 	/// Someone tried to allocate more memory than the allowed maximum per allocation.
 	#[error("Requested allocation size is too large")]

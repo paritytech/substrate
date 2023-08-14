@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -61,16 +61,14 @@ pub struct KeystoreParams {
 	pub password_filename: Option<PathBuf>,
 }
 
-/// Parse a sercret string, returning a displayable error.
+/// Parse a secret string, returning a displayable error.
 pub fn secret_string_from_str(s: &str) -> std::result::Result<SecretString, String> {
 	std::str::FromStr::from_str(s).map_err(|_| "Could not get SecretString".to_string())
 }
 
 impl KeystoreParams {
 	/// Get the keystore configuration for the parameters
-	///
-	/// Returns a vector of remote-urls and the local Keystore configuration
-	pub fn keystore_config(&self, config_dir: &Path) -> Result<(Option<String>, KeystoreConfig)> {
+	pub fn keystore_config(&self, config_dir: &Path) -> Result<KeystoreConfig> {
 		let password = if self.password_interactive {
 			Some(SecretString::new(input_keystore_password()?))
 		} else if let Some(ref file) = self.password_filename {
@@ -85,7 +83,7 @@ impl KeystoreParams {
 			.clone()
 			.unwrap_or_else(|| config_dir.join(DEFAULT_KEYSTORE_CONFIG_PATH));
 
-		Ok((self.keystore_uri.clone(), KeystoreConfig::Path { path, password }))
+		Ok(KeystoreConfig::Path { path, password })
 	}
 
 	/// helper method to fetch password from `KeyParams` or read from stdin

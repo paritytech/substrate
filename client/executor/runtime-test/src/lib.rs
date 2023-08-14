@@ -328,6 +328,15 @@ sp_core::wasm_export_functions! {
 		assert_eq!(value, -66);
 	}
 
+	fn allocate_two_gigabyte() -> u32 {
+		let mut data = Vec::new();
+		for _ in 0..205 {
+			data.push(Vec::<u8>::with_capacity(10 * 1024 * 1024));
+		}
+
+		data.iter().map(|d| d.capacity() as u32).sum()
+	}
+
 	fn test_abort_on_panic() {
 		sp_io::panic_handler::abort_on_panic("test_abort_on_panic called");
 	}

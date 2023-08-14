@@ -13,17 +13,17 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-array-bytes = { version = "4.1", optional = true }
-sha2 = { version = "0.10.1", default-features = false, optional = true }
+array-bytes = { version = "6.1", optional = true }
 log = { version = "0.4.14", default-features = false }
 
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
+sp-core-hashing = { version = "9.0.0", default-features = false, path = "../../primitives/core/hashing", optional = true }
+sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
@@ -33,14 +33,15 @@ pallet-identity = { version = "4.0.0-dev", path = "../identity", default-feature
 pallet-collective = { version = "4.0.0-dev", path = "../collective", default-features = false, optional = true }
 
 [dev-dependencies]
-array-bytes = "4.1"
-sha2 = "0.10.1"
+array-bytes = "6.1"
+sp-core-hashing = { version = "9.0.0", default-features = false, path = "../../primitives/core/hashing" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-collective = { version = "4.0.0-dev", path = "../collective" }
 
 [features]
 default = ["std"]
 std = [
+	"sp-core-hashing?/std",
 	"pallet-collective?/std",
 	"frame-benchmarking?/std",
 	"log/std",
@@ -53,18 +54,24 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-identity/std",
+	"pallet-balances/std"
 ]
 runtime-benchmarks = [
 	"array-bytes",
-	"sha2",
+	"sp-core-hashing",
 	"frame-benchmarking/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"pallet-collective/runtime-benchmarks",
 	"pallet-identity/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks"
 ]
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-collective?/try-runtime",
+	"pallet-identity/try-runtime",
+	"sp-runtime/try-runtime"
 ]

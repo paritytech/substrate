@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,7 @@ use super::*;
 use crate::{self as bags_list};
 use frame_election_provider_support::VoteWeight;
 use frame_support::parameter_types;
+use sp_runtime::BuildStorage;
 use std::collections::HashMap;
 
 pub type AccountId = u32;
@@ -40,9 +41,10 @@ impl frame_election_provider_support::ScoreProvider<AccountId> for StakingMock {
 		*NextVoteWeightMap::get().get(id).unwrap_or(&NextVoteWeight::get())
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", test))]
-	fn set_score_of(id: &AccountId, weight: Self::Score) {
-		NEXT_VOTE_WEIGHT_MAP.with(|m| m.borrow_mut().insert(*id, weight));
+	frame_election_provider_support::runtime_benchmarks_fuzz_or_std_enabled! {
+		fn set_score_of(id: &AccountId, weight: Self::Score) {
+			NEXT_VOTE_WEIGHT_MAP.with(|m| m.borrow_mut().insert(*id, weight));
+		}
 	}
 }
 
@@ -50,14 +52,13 @@ impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_core::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
-	type Header = sp_runtime::testing::Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type DbWeight = ();
@@ -85,15 +86,11 @@ impl bags_list::Config for Runtime {
 	type Score = VoteWeight;
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
 frame_support::construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub struct Runtime
 	{
-		System: frame_system::{Pallet, Call, Storage, Event<T>, Config},
+		System: frame_system::{Pallet, Call, Storage, Event<T>, Config<T>},
 		BagsList: bags_list::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -126,7 +123,7 @@ impl ExtBuilder {
 
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
-		let storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let storage = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
 		let ids_with_weight: Vec<_> = if self.skip_genesis_ids {
 			self.ids.iter().collect()
@@ -148,7 +145,7 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();
-			List::<Runtime>::try_state().expect("Try-state post condition failed")
+			List::<Runtime>::do_try_state().expect("do_try_state post condition failed")
 		})
 	}
 

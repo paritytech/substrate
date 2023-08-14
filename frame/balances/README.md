@@ -70,7 +70,7 @@ given account is unused.
 ### Dispatchable Functions
 
 - `transfer` - Transfer some liquid free balance to another account.
-- `set_balance` - Set the balances of a given account. The origin of this call must be root.
+- `force_set_balance` - Set the balances of a given account. The origin of this call must be root.
 
 ## Usage
 
@@ -94,7 +94,7 @@ The Staking module uses the `LockableCurrency` trait to lock a stash account's f
 use frame_support::traits::{WithdrawReasons, LockableCurrency};
 use sp_runtime::traits::Bounded;
 pub trait Config: frame_system::Config {
-	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+	type Currency: LockableCurrency<Self::AccountId, Moment=frame_system::pallet_prelude::BlockNumberFor<Self>>;
 }
 
 fn update_ledger<T: Config>(

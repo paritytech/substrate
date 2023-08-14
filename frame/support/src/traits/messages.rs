@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@ use scale_info::TypeInfo;
 use sp_core::{ConstU32, Get, TypedGet};
 use sp_runtime::{traits::Convert, BoundedSlice, RuntimeDebug};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
-use sp_weights::Weight;
+use sp_weights::{Weight, WeightMeter};
 
 /// Errors that can happen when attempting to process a message with
 /// [`ProcessMessage::process_message()`].
@@ -38,6 +38,13 @@ pub enum ProcessMessageError {
 	/// would be respected. The parameter gives the maximum weight which the message could take
 	/// to process.
 	Overweight(Weight),
+	/// The queue wants to give up its current processing slot.
+	///
+	/// Hints the message processor to cease servicing this queue and proceed to the next
+	/// one. This is seen as a *hint*, not an instruction. Implementations must therefore handle
+	/// the case that a queue is re-serviced within the same block after *yielding*. A queue is
+	/// not required to *yield* again when it is being re-serviced withing the same block.
+	Yield,
 }
 
 /// Can process messages from a specific origin.
@@ -45,12 +52,15 @@ pub trait ProcessMessage {
 	/// The transport from where a message originates.
 	type Origin: FullCodec + MaxEncodedLen + Clone + Eq + PartialEq + TypeInfo + Debug;
 
-	/// Process the given message, using no more than `weight_limit` in weight to do so.
+	/// Process the given message, using no more than the remaining `meter` weight to do so.
+	///
+	/// Returns whether the message was processed.
 	fn process_message(
 		message: &[u8],
 		origin: Self::Origin,
-		weight_limit: Weight,
-	) -> Result<(bool, Weight), ProcessMessageError>;
+		meter: &mut WeightMeter,
+		id: &mut [u8; 32],
+	) -> Result<bool, ProcessMessageError>;
 }
 
 /// Errors that can happen when attempting to execute an overweight message with
@@ -59,8 +69,18 @@ pub trait ProcessMessage {
 pub enum ExecuteOverweightError {
 	/// The referenced message was not found.
 	NotFound,
+	/// The message was already processed.
+	///
+	/// This can be treated as success condition.
+	AlreadyProcessed,
 	/// The available weight was insufficient to execute the message.
 	InsufficientWeight,
+	/// The queue is paused and no message can be executed from it.
+	///
+	/// This can change at any time and may resolve in the future by re-trying.
+	QueuePaused,
+	/// An unspecified error.
+	Other,
 }
 
 /// Can service queues and execute overweight messages.
@@ -82,6 +102,16 @@ pub trait ServiceQueues {
 		_address: Self::OverweightMessageAddress,
 	) -> Result<Weight, ExecuteOverweightError> {
 		Err(ExecuteOverweightError::NotFound)
+	}
+}
+
+/// Services queues by doing nothing.
+pub struct NoopServiceQueues<OverweightAddr>(PhantomData<OverweightAddr>);
+impl<OverweightAddr> ServiceQueues for NoopServiceQueues<OverweightAddr> {
+	type OverweightMessageAddress = OverweightAddr;
+
+	fn service_queues(_: Weight) -> Weight {
+		Weight::zero()
 	}
 }
 
@@ -198,5 +228,17 @@ where
 
 	fn footprint() -> Footprint {
 		E::footprint(O::get())
+	}
+}
+
+/// Provides information on paused queues.
+pub trait QueuePausedQuery<Origin> {
+	/// Whether this queue is paused.
+	fn is_paused(origin: &Origin) -> bool;
+}
+
+impl<Origin> QueuePausedQuery<Origin> for () {
+	fn is_paused(_: &Origin) -> bool {
+		false
 	}
 }

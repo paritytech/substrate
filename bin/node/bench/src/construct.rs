@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ use futures::Future;
 use std::{borrow::Cow, collections::HashMap, pin::Pin, sync::Arc};
 
 use node_primitives::Block;
-use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes, Profile};
+use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes};
 use sc_transaction_pool_api::{
 	ImportNotificationStream, PoolFuture, PoolStatus, ReadyTransactions, TransactionFor,
 	TransactionSource, TransactionStatusStreamFor, TxHash,
@@ -43,7 +43,6 @@ use crate::{
 };
 
 pub struct ConstructionBenchmarkDescription {
-	pub profile: Profile,
 	pub key_types: KeyTypes,
 	pub block_type: BlockType,
 	pub size: SizeType,
@@ -51,7 +50,6 @@ pub struct ConstructionBenchmarkDescription {
 }
 
 pub struct ConstructionBenchmark {
-	profile: Profile,
 	database: BenchDb,
 	transactions: Transactions,
 }
@@ -59,11 +57,6 @@ pub struct ConstructionBenchmark {
 impl core::BenchmarkDescription for ConstructionBenchmarkDescription {
 	fn path(&self) -> Path {
 		let mut path = Path::new(&["node", "proposer"]);
-
-		match self.profile {
-			Profile::Wasm => path.push("wasm"),
-			Profile::Native => path.push("native"),
-		}
 
 		match self.key_types {
 			KeyTypes::Sr25519 => path.push("sr25519"),
@@ -99,7 +92,6 @@ impl core::BenchmarkDescription for ConstructionBenchmarkDescription {
 		}
 
 		Box::new(ConstructionBenchmark {
-			profile: self.profile,
 			database: bench_db,
 			transactions: Transactions(extrinsics),
 		})
@@ -107,8 +99,8 @@ impl core::BenchmarkDescription for ConstructionBenchmarkDescription {
 
 	fn name(&self) -> Cow<'static, str> {
 		format!(
-			"Block construction ({:?}/{}, {:?}, {:?} backend)",
-			self.block_type, self.size, self.profile, self.database_type,
+			"Block construction ({:?}/{}, {:?} backend)",
+			self.block_type, self.size, self.database_type,
 		)
 		.into()
 	}
@@ -116,11 +108,11 @@ impl core::BenchmarkDescription for ConstructionBenchmarkDescription {
 
 impl core::Benchmark for ConstructionBenchmark {
 	fn run(&mut self, mode: Mode) -> std::time::Duration {
-		let context = self.database.create_context(self.profile);
+		let context = self.database.create_context();
 
 		let _ = context
 			.client
-			.runtime_version_at(&BlockId::Number(0))
+			.runtime_version_at(context.client.chain_info().genesis_hash)
 			.expect("Failed to get runtime version")
 			.spec_version;
 

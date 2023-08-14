@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,29 +22,27 @@
 //! components of the runtime that are expensive to initialize.
 
 use crate::error::{Error, WasmError};
+
 use codec::Decode;
-use lru::LruCache;
 use parking_lot::Mutex;
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{WasmInstance, WasmModule},
+	wasm_runtime::{HeapAllocStrategy, WasmInstance, WasmModule},
 };
+use schnellru::{ByLength, LruMap};
 use sp_core::traits::{Externalities, FetchRuntimeCode, RuntimeCode};
 use sp_version::RuntimeVersion;
+use sp_wasm_interface::HostFunctions;
+
 use std::{
-	num::NonZeroUsize,
 	panic::AssertUnwindSafe,
 	path::{Path, PathBuf},
 	sync::Arc,
 };
 
-use sp_wasm_interface::HostFunctions;
-
 /// Specification of different methods of executing the runtime Wasm code.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub enum WasmExecutionMethod {
-	/// Uses the Wasmi interpreter.
-	Interpreted,
 	/// Uses the Wasmtime compiled runtime.
 	Compiled {
 		/// The instantiation strategy to use.
@@ -53,8 +51,10 @@ pub enum WasmExecutionMethod {
 }
 
 impl Default for WasmExecutionMethod {
-	fn default() -> WasmExecutionMethod {
-		WasmExecutionMethod::Interpreted
+	fn default() -> Self {
+		Self::Compiled {
+			instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite,
+		}
 	}
 }
 
@@ -64,21 +64,21 @@ struct VersionedRuntimeId {
 	code_hash: Vec<u8>,
 	/// Wasm runtime type.
 	wasm_method: WasmExecutionMethod,
-	/// The number of WebAssembly heap pages this instance was created with.
-	heap_pages: u64,
+	/// The heap allocation strategy this runtime was created with.
+	heap_alloc_strategy: HeapAllocStrategy,
 }
 
 /// A Wasm runtime object along with its cached runtime version.
 struct VersionedRuntime {
 	/// Shared runtime that can spawn instances.
-	module: Arc<dyn WasmModule>,
+	module: Box<dyn WasmModule>,
 	/// Runtime version according to `Core_version` if any.
 	version: Option<RuntimeVersion>,
 
 	// TODO: Remove this once the legacy instance reuse instantiation strategy
 	//       for `wasmtime` is gone, as this only makes sense with that particular strategy.
 	/// Cached instance pool.
-	instances: Arc<Vec<Mutex<Option<Box<dyn WasmInstance>>>>>,
+	instances: Vec<Mutex<Option<Box<dyn WasmInstance>>>>,
 }
 
 impl VersionedRuntime {
@@ -86,7 +86,7 @@ impl VersionedRuntime {
 	fn with_instance<R, F>(&self, ext: &mut dyn Externalities, f: F) -> Result<R, Error>
 	where
 		F: FnOnce(
-			&Arc<dyn WasmModule>,
+			&dyn WasmModule,
 			&mut dyn WasmInstance,
 			Option<&RuntimeVersion>,
 			&mut dyn Externalities,
@@ -106,7 +106,7 @@ impl VersionedRuntime {
 					.map(|r| Ok((r, false)))
 					.unwrap_or_else(|| self.module.new_instance().map(|i| (i, true)))?;
 
-				let result = f(&self.module, &mut *instance, self.version.as_ref(), ext);
+				let result = f(&*self.module, &mut *instance, self.version.as_ref(), ext);
 				if let Err(e) = &result {
 					if new_inst {
 						tracing::warn!(
@@ -142,7 +142,7 @@ impl VersionedRuntime {
 				// Allocate a new instance
 				let mut instance = self.module.new_instance()?;
 
-				f(&self.module, &mut *instance, self.version.as_ref(), ext)
+				f(&*self.module, &mut *instance, self.version.as_ref(), ext)
 			},
 		}
 	}
@@ -163,7 +163,7 @@ pub struct RuntimeCache {
 	/// A cache of runtimes along with metadata.
 	///
 	/// Runtimes sorted by recent usage. The most recently used is at the front.
-	runtimes: Mutex<LruCache<VersionedRuntimeId, Arc<VersionedRuntime>>>,
+	runtimes: Mutex<LruMap<VersionedRuntimeId, Arc<VersionedRuntime>>>,
 	/// The size of the instances cache for each runtime.
 	max_runtime_instances: usize,
 	cache_path: Option<PathBuf>,
@@ -185,9 +185,8 @@ impl RuntimeCache {
 		cache_path: Option<PathBuf>,
 		runtime_cache_size: u8,
 	) -> RuntimeCache {
-		let cap =
-			NonZeroUsize::new(runtime_cache_size.max(1) as usize).expect("cache size is not zero");
-		RuntimeCache { runtimes: Mutex::new(LruCache::new(cap)), max_runtime_instances, cache_path }
+		let cap = ByLength::new(runtime_cache_size.max(1) as u32);
+		RuntimeCache { runtimes: Mutex::new(LruMap::new(cap)), max_runtime_instances, cache_path }
 	}
 
 	/// Prepares a WASM module instance and executes given function for it.
@@ -197,9 +196,11 @@ impl RuntimeCache {
 	///
 	/// `runtime_code` - The runtime wasm code used setup the runtime.
 	///
-	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
+	/// `ext` - The externalities to access the state.
 	///
 	/// `wasm_method` - Type of WASM backend to use.
+	///
+	/// `heap_alloc_strategy` - The heap allocation strategy to use.
 	///
 	/// `allow_missing_func_imports` - Ignore missing function imports.
 	///
@@ -219,24 +220,23 @@ impl RuntimeCache {
 		runtime_code: &'c RuntimeCode<'c>,
 		ext: &mut dyn Externalities,
 		wasm_method: WasmExecutionMethod,
-		default_heap_pages: u64,
+		heap_alloc_strategy: HeapAllocStrategy,
 		allow_missing_func_imports: bool,
 		f: F,
 	) -> Result<Result<R, Error>, Error>
 	where
 		H: HostFunctions,
 		F: FnOnce(
-			&Arc<dyn WasmModule>,
+			&dyn WasmModule,
 			&mut dyn WasmInstance,
 			Option<&RuntimeVersion>,
 			&mut dyn Externalities,
 		) -> Result<R, Error>,
 	{
 		let code_hash = &runtime_code.hash;
-		let heap_pages = runtime_code.heap_pages.unwrap_or(default_heap_pages);
 
 		let versioned_runtime_id =
-			VersionedRuntimeId { code_hash: code_hash.clone(), heap_pages, wasm_method };
+			VersionedRuntimeId { code_hash: code_hash.clone(), heap_alloc_strategy, wasm_method };
 
 		let mut runtimes = self.runtimes.lock(); // this must be released prior to calling f
 		let versioned_runtime = if let Some(versioned_runtime) = runtimes.get(&versioned_runtime_id)
@@ -251,7 +251,7 @@ impl RuntimeCache {
 				&code,
 				ext,
 				wasm_method,
-				heap_pages,
+				heap_alloc_strategy,
 				allow_missing_func_imports,
 				self.max_runtime_instances,
 				self.cache_path.as_deref(),
@@ -274,7 +274,7 @@ impl RuntimeCache {
 			let versioned_runtime = Arc::new(result?);
 
 			// Save new versioned wasm runtime in cache
-			runtimes.put(versioned_runtime_id, versioned_runtime.clone());
+			runtimes.insert(versioned_runtime_id, versioned_runtime.clone());
 
 			versioned_runtime
 		};
@@ -289,30 +289,15 @@ impl RuntimeCache {
 /// Create a wasm runtime with the given `code`.
 pub fn create_wasm_runtime_with_code<H>(
 	wasm_method: WasmExecutionMethod,
-	heap_pages: u64,
+	heap_alloc_strategy: HeapAllocStrategy,
 	blob: RuntimeBlob,
 	allow_missing_func_imports: bool,
 	cache_path: Option<&Path>,
-) -> Result<Arc<dyn WasmModule>, WasmError>
+) -> Result<Box<dyn WasmModule>, WasmError>
 where
 	H: HostFunctions,
 {
 	match wasm_method {
-		WasmExecutionMethod::Interpreted => {
-			// Wasmi doesn't have any need in a cache directory.
-			//
-			// We drop the cache_path here to silence warnings that cache_path is not used if
-			// compiling without the `wasmtime` flag.
-			let _ = cache_path;
-
-			sc_executor_wasmi::create_runtime(
-				blob,
-				heap_pages,
-				H::host_functions(),
-				allow_missing_func_imports,
-			)
-			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
-		},
 		WasmExecutionMethod::Compiled { instantiation_strategy } =>
 			sc_executor_wasmtime::create_runtime::<H>(
 				blob,
@@ -320,16 +305,19 @@ where
 					allow_missing_func_imports,
 					cache_path: cache_path.map(ToOwned::to_owned),
 					semantics: sc_executor_wasmtime::Semantics {
-						extra_heap_pages: heap_pages,
+						heap_alloc_strategy,
 						instantiation_strategy,
 						deterministic_stack_limit: None,
 						canonicalize_nans: false,
 						parallel_compilation: true,
-						max_memory_size: None,
+						wasm_multi_value: false,
+						wasm_bulk_memory: false,
+						wasm_reference_types: false,
+						wasm_simd: false,
 					},
 				},
 			)
-			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) }),
+			.map(|runtime| -> Box<dyn WasmModule> { Box::new(runtime) }),
 	}
 }
 
@@ -393,7 +381,7 @@ fn create_versioned_wasm_runtime<H>(
 	code: &[u8],
 	ext: &mut dyn Externalities,
 	wasm_method: WasmExecutionMethod,
-	heap_pages: u64,
+	heap_alloc_strategy: HeapAllocStrategy,
 	allow_missing_func_imports: bool,
 	max_instances: usize,
 	cache_path: Option<&Path>,
@@ -408,11 +396,11 @@ where
 	// Use the runtime blob to scan if there is any metadata embedded into the wasm binary
 	// pertaining to runtime version. We do it before consuming the runtime blob for creating the
 	// runtime.
-	let mut version: Option<_> = read_embedded_version(&blob)?;
+	let mut version = read_embedded_version(&blob)?;
 
 	let runtime = create_wasm_runtime_with_code::<H>(
 		wasm_method,
-		heap_pages,
+		heap_alloc_strategy,
 		blob,
 		allow_missing_func_imports,
 		cache_path,
@@ -430,7 +418,7 @@ where
 			// The following unwind safety assertion is OK because if the method call panics, the
 			// runtime will be dropped.
 			let runtime = AssertUnwindSafe(runtime.as_ref());
-			crate::native_executor::with_externalities_safe(&mut **ext, move || {
+			crate::executor::with_externalities_safe(&mut **ext, move || {
 				runtime.new_instance()?.call("Core_version".into(), &[])
 			})
 			.map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
@@ -444,7 +432,7 @@ where
 	let mut instances = Vec::with_capacity(max_instances);
 	instances.resize_with(max_instances, || Mutex::new(None));
 
-	Ok(VersionedRuntime { module: runtime, version, instances: Arc::new(instances) })
+	Ok(VersionedRuntime { module: runtime, version, instances })
 }
 
 #[cfg(test)]

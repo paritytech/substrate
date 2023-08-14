@@ -1,12 +1,47 @@
-error: use of deprecated struct `pallet::warnings::foo`:
-                   Implicit call indices are deprecated in favour of explicit ones.
-                   Please ensure that all calls have the `pallet::call_index` attribute or that the
-                   `dev-mode` of the pallet is enabled. For more info see:
-                   <https://github.com/paritytech/substrate/pull/12891> and
-                   <https://github.com/paritytech/substrate/pull/11381>.
+error: use of deprecated constant `pallet::warnings::ImplicitCallIndex_0::_w`:
+               It is deprecated to use implicit call indices.
+               Please instead ensure that all calls have a `pallet::call_index` attribute or put the pallet into `dev` mode.
+
+               For more info see:
+                   <https://github.com/paritytech/substrate/pull/12891>
+                   <https://github.com/paritytech/substrate/pull/11381>
   --> tests/pallet_ui/call_missing_index.rs:15:10
    |
 15 |         pub fn foo(_: OriginFor<T>) -> DispatchResult {
    |                ^^^
    |
    = note: `-D deprecated` implied by `-D warnings`
+
+error: use of deprecated constant `pallet::warnings::ImplicitCallIndex_1::_w`:
+               It is deprecated to use implicit call indices.
+               Please instead ensure that all calls have a `pallet::call_index` attribute or put the pallet into `dev` mode.
+
+               For more info see:
+                   <https://github.com/paritytech/substrate/pull/12891>
+                   <https://github.com/paritytech/substrate/pull/11381>
+  --> tests/pallet_ui/call_missing_index.rs:20:10
+   |
+20 |         pub fn bar(_: OriginFor<T>) -> DispatchResult {
+   |                ^^^
+
+error: use of deprecated constant `pallet::warnings::ConstantWeight_0::_w`:
+               It is deprecated to use hard-coded constant as call weight.
+               Please instead benchmark all calls or put the pallet into `dev` mode.
+
+               For more info see:
+                   <https://github.com/paritytech/substrate/pull/13798>
+  --> tests/pallet_ui/call_missing_index.rs:14:20
+   |
+14 |         #[pallet::weight(0)]
+   |                          ^
+
+error: use of deprecated constant `pallet::warnings::ConstantWeight_1::_w`:
+               It is deprecated to use hard-coded constant as call weight.
+               Please instead benchmark all calls or put the pallet into `dev` mode.
+
+               For more info see:
+                   <https://github.com/paritytech/substrate/pull/13798>
+  --> tests/pallet_ui/call_missing_index.rs:19:20
+   |
+19 |         #[pallet::weight(0)]
+   |                          ^

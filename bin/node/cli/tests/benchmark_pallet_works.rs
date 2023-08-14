@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,10 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
-
-pub mod common;
 
 /// `benchmark pallet` works for the different combinations of `steps` and `repeat`.
 #[test]
@@ -34,16 +34,20 @@ fn benchmark_pallet_works() {
 }
 
 fn benchmark_pallet(steps: u32, repeat: u32, should_work: bool) {
-	let output = Command::new(cargo_bin("substrate"))
+	let status = Command::new(cargo_bin("substrate-node"))
 		.args(["benchmark", "pallet", "--dev"])
 		// Use the `addition` benchmark since is the fastest.
 		.args(["--pallet", "frame-benchmarking", "--extrinsic", "addition"])
 		.args(["--steps", &format!("{}", steps), "--repeat", &format!("{}", repeat)])
-		.output()
+		.args([
+			"--wasm-execution=compiled",
+			"--no-storage-info",
+			"--no-median-slopes",
+			"--no-min-squares",
+			"--heap-pages=4096",
+		])
+		.status()
 		.unwrap();
 
-	if output.status.success() != should_work {
-		let log = String::from_utf8_lossy(&output.stderr).to_string();
-		panic!("Test failed:\n{}", log);
-	}
+	assert_eq!(status.success(), should_work);
 }
