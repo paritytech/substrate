@@ -22,7 +22,7 @@
 
 use crate::{
 	mock::{
-		build_and_execute, new_test_ext, CountingMessageProcessor, IntoWeight, MockedWeightInfo,
+		build_and_execute, CountingMessageProcessor, IntoWeight, MockedWeightInfo,
 		NumMessagesProcessed, YieldingQueues,
 	},
 	mock_helpers::MessageOrigin,

@@ -559,14 +559,11 @@ fn service_page_suspension_works() {
 #[test]
 fn bump_service_head_works() {
 	use MessageOrigin::*;
-	test_closure(|| {
+	build_and_execute::<Test>(|| {
 		// Create a ready ring with three queues.
-		BookStateFor::<Test>::insert(Here, empty_book::<Test>());
-		knit(&Here);
-		BookStateFor::<Test>::insert(There, empty_book::<Test>());
-		knit(&There);
-		BookStateFor::<Test>::insert(Everywhere(0), empty_book::<Test>());
-		knit(&Everywhere(0));
+		MessageQueue::enqueue_message(msg(";)"), Here);
+		MessageQueue::enqueue_message(msg(";)"), There);
+		MessageQueue::enqueue_message(msg(";)"), Everywhere(0));
 
 		// Bump 99 times.
 		for i in 0..99 {
@@ -582,9 +579,9 @@ fn bump_service_head_works() {
 /// `bump_service_head` does nothing when called with an insufficient weight limit.
 #[test]
 fn bump_service_head_bails() {
-	test_closure(|| {
+	build_and_execute::<Test>(|| {
 		set_weight("bump_service_head", 2.into_weight());
-		setup_bump_service_head::<Test>(0.into(), 10.into());
+		setup_bump_service_head::<Test>(0.into(), 1.into());
 
 		let _guard = StorageNoopGuard::default();
 		let mut meter = WeightMeter::from_limit(1.into_weight());
@@ -608,7 +605,7 @@ fn bump_service_head_trivial_works() {
 		assert_eq!(ServiceHead::<Test>::get().unwrap(), 1.into(), "Bumped the head");
 		assert_eq!(meter.consumed(), 4.into_weight());
 
-		assert_eq!(MessageQueue::bump_service_head(&mut meter), None, "Cannot bump");
+		assert_eq!(MessageQueue::bump_service_head(&mut meter), Some(1.into()), "Its a ring");
 		assert_eq!(meter.consumed(), 6.into_weight());
 	});
 }
@@ -1323,7 +1320,7 @@ fn enqueue_messages_works() {
 #[test]
 fn service_queues_suspend_works() {
 	use MessageOrigin::*;
-	test_closure(|| {
+	build_and_execute::<Test>(|| {
 		MessageQueue::enqueue_messages(vec![msg("a"), msg("ab"), msg("abc")].into_iter(), Here);
 		MessageQueue::enqueue_messages(vec![msg("x"), msg("xy"), msg("xyz")].into_iter(), There);
 		assert_eq!(QueueChanges::take(), vec![(Here, 3, 6), (There, 3, 6)]);
@@ -1390,7 +1387,7 @@ fn service_queues_suspend_works() {
 /// Tests that manual overweight execution on a suspended queue errors with `QueueSuspended`.
 #[test]
 fn execute_overweight_respects_suspension() {
-	test_closure(|| {
+	build_and_execute::<Test>(|| {
 		let origin = MessageOrigin::Here;
 		MessageQueue::enqueue_message(msg("weight=5"), origin);
 		// Mark the message as permanently overweight.
@@ -1436,7 +1433,7 @@ fn execute_overweight_respects_suspension() {
 
 #[test]
 fn service_queue_suspension_ready_ring_works() {
-	test_closure(|| {
+	build_and_execute::<Test>(|| {
 		let origin = MessageOrigin::Here;
 		PausedQueues::set(vec![origin]);
 		MessageQueue::enqueue_message(msg("weight=5"), origin);

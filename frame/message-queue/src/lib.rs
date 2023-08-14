@@ -1164,7 +1164,7 @@ impl<T: Config> Pallet<T> {
 				head_book_state.message_count > 0,
 				"There must be some messages if in ReadyRing"
 			);
-			ensure!(head_book_state.size > 0, "There must be some messages if in ReadyRing");
+			ensure!(head_book_state.size > 0, "There must be some message size if in ReadyRing");
 			ensure!(
 				head_book_state.end > head_book_state.begin,
 				"End > Begin if unprocessed messages exists"

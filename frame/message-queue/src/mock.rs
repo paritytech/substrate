@@ -298,12 +298,12 @@ where
 /// Run the function pointer inside externalities and asserts the try_state hook at the end.
 pub fn build_and_execute<T: Config>(test: impl FnOnce() -> ())
 where
-	<T as frame_system::Config>::BlockNumber: From<u32>,
+	BlockNumberFor<T>: From<u32>,
 {
 	new_test_ext::<T>().execute_with(|| {
 		test();
-		MessageQueue::do_try_state().unwrap();
-	})
+		MessageQueue::do_try_state().expect("All invariants must hold after a test");
+	});
 }
 
 /// Set the weight of a specific weight function.
