@@ -26,42 +26,6 @@
 /// - `EncodeLike`: Trait indicating the type can be encoded as is.
 /// - `Decode`: Decodes the wrapper type from the input.
 /// - `TypeInfo`: Provides type information for the wrapper type.
-///
-/// # Example
-///
-/// ```
-/// # use codec::{Encode, Decode, MaxEncodedLen, TypeInfo};
-/// # use sp_std::prelude::BitFlags;
-/// # use sp_core::Bytes;
-///
-/// // Assume `MyBitflagEnum` is defined here.
-/// # #[derive(Debug, Encode, Decode)]
-/// # enum MyBitflagEnum {
-/// #     A = 0b0001,
-/// #     B = 0b0010,
-/// #     C = 0b0100,
-/// #     D = 0b1000,
-/// # }
-///
-/// // Define a newtype wrapper to hold the bitflags.
-/// #[derive(Debug, Encode, Decode)]
-/// struct MyBitflagsWrapper(BitFlags<MyBitflagEnum>);
-///
-/// // Implement the `impl_codec_bitflags` macro for the newtype wrapper.
-/// impl_codec_bitflags!(MyBitflagsWrapper, u8, MyBitflagEnum);
-///
-/// // Now you can use the `MyBitflagsWrapper` with the codec library for encoding/decoding.
-/// let bitflags = MyBitflagsWrapper(BitFlags::from(MyBitflagEnum::A | MyBitflagEnum::C));
-/// let encoded_bytes = bitflags.using_encoded(|bytes| Bytes::from(bytes.to_vec()));
-///
-/// // ... do something with `encoded_bytes` ...
-///
-/// // Decode the bytes back to the wrapper type.
-/// let decoded_bitflags = MyBitflagsWrapper::decode(&mut &encoded_bytes[..])
-///     .expect("Decoding failed");
-///
-/// assert_eq!(decoded_bitflags, bitflags);
-/// ```
 macro_rules! impl_codec_bitflags {
 	($wrapper:ty, $size:ty, $bitflag_enum:ty) => {
 		impl MaxEncodedLen for $wrapper {
