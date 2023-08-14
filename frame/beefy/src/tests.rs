@@ -791,3 +791,24 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		assert_eq!(post_info.pays_fee, Pays::Yes);
 	})
 }
+
+#[test]
+fn set_new_genesis_works() {
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let new_genesis = 10u64;
+		// the call for setting new genesis should work
+		assert_ok!(Beefy::set_new_genesis(RuntimeOrigin::root(), new_genesis,));
+		// verify new genesis was set
+		assert_eq!(Beefy::genesis_block(), Some(new_genesis));
+
+		// setting to old block should fail
+		assert_err!(
+			Beefy::set_new_genesis(RuntimeOrigin::root(), 1u64,),
+			Error::<Test>::InvalidConfiguration,
+		);
+	});
+}
