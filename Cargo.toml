@@ -43,7 +43,6 @@ sassafras-experimental = [
 	"sc-keystore/bandersnatch-experimental",
 ]
 
-
 # Exists here to be backwards compatible and to support `cargo run` in the workspace.
 #
 # Just uses the `node-cli` main binary. `node-cli` itself also again exposes the node as

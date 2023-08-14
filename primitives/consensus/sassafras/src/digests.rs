@@ -50,7 +50,7 @@ pub struct NextEpochDescriptor {
 	pub authorities: Vec<AuthorityId>,
 	/// Epoch randomness.
 	pub randomness: Randomness,
-	/// Mutable protocol parameters. If not present previous epoch parameters are used.
+	/// Mutable epoch parameters. If not present previous epoch parameters are used.
 	pub config: Option<EpochConfiguration>,
 }
 
@@ -60,7 +60,7 @@ pub enum ConsensusLog {
 	/// Provides information about the next epoch parameters.
 	#[codec(index = 1)]
 	NextEpochData(NextEpochDescriptor),
-	/// Disable the authority with given index (@davxy: todo).
+	/// Disable the authority with given index (TODO @davxy).
 	#[codec(index = 2)]
 	OnDisabled(AuthorityIndex),
 }

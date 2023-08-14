@@ -21,8 +21,9 @@ use crate::{Randomness, RingVrfSignature, VrfInput, VrfOutput, VrfSignData, SASS
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_consensus_slots::Slot;
-use sp_core::ed25519::{Public as EphemeralPublic, Signature as EphemeralSignature};
 use sp_std::vec::Vec;
+
+pub use sp_core::ed25519::{Public as EphemeralPublic, Signature as EphemeralSignature};
 
 /// Ticket identifier.
 ///

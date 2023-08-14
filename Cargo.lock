@@ -10743,6 +10743,7 @@ dependencies = [
  "async-trait",
  "parity-scale-codec",
  "scale-info",
+ "serde",
  "sp-api",
  "sp-application-crypto",
  "sp-consensus-slots",

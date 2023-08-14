@@ -33,13 +33,17 @@ pub use sp_core::bandersnatch::{
 	vrf::{VrfInput, VrfOutput, VrfSignData, VrfSignature},
 };
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 pub mod digests;
 pub mod inherents;
 pub mod ticket;
 
 pub use ticket::{
 	slot_claim_sign_data, slot_claim_vrf_input, ticket_body_sign_data, ticket_id,
-	ticket_id_threshold, ticket_id_vrf_input, TicketBody, TicketClaim, TicketEnvelope, TicketId,
+	ticket_id_threshold, ticket_id_vrf_input, EphemeralPublic, EphemeralSignature, TicketBody,
+	TicketClaim, TicketEnvelope, TicketId,
 };
 
 mod app {
@@ -82,18 +86,24 @@ pub type EquivocationProof<H> = sp_consensus_slots::EquivocationProof<H, Authori
 pub type Randomness = [u8; RANDOMNESS_LENGTH];
 
 /// Configuration data that can be modified on epoch change.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo, Default)]
+#[derive(
+	Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo, Default,
+)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct EpochConfiguration {
-	/// Redundancy factor.
+	/// Tickets threshold redundancy factor.
 	pub redundancy_factor: u32,
-	/// Number of attempts for tickets generation.
+	/// Tickets attempts for each validator.
 	pub attempts_number: u32,
 }
 
-/// Information attached to an epoch.
-// TODO @davxy. Why not embed this information in `Epoch` structure below?
-#[derive(Clone, Encode, Decode, RuntimeDebug, PartialEq, Eq, TypeInfo)]
-pub struct EpochData {
+/// Sassafras epoch information
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct Epoch {
+	/// The epoch index.
+	pub epoch_idx: u64,
+	/// The starting slot of the epoch.
+	pub start_slot: Slot,
 	/// Slot duration in milliseconds.
 	pub slot_duration: SlotDuration,
 	/// Duration of epoch in slots.
@@ -102,19 +112,8 @@ pub struct EpochData {
 	pub authorities: Vec<AuthorityId>,
 	/// Randomness for the epoch.
 	pub randomness: Randomness,
-	/// Tickets threshold parameters.
-	pub threshold_params: EpochConfiguration,
-}
-
-/// Sassafras epoch information
-#[derive(Encode, Decode, PartialEq, Eq, Clone, Debug, TypeInfo)]
-pub struct Epoch {
-	/// The epoch index.
-	pub epoch_idx: u64,
-	/// The starting slot of the epoch.
-	pub start_slot: Slot,
 	/// Epoch configuration.
-	pub config: EpochData,
+	pub config: EpochConfiguration,
 }
 
 /// An opaque type used to represent the key ownership proof at the runtime API boundary.
@@ -130,6 +129,13 @@ pub struct OpaqueKeyOwnershipProof(Vec<u8>);
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with Sassafras.
 	pub trait SassafrasApi {
+		/// Get ring context to be used for ticket construction and verification.
+		fn ring_context() -> Option<RingContext>;
+
+		/// Submit next epoch validator tickets via an unsigned extrinsic.
+		/// This method returns `false` when creation of the extrinsics fails.
+		fn submit_tickets_unsigned_extrinsic(tickets: Vec<TicketEnvelope>) -> bool;
+
 		/// Get ticket id associated to the given slot.
 		fn slot_ticket_id(slot: Slot) -> Option<TicketId>;
 
@@ -142,12 +148,33 @@ sp_api::decl_runtime_apis! {
 		/// Next epoch information.
 		fn next_epoch() -> Epoch;
 
-		/// Get ring context to be used for ticket proof construction.
-		fn ring_context() -> Option<RingContext>;
-
-		/// Submit next epoch validator tickets via an unsigned extrinsic.
+		/// Generates a proof of key ownership for the given authority in the current epoch.
 		///
-		/// This method returns `false` when creation of the extrinsics fails.
-		fn submit_tickets_unsigned_extrinsic(tickets: Vec<TicketEnvelope>) -> bool;
+		/// An example usage of this module is coupled with the session historical module to prove
+		/// that a given authority key is tied to a given staking identity during a specific
+		/// session. Proofs of key ownership are necessary for submitting equivocation reports.
+		///
+		/// NOTE: even though the API takes a `slot` as parameter the current implementations
+		/// ignores this parameter and instead relies on this method being called at the correct
+		/// block height, i.e. any point at which the epoch for the given slot is live on-chain.
+		/// Future implementations will instead use indexed data through an offchain worker, not
+		/// requiring older states to be available.
+		fn generate_key_ownership_proof(
+			slot: Slot,
+			authority_id: AuthorityId,
+		) -> Option<OpaqueKeyOwnershipProof>;
+
+		/// Submits an unsigned extrinsic to report an equivocation.
+		///
+		/// The caller must provide the equivocation proof and a key ownership proof (should be
+		/// obtained using `generate_key_ownership_proof`). The extrinsic will be unsigned and
+		/// should only be accepted for local authorship (not to be broadcast to the network). This
+		/// method returns `None` when creation of the extrinsic fails, e.g. if equivocation
+		/// reporting is disabled for the given runtime (i.e. this method is hardcoded to return
+		/// `None`). Only useful in an offchain context.
+		fn submit_report_equivocation_unsigned_extrinsic(
+			equivocation_proof: EquivocationProof<Block::Header>,
+			key_owner_proof: OpaqueKeyOwnershipProof,
+		) -> bool;
 	}
 }
