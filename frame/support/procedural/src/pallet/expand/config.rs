@@ -52,8 +52,8 @@ Consequently, a runtime that wants to include this pallet must implement this tr
 	// impossible consequently.
 	match &config.default_sub_trait {
 		Some(default_sub_trait) if default_sub_trait.items.len() > 0 => {
-			let trait_items = &config
-				.default_sub_trait
+			let trait_items = &default_sub_trait
+				.items
 				.iter()
 				.map(|item| {
 					if item.1 {
