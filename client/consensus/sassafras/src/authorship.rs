@@ -475,8 +475,17 @@ async fn start_tickets_worker<B, C, SC>(
 			_ => None,
 		};
 
-		if let Some(err) = err {
-			error!(target: LOG_TARGET, "Unable to submit tickets: {}", err);
+		match err {
+			None => {
+				// Cache tickets secret in the epoch changes tree (TODO: @davxy use the keystre)
+				epoch_changes
+					.shared_data()
+					.epoch_mut(&epoch_identifier)
+					.map(|target_epoch| target_epoch.tickets_aux = epoch.tickets_aux);
+			},
+			Some(err) => {
+				error!(target: LOG_TARGET, "Unable to submit tickets: {}", err);
+			},
 		}
 	}
 }

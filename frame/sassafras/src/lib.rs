@@ -255,11 +255,11 @@ pub mod pallet {
 			Pallet::<T>::initialize_genesis_authorities(&self.authorities);
 			EpochConfig::<T>::put(self.epoch_config.clone());
 
-			// // TODO: davxy... remove for tests
-			// log::warn!(target: LOG_TARGET, "Constructing testing ring context (in build)");
-			// let ring_ctx = RingContext::new_testing();
-			// log::warn!(target: LOG_TARGET, "... done");
-			// RingVrfContext::<T>::set(Some(ring_ctx.clone()));
+			// TODO: davxy... remove for tests
+			log::warn!(target: LOG_TARGET, "Constructing testing ring context (in build)");
+			let ring_ctx = RingContext::new_testing();
+			log::warn!(target: LOG_TARGET, "... done");
+			RingVrfContext::<T>::set(Some(ring_ctx.clone()));
 		}
 	}
 
