@@ -189,17 +189,19 @@ impl OnRuntimeUpgrade for Tuple {
 		Ok(weight)
 	}
 
-	/// `Executive` used to directly call AllPalletsWithSystem::post_upgrade() which is now a
-	/// noop. If a runtime is running an old version of `Exeuctive`, return an error instead of
-	/// silently doing nothing which can lead to confusion. See https://github.com/paritytech/substrate/issues/13681.
+	/// `Executive` used to directly call AllPalletsWithSystem::post_upgrade() which is now a noop.
+	/// If a runtime is running an old version of `Exeuctive`, return an error instead of silently
+	/// doing nothing which can lead to confusion. See
+	/// <https://github.com/paritytech/substrate/issues/13681>.
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		Err("If you see this error the implementation of `pub fn try_runtime_upgrade` in your `Executive` pallet is probably old and `pre_upgrade` checks will *not* be executed. Please update your implementation of `Executive` `pub fn try_runtime_upgrade` to match Substrate master (https://github.com/paritytech/substrate/blob/master/frame/executive/src/lib.rs).".into())
 	}
 
-	/// `Executive` used to directly call AllPalletsWithSystem::post_upgrade() which is now a
-	/// noop. If a runtime is running an old version of `Exeuctive`, return an error instead of
-	/// silently doing nothing which can lead to confusion. See https://github.com/paritytech/substrate/issues/13681.
+	/// `Executive` used to directly call AllPalletsWithSystem::post_upgrade() which is now a noop.
+	/// If a runtime is running an old version of `Exeuctive`, return an error instead of silently
+	/// doing nothing which can lead to confusion. See
+	/// <https://github.com/paritytech/substrate/issues/13681>.
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		Err("If you see this error the implementation of `pub fn try_runtime_upgrade` in your `Executive` pallet is probably old and `post_upgrade` checks will *not* be executed. Please update your implementation of `Executive` `pub fn try_runtime_upgrade` to match Substrate master (https://github.com/paritytech/substrate/blob/master/frame/executive/src/lib.rs).".into())
