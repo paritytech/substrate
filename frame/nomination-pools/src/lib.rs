@@ -473,10 +473,12 @@ impl<T: Config> PoolMember<T> {
 	#[cfg(any(feature = "try-runtime", test))]
 	fn total_balance(&self) -> BalanceOf<T> {
 		// TODO
-		self.active_balance().saturating_add(self.unbonding_eras
-			.as_ref()
-			.iter()
-			.fold(BalanceOf::<T>::zero(), |acc, (_, v)| acc.saturating_add(*v)))
+		self.active_balance().saturating_add(
+			self.unbonding_eras
+				.as_ref()
+				.iter()
+				.fold(BalanceOf::<T>::zero(), |acc, (_, v)| acc.saturating_add(*v)),
+		)
 	}
 
 	/// Total points of this member, both active and unbonding.
@@ -2514,7 +2516,7 @@ impl<T: Config> Pallet<T> {
 			assert!(!d.total_points().is_zero(), "no member should have zero points: {:?}", d);
 			*pools_members.entry(d.pool_id).or_default() += 1;
 			all_members += 1;
-			expected_tvl += d.tota
+			expected_tvl += d.points;
 
 			let reward_pool = RewardPools::<T>::get(d.pool_id).unwrap();
 			if !bonded_pool.points.is_zero() {
@@ -2614,7 +2616,8 @@ impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		total_slashed: BalanceOf<T>,
 	) {
 		if let Some(pool_id) = ReversePoolIdLookup::<T>::get(pool_account).defensive() {
-			// TODO: bug here: a slash toward a pool who's subpools were missing would not be tracked. write a test for it.
+			// TODO: bug here: a slash toward a pool who's subpools were missing would not be
+			// tracked. write a test for it.
 			Self::deposit_event(Event::<T>::PoolSlashed { pool_id, balance: slashed_bonded });
 
 			TotalValueLocked::<T>::mutate(|tvl| {
