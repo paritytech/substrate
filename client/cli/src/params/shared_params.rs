@@ -114,7 +114,7 @@ impl SharedParams {
 
 	/// Should the log color output be disabled?
 	pub fn disable_log_color(&self) -> bool {
-		self.disable_log_color
+		std::env::var("NO_COLOR").map_or(self.disable_log_color, |no_color| no_color == "1")
 	}
 
 	/// Is log reloading enabled
