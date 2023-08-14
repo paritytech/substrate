@@ -25,6 +25,8 @@ pub fn expand_outer_task(pallet_decls: &[Pallet], scrate: &TokenStream) -> Token
 	let mut task_variants = Vec::new();
 	for decl in pallet_decls {
 		if let Some(_) = decl.find_part("Task") {
+			// TODO: for some reason `find_part` above never finds `Task` even when it is
+			// clearly in the pallet
 			let variant_name = &decl.name;
 			let path = &decl.path;
 			let index = decl.index;

@@ -476,7 +476,7 @@ impl PalletPartKeyword {
 
 	/// Returns the names of all pallet parts that allow to have a generic argument.
 	fn all_generic_arg() -> &'static [&'static str] {
-		&["Event", "Error", "Origin", "Config"]
+		&["Event", "Error", "Origin", "Config", "Task"]
 	}
 }
 
