@@ -508,6 +508,7 @@ mod tests {
 		impl_test_type!(Baz);
 
 		TestExternalities::default().execute_with(|| {
+			// try_on_runtime_upgrade works
 			Foo::try_on_runtime_upgrade(true).unwrap();
 			assert_eq!(Pre::take(), vec!["Foo"]);
 			assert_eq!(Post::take(), vec!["Foo"]);
@@ -523,6 +524,10 @@ mod tests {
 			<(Foo, (Bar, Baz))>::try_on_runtime_upgrade(true).unwrap();
 			assert_eq!(Pre::take(), vec!["Foo", "Bar", "Baz"]);
 			assert_eq!(Post::take(), vec!["Foo", "Bar", "Baz"]);
+
+			// calling pre_upgrade and post_upgrade directly on tuple of pallets fails
+			assert!(<(Foo, (Bar, Baz))>::pre_upgrade().is_err());
+			assert!(<(Foo, (Bar, Baz))>::post_upgrade(vec![]).is_err());
 		});
 	}
 
