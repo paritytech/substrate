@@ -513,7 +513,6 @@ pub mod pallet {
 			ensure_signed(origin)?;
 
 			if !task.is_valid() {
-				Self::deposit_event(Event::TaskInvalid { task });
 				return Err(Error::<T>::InvalidTask.into())
 			}
 
@@ -550,8 +549,6 @@ pub mod pallet {
 		TaskStarted { task: T::RuntimeTask },
 		/// A [`Task`] has finished executing.
 		TaskCompleted { task: T::RuntimeTask },
-		/// An attempt was made to run an invalid [`Task`].
-		TaskInvalid { task: T::RuntimeTask },
 		/// A [`Task`] failed during execution.
 		TaskFailed { task: T::RuntimeTask, err: DispatchError },
 	}
