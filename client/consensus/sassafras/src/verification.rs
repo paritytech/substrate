@@ -19,6 +19,7 @@
 //! Types and functions related to block verification.
 
 use super::*;
+use crate::inherents::SassafrasInherentData;
 use sp_core::{
 	crypto::{VrfPublic, Wraps},
 	ed25519::Pair as EphemeralPair,

@@ -37,7 +37,6 @@ pub use sp_core::bandersnatch::{
 use serde::{Deserialize, Serialize};
 
 pub mod digests;
-pub mod inherents;
 pub mod ticket;
 
 pub use ticket::{

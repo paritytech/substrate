@@ -122,13 +122,10 @@ pub fn new_partial(
 		select_chain.clone(),
 		move |_, ()| async move {
 			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
-
-			let slot =
-					sp_consensus_sassafras::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
-						*timestamp,
-						slot_duration,
-					);
-
+			let slot = sc_consensus_sassafras::InherentDataProvider::from_timestamp(
+				*timestamp,
+				slot_duration,
+			);
 			Ok((slot, timestamp))
 		},
 		&task_manager.spawn_essential_handle(),
@@ -266,7 +263,10 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			force_authoring,
 			create_inherent_data_providers: move |_, _| async move {
 				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
-				let slot = sp_consensus_sassafras::inherents::InherentDataProvider::from_timestamp_and_slot_duration(*timestamp, slot_duration);
+				let slot = sc_consensus_sassafras::InherentDataProvider::from_timestamp(
+					*timestamp,
+					slot_duration,
+				);
 				Ok((slot, timestamp))
 			},
 			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(transaction_pool.clone()),

@@ -10884,7 +10884,6 @@ dependencies = [
 name = "sp-consensus-sassafras"
 version = "0.3.4-dev"
 dependencies = [
- "async-trait",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -10892,10 +10891,8 @@ dependencies = [
  "sp-application-crypto",
  "sp-consensus-slots",
  "sp-core",
- "sp-inherents",
  "sp-runtime",
  "sp-std",
- "sp-timestamp",
 ]
 
 [[package]]

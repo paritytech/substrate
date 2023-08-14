@@ -18,7 +18,7 @@
 //! Sassafras inherents structures and helpers.
 
 use sp_inherents::{Error, InherentData, InherentIdentifier};
-use sp_std::result::Result;
+use std::ops::Deref;
 
 /// Inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"sassslot";
@@ -53,7 +53,6 @@ impl SassafrasInherentData for InherentData {
 /// Provides the slot duration inherent data.
 pub struct InherentDataProvider(InherentType);
 
-#[cfg(feature = "std")]
 impl InherentDataProvider {
 	/// Create new inherent data provider from the given `slot`.
 	pub fn new(slot: InherentType) -> Self {
@@ -62,21 +61,15 @@ impl InherentDataProvider {
 
 	/// Creates the inherent data provider by calculating the slot from the given
 	/// `timestamp` and `duration`.
-	pub fn from_timestamp_and_slot_duration(
+	pub fn from_timestamp(
 		timestamp: sp_timestamp::Timestamp,
 		slot_duration: sp_consensus_slots::SlotDuration,
 	) -> Self {
 		Self(InherentType::from_timestamp(timestamp, slot_duration))
 	}
-
-	/// Returns the `slot` of this inherent data provider.
-	pub fn slot(&self) -> InherentType {
-		self.0
-	}
 }
 
-#[cfg(feature = "std")]
-impl sp_std::ops::Deref for InherentDataProvider {
+impl Deref for InherentDataProvider {
 	type Target = InherentType;
 
 	fn deref(&self) -> &Self::Target {
@@ -84,7 +77,6 @@ impl sp_std::ops::Deref for InherentDataProvider {
 	}
 }
 
-#[cfg(feature = "std")]
 #[async_trait::async_trait]
 impl sp_inherents::InherentDataProvider for InherentDataProvider {
 	async fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {

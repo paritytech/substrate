@@ -65,7 +65,7 @@ use sp_consensus::{
 };
 use sp_consensus_slots::Slot;
 use sp_core::Pair;
-use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
+use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider as _};
 use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
@@ -76,7 +76,6 @@ use sp_runtime::{
 // Re-export some primitives.
 pub use sp_consensus_sassafras::{
 	digests::{CompatibleDigestItem, ConsensusLog, NextEpochDescriptor, PreDigest},
-	inherents::SassafrasInherentData,
 	slot_claim_sign_data, slot_claim_vrf_input, ticket_body_sign_data, ticket_id_vrf_input,
 	AuthorityId, AuthorityIndex, AuthorityPair, AuthoritySignature, EpochConfiguration,
 	SassafrasApi, TicketBody, TicketClaim, TicketEnvelope, TicketId, RANDOMNESS_LENGTH,
@@ -86,6 +85,7 @@ pub use sp_consensus_sassafras::{
 mod authorship;
 mod aux_schema;
 mod block_import;
+mod inherents;
 #[cfg(test)]
 mod tests;
 mod verification;
@@ -94,6 +94,7 @@ mod verification;
 pub use authorship::{start_sassafras, SassafrasWorker, SassafrasWorkerParams};
 pub use aux_schema::revert;
 pub use block_import::{block_import, SassafrasBlockImport};
+pub use inherents::{InherentDataProvider, InherentType};
 pub use verification::SassafrasVerifier;
 
 const LOG_TARGET: &str = "sassafras 🌳";

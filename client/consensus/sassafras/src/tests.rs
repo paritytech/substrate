@@ -35,7 +35,7 @@ use sc_transaction_pool_api::{OffchainTransactionPoolFactory, RejectAllTxPool};
 use sp_application_crypto::key_types::SASSAFRAS;
 use sp_blockchain::Error as TestError;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
-use sp_consensus_sassafras::{inherents::InherentDataProvider, EphemeralPublic, SlotDuration};
+use sp_consensus_sassafras::{EphemeralPublic, SlotDuration};
 use sp_core::crypto::UncheckedFrom;
 use sp_keyring::BandersnatchKeyring as Keyring;
 use sp_keystore::{testing::MemoryKeystore, Keystore};
@@ -146,10 +146,7 @@ fn create_test_verifier(
 ) -> SassafrasVerifier {
 	let slot_duration = config.slot_duration;
 	let create_inherent_data_providers = Box::new(move |_, _| async move {
-		let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-			Timestamp::current(),
-			slot_duration,
-		);
+		let slot = InherentDataProvider::from_timestamp(Timestamp::current(), slot_duration);
 		Ok((slot,))
 	});
 
