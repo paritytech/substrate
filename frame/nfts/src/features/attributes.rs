@@ -160,7 +160,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// performing the deposit checks. It bypasses the deposit requirement and should only be used
 	/// in specific situations where deposit checks are not necessary or handled separately.
 	///
-	/// - `set_as`: The account that the attribute should be set as.
+	/// - `set_as`: The account that would normally pay for the deposit.
 	/// - `collection`: The identifier of the collection to which the item belongs, or the
 	///   collection itself if setting a collection attribute.
 	/// - `maybe_item`: The identifier of the item to which the attribute belongs, or `None` if
