@@ -633,7 +633,6 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// where `TestDefaultConfig` was defined and registered as follows:
-///
 /// ```ignore
 /// pub struct TestDefaultConfig;
 ///
@@ -660,7 +659,6 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// The above call to `derive_impl` would expand to roughly the following:
-///
 /// ```ignore
 /// impl frame_system::Config for Test {
 ///     use frame_system::config_preludes::TestDefaultConfig;

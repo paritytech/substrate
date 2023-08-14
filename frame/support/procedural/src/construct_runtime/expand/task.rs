@@ -34,6 +34,16 @@ pub fn expand_outer_task(pallet_decls: &[Pallet], scrate: &TokenStream) -> Token
 			task_variants.push(expand_variant(index, path, variant_name));
 		}
 	}
+	use quote::ToTokens;
+	if !task_variants.is_empty() {
+		println!(
+			"{:#?}",
+			task_variants
+				.iter()
+				.map(|item| item.to_token_stream().to_string())
+				.collect::<Vec<_>>()
+		);
+	}
 
 	quote! {
 		/// An aggregation of all `Task` enums across all pallets included in the current runtime.
@@ -45,6 +55,25 @@ pub fn expand_outer_task(pallet_decls: &[Pallet], scrate: &TokenStream) -> Token
 		)]
 		pub enum RuntimeTask {
 			#( #task_variants )*
+		}
+
+		impl #scrate::traits::AggregatedTask for RuntimeTask {
+			fn is_valid(&self) -> bool {
+				use #scrate::traits::tasks::prelude::*;
+				todo!();
+			}
+
+			fn run(&self) -> Result<(), #scrate::traits::tasks::prelude::DispatchError> {
+				todo!();
+			}
+
+			fn weight(&self) -> Weight {
+				todo!();
+			}
+
+			fn task_index(&self) -> u64 {
+				todo!();
+			}
 		}
 
 		#( #conversion_fns )*
