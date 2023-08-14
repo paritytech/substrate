@@ -48,10 +48,21 @@ std = [
 	"sp-npos-elections/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"pallet-balances/std",
+	"sp-staking/std",
+	"sp-tracing/std"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+	"sp-staking/runtime-benchmarks"
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-balances/try-runtime",
+	"sp-runtime/try-runtime"
+]

@@ -67,17 +67,13 @@ pub use tt_call::*;
 
 #[macro_use]
 pub mod dispatch;
-mod hash;
-pub mod storage;
-#[macro_use]
-pub mod event;
-pub mod inherent;
-#[macro_use]
-pub mod error;
 pub mod crypto;
 pub mod dispatch_context;
+mod hash;
+pub mod inherent;
 pub mod instances;
 pub mod migrations;
+pub mod storage;
 pub mod traits;
 pub mod weights;
 #[doc(hidden)]
@@ -531,8 +527,7 @@ pub fn debug(data: &impl sp_std::fmt::Debug) {
 
 #[doc(inline)]
 pub use frame_support_procedural::{
-	construct_runtime, decl_storage, match_and_insert, transactional, PalletError,
-	RuntimeDebugNoBound,
+	construct_runtime, match_and_insert, transactional, PalletError, RuntimeDebugNoBound,
 };
 
 #[doc(hidden)]
@@ -1550,9 +1545,10 @@ pub mod pallet_prelude {
 		storage::{
 			bounded_vec::BoundedVec,
 			types::{
-				CountedStorageMap, Key as NMapKey, OptionQuery, ResultQuery, StorageDoubleMap,
-				StorageMap, StorageNMap, StorageValue, ValueQuery,
+				CountedStorageMap, CountedStorageNMap, Key as NMapKey, OptionQuery, ResultQuery,
+				StorageDoubleMap, StorageMap, StorageNMap, StorageValue, ValueQuery,
 			},
+			StorageList,
 		},
 		traits::{
 			BuildGenesisConfig, ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks,
@@ -1664,9 +1660,14 @@ pub mod pallet_prelude {
 ///   default, dev mode pallets will assume a weight of zero (`0`) if a weight is not
 ///   specified. This is equivalent to specifying `#[weight(0)]` on all calls that do not
 ///   specify a weight.
+/// * Call indices no longer need to be specified on every `#[pallet::call]` declaration. By
+///   default, dev mode pallets will assume a call index based on the order of the call.
 /// * All storages are marked as unbounded, meaning you do not need to implement
 ///   `MaxEncodedLen` on storage types. This is equivalent to specifying `#[pallet::unbounded]`
 ///   on all storage type definitions.
+/// * Storage hashers no longer need to be specified and can be replaced by `_`. In dev mode,
+///   these will be replaced by `Blake2_128Concat`. In case of explicit key-binding, `Hasher`
+///   can simply be ignored when in `dev_mode`.
 ///
 /// Note that the `dev_mode` argument can only be supplied to the `#[pallet]` or
 /// `#[frame_support::pallet]` attribute macro that encloses your pallet module. This argument
@@ -2909,8 +2910,17 @@ pub mod pallet_macros {
 	};
 }
 
+#[deprecated(note = "Will be removed after July 2023; Use `sp_runtime::traits` directly instead.")]
+pub mod error {
+	#[doc(hidden)]
+	pub use sp_runtime::traits::{BadOrigin, LookupError};
+}
+
 #[doc(inline)]
 pub use frame_support_procedural::register_default_impl;
 
 // Generate a macro that will enable/disable code based on `std` feature being active.
 sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);
+
+// Helper for implementing GenesisBuilder runtime API
+pub mod genesis_builder_helper;

@@ -28,7 +28,7 @@ use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 };
 use sp_runtime::{
-	traits::{Block as BlockT, HashFor},
+	traits::{Block as BlockT, HashingFor},
 	StateVersion, Storage,
 };
 use sp_state_machine::{
@@ -52,9 +52,9 @@ struct StorageDb<Block: BlockT> {
 	_block: std::marker::PhantomData<Block>,
 }
 
-impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
+impl<Block: BlockT> sp_state_machine::Storage<HashingFor<Block>> for StorageDb<Block> {
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		let prefixed_key = prefixed_key::<HashFor<Block>>(key, prefix);
+		let prefixed_key = prefixed_key::<HashingFor<Block>>(key, prefix);
 		self.db
 			.get(0, &prefixed_key)
 			.map_err(|e| format!("Database backend error: {:?}", e))
@@ -84,19 +84,19 @@ pub struct BenchmarkingState<B: BlockT> {
 	record: Cell<Vec<Vec<u8>>>,
 	key_tracker: Arc<Mutex<KeyTracker>>,
 	whitelist: RefCell<Vec<TrackedStorageKey>>,
-	proof_recorder: Option<sp_trie::recorder::Recorder<HashFor<B>>>,
+	proof_recorder: Option<sp_trie::recorder::Recorder<HashingFor<B>>>,
 	proof_recorder_root: Cell<B::Hash>,
-	shared_trie_cache: SharedTrieCache<HashFor<B>>,
+	shared_trie_cache: SharedTrieCache<HashingFor<B>>,
 }
 
 /// A raw iterator over the `BenchmarkingState`.
 pub struct RawIter<B: BlockT> {
-	inner: <DbState<B> as StateBackend<HashFor<B>>>::RawIter,
+	inner: <DbState<B> as StateBackend<HashingFor<B>>>::RawIter,
 	child_trie: Option<Vec<u8>>,
 	key_tracker: Arc<Mutex<KeyTracker>>,
 }
 
-impl<B: BlockT> StorageIterator<HashFor<B>> for RawIter<B> {
+impl<B: BlockT> StorageIterator<HashingFor<B>> for RawIter<B> {
 	type Backend = BenchmarkingState<B>;
 	type Error = String;
 
@@ -138,8 +138,8 @@ impl<B: BlockT> BenchmarkingState<B> {
 	) -> Result<Self, String> {
 		let state_version = sp_runtime::StateVersion::default();
 		let mut root = B::Hash::default();
-		let mut mdb = MemoryDB::<HashFor<B>>::default();
-		sp_trie::trie_types::TrieDBMutBuilderV1::<HashFor<B>>::new(&mut mdb, &mut root).build();
+		let mut mdb = MemoryDB::<HashingFor<B>>::default();
+		sp_trie::trie_types::TrieDBMutBuilderV1::<HashingFor<B>>::new(&mut mdb, &mut root).build();
 
 		let mut state = BenchmarkingState {
 			state: RefCell::new(None),
@@ -341,10 +341,10 @@ fn state_err() -> String {
 	"State is not open".into()
 }
 
-impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
-	type Error = <DbState<B> as StateBackend<HashFor<B>>>::Error;
-	type Transaction = <DbState<B> as StateBackend<HashFor<B>>>::Transaction;
-	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
+impl<B: BlockT> StateBackend<HashingFor<B>> for BenchmarkingState<B> {
+	type Error = <DbState<B> as StateBackend<HashingFor<B>>>::Error;
+	type Transaction = <DbState<B> as StateBackend<HashingFor<B>>>::Transaction;
+	type TrieBackendStorage = <DbState<B> as StateBackend<HashingFor<B>>>::TrieBackendStorage;
 	type RawIter = RawIter<B>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -459,7 +459,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 
 	fn commit(
 		&self,
-		storage_root: <HashFor<B> as Hasher>::Out,
+		storage_root: <HashingFor<B> as Hasher>::Out,
 		mut transaction: Self::Transaction,
 		main_storage_changes: StorageCollection,
 		child_storage_changes: ChildStorageCollection,
@@ -614,7 +614,8 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 				log::debug!(target: "benchmark", "Some proof size: {}", &proof_size);
 				proof_size
 			} else {
-				if let Some(size) = proof.encoded_compact_size::<HashFor<B>>(proof_recorder_root) {
+				if let Some(size) = proof.encoded_compact_size::<HashingFor<B>>(proof_recorder_root)
+				{
 					size as u32
 				} else if proof_recorder_root == self.root.get() {
 					log::debug!(target: "benchmark", "No changes - no proof");

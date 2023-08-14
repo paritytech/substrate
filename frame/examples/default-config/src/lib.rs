@@ -55,11 +55,20 @@ pub mod pallet {
 		/// in our tests below.
 		type OverwrittenDefaultValue: Get<u32>;
 
-		/// An input parameter that relies on `<Self as frame_system::Config>::AccountId`. As of
-		/// now, such types cannot have defaults and need to be annotated as such, iff
-		/// `#[pallet::config(with_default)]` is enabled:
+		/// An input parameter that relies on `<Self as frame_system::Config>::AccountId`. This can
+		/// too have a default, as long as as it is present in `frame_system::DefaultConfig`.
+		type CanDeriveDefaultFromSystem: Get<Self::AccountId>;
+
+		/// We might chose to declare as one that doesn't have a default, for whatever semantical
+		/// reason.
 		#[pallet::no_default]
-		type CannotHaveDefault: Get<Self::AccountId>;
+		type HasNoDefault: Get<u32>;
+
+		/// Some types can technically have no default, such as those the rely on
+		/// `frame_system::Config` but are not present in `frame_system::DefaultConfig`. For
+		/// example, a `RuntimeCall` cannot reasonably have a default.
+		#[pallet::no_default] // if we skip this, there will be a compiler error.
+		type CannotHaveDefault: Get<Self::RuntimeCall>;
 
 		/// Something that is a normal type, with default.
 		type WithDefaultType;
@@ -73,24 +82,41 @@ pub mod pallet {
 	pub mod config_preludes {
 		// This will help use not need to disambiguate anything when using `derive_impl`.
 		use super::*;
+		use frame_support::derive_impl;
 
 		/// A type providing default configurations for this pallet in testing environment.
 		pub struct TestDefaultConfig;
+
+		#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+		impl frame_system::DefaultConfig for TestDefaultConfig {}
+
 		#[frame_support::register_default_impl(TestDefaultConfig)]
 		impl DefaultConfig for TestDefaultConfig {
 			type WithDefaultValue = frame_support::traits::ConstU32<42>;
 			type OverwrittenDefaultValue = frame_support::traits::ConstU32<42>;
 
+			// `frame_system::config_preludes::TestDefaultConfig` declares account-id as u64.
+			type CanDeriveDefaultFromSystem = frame_support::traits::ConstU64<42>;
+
 			type WithDefaultType = u32;
 			type OverwrittenDefaultType = u32;
 		}
 
-		/// A type providing default configurations for this pallet in a parachain environment.
-		pub struct ParachainDefaultConfig;
-		#[frame_support::register_default_impl(ParachainDefaultConfig)]
-		impl DefaultConfig for ParachainDefaultConfig {
+		/// A type providing default configurations for this pallet in another environment. Examples
+		/// could be a parachain, or a solo-chain.
+		///
+		/// Appropriate derive for `frame_system::DefaultConfig` needs to be provided. In this
+		/// example, we simple derive `frame_system::config_preludes::TestDefaultConfig` again.
+		pub struct OtherDefaultConfig;
+
+		#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+		impl frame_system::DefaultConfig for OtherDefaultConfig {}
+
+		#[frame_support::register_default_impl(OtherDefaultConfig)]
+		impl DefaultConfig for OtherDefaultConfig {
 			type WithDefaultValue = frame_support::traits::ConstU32<66>;
 			type OverwrittenDefaultValue = frame_support::traits::ConstU32<66>;
+			type CanDeriveDefaultFromSystem = frame_support::traits::ConstU64<42>;
 			type WithDefaultType = u32;
 			type OverwrittenDefaultType = u32;
 		}
@@ -106,28 +132,25 @@ pub mod pallet {
 #[cfg(any(test, doc))]
 pub mod tests {
 	use super::*;
-	use frame_support::derive_impl;
-	use sp_runtime::traits::ConstU64;
+	use frame_support::{derive_impl, parameter_types};
+	use pallet::{self as pallet_default_config_example, config_preludes::*};
 
-	use super::pallet as pallet_default_config_example;
-
-	type Block = frame_system::mocking::MockBlock<Test>;
+	type Block = frame_system::mocking::MockBlock<Runtime>;
 
 	frame_support::construct_runtime!(
-		pub enum Test
-		{
+		pub struct Runtime {
 			System: frame_system,
 			DefaultPallet: pallet_default_config_example,
 		}
 	);
 
 	#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
-	impl frame_system::Config for Test {
+	impl frame_system::Config for Runtime {
 		// these items are defined by frame-system as `no_default`, so we must specify them here.
 		// Note that these are types that actually rely on the outer runtime, and can't sensibly
 		// have an _independent_ default.
 		type Block = Block;
-		type BlockHashCount = ConstU64<10>;
+		type BlockHashCount = frame_support::traits::ConstU64<10>;
 		type BaseCallFilter = frame_support::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
@@ -139,9 +162,6 @@ pub mod tests {
 
 		// type Nonce = u32;
 		// type BlockNumber = u32;
-		// type Header =
-		// sp_runtime::generic::Header<frame_system::pallet_prelude::BlockNumberFor<Self>,
-		// Self::Hashing>;
 		// type Hash = sp_core::hash::H256;
 		// type Hashing = sp_runtime::traits::BlakeTwo256;
 		// type AccountId = u64;
@@ -162,15 +182,17 @@ pub mod tests {
 		type SS58Prefix = frame_support::traits::ConstU16<456>;
 	}
 
-	// Similarly, we use the defaults provided by own crate as well.
-	use pallet::config_preludes::*;
+	parameter_types! {
+		pub const SomeCall: RuntimeCall = RuntimeCall::System(frame_system::Call::<Runtime>::remark { remark: vec![] });
+	}
+
 	#[derive_impl(TestDefaultConfig as pallet::DefaultConfig)]
-	impl crate::pallet::Config for Test {
+	impl pallet_default_config_example::Config for Runtime {
 		// These two both cannot have defaults.
 		type RuntimeEvent = RuntimeEvent;
-		// Note that the default account-id type in
-		// `frame_system::config_preludes::TestDefaultConfig` is `u64`.
-		type CannotHaveDefault = frame_support::traits::ConstU64<1>;
+
+		type HasNoDefault = frame_support::traits::ConstU32<1>;
+		type CannotHaveDefault = SomeCall;
 
 		type OverwrittenDefaultValue = frame_support::traits::ConstU32<678>;
 		type OverwrittenDefaultType = u128;
@@ -183,22 +205,22 @@ pub mod tests {
 
 		// assert one of the value types that is not overwritten.
 		assert_eq!(
-			<<Test as Config>::WithDefaultValue as Get<u32>>::get(),
+			<<Runtime as Config>::WithDefaultValue as Get<u32>>::get(),
 			<<TestDefaultConfig as DefaultConfig>::WithDefaultValue as Get<u32>>::get()
 		);
 
 		// assert one of the value types that is overwritten.
-		assert_eq!(<<Test as Config>::OverwrittenDefaultValue as Get<u32>>::get(), 678u32);
+		assert_eq!(<<Runtime as Config>::OverwrittenDefaultValue as Get<u32>>::get(), 678u32);
 
 		// assert one of the types that is not overwritten.
 		assert_eq!(
-			std::any::TypeId::of::<<Test as Config>::WithDefaultType>(),
+			std::any::TypeId::of::<<Runtime as Config>::WithDefaultType>(),
 			std::any::TypeId::of::<<TestDefaultConfig as DefaultConfig>::WithDefaultType>()
 		);
 
 		// assert one of the types that is overwritten.
 		assert_eq!(
-			std::any::TypeId::of::<<Test as Config>::OverwrittenDefaultType>(),
+			std::any::TypeId::of::<<Runtime as Config>::OverwrittenDefaultType>(),
 			std::any::TypeId::of::<u128>()
 		)
 	}

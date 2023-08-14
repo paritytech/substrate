@@ -27,6 +27,8 @@ frame-election-provider-support = { version = "4.0.0-dev", default-features = fa
 
 # third party
 log = { version = "0.4.17", default-features = false }
+docify = "0.2.1"
+aquamarine = { version = "0.3.2" }
 
 # Optional imports for benchmarking
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking", optional = true, default-features = false }
@@ -67,6 +69,9 @@ runtime-benchmarks = [
 	"pallet-balances/runtime-benchmarks",
 	"sp-tracing",
 	"frame-election-provider-support/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks"
 ]
 fuzz = [
 	"sp-core",
@@ -75,4 +80,10 @@ fuzz = [
 	"sp-tracing",
 	"frame-election-provider-support/fuzz",
 ]
-try-runtime = [ "frame-support/try-runtime", "frame-election-provider-support/try-runtime" ]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-election-provider-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-balances?/try-runtime",
+	"sp-runtime/try-runtime"
+]
