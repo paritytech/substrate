@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use futures::channel::oneshot;
 use parking_lot::RwLock;
 use sc_client_api::Backend;
 use sp_runtime::traits::Block as BlockT;
@@ -25,9 +24,9 @@ use std::{sync::Arc, time::Duration};
 mod error;
 mod inner;
 
+use self::inner::SubscriptionsInner;
 pub use error::SubscriptionManagementError;
-pub use inner::BlockGuard;
-use inner::SubscriptionsInner;
+pub use inner::{BlockGuard, InsertedSubscriptionData};
 
 /// Manage block pinning / unpinning for subscription IDs.
 pub struct SubscriptionManagement<Block: BlockT, BE: Backend<Block>> {
@@ -61,7 +60,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionManagement<Block, BE> {
 		&self,
 		sub_id: String,
 		runtime_updates: bool,
-	) -> Option<oneshot::Receiver<()>> {
+	) -> Option<InsertedSubscriptionData<Block>> {
 		let mut inner = self.inner.write();
 		inner.insert_subscription(sub_id, runtime_updates)
 	}

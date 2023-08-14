@@ -37,9 +37,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, Header as HeaderT},
 	ConsensusEngineId, Justifications, StateVersion,
 };
-use sp_state_machine::{
-	backend::Backend as _, ExecutionStrategy, InMemoryBackend, OverlayedChanges, StateMachine,
-};
+use sp_state_machine::{backend::Backend as _, InMemoryBackend, OverlayedChanges, StateMachine};
 use sp_storage::{ChildInfo, StorageKey};
 use sp_trie::{LayoutV0, TrieConfiguration};
 use std::{collections::HashSet, sync::Arc};
@@ -90,11 +88,11 @@ fn construct_block(
 		&new_native_or_wasm_executor(),
 		"Core_initialize_block",
 		&header.encode(),
-		Default::default(),
+		&mut Default::default(),
 		&runtime_code,
 		CallContext::Onchain,
 	)
-	.execute(ExecutionStrategy::NativeElseWasm)
+	.execute()
 	.unwrap();
 
 	for tx in transactions.iter() {
@@ -104,11 +102,11 @@ fn construct_block(
 			&new_native_or_wasm_executor(),
 			"BlockBuilder_apply_extrinsic",
 			&tx.encode(),
-			Default::default(),
+			&mut Default::default(),
 			&runtime_code,
 			CallContext::Onchain,
 		)
-		.execute(ExecutionStrategy::NativeElseWasm)
+		.execute()
 		.unwrap();
 	}
 
@@ -118,11 +116,11 @@ fn construct_block(
 		&new_native_or_wasm_executor(),
 		"BlockBuilder_finalize_block",
 		&[],
-		Default::default(),
+		&mut Default::default(),
 		&runtime_code,
 		CallContext::Onchain,
 	)
-	.execute(ExecutionStrategy::NativeElseWasm)
+	.execute()
 	.unwrap();
 	header = Header::decode(&mut &ret_data[..]).unwrap();
 
@@ -189,11 +187,11 @@ fn construct_genesis_should_work_with_native() {
 		&new_native_or_wasm_executor(),
 		"Core_execute_block",
 		&b1data,
-		Default::default(),
+		&mut Default::default(),
 		&runtime_code,
 		CallContext::Onchain,
 	)
-	.execute(ExecutionStrategy::NativeElseWasm)
+	.execute()
 	.unwrap();
 }
 
@@ -220,11 +218,11 @@ fn construct_genesis_should_work_with_wasm() {
 		&new_native_or_wasm_executor(),
 		"Core_execute_block",
 		&b1data,
-		Default::default(),
+		&mut Default::default(),
 		&runtime_code,
 		CallContext::Onchain,
 	)
-	.execute(ExecutionStrategy::AlwaysWasm)
+	.execute()
 	.unwrap();
 }
 
@@ -1670,22 +1668,21 @@ fn storage_keys_prefix_and_start_key_works() {
 
 	let block_hash = client.info().best_hash;
 
-	let child_root = b":child_storage:default:child".to_vec();
+	let child_root = array_bytes::bytes2hex("", b":child_storage:default:child");
 	let prefix = StorageKey(array_bytes::hex2bytes_unchecked("3a"));
 	let child_prefix = StorageKey(b"sec".to_vec());
 
 	let res: Vec<_> = client
 		.storage_keys(block_hash, Some(&prefix), None)
 		.unwrap()
-		.map(|x| x.0)
+		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
 	assert_eq!(
 		res,
 		[
-			child_root.clone(),
-			array_bytes::hex2bytes_unchecked("3a636f6465"), //":code"
-			array_bytes::hex2bytes_unchecked("3a65787472696e7369635f696e646578"), //":extrinsic_index"
-			array_bytes::hex2bytes_unchecked("3a686561707061676573"), //":heappages"
+			&child_root,
+			"3a636f6465",                       //":code"
+			"3a65787472696e7369635f696e646578", //":extrinsic_index"
 		]
 	);
 
@@ -1696,15 +1693,9 @@ fn storage_keys_prefix_and_start_key_works() {
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f6465"))),
 		)
 		.unwrap()
-		.map(|x| x.0)
+		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
-	assert_eq!(
-		res,
-		[
-			array_bytes::hex2bytes_unchecked("3a65787472696e7369635f696e646578"),
-			array_bytes::hex2bytes_unchecked("3a686561707061676573")
-		]
-	);
+	assert_eq!(res, ["3a65787472696e7369635f696e646578",]);
 
 	let res: Vec<_> = client
 		.storage_keys(
@@ -1737,7 +1728,7 @@ fn storage_keys_works() {
 	sp_tracing::try_init_simple();
 
 	let expected_keys =
-		substrate_test_runtime::storage_key_generator::get_expected_storage_hashed_keys();
+		substrate_test_runtime::storage_key_generator::get_expected_storage_hashed_keys(false);
 
 	let client = substrate_test_runtime_client::new();
 	let block_hash = client.info().best_hash;
@@ -1776,10 +1767,10 @@ fn storage_keys_works() {
 		res,
 		expected_keys
 			.iter()
-			.filter(|&i| i > &"3a636f64".to_string())
+			.filter(|&i| *i > "3a636f64")
 			.take(8)
 			.cloned()
-			.collect::<Vec<String>>()
+			.collect::<Vec<_>>()
 	);
 
 	// Starting at a complete key the first key is skipped.
@@ -1797,10 +1788,10 @@ fn storage_keys_works() {
 		res,
 		expected_keys
 			.iter()
-			.filter(|&i| i > &"3a636f6465".to_string())
+			.filter(|&i| *i > "3a636f6465")
 			.take(8)
 			.cloned()
-			.collect::<Vec<String>>()
+			.collect::<Vec<_>>()
 	);
 
 	const SOME_BALANCE_KEY : &str = "26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9e2c1dc507e2035edbbd8776c440d870460c57f0008067cc01c5ff9eb2e2f9b3a94299a915a91198bd1021a6c55596f57";
@@ -1818,10 +1809,10 @@ fn storage_keys_works() {
 		res,
 		expected_keys
 			.iter()
-			.filter(|&i| i > &SOME_BALANCE_KEY.to_string())
+			.filter(|&i| *i > SOME_BALANCE_KEY)
 			.take(8)
 			.cloned()
-			.collect::<Vec<String>>()
+			.collect::<Vec<_>>()
 	);
 }
 
@@ -1848,7 +1839,6 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 		backend,
 		executor,
 		genesis_block_builder,
-		None,
 		None,
 		None,
 		Box::new(TaskExecutor::new()),

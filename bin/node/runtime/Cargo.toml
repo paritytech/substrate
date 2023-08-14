@@ -121,7 +121,8 @@ pallet-treasury = { version = "4.0.0-dev", default-features = false, path = "../
 pallet-utility = { version = "4.0.0-dev", default-features = false, path = "../../../frame/utility" }
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment" }
 pallet-transaction-payment-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
-pallet-asset-tx-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment/asset-tx-payment/" }
+pallet-asset-conversion-tx-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment/asset-conversion-tx-payment" }
+pallet-asset-tx-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment/asset-tx-payment" }
 pallet-transaction-storage = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-storage" }
 pallet-uniques = { version = "4.0.0-dev", default-features = false, path = "../../../frame/uniques" }
 pallet-vesting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/vesting" }
@@ -137,6 +138,7 @@ std = [
 	"pallet-whitelist/std",
 	"pallet-offences-benchmarking?/std",
 	"pallet-election-provider-support-benchmarking?/std",
+	"pallet-asset-conversion-tx-payment/std",
 	"pallet-asset-tx-payment/std",
 	"frame-system-benchmarking?/std",
 	"frame-election-provider-support/std",
@@ -295,6 +297,11 @@ runtime-benchmarks = [
 	"pallet-vesting/runtime-benchmarks",
 	"pallet-whitelist/runtime-benchmarks",
 	"frame-system-benchmarking/runtime-benchmarks",
+	"frame-election-provider-support/runtime-benchmarks",
+	"pallet-asset-tx-payment/runtime-benchmarks",
+	"pallet-nomination-pools/runtime-benchmarks",
+	"pallet-offences/runtime-benchmarks",
+	"sp-staking/runtime-benchmarks"
 ]
 try-runtime = [
 	"frame-try-runtime/try-runtime",
@@ -355,6 +362,7 @@ try-runtime = [
 	"pallet-asset-rate/try-runtime",
 	"pallet-utility/try-runtime",
 	"pallet-transaction-payment/try-runtime",
+	"pallet-asset-conversion-tx-payment/try-runtime",
 	"pallet-asset-tx-payment/try-runtime",
 	"pallet-transaction-storage/try-runtime",
 	"pallet-uniques/try-runtime",
@@ -362,4 +370,7 @@ try-runtime = [
 	"pallet-nft-fractionalization/try-runtime",
 	"pallet-vesting/try-runtime",
 	"pallet-whitelist/try-runtime",
+	"frame-election-provider-support/try-runtime",
+	"sp-runtime/try-runtime"
 ]
+unsafe-debug = ["pallet-contracts/unsafe-debug"]

@@ -51,6 +51,10 @@ pub struct RunCmd {
 	#[arg(long)]
 	pub no_grandpa: bool,
 
+	/// Disable BEEFY voter when running in validator mode, otherwise disable the BEEFY observer.
+	#[arg(long)]
+	pub no_beefy: bool,
+
 	/// Listen to all RPC interfaces.
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
 	/// proxy server to filter out dangerous methods. More details:
@@ -313,6 +317,10 @@ impl CliConfiguration for RunCmd {
 		Ok(self.no_grandpa)
 	}
 
+	fn disable_beefy(&self) -> Result<bool> {
+		Ok(self.no_beefy)
+	}
+
 	fn rpc_max_connections(&self) -> Result<u32> {
 		Ok(self.rpc_max_connections)
 	}
@@ -394,6 +402,11 @@ impl CliConfiguration for RunCmd {
 /// Check whether a node name is considered as valid.
 pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 	let name = _name.to_string();
+
+	if name.is_empty() {
+		return Err("Node name cannot be empty")
+	}
+
 	if name.chars().count() >= crate::NODE_NAME_MAX_LENGTH {
 		return Err("Node name too long")
 	}
@@ -404,7 +417,7 @@ pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 		return Err("Node name should not contain invalid chars such as '.' and '@'")
 	}
 
-	let invalid_patterns = r"(https?:\\/+)?(www)+";
+	let invalid_patterns = r"^https?:";
 	let re = Regex::new(invalid_patterns).unwrap();
 	if re.is_match(&name) {
 		return Err("Node name should not contain urls")
@@ -490,18 +503,32 @@ mod tests {
 	#[test]
 	fn tests_node_name_good() {
 		assert!(is_node_name_valid("short name").is_ok());
+		assert!(is_node_name_valid("www").is_ok());
+		assert!(is_node_name_valid("aawww").is_ok());
+		assert!(is_node_name_valid("wwwaa").is_ok());
+		assert!(is_node_name_valid("www aa").is_ok());
 	}
 
 	#[test]
 	fn tests_node_name_bad() {
+		assert!(is_node_name_valid("").is_err());
 		assert!(is_node_name_valid(
 			"very very long names are really not very cool for the ui at all, really they're not"
 		)
 		.is_err());
 		assert!(is_node_name_valid("Dots.not.Ok").is_err());
-		assert!(is_node_name_valid("http://visit.me").is_err());
-		assert!(is_node_name_valid("https://visit.me").is_err());
+		// NOTE: the urls below don't include a domain otherwise
+		// they'd get filtered for including a `.`
+		assert!(is_node_name_valid("http://visitme").is_err());
+		assert!(is_node_name_valid("http:/visitme").is_err());
+		assert!(is_node_name_valid("http:visitme").is_err());
+		assert!(is_node_name_valid("https://visitme").is_err());
+		assert!(is_node_name_valid("https:/visitme").is_err());
+		assert!(is_node_name_valid("https:visitme").is_err());
 		assert!(is_node_name_valid("www.visit.me").is_err());
+		assert!(is_node_name_valid("www.visit").is_err());
+		assert!(is_node_name_valid("hello\\world").is_err());
+		assert!(is_node_name_valid("visit.www").is_err());
 		assert!(is_node_name_valid("email@domain").is_err());
 	}
 }

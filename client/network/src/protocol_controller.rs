@@ -52,13 +52,93 @@ use std::{
 };
 use wasm_timer::Delay;
 
-use crate::{
-	peer_store::PeerStoreProvider,
-	peerset::{IncomingIndex, Message, SetConfig, SetId},
-};
+use crate::peer_store::PeerStoreProvider;
 
 /// Log target for this file.
 pub const LOG_TARGET: &str = "peerset";
+
+/// `Notifications` protocol index. For historical reasons it's called `SetId`, because it
+/// used to refer to a set of peers in a peerset for this protocol.
+///
+/// Can be constructed using the `From<usize>` trait implementation based on the index of the
+/// protocol in `Notifications`.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SetId(usize);
+
+impl SetId {
+	/// Const conversion function for initialization of hardcoded peerset indices.
+	pub const fn from(id: usize) -> Self {
+		Self(id)
+	}
+}
+
+impl From<usize> for SetId {
+	fn from(id: usize) -> Self {
+		Self(id)
+	}
+}
+
+impl From<SetId> for usize {
+	fn from(id: SetId) -> Self {
+		id.0
+	}
+}
+
+/// Configuration for a set of nodes for a specific protocol.
+#[derive(Debug)]
+pub struct ProtoSetConfig {
+	/// Maximum number of incoming links to peers.
+	pub in_peers: u32,
+
+	/// Maximum number of outgoing links to peers.
+	pub out_peers: u32,
+
+	/// Lists of nodes we should always be connected to.
+	///
+	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
+	/// >			otherwise it will not be able to connect to them.
+	pub reserved_nodes: HashSet<PeerId>,
+
+	/// If true, we only accept nodes in [`ProtoSetConfig::reserved_nodes`].
+	pub reserved_only: bool,
+}
+
+/// Message that is sent by [`ProtocolController`] to `Notifications`.
+#[derive(Debug, PartialEq)]
+pub enum Message {
+	/// Request to open a connection to the given peer. From the point of view of the
+	/// `ProtocolController`, we are immediately connected.
+	Connect {
+		/// Set id to connect on.
+		set_id: SetId,
+		/// Peer to connect to.
+		peer_id: PeerId,
+	},
+
+	/// Drop the connection to the given peer, or cancel the connection attempt after a `Connect`.
+	Drop {
+		/// Set id to disconnect on.
+		set_id: SetId,
+		/// Peer to disconnect from.
+		peer_id: PeerId,
+	},
+
+	/// Equivalent to `Connect` for the peer corresponding to this incoming index.
+	Accept(IncomingIndex),
+
+	/// Equivalent to `Drop` for the peer corresponding to this incoming index.
+	Reject(IncomingIndex),
+}
+
+/// Opaque identifier for an incoming connection. Allocated by the network.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IncomingIndex(pub u64);
+
+impl From<u64> for IncomingIndex {
+	fn from(val: u64) -> Self {
+		Self(val)
+	}
+}
 
 /// External API actions.
 #[derive(Debug)]
@@ -179,8 +259,7 @@ impl Default for PeerState {
 	}
 }
 
-/// Side of [`ProtocolHandle`] responsible for all the logic. Currently all instances are
-/// owned by [`crate::Peerset`], but they should eventually be moved to corresponding protocols.
+/// Worker side of [`ProtocolHandle`] responsible for all the logic.
 #[derive(Debug)]
 pub struct ProtocolController {
 	/// Set id to use when sending connect/drop requests to `Notifications`.
@@ -217,7 +296,7 @@ impl ProtocolController {
 	/// Construct new [`ProtocolController`].
 	pub fn new(
 		set_id: SetId,
-		config: SetConfig,
+		config: ProtoSetConfig,
 		to_notifications: TracingUnboundedSender<Message>,
 		peer_store: Box<dyn PeerStoreProvider>,
 	) -> (ProtocolHandle, ProtocolController) {
@@ -306,11 +385,10 @@ impl ProtocolController {
 	}
 
 	/// Send "accept" message to `Notifications`.
-	fn accept_connection(&mut self, incoming_index: IncomingIndex) {
+	fn accept_connection(&mut self, peer_id: PeerId, incoming_index: IncomingIndex) {
 		trace!(
 			target: LOG_TARGET,
-			"Accepting {:?} on {:?} ({}/{} num_in/max_in).",
-			incoming_index,
+			"Accepting {peer_id} ({incoming_index:?}) on {:?} ({}/{} num_in/max_in).",
 			self.set_id,
 			self.num_in,
 			self.max_in,
@@ -320,11 +398,10 @@ impl ProtocolController {
 	}
 
 	/// Send "reject" message to `Notifications`.
-	fn reject_connection(&mut self, incoming_index: IncomingIndex) {
+	fn reject_connection(&mut self, peer_id: PeerId, incoming_index: IncomingIndex) {
 		trace!(
 			target: LOG_TARGET,
-			"Rejecting {:?} on {:?} ({}/{} num_in/max_in).",
-			incoming_index,
+			"Rejecting {peer_id} ({incoming_index:?}) on {:?} ({}/{} num_in/max_in).",
 			self.set_id,
 			self.num_in,
 			self.max_in,
@@ -337,8 +414,7 @@ impl ProtocolController {
 	fn start_connection(&mut self, peer_id: PeerId) {
 		trace!(
 			target: LOG_TARGET,
-			"Connecting to {} on {:?} ({}/{} num_out/max_out).",
-			peer_id,
+			"Connecting to {peer_id} on {:?} ({}/{} num_out/max_out).",
 			self.set_id,
 			self.num_out,
 			self.max_out,
@@ -353,8 +429,7 @@ impl ProtocolController {
 	fn drop_connection(&mut self, peer_id: PeerId) {
 		trace!(
 			target: LOG_TARGET,
-			"Dropping {} on {:?} ({}/{} num_in/max_in, {}/{} num_out/max_out).",
-			peer_id,
+			"Dropping {peer_id} on {:?} ({}/{} num_in/max_in, {}/{} num_out/max_out).",
 			self.set_id,
 			self.num_in,
 			self.max_in,
@@ -384,7 +459,8 @@ impl ProtocolController {
 		if self.reserved_nodes.contains_key(&peer_id) {
 			warn!(
 				target: LOG_TARGET,
-				"Trying to add an already reserved node as reserved: {peer_id}.",
+				"Trying to add an already reserved node {peer_id} as reserved on {:?}.",
+				self.set_id,
 			);
 			return
 		}
@@ -394,12 +470,15 @@ impl ProtocolController {
 			Some(direction) => {
 				trace!(
 					target: LOG_TARGET,
-					"Marking previously connected node {peer_id} ({direction:?}) as reserved.",
+					"Marking previously connected node {} ({:?}) as reserved on {:?}.",
+					peer_id,
+					direction,
+					self.set_id
 				);
 				PeerState::Connected(direction)
 			},
 			None => {
-				trace!(target: LOG_TARGET, "Adding reserved node {peer_id}.");
+				trace!(target: LOG_TARGET, "Adding reserved node {peer_id} on {:?}.", self.set_id,);
 				PeerState::NotConnected
 			},
 		};
@@ -420,7 +499,10 @@ impl ProtocolController {
 		let state = match self.reserved_nodes.remove(&peer_id) {
 			Some(state) => state,
 			None => {
-				warn!(target: LOG_TARGET, "Trying to remove unknown reserved node: {peer_id}.");
+				warn!(
+					target: LOG_TARGET,
+					"Trying to remove unknown reserved node {peer_id} from {:?}.", self.set_id,
+				);
 				return
 			},
 		};
@@ -430,9 +512,7 @@ impl ProtocolController {
 				// Disconnect the node.
 				trace!(
 					target: LOG_TARGET,
-					"Disconnecting previously reserved node {} ({:?}) on {:?}.",
-					peer_id,
-					direction,
+					"Disconnecting previously reserved node {peer_id} ({direction:?}) on {:?}.",
 					self.set_id,
 				);
 				self.drop_connection(peer_id);
@@ -440,8 +520,7 @@ impl ProtocolController {
 				// Count connections as of regular node.
 				trace!(
 					target: LOG_TARGET,
-					"Making a connected reserved node {} ({:?}) on {:?} a regular one.",
-					peer_id,
+					"Making a connected reserved node {peer_id} ({:?}) on {:?} a regular one.",
 					direction,
 					self.set_id,
 				);
@@ -456,7 +535,11 @@ impl ProtocolController {
 				assert!(prev.is_none(), "Corrupted state: reserved node was also non-reserved.");
 			}
 		} else {
-			trace!(target: LOG_TARGET, "Removed disconnected reserved node {peer_id}.");
+			trace!(
+				target: LOG_TARGET,
+				"Removed disconnected reserved node {peer_id} from {:?}.",
+				self.set_id,
+			);
 		}
 	}
 
@@ -479,7 +562,7 @@ impl ProtocolController {
 	/// Change "reserved only" flag. In "reserved only" mode we connect and accept connections to
 	/// reserved nodes only.
 	fn on_set_reserved_only(&mut self, reserved_only: bool) {
-		trace!(target: LOG_TARGET, "Set reserved only: {reserved_only}");
+		trace!(target: LOG_TARGET, "Set reserved only to `{reserved_only}` on {:?}", self.set_id);
 
 		self.reserved_only = reserved_only;
 
@@ -515,14 +598,18 @@ impl ProtocolController {
 		if self.reserved_nodes.contains_key(&peer_id) {
 			debug!(
 				target: LOG_TARGET,
-				"Ignoring request to disconnect reserved peer {} from {:?}.", peer_id, self.set_id,
+				"Ignoring request to disconnect reserved peer {peer_id} from {:?}.", self.set_id,
 			);
 			return
 		}
 
 		match self.nodes.remove(&peer_id) {
 			Some(direction) => {
-				trace!(target: LOG_TARGET, "Disconnecting peer {peer_id} ({direction:?}).");
+				trace!(
+					target: LOG_TARGET,
+					"Disconnecting peer {peer_id} ({direction:?}) from {:?}.",
+					self.set_id
+				);
 				match direction {
 					Direction::Inbound => self.num_in -= 1,
 					Direction::Outbound => self.num_out -= 1,
@@ -532,7 +619,7 @@ impl ProtocolController {
 			None => {
 				debug!(
 					target: LOG_TARGET,
-					"Trying to disconnect unknown peer {} from {:?}.", peer_id, self.set_id,
+					"Trying to disconnect unknown peer {peer_id} from {:?}.", self.set_id,
 				);
 			},
 		}
@@ -550,10 +637,14 @@ impl ProtocolController {
 	// until it receives a response for the incoming request to `ProtocolController`, so we must
 	// ensure we handle this incoming request correctly.
 	fn on_incoming_connection(&mut self, peer_id: PeerId, incoming_index: IncomingIndex) {
-		trace!(target: LOG_TARGET, "Incoming connection from peer {peer_id} ({incoming_index:?}).",);
+		trace!(
+			target: LOG_TARGET,
+			"Incoming connection from peer {peer_id} ({incoming_index:?}) on {:?}.",
+			self.set_id,
+		);
 
 		if self.reserved_only && !self.reserved_nodes.contains_key(&peer_id) {
-			self.reject_connection(incoming_index);
+			self.reject_connection(peer_id, incoming_index);
 			return
 		}
 
@@ -564,14 +655,14 @@ impl ProtocolController {
 					// We are accepting an incoming connection, so ensure the direction is inbound.
 					// (See the implementation note above.)
 					*direction = Direction::Inbound;
-					self.accept_connection(incoming_index);
+					self.accept_connection(peer_id, incoming_index);
 				},
 				PeerState::NotConnected =>
 					if self.peer_store.is_banned(&peer_id) {
-						self.reject_connection(incoming_index);
+						self.reject_connection(peer_id, incoming_index);
 					} else {
 						*state = PeerState::Connected(Direction::Inbound);
-						self.accept_connection(incoming_index);
+						self.accept_connection(peer_id, incoming_index);
 					},
 			}
 			return
@@ -582,9 +673,10 @@ impl ProtocolController {
 		if let Some(direction) = self.nodes.remove(&peer_id) {
 			trace!(
 				target: LOG_TARGET,
-				"Handling incoming connection from peer {} we think we already connected as {:?}.",
+				"Handling incoming connection from peer {} we think we already connected as {:?} on {:?}.",
 				peer_id,
 				direction,
+				self.set_id
 			);
 			match direction {
 				Direction::Inbound => self.num_in -= 1,
@@ -593,18 +685,18 @@ impl ProtocolController {
 		}
 
 		if self.num_in >= self.max_in {
-			self.reject_connection(incoming_index);
+			self.reject_connection(peer_id, incoming_index);
 			return
 		}
 
 		if self.is_banned(&peer_id) {
-			self.reject_connection(incoming_index);
+			self.reject_connection(peer_id, incoming_index);
 			return
 		}
 
 		self.num_in += 1;
 		self.nodes.insert(peer_id, Direction::Inbound);
-		self.accept_connection(incoming_index);
+		self.accept_connection(peer_id, incoming_index);
 	}
 
 	/// Indicate that a connection with the peer was dropped.
@@ -615,8 +707,7 @@ impl ProtocolController {
 			// for a peer we already disconnected ourself.
 			trace!(
 				target: LOG_TARGET,
-				"Received `Action::Dropped` for not connected peer {} on {:?}.",
-				peer_id,
+				"Received `Action::Dropped` for not connected peer {peer_id} on {:?}.",
 				self.set_id,
 			)
 		});
@@ -639,12 +730,14 @@ impl ProtocolController {
 	/// disconnected, `Ok(false)` if it wasn't found, `Err(PeerId)`, if the peer found, but not in
 	/// connected state.
 	fn drop_reserved_peer(&mut self, peer_id: &PeerId) -> Result<bool, PeerId> {
-		let Some(state) = self.reserved_nodes.get_mut(peer_id) else {
-			return Ok(false)
-		};
+		let Some(state) = self.reserved_nodes.get_mut(peer_id) else { return Ok(false) };
 
 		if let PeerState::Connected(direction) = state {
-			trace!(target: LOG_TARGET, "Reserved peer {peer_id} ({direction:?}) dropped.");
+			trace!(
+				target: LOG_TARGET,
+				"Reserved peer {peer_id} ({direction:?}) dropped from {:?}.",
+				self.set_id,
+			);
 			*state = PeerState::NotConnected;
 			Ok(true)
 		} else {
@@ -655,11 +748,13 @@ impl ProtocolController {
 	/// Try dropping the peer as a regular peer. Return `true` if the peer was found and
 	/// disconnected, `false` if it wasn't found.
 	fn drop_regular_peer(&mut self, peer_id: &PeerId) -> bool {
-		let Some(direction) = self.nodes.remove(peer_id) else {
-			return false
-		};
+		let Some(direction) = self.nodes.remove(peer_id) else { return false };
 
-		trace!(target: LOG_TARGET, "Peer {peer_id} ({direction:?}) dropped.");
+		trace!(
+			target: LOG_TARGET,
+			"Peer {peer_id} ({direction:?}) dropped from {:?}.",
+			self.set_id,
+		);
 
 		match direction {
 			Direction::Inbound => self.num_in -= 1,
@@ -742,12 +837,8 @@ impl ProtocolController {
 
 #[cfg(test)]
 mod tests {
-	use super::{Direction, PeerState, ProtocolController, ProtocolHandle};
-	use crate::{
-		peer_store::PeerStoreProvider,
-		peerset::{IncomingIndex, Message, SetConfig, SetId},
-		ReputationChange,
-	};
+	use super::*;
+	use crate::{peer_store::PeerStoreProvider, ReputationChange};
 	use libp2p::PeerId;
 	use sc_utils::mpsc::{tracing_unbounded, TryRecvError};
 	use std::collections::HashSet;
@@ -772,10 +863,9 @@ mod tests {
 		let reserved2 = PeerId::random();
 
 		// Add first reserved node via config.
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			out_peers: 0,
-			bootnodes: Vec::new(),
 			reserved_nodes: std::iter::once(reserved1).collect(),
 			reserved_only: true,
 		};
@@ -835,10 +925,9 @@ mod tests {
 		let reserved2 = PeerId::random();
 
 		// Add first reserved node via config.
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			out_peers: 0,
-			bootnodes: Vec::new(),
 			reserved_nodes: std::iter::once(reserved1).collect(),
 			reserved_only: true,
 		};
@@ -887,10 +976,9 @@ mod tests {
 		let reserved2 = PeerId::random();
 
 		// Add first reserved node via config.
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			out_peers: 0,
-			bootnodes: Vec::new(),
 			reserved_nodes: std::iter::once(reserved1).collect(),
 			reserved_only: true,
 		};
@@ -946,11 +1034,10 @@ mod tests {
 		let peer2 = PeerId::random();
 		let candidates = vec![peer1, peer2];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			// Less slots than candidates.
 			out_peers: 2,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -998,13 +1085,8 @@ mod tests {
 		let outgoing_candidates = vec![regular1, regular2];
 		let reserved_nodes = [reserved1, reserved2].iter().cloned().collect();
 
-		let config = SetConfig {
-			in_peers: 10,
-			out_peers: 10,
-			bootnodes: Vec::new(),
-			reserved_nodes,
-			reserved_only: false,
-		};
+		let config =
+			ProtoSetConfig { in_peers: 10, out_peers: 10, reserved_nodes, reserved_only: false };
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
 		let mut peer_store = MockPeerStoreHandle::new();
@@ -1039,11 +1121,10 @@ mod tests {
 		let candidates1 = vec![peer1, peer2];
 		let candidates2 = vec![peer3];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			// Less slots than candidates.
 			out_peers: 2,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1110,11 +1191,10 @@ mod tests {
 
 	#[test]
 	fn in_reserved_only_mode_no_peers_are_requested_from_peer_store_and_connected() {
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			// Make sure we have slots available.
 			out_peers: 2,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: true,
 		};
@@ -1137,11 +1217,10 @@ mod tests {
 
 	#[test]
 	fn in_reserved_only_mode_no_regular_peers_are_accepted() {
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			// Make sure we have slots available.
 			in_peers: 2,
 			out_peers: 0,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: true,
 		};
@@ -1175,11 +1254,10 @@ mod tests {
 		let peer2 = PeerId::random();
 		let candidates = vec![peer1, peer2];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			// Make sure we have slots available.
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: true,
 		};
@@ -1223,10 +1301,9 @@ mod tests {
 		let regular2 = PeerId::random();
 		let outgoing_candidates = vec![regular1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
 			reserved_only: false,
 		};
@@ -1284,10 +1361,9 @@ mod tests {
 		let reserved1 = PeerId::random();
 		let reserved2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
 			reserved_only: false,
 		};
@@ -1317,10 +1393,9 @@ mod tests {
 		let reserved1 = PeerId::random();
 		let reserved2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
 			reserved_only: true,
 		};
@@ -1364,10 +1439,9 @@ mod tests {
 		let peer1 = PeerId::random();
 		let peer2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [peer1, peer2].iter().cloned().collect(),
 			reserved_only: false,
 		};
@@ -1411,10 +1485,9 @@ mod tests {
 		let peer2 = PeerId::random();
 		let outgoing_candidates = vec![peer1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1454,10 +1527,9 @@ mod tests {
 		let peer2 = PeerId::random();
 		let outgoing_candidates = vec![peer1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1514,10 +1586,9 @@ mod tests {
 		let reserved1 = PeerId::random();
 		let reserved2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
 			reserved_only: false,
 		};
@@ -1571,10 +1642,9 @@ mod tests {
 		let peer2 = PeerId::random();
 		let outgoing_candidates = vec![peer1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1624,10 +1694,9 @@ mod tests {
 		let reserved1 = PeerId::random();
 		let reserved2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
 			reserved_only: false,
 		};
@@ -1685,10 +1754,9 @@ mod tests {
 		let regular2 = PeerId::random();
 		let outgoing_candidates = vec![regular1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1738,10 +1806,9 @@ mod tests {
 		let regular2 = PeerId::random();
 		let outgoing_candidates = vec![regular1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1792,10 +1859,9 @@ mod tests {
 		let regular2 = PeerId::random();
 		let outgoing_candidates = vec![regular1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 1,
 			out_peers: 1,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1846,10 +1912,9 @@ mod tests {
 		let peer1 = PeerId::random();
 		let peer2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 1,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1877,10 +1942,9 @@ mod tests {
 	fn banned_regular_incoming_node_is_rejected() {
 		let peer1 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1903,10 +1967,9 @@ mod tests {
 	fn banned_reserved_incoming_node_is_rejected() {
 		let reserved1 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: std::iter::once(reserved1).collect(),
 			reserved_only: false,
 		};
@@ -1930,10 +1993,9 @@ mod tests {
 	fn we_dont_connect_to_banned_reserved_node() {
 		let reserved1 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: std::iter::once(reserved1).collect(),
 			reserved_only: false,
 		};

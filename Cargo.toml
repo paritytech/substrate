@@ -1,3 +1,45 @@
+[package]
+name = "substrate"
+description = "Next-generation framework for blockchain innovation"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+version = "0.0.0"
+
+# This list of dependencies is for documentation purposes only.
+[dependencies]
+aquamarine = "0.3.2"
+
+subkey = { path = "bin/utils/subkey" }
+chain-spec-builder = { path = "bin/utils/chain-spec-builder" }
+
+sc-service = { path = "client/service" }
+sc-cli = { path = "client/cli" }
+sc-consensus-aura = { path = "client/consensus/aura" }
+sc-consensus-babe = { path = "client/consensus/babe" }
+sc-consensus-grandpa = { path = "client/consensus/grandpa" }
+sc-consensus-beefy = { path = "client/consensus/beefy" }
+sc-consensus-manual-seal = { path = "client/consensus/manual-seal" }
+sc-consensus-pow = { path = "client/consensus/pow" }
+
+sp-runtime = { path = "primitives/runtime" }
+frame-support = { path = "frame/support" }
+
+node-cli = { path = "bin/node/cli" }
+
+# Exists here to be backwards compatible and to support `cargo run` in the workspace.
+#
+# Just uses the `node-cli` main binary. `node-cli` itself also again exposes the node as
+# `substrate-node`.
+
+# `cargo run` on its own doesn't support features. To use features you must explicitly use
+# `node-cli` in your command, e.g. `cargo run -p node-cli --features try-runtime ...`.
+[[bin]]
+name = "substrate"
+path = "bin/node/cli/bin/main.rs"
+
 [workspace]
 resolver = "2"
 
@@ -111,6 +153,7 @@ members = [
 	"frame/examples/offchain-worker",
 	"frame/examples/kitchensink",
 	"frame/examples/dev-mode",
+	"frame/examples/split",
 	"frame/examples/default-config",
 	"frame/executive",
 	"frame/nis",
@@ -137,6 +180,8 @@ members = [
 	"frame/nomination-pools/benchmarking",
 	"frame/nomination-pools/test-staking",
 	"frame/nomination-pools/runtime-api",
+	"frame/paged-list",
+	"frame/paged-list/fuzzer",
 	"frame/insecure-randomness-collective-flip",
 	"frame/ranked-collective",
 	"frame/recovery",
@@ -169,6 +214,7 @@ members = [
 	"frame/system/rpc/runtime-api",
 	"frame/timestamp",
 	"frame/transaction-payment",
+	"frame/transaction-payment/asset-conversion-tx-payment",
 	"frame/transaction-payment/asset-tx-payment",
 	"frame/transaction-payment/rpc",
 	"frame/transaction-payment/rpc/runtime-api",
@@ -205,6 +251,7 @@ members = [
 	"primitives/database",
 	"primitives/debug-derive",
 	"primitives/externalities",
+	"primitives/genesis-builder",
 	"primitives/inherents",
 	"primitives/io",
 	"primitives/keyring",
@@ -241,6 +288,7 @@ members = [
 	"primitives/weights",
 	"scripts/ci/node-template-release",
 	"test-utils",
+	"test-utils/cli",
 	"test-utils/client",
 	"test-utils/derive",
 	"test-utils/runtime",

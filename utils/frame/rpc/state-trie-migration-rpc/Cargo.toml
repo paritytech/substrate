@@ -13,10 +13,8 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false }
 serde = { version = "1", features = ["derive"] }
-log = { version = "0.4.17", default-features = false }
 
 sp-core = { path = "../../../../primitives/core" }
 sp-state-machine = { path = "../../../../primitives/state-machine" }

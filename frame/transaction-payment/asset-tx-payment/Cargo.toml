@@ -52,10 +52,25 @@ std = [
 	"sp-core/std",
 	"pallet-transaction-payment/std",
 	"frame-benchmarking?/std",
+	"pallet-assets/std",
+	"pallet-authorship/std",
+	"pallet-balances/std",
+	"sp-storage/std"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"pallet-assets/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks"
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-assets/try-runtime",
+	"pallet-authorship/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-transaction-payment/try-runtime",
+	"sp-runtime/try-runtime"
+]

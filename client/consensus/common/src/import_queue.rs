@@ -95,7 +95,7 @@ pub struct IncomingBlock<B: BlockT> {
 
 /// Verify a justification of a block
 #[async_trait::async_trait]
-pub trait Verifier<B: BlockT>: Send + Sync {
+pub trait Verifier<B: BlockT>: Send {
 	/// Verify the given block data and return the `BlockImportParams` to
 	/// continue the block import process.
 	async fn verify(
