@@ -34,7 +34,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - `maybe_item`: The identifier of the item to which the attribute belongs, or `None` if
 	///   setting a collection attribute.
 	/// - `namespace`: The namespace in which the attribute is being set. It can be either
-	///   `CollectionOwner`, `ItemOwner`, or `Account` (for off-chain mints).
+	///   `CollectionOwner`, `ItemOwner`, or `Account` (pre-approved external address).
 	/// - `key`: The key of the attribute. It should be a vector of bytes within the limits defined
 	///   by `T::KeyLimit`.
 	/// - `value`: The value of the attribute. It should be a vector of bytes within the limits
@@ -166,7 +166,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - `maybe_item`: The identifier of the item to which the attribute belongs, or `None` if
 	///   setting a collection attribute.
 	/// - `namespace`: The namespace in which the attribute is being set. It can be either
-	///   `CollectionOwner`, `ItemOwner`, or `Account` (for off-chain mints).
+	///   `CollectionOwner`, `ItemOwner`, or `Account` (pre-approved external address).
 	/// - `key`: The key of the attribute. It should be a vector of bytes within the limits defined
 	///   by `T::KeyLimit`.
 	/// - `value`: The value of the attribute. It should be a vector of bytes within the limits
@@ -202,14 +202,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	/// Sets multiple attributes for an item or a collection in a single transaction.
+	/// Sets multiple attributes for an item or a collection.
 	///
-	/// This function allows setting multiple attributes for an item or a collection at once. It is
-	/// intended to be used with pre-signed transactions for off-chain mints. The `signer` account
-	/// must have the `ItemOwner` or `Account` namespace permission, depending on the `namespace`
-	/// provided for each attribute. The transaction must be signed with the `signer` account's key.
-	/// It is limited by `T::MaxAttributesPerCall` to prevent excessive storage consumption in a
-	/// single transaction.
+	/// This function checks the pre-signed data is valid and updates the attributes of an item or
+	/// collection. It is limited by [`T::MaxAttributesPerCall`] to prevent excessive storage
+	/// consumption in a single transaction.
 	///
 	/// - `origin`: The account initiating the transaction.
 	/// - `data`: The data containing the details of the pre-signed attributes to be set.
