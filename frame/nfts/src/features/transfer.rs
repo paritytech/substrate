@@ -23,11 +23,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	///
-	/// This function returns a `Dispatch` error in the following cases:
-	/// - If the collection ID is invalid (`UnknownCollection`)
-	/// - If the item ID is invalid (`UnknownItem`).
-	/// - If the item is locked or transferring it is disabled (`ItemLocked`).
-	/// - If the collection or item is non-transferable (`ItemsNonTransferable`).
+	/// This function returns a dispatch error in the following cases:
+	/// - If the collection ID is invalid ([`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - If the item ID is invalid ([`UnknownItem`](crate::Error::UnknownItem)).
+	/// - If the item is locked or transferring it is disabled ([`ItemLocked`](crate::Error::ItemLocked)).
+	/// - If the collection or item is non-transferable ([`ItemsNonTransferable`](crate::Error::ItemsNonTransferable)).
 	pub fn do_transfer(
 		collection: T::CollectionId,
 		item: T::ItemId,

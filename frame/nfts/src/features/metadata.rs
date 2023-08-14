@@ -212,7 +212,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	///
-	/// This function returns a `IncorrectMetadata` error if the provided metadata is incorrectly
+	/// This function returns an [`IncorrectMetadata`](crate::Error::IncorrectMetadata) dispatch error if the provided metadata is incorrectly
 	/// formatted.
 	pub fn construct_metadata(
 		metadata: Vec<u8>,

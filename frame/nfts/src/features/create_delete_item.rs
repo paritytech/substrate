@@ -29,12 +29,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	///
-	/// This function returns a `Dispatch` error in the following cases:
-	/// - If the collection ID is invalid (`UnknownCollection`).
-	/// - If the item already exists in the collection (`AlreadyExists`).
-	/// - If the item configuration already exists (`InconsistentItemConfig`).
-	/// - If the max supply limit (if configured) for the collection is reached
-	///   (`MaxSupplyReached`).
+	/// This function returns a dispatch error in the following cases:
+	/// - If the collection ID is invalid ([`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - If the item already exists in the collection ([`AlreadyExists`](crate::Error::AlreadyExists)).
+	/// - If the item configuration already exists ([`InconsistentItemConfig`](crate::Error::InconsistentItemConfig)).
+	/// - If the max supply limit (if configured) for the collection is reached ([`MaxSupplyReached`](crate::Error::MaxSupplyReached)).
 	/// - If any error occurs in the `with_details_and_config` closure.
 	pub fn do_mint(
 		collection: T::CollectionId,
@@ -184,9 +183,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	///
-	/// This function returns a `Dispatch` error in the following cases:
-	/// - If the collection ID is invalid (`UnknownCollection`)
-	/// - If the item is locked (`ItemLocked`)
+	/// This function returns a dispatch error in the following cases:
+	/// - If the collection ID is invalid ([`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - If the item is locked ([`ItemLocked`](crate::Error::ItemLocked)).
 	pub fn do_burn(
 		collection: T::CollectionId,
 		item: T::ItemId,
