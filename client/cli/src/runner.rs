@@ -280,6 +280,7 @@ mod tests {
 				offchain_worker: Default::default(),
 				force_authoring: false,
 				disable_grandpa: false,
+				disable_beefy: false,
 				dev_key_seed: None,
 				tracing_targets: None,
 				tracing_receiver: Default::default(),

@@ -5875,6 +5875,8 @@ dependencies = [
 name = "pallet-bags-list"
 version = "4.0.0-dev"
 dependencies = [
+ "aquamarine",
+ "docify",
  "frame-benchmarking",
  "frame-election-provider-support",
  "frame-support",
@@ -6578,7 +6580,6 @@ dependencies = [
  "pallet-balances",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
