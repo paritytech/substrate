@@ -1274,6 +1274,14 @@ where
 		let frame = self.top_frame_mut();
 		let info = frame.terminate();
 		frame.nested_storage.terminate(&info);
+
+		// During the termination process we first transfer all the free balance of the contract to
+		// the beneficiary. And then we release the held balance under the `StorageDepositReserve`
+		// reason to be transferred back.
+		// We need a provider so that the `reducible_balance` calculation includes the `ed` and the
+		// `transfer` succeeds while keeping the account alive. The provider is removed once the
+		// storage deposit process is finished.
+		crate::System::<T>::inc_providers(&frame.account_id);
 		Self::transfer(
 			Preservation::Expendable,
 			&frame.account_id,

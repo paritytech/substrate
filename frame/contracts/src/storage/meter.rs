@@ -444,10 +444,8 @@ where
 		// contract execution does conclude and hence would lead to a double charge.
 		self.total_deposit = deposit.clone();
 
-		// We need to make sure that the contract's account itself exists.
+		// We need to make sure that the contract's account exists.
 		T::Currency::transfer(origin, contract, ed, Preservation::Preserve)?;
-
-		System::<T>::inc_providers(&contract);
 
 		// Normally, deposit charges are deferred to be able to coalesce them with refunds.
 		// However, we need to charge immediately so that the account is created before
@@ -587,10 +585,11 @@ impl<T: Config> Ext<T> for ReservingExt {
 						"Failed to repatriate full storage deposit {:?} from contract {:?} to origin {:?}. Transferred {:?}.",
 						amount, contract, origin, transferred,
 					);
-				} else if terminated {
-					System::<T>::dec_providers(&contract)?;
 				}
 			},
+		}
+		if terminated {
+			System::<T>::dec_providers(&contract)?;
 		}
 		Ok(())
 	}

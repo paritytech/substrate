@@ -40,8 +40,6 @@ use frame_support::{
 };
 use frame_system::Pallet as System;
 use sp_core::hexdisplay::HexDisplay;
-#[cfg(feature = "runtime-benchmarks")]
-use sp_runtime::traits::{Hash, TrailingZeroInput};
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 use sp_runtime::{traits::Zero, Saturating};
@@ -77,6 +75,7 @@ mod old {
 
 #[cfg(feature = "runtime-benchmarks")]
 pub fn store_old_contract_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>) {
+	use sp_runtime::traits::{Hash, TrailingZeroInput};
 	let entropy = (b"contract_depo_v1", account.clone()).using_encoded(T::Hashing::hash);
 	let deposit_account = Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
 		.expect("infinite length input; no invalid inputs for type; qed");
