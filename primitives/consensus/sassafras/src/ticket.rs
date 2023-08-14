@@ -122,14 +122,18 @@ pub fn ticket_id(vrf_input: &VrfInput, vrf_output: &VrfOutput) -> TicketId {
 	u128::from_le_bytes(bytes)
 }
 
-/// Computes the threshold for a given epoch as T = (x*s)/(a*v), where:
-/// - x: redundancy factor;
-/// - s: number of slots in epoch;
-/// - a: max number of attempts;
-/// - v: number of validator in epoch.
-/// The parameters should be chosen such that T <= 1.
-/// If `attempts * validators` is zero then we fallback to T = 0
-// TODO-SASS-P3: this formula must be double-checked...
+/// Computes the ticket-id maximum allowed values for a given epoch.
+///
+/// Only ticket identifiers below this threshold should be considered for slot
+/// assignment.
+///
+/// The value is computed as `T = TicketId::MAX·(redundancy*slots)/(attempts*validators)`, where:
+/// - `redundancy`: redundancy factor;
+/// - `slots`: number of slots in epoch;
+/// - `attempts`: max number of tickets attempts per validator;
+/// - `validators`: number of validators in epoch.
+///
+/// If `attempts * validators = 0` then we fallback to 0.
 pub fn ticket_id_threshold(
 	redundancy: u32,
 	slots: u32,
