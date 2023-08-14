@@ -19,8 +19,10 @@
 //! Types and functions related to block verification.
 
 use super::*;
-use sp_application_crypto::Wraps;
-use sp_core::{crypto::VrfPublic, ed25519};
+use sp_core::{
+	crypto::{VrfPublic, Wraps},
+	ed25519::Pair as EphemeralPair,
+};
 
 // Allowed slot drift.
 const MAX_SLOT_DRIFT: u64 = 1;
@@ -63,7 +65,6 @@ fn check_header<B: BlockT + Sized>(
 ) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo>, Error<B>> {
 	let VerificationParams { mut header, pre_digest, slot_now, epoch, origin, maybe_ticket } =
 		params;
-	let config = &epoch.config;
 
 	let seal = header
 		.digest_mut()
@@ -76,7 +77,7 @@ fn check_header<B: BlockT + Sized>(
 		return Ok(CheckedHeader::Deferred(header, pre_digest.slot))
 	}
 
-	let Some(authority_id) = config.authorities.get(pre_digest.authority_idx as usize) else {
+	let Some(authority_id) = epoch.authorities.get(pre_digest.authority_idx as usize) else {
 		return Err(sassafras_err(Error::SlotAuthorNotFound))
 	};
 
@@ -94,7 +95,7 @@ fn check_header<B: BlockT + Sized>(
 	// Optionally check ticket ownership
 
 	let mut vrf_sign_data =
-		slot_claim_sign_data(&config.randomness, pre_digest.slot, epoch.epoch_idx);
+		slot_claim_sign_data(&epoch.randomness, pre_digest.slot, epoch.epoch_idx);
 
 	match (&maybe_ticket, &pre_digest.ticket_claim) {
 		(Some((_ticket_id, ticket_data)), Some(ticket_claim)) => {
@@ -103,16 +104,17 @@ fn check_header<B: BlockT + Sized>(
 			vrf_sign_data.push_transcript_data(&ticket_data.encode());
 			let challenge = vrf_sign_data.challenge::<32>();
 
-			let erased_public = ed25519::Public::from_raw(ticket_data.erased_public);
-			let erased_signature = ed25519::Signature::from_raw(ticket_claim.erased_signature);
-
-			if !ed25519::Pair::verify(&erased_signature, &challenge, &erased_public) {
+			if !EphemeralPair::verify(
+				&ticket_claim.erased_signature,
+				&challenge,
+				&ticket_data.erased_public,
+			) {
 				return Err(sassafras_err(Error::BadSignature(pre_hash)))
 			}
 		},
 		(None, None) => {
 			log::debug!(target: LOG_TARGET, "checking secondary");
-			let idx = authorship::secondary_authority_index(pre_digest.slot, config);
+			let idx = authorship::secondary_authority_index(pre_digest.slot, epoch);
 			if idx != pre_digest.authority_idx {
 				log::error!(target: LOG_TARGET, "Bad secondary authority index");
 				return Err(Error::SlotAuthorNotFound)
@@ -149,8 +151,8 @@ pub struct SassafrasVerifier<Block: BlockT, Client, SelectChain, CIDP> {
 	select_chain: SelectChain,
 	create_inherent_data_providers: CIDP,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
+	genesis_config: Epoch,
 	telemetry: Option<TelemetryHandle>,
-	genesis_config: SassafrasConfiguration,
 }
 
 impl<Block: BlockT, Client, SelectChain, CIDP> SassafrasVerifier<Block, Client, SelectChain, CIDP> {
@@ -160,16 +162,16 @@ impl<Block: BlockT, Client, SelectChain, CIDP> SassafrasVerifier<Block, Client, 
 		select_chain: SelectChain,
 		create_inherent_data_providers: CIDP,
 		epoch_changes: SharedEpochChanges<Block, Epoch>,
+		genesis_config: Epoch,
 		telemetry: Option<TelemetryHandle>,
-		genesis_config: SassafrasConfiguration,
 	) -> Self {
 		SassafrasVerifier {
 			client,
 			select_chain,
 			create_inherent_data_providers,
 			epoch_changes,
-			telemetry,
 			genesis_config,
+			telemetry,
 		}
 	}
 }
@@ -419,7 +421,7 @@ where
 							.create_inherent_data()
 							.await
 							.map_err(Error::<Block>::CreateInherents)?;
-						inherent_data.sassafras_replace_inherent_data(pre_digest.slot);
+						inherent_data.sassafras_replace_inherent_data(&pre_digest.slot);
 						self.check_inherents(
 							new_block.clone(),
 							parent_hash,

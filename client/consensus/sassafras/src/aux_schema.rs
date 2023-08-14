@@ -54,7 +54,7 @@ where
 	}
 }
 
-/// Update the epoch changes on disk after a change.
+/// Update the epoch changes to persist after a change.
 pub fn write_epoch_changes<Block: BlockT, F, R>(
 	epoch_changes: &EpochChangesFor<Block, Epoch>,
 	write_aux: F,

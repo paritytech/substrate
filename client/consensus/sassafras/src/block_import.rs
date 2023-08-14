@@ -33,7 +33,7 @@ pub struct SassafrasBlockImport<B: BlockT, C, I> {
 	inner: I,
 	client: Arc<C>,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
-	genesis_config: SassafrasConfiguration,
+	genesis_config: Epoch,
 }
 
 impl<Block: BlockT, I: Clone, Client> Clone for SassafrasBlockImport<Block, Client, I> {
@@ -72,7 +72,7 @@ where
 		inner: I,
 		client: Arc<C>,
 		epoch_changes: SharedEpochChanges<B, Epoch>,
-		genesis_config: SassafrasConfiguration,
+		genesis_config: Epoch,
 	) -> Self {
 		let client_weak = Arc::downgrade(&client);
 		let on_finality = move |notification: &FinalityNotification<B>| {
@@ -155,8 +155,7 @@ where
 			// current epoch. We will figure out which is the first skipped epoch and we
 			// will partially re-use its data for this "recovery" epoch.
 			let epoch_data = viable_epoch.as_mut();
-			let skipped_epochs =
-				(*slot - *epoch_data.start_slot) / epoch_data.config.epoch_duration;
+			let skipped_epochs = (*slot - *epoch_data.start_slot) / epoch_data.epoch_duration;
 			let original_epoch_idx = epoch_data.epoch_idx;
 
 			// NOTE: notice that we are only updating a local copy of the `Epoch`, this
@@ -169,9 +168,8 @@ where
 			// predicate `epoch.start_slot <= slot` which will still match correctly without
 			// requiring to update `start_slot` to the correct value.
 			epoch_data.epoch_idx += skipped_epochs;
-			epoch_data.start_slot = Slot::from(
-				*epoch_data.start_slot + skipped_epochs * epoch_data.config.epoch_duration,
-			);
+			epoch_data.start_slot =
+				Slot::from(*epoch_data.start_slot + skipped_epochs * epoch_data.epoch_duration);
 			log::warn!(
 				target: LOG_TARGET,
 				"Epoch(s) skipped from {} to {}",
@@ -506,7 +504,7 @@ where
 /// Also returns a link object used to correctly instantiate the import queue
 /// and authoring worker.
 pub fn block_import<C, B: BlockT, I>(
-	genesis_config: SassafrasConfiguration,
+	genesis_config: Epoch,
 	inner_block_import: I,
 	client: Arc<C>,
 ) -> ClientResult<(SassafrasBlockImport<B, C, I>, SassafrasLink<B>)>

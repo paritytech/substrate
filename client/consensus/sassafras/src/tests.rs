@@ -18,7 +18,7 @@
 
 //! Sassafras client tests
 
-// TODO-SASS-P3
+// TODO @davxy
 // Missing tests
 // - verify block claimed via primary method
 // - tests using tickets to claim slots. Curret tests just doesn't register any on-chain ticket
@@ -35,7 +35,8 @@ use sc_transaction_pool_api::{OffchainTransactionPoolFactory, RejectAllTxPool};
 use sp_application_crypto::key_types::SASSAFRAS;
 use sp_blockchain::Error as TestError;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
-use sp_consensus_sassafras::inherents::InherentDataProvider;
+use sp_consensus_sassafras::{inherents::InherentDataProvider, EphemeralPublic, SlotDuration};
+use sp_core::crypto::UncheckedFrom;
 use sp_keyring::BandersnatchKeyring as Keyring;
 use sp_keystore::{testing::MemoryKeystore, Keystore};
 use sp_runtime::{Digest, DigestItem};
@@ -141,10 +142,9 @@ struct TestContext {
 fn create_test_verifier(
 	client: Arc<TestClient>,
 	link: &SassafrasLink,
-	config: SassafrasConfiguration,
+	config: Epoch,
 ) -> SassafrasVerifier {
-	let slot_duration = config.slot_duration();
-
+	let slot_duration = config.slot_duration;
 	let create_inherent_data_providers = Box::new(move |_, _| async move {
 		let slot = InherentDataProvider::from_timestamp_and_slot_duration(
 			Timestamp::current(),
@@ -160,14 +160,14 @@ fn create_test_verifier(
 		longest_chain,
 		create_inherent_data_providers,
 		link.epoch_changes.clone(),
-		None,
 		config,
+		None,
 	)
 }
 
 fn create_test_block_import(
 	client: Arc<TestClient>,
-	config: SassafrasConfiguration,
+	config: Epoch,
 ) -> (SassafrasBlockImport, SassafrasLink) {
 	crate::block_import(config, client.clone(), client.clone())
 		.expect("can initialize block-import")
@@ -181,9 +181,11 @@ fn create_test_keystore(authority: Keyring) -> KeystorePtr {
 	keystore.into()
 }
 
-fn create_test_config() -> SassafrasConfiguration {
-	SassafrasConfiguration {
-		slot_duration: SLOT_DURATION,
+fn create_test_epoch() -> Epoch {
+	sp_consensus_sassafras::Epoch {
+		epoch_idx: 0,
+		start_slot: 0.into(),
+		slot_duration: SlotDuration::from_millis(SLOT_DURATION),
 		epoch_duration: EPOCH_DURATION,
 		authorities: vec![
 			Keyring::Alice.public().into(),
@@ -191,8 +193,9 @@ fn create_test_config() -> SassafrasConfiguration {
 			Keyring::Charlie.public().into(),
 		],
 		randomness: [0; 32],
-		threshold_params: SassafrasEpochConfiguration { redundancy_factor: 1, attempts_number: 32 },
+		config: EpochConfiguration { redundancy_factor: 1, attempts_number: 32 },
 	}
+	.into()
 }
 
 impl TestContext {
@@ -362,29 +365,24 @@ impl TestContext {
 #[test]
 fn tests_assumptions_sanity_check() {
 	let env = TestContext::new();
-	assert_eq!(env.link.genesis_config, create_test_config());
+	assert_eq!(env.link.genesis_config, create_test_epoch());
 }
 
 #[test]
 fn claim_secondary_slots_works() {
-	let mut config = create_test_config();
-	config.randomness = [2; 32];
+	let mut epoch = create_test_epoch();
+	epoch.epoch_idx = 1;
+	epoch.start_slot = 6.into();
+	epoch.randomness = [2; 32];
 
 	let authorities = [Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 
-	let mut epoch = Epoch {
-		epoch_idx: 1,
-		start_slot: 6.into(),
-		config: config.clone(),
-		tickets_aux: Default::default(),
-	};
-
-	let mut assignments = vec![usize::MAX; config.epoch_duration as usize];
+	let mut assignments = vec![usize::MAX; epoch.epoch_duration as usize];
 
 	for (auth_idx, auth_id) in authorities.iter().enumerate() {
 		let keystore = create_test_keystore(*auth_id);
 
-		for slot in 0..config.epoch_duration {
+		for slot in 0..epoch.epoch_duration {
 			if let Some((claim, auth_id2)) =
 				authorship::claim_slot(slot.into(), &mut epoch, None, &keystore)
 			{
@@ -410,22 +408,18 @@ fn claim_primary_slots_works() {
 	// If a node has in its epoch `tickets_aux` the information corresponding to the
 	// ticket that is presented. Then the claim ticket should just return the
 	// ticket auxiliary information.
-	let mut config = create_test_config();
-	config.randomness = [2; 32];
-
-	let mut epoch = Epoch {
-		epoch_idx: 1,
-		start_slot: 6.into(),
-		config: config.clone(),
-		tickets_aux: Default::default(),
-	};
+	let mut epoch = create_test_epoch();
+	epoch.randomness = [2; 32];
+	epoch.epoch_idx = 1;
+	epoch.start_slot = 6.into();
 
 	let keystore = create_test_keystore(Keyring::Alice);
 	let alice_authority_idx = 0_u32;
 
 	let ticket_id = 123;
-	let ticket_body = TicketBody { attempt_idx: 0, erased_public: [0; 32] };
-	let ticket_secret = TicketSecret { attempt_idx: 0, erased_secret: [0; 32] };
+	let erased_public = EphemeralPublic::unchecked_from([0; 32]);
+	let ticket_body = TicketBody { attempt_idx: 0, erased_public };
+	let ticket_secret = TicketSecret { attempt_idx: 0, seed: [0; 32] };
 
 	// Fail if we have authority key in our keystore but not ticket aux data
 	// 	ticket-aux = None && authority-key = Some => claim = None

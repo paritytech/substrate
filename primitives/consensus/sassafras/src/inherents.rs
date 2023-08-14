@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,47 +15,49 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Inherents for Sassafras
+//! Sassafras inherents structures and helpers.
 
 use sp_inherents::{Error, InherentData, InherentIdentifier};
 use sp_std::result::Result;
 
-/// The Sassafras inherent identifier.
+/// Inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"sassslot";
 
-/// The type of the Sassafras inherent.
+/// The type of inherent.
 pub type InherentType = sp_consensus_slots::Slot;
 
-/// Auxiliary trait to extract Sassafras inherent data.
+/// Auxiliary trait to extract inherent data.
 pub trait SassafrasInherentData {
-	/// Get Sassafras inherent data.
-	fn sassafras_inherent_data(&self) -> Result<Option<InherentType>, Error>;
-	/// Replace Sassafras inherent data.
-	fn sassafras_replace_inherent_data(&mut self, new: InherentType);
+	/// Get inherent data.
+	fn sassafras_get_inherent_data(&self) -> Result<Option<InherentType>, Error>;
+	/// Put inherent data.
+	fn sassafras_put_inherent_data(&mut self, data: &InherentType) -> Result<(), Error>;
+	/// Replace inherent data.
+	fn sassafras_replace_inherent_data(&mut self, data: &InherentType);
 }
 
 impl SassafrasInherentData for InherentData {
-	fn sassafras_inherent_data(&self) -> Result<Option<InherentType>, Error> {
+	fn sassafras_get_inherent_data(&self) -> Result<Option<InherentType>, Error> {
 		self.get_data(&INHERENT_IDENTIFIER)
 	}
 
-	fn sassafras_replace_inherent_data(&mut self, new: InherentType) {
-		self.replace_data(INHERENT_IDENTIFIER, &new);
+	fn sassafras_put_inherent_data(&mut self, data: &InherentType) -> Result<(), Error> {
+		self.put_data(INHERENT_IDENTIFIER, data)
+	}
+
+	fn sassafras_replace_inherent_data(&mut self, data: &InherentType) {
+		self.replace_data(INHERENT_IDENTIFIER, data);
 	}
 }
 
-/// Provides the slot duration inherent data for Sassafras.
-// TODO: Remove in the future. https://github.com/paritytech/substrate/issues/8029
-#[cfg(feature = "std")]
-pub struct InherentDataProvider {
-	slot: InherentType,
-}
+/// Provides the slot duration inherent data.
+pub struct InherentDataProvider(InherentType);
 
 #[cfg(feature = "std")]
 impl InherentDataProvider {
 	/// Create new inherent data provider from the given `slot`.
 	pub fn new(slot: InherentType) -> Self {
-		Self { slot }
+		Self(slot)
 	}
 
 	/// Creates the inherent data provider by calculating the slot from the given
@@ -64,14 +66,12 @@ impl InherentDataProvider {
 		timestamp: sp_timestamp::Timestamp,
 		slot_duration: sp_consensus_slots::SlotDuration,
 	) -> Self {
-		let slot = InherentType::from_timestamp(timestamp, slot_duration);
-
-		Self { slot }
+		Self(InherentType::from_timestamp(timestamp, slot_duration))
 	}
 
 	/// Returns the `slot` of this inherent data provider.
 	pub fn slot(&self) -> InherentType {
-		self.slot
+		self.0
 	}
 }
 
@@ -80,7 +80,7 @@ impl sp_std::ops::Deref for InherentDataProvider {
 	type Target = InherentType;
 
 	fn deref(&self) -> &Self::Target {
-		&self.slot
+		&self.0
 	}
 }
 
@@ -88,15 +88,6 @@ impl sp_std::ops::Deref for InherentDataProvider {
 #[async_trait::async_trait]
 impl sp_inherents::InherentDataProvider for InherentDataProvider {
 	async fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
-		inherent_data.put_data(INHERENT_IDENTIFIER, &self.slot)
-	}
-
-	async fn try_handle_error(
-		&self,
-		_: &InherentIdentifier,
-		_: &[u8],
-	) -> Option<Result<(), Error>> {
-		// There is no error anymore
-		None
+		inherent_data.sassafras_put_inherent_data(&self.0)
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,11 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Private implementation details of Sassafras digests.
+//! Sassafras digests structures and helpers.
 
-use super::{
-	ticket::TicketClaim, AuthorityId, AuthorityIndex, AuthoritySignature, Randomness,
-	SassafrasEpochConfiguration, Slot, VrfSignature, SASSAFRAS_ENGINE_ID,
+use crate::{
+	ticket::TicketClaim, AuthorityId, AuthorityIndex, AuthoritySignature, EpochConfiguration,
+	Randomness, Slot, VrfSignature, SASSAFRAS_ENGINE_ID,
 };
 
 use scale_codec::{Decode, Encode, MaxEncodedLen};
@@ -28,7 +28,7 @@ use scale_info::TypeInfo;
 use sp_runtime::{DigestItem, RuntimeDebug};
 use sp_std::vec::Vec;
 
-/// Sassafras primary slot assignment pre-digest.
+/// Sassafras slot assignment pre-digest.
 #[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct PreDigest {
 	/// Authority index that claimed the slot.
@@ -36,49 +36,47 @@ pub struct PreDigest {
 	/// Corresponding slot number.
 	pub slot: Slot,
 	/// Slot claim VRF signature.
-	/// TODO DAVXY we can store this Signature as a Seal DigestItem
 	pub vrf_signature: VrfSignature,
 	/// Ticket auxiliary information for claim check.
 	pub ticket_claim: Option<TicketClaim>,
 }
 
-/// Information about the next epoch. This is broadcast in the first block
-/// of the epoch.
+/// Information about the next epoch.
+///
+/// This is broadcast in the first block of each epoch.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub struct NextEpochDescriptor {
-	/// The authorities.
+	/// Authorities list.
 	pub authorities: Vec<AuthorityId>,
-	/// The value of randomness to use for the slot-assignment.
+	/// Epoch randomness.
 	pub randomness: Randomness,
-	/// Algorithm parameters. If not present, previous epoch parameters are used.
-	pub config: Option<SassafrasEpochConfiguration>,
+	/// Mutable epoch parameters. If not present previous epoch parameters are used.
+	pub config: Option<EpochConfiguration>,
 }
 
-/// An consensus log item for BABE.
+/// Consensus log item.
 #[derive(Decode, Encode, Clone, PartialEq, Eq)]
 pub enum ConsensusLog {
-	/// The epoch has changed. This provides information about the _next_
-	/// epoch - information about the _current_ epoch (i.e. the one we've just
-	/// entered) should already be available earlier in the chain.
+	/// Provides information about the next epoch parameters.
 	#[codec(index = 1)]
 	NextEpochData(NextEpochDescriptor),
-	/// Disable the authority with given index.
+	/// Disable the authority with given index (TODO @davxy).
 	#[codec(index = 2)]
 	OnDisabled(AuthorityIndex),
 }
 
-/// A digest item which is usable with Sassafras consensus.
-pub trait CompatibleDigestItem: Sized {
-	/// Construct a digest item which contains a Sassafras pre-digest.
+/// A digest item which is usable by Sassafras.
+pub trait CompatibleDigestItem {
+	/// Construct a digest item which contains a `PreDigest`.
 	fn sassafras_pre_digest(seal: PreDigest) -> Self;
 
-	/// If this item is an Sassafras pre-digest, return it.
+	/// If this item is a `PreDigest`, return it.
 	fn as_sassafras_pre_digest(&self) -> Option<PreDigest>;
 
-	/// Construct a digest item which contains a Sassafras seal.
+	/// Construct a digest item which contains an `AuthoritySignature`.
 	fn sassafras_seal(signature: AuthoritySignature) -> Self;
 
-	/// If this item is a Sassafras signature, return the signature.
+	/// If this item is an `AuthoritySignature`, return it.
 	fn as_sassafras_seal(&self) -> Option<AuthoritySignature>;
 }
 

@@ -57,9 +57,8 @@ use frame_system::{
 };
 use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
-	AuthorityId, Epoch, EquivocationProof, Randomness, RingContext, SassafrasConfiguration,
-	SassafrasEpochConfiguration, Slot, TicketBody, TicketEnvelope, TicketId, RANDOMNESS_LENGTH,
-	SASSAFRAS_ENGINE_ID,
+	AuthorityId, Epoch, EpochConfiguration, EquivocationProof, Randomness, RingContext, Slot,
+	SlotDuration, TicketBody, TicketEnvelope, TicketId, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID,
 };
 use sp_io::hashing;
 use sp_runtime::{
@@ -193,12 +192,12 @@ pub mod pallet {
 	/// The configuration for the current epoch.
 	#[pallet::storage]
 	#[pallet::getter(fn config)]
-	pub type EpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration, ValueQuery>;
+	pub type EpochConfig<T> = StorageValue<_, EpochConfiguration, ValueQuery>;
 
 	/// The configuration for the next epoch.
 	#[pallet::storage]
 	#[pallet::getter(fn next_config)]
-	pub type NextEpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration>;
+	pub type NextEpochConfig<T> = StorageValue<_, EpochConfiguration>;
 
 	/// Pending epoch configuration change that will be set as `NextEpochConfig` when the next
 	/// epoch is enacted.
@@ -206,7 +205,7 @@ pub mod pallet {
 	/// This is to maintain coherence for already submitted tickets for epoch N+1 that where
 	/// computed using configuration parameters stored for epoch N+1.
 	#[pallet::storage]
-	pub(super) type PendingEpochConfigChange<T> = StorageValue<_, SassafrasEpochConfiguration>;
+	pub(super) type PendingEpochConfigChange<T> = StorageValue<_, EpochConfiguration>;
 
 	/// Stored tickets metadata.
 	#[pallet::storage]
@@ -244,7 +243,7 @@ pub mod pallet {
 		/// Genesis authorities.
 		pub authorities: Vec<AuthorityId>,
 		/// Genesis epoch configuration.
-		pub epoch_config: SassafrasEpochConfiguration,
+		pub epoch_config: EpochConfiguration,
 		/// Phantom config
 		#[serde(skip)]
 		pub _phantom: sp_std::marker::PhantomData<T>,
@@ -256,11 +255,11 @@ pub mod pallet {
 			Pallet::<T>::initialize_genesis_authorities(&self.authorities);
 			EpochConfig::<T>::put(self.epoch_config.clone());
 
-			// TODO: davxy... remove for tests
-			log::warn!(target: LOG_TARGET, "Constructing testing ring context (in build)");
-			let ring_ctx = RingContext::new_testing();
-			log::warn!(target: LOG_TARGET, "... done");
-			RingVrfContext::<T>::set(Some(ring_ctx.clone()));
+			// // TODO: davxy... remove for tests
+			// log::warn!(target: LOG_TARGET, "Constructing testing ring context (in build)");
+			// let ring_ctx = RingContext::new_testing();
+			// log::warn!(target: LOG_TARGET, "... done");
+			// RingVrfContext::<T>::set(Some(ring_ctx.clone()));
 		}
 	}
 
@@ -405,7 +404,7 @@ pub mod pallet {
 					epoch_idx,
 				);
 
-				let Some(vrf_preout) = ticket.ring_signature.outputs.get(0) else {
+				let Some(vrf_preout) = ticket.signature.outputs.get(0) else {
 					log::debug!(target: LOG_TARGET, "Missing ticket pre-output from ring signature");
 					continue
 				};
@@ -418,7 +417,7 @@ pub mod pallet {
 				let mut sign_data = sp_consensus_sassafras::ticket_body_sign_data(&ticket.body);
 				sign_data.push_vrf_input(vrf_input).expect("Can't fail");
 
-				if ticket.ring_signature.verify(&sign_data, &verifier) {
+				if ticket.signature.verify(&sign_data, &verifier) {
 					TicketsData::<T>::set(ticket_id, Some(ticket.body));
 					segment
 						.try_push(ticket_id)
@@ -453,7 +452,7 @@ pub mod pallet {
 		#[pallet::weight({0})]
 		pub fn plan_config_change(
 			origin: OriginFor<T>,
-			config: SassafrasEpochConfiguration,
+			config: EpochConfiguration,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -808,34 +807,34 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next));
 	}
 
-	/// Current epoch configuration.
+	/// Current epoch information.
 	pub fn current_epoch() -> Epoch {
-		let config = SassafrasConfiguration {
-			slot_duration: T::SlotDuration::get(),
+		let epoch_idx = EpochIndex::<T>::get();
+		Epoch {
+			epoch_idx,
+			start_slot: Self::epoch_start(epoch_idx),
+			slot_duration: SlotDuration::from_millis(T::SlotDuration::get()),
 			epoch_duration: T::EpochDuration::get(),
 			authorities: Self::authorities().to_vec(),
 			randomness: Self::randomness(),
-			threshold_params: Self::config(),
-		};
-		let epoch_idx = EpochIndex::<T>::get();
-		let start_slot = Self::current_epoch_start();
-		Epoch { epoch_idx, start_slot, config }
+			config: Self::config(),
+		}
 	}
 
-	/// Next epoch configuration.
+	/// Next epoch information.
 	pub fn next_epoch() -> Epoch {
-		let config = SassafrasConfiguration {
-			slot_duration: T::SlotDuration::get(),
-			epoch_duration: T::EpochDuration::get(),
-			authorities: Self::next_authorities().to_vec(),
-			randomness: Self::next_randomness(),
-			threshold_params: Self::next_config().unwrap_or_else(|| Self::config()),
-		};
 		let epoch_idx = EpochIndex::<T>::get()
 			.checked_add(1)
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
-		let start_slot = Self::epoch_start(epoch_idx);
-		Epoch { epoch_idx, start_slot, config }
+		Epoch {
+			epoch_idx,
+			start_slot: Self::epoch_start(epoch_idx),
+			slot_duration: SlotDuration::from_millis(T::SlotDuration::get()),
+			epoch_duration: T::EpochDuration::get(),
+			authorities: Self::next_authorities().to_vec(),
+			randomness: Self::next_randomness(),
+			config: Self::next_config().unwrap_or_else(|| Self::config()),
+		}
 	}
 
 	/// Fetch expected ticket-id for the given slot according to an "outside-in" sorting strategy.

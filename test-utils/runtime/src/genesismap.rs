@@ -144,7 +144,7 @@ impl GenesisStorageBuilder {
 			},
 			sassafras: pallet_sassafras::GenesisConfig {
 				authorities: authorities_bandersnatch.into_iter().map(|x| x.into()).collect(),
-				epoch_config: sp_consensus_sassafras::SassafrasEpochConfiguration {
+				epoch_config: sp_consensus_sassafras::EpochConfiguration {
 					redundancy_factor: 1,
 					attempts_number: 32,
 				},

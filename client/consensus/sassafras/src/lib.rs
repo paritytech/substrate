@@ -73,14 +73,14 @@ use sp_runtime::{
 	DigestItem,
 };
 
-// Re-export Sassafras primitives.
+// Re-export some primitives.
 pub use sp_consensus_sassafras::{
 	digests::{CompatibleDigestItem, ConsensusLog, NextEpochDescriptor, PreDigest},
 	inherents::SassafrasInherentData,
 	slot_claim_sign_data, slot_claim_vrf_input, ticket_body_sign_data, ticket_id_vrf_input,
-	AuthorityId, AuthorityIndex, AuthorityPair, AuthoritySignature, SassafrasApi,
-	SassafrasConfiguration, SassafrasEpochConfiguration, TicketBody, TicketClaim, TicketEnvelope,
-	TicketId, TicketSecret, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID,
+	AuthorityId, AuthorityIndex, AuthorityPair, AuthoritySignature, EpochConfiguration,
+	SassafrasApi, TicketBody, TicketClaim, TicketEnvelope, TicketId, RANDOMNESS_LENGTH,
+	SASSAFRAS_ENGINE_ID,
 };
 
 mod authorship;
@@ -187,27 +187,41 @@ fn sassafras_err<B: BlockT>(err: Error<B>) -> Error<B> {
 	err
 }
 
-/// Sassafras epoch information augmented with private tickets information.
-#[derive(Encode, Decode, PartialEq, Eq, Clone, Debug)]
+/// Secret seed
+#[derive(Debug, Clone, Encode, Decode, PartialEq)]
+pub struct TicketSecret {
+	/// Attempt index
+	pub(crate) attempt_idx: u32,
+	/// Secret seed
+	pub(crate) seed: [u8; 32],
+}
+
+/// Primitive epoch newtype.
+#[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub struct Epoch {
-	/// The epoch index.
-	pub epoch_idx: u64,
-	/// The starting slot of the epoch.
-	pub start_slot: Slot,
-	/// Epoch configuration.
-	pub config: SassafrasConfiguration,
-	/// Tickets associated secret data.
-	pub tickets_aux: BTreeMap<TicketId, (AuthorityIndex, TicketSecret)>,
+	pub(crate) inner: sp_consensus_sassafras::Epoch,
+	pub(crate) tickets_aux: BTreeMap<TicketId, (AuthorityIndex, TicketSecret)>,
+}
+
+use std::ops::{Deref, DerefMut};
+
+impl Deref for Epoch {
+	type Target = sp_consensus_sassafras::Epoch;
+
+	fn deref(&self) -> &Self::Target {
+		&self.inner
+	}
+}
+
+impl DerefMut for Epoch {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.inner
+	}
 }
 
 impl From<sp_consensus_sassafras::Epoch> for Epoch {
 	fn from(epoch: sp_consensus_sassafras::Epoch) -> Self {
-		Epoch {
-			epoch_idx: epoch.epoch_idx,
-			start_slot: epoch.start_slot,
-			config: epoch.config,
-			tickets_aux: BTreeMap::new(),
-		}
+		Epoch { inner: epoch, tickets_aux: Default::default() }
 	}
 }
 
@@ -216,19 +230,16 @@ impl EpochT for Epoch {
 	type Slot = Slot;
 
 	fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
-		let config = SassafrasConfiguration {
-			slot_duration: self.config.slot_duration,
-			epoch_duration: self.config.epoch_duration,
+		sp_consensus_sassafras::Epoch {
+			epoch_idx: self.epoch_idx + 1,
+			start_slot: self.start_slot + self.epoch_duration,
+			slot_duration: self.slot_duration,
+			epoch_duration: self.epoch_duration,
 			authorities: descriptor.authorities,
 			randomness: descriptor.randomness,
-			threshold_params: descriptor.config.unwrap_or(self.config.threshold_params.clone()),
-		};
-		Epoch {
-			epoch_idx: self.epoch_idx + 1,
-			start_slot: self.start_slot + config.epoch_duration,
-			config,
-			tickets_aux: BTreeMap::new(),
+			config: descriptor.config.unwrap_or(self.config),
 		}
+		.into()
 	}
 
 	fn start_slot(&self) -> Slot {
@@ -236,26 +247,24 @@ impl EpochT for Epoch {
 	}
 
 	fn end_slot(&self) -> Slot {
-		self.start_slot + self.config.epoch_duration
+		self.start_slot + self.epoch_duration
 	}
 }
 
 impl Epoch {
 	/// Create the genesis epoch (epoch #0). This is defined to start at the slot of
 	/// the first block, so that has to be provided.
-	pub fn genesis(config: &SassafrasConfiguration, slot: Slot) -> Epoch {
-		Epoch {
-			epoch_idx: 0,
-			start_slot: slot,
-			config: config.clone(),
-			tickets_aux: BTreeMap::new(),
-		}
+	pub fn genesis(config: &Epoch, slot: Slot) -> Epoch {
+		let mut epoch = config.clone();
+		epoch.epoch_idx = 0;
+		epoch.start_slot = slot;
+		epoch
 	}
 }
 
 /// Read protocol configuration from the blockchain state corresponding
 /// to the last finalized block
-pub fn finalized_configuration<B, C>(client: &C) -> ClientResult<SassafrasConfiguration>
+pub fn finalized_configuration<B, C>(client: &C) -> ClientResult<Epoch>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + UsageProvider<B>,
@@ -268,7 +277,7 @@ where
 	});
 
 	let epoch = client.runtime_api().current_epoch(hash)?;
-	Ok(epoch.config)
+	Ok(epoch.into())
 }
 
 /// Intermediate value passed to block importer from authoring or validation logic.
@@ -328,12 +337,12 @@ pub struct SassafrasLink<B: BlockT> {
 	/// Epoch changes tree
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	/// Startup configuration. Read from runtime at last finalized block.
-	genesis_config: SassafrasConfiguration,
+	genesis_config: Epoch,
 }
 
 impl<B: BlockT> SassafrasLink<B> {
 	/// Get the config of this link.
-	pub fn genesis_config(&self) -> &SassafrasConfiguration {
+	pub fn genesis_config(&self) -> &Epoch {
 		&self.genesis_config
 	}
 }
@@ -382,8 +391,8 @@ where
 		select_chain,
 		create_inherent_data_providers,
 		sassafras_link.epoch_changes,
-		telemetry,
 		sassafras_link.genesis_config,
+		telemetry,
 	);
 
 	Ok(BasicQueue::new(verifier, Box::new(block_import), justification_import, spawner, registry))

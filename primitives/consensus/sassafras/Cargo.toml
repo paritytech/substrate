@@ -9,22 +9,21 @@ homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sp-consensus-sassafras"
 readme = "README.md"
+publish = false
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 async-trait = { version = "0.1.50", optional = true }
-merlin = { version = "2.0", default-features = false }
 scale-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-serde = { version = "1.0.163", default-features = false, features = ["derive", "alloc"], optional = true }
+serde = { version = "1.0.163", default-features = false, features = ["derive"], optional = true }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../api" }
 sp-application-crypto = { version = "23.0.0", default-features = false, path = "../../application-crypto", features = ["bandersnatch-experimental"] }
 sp-consensus-slots = { version = "0.10.0-dev", default-features = false, path = "../slots" }
 sp-core = { version = "21.0.0", default-features = false, path = "../../core", features = ["bandersnatch-experimental"] }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../inherents" }
-sp-keystore = { version = "0.27.0", default-features = false, optional = true, path = "../../keystore", features = ["bandersnatch-experimental"] }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../runtime" }
 sp-std = { version = "8.0.0", default-features = false, path = "../../std" }
 sp-timestamp = { version = "4.0.0-dev", optional = true, path = "../../timestamp" }
@@ -33,7 +32,6 @@ sp-timestamp = { version = "4.0.0-dev", optional = true, path = "../../timestamp
 default = ["std"]
 std = [
  	"async-trait",
- 	"merlin/std",
  	"scale-codec/std",
  	"scale-info/std",
  	"serde/std",
@@ -42,7 +40,6 @@ std = [
 	"sp-consensus-slots/std",
  	"sp-core/std",
  	"sp-inherents/std",
- 	"sp-keystore/std",
  	"sp-runtime/std",
  	"sp-std/std",
  	"sp-timestamp",

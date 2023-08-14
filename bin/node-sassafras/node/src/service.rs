@@ -112,7 +112,7 @@ pub fn new_partial(
 		client.clone(),
 	)?;
 
-	let slot_duration = sassafras_link.genesis_config().slot_duration();
+	let slot_duration = sassafras_link.genesis_config().slot_duration;
 
 	let import_queue = sc_consensus_sassafras::import_queue(
 		sassafras_link.clone(),
@@ -252,7 +252,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			telemetry.as_ref().map(|x| x.handle()),
 		);
 
-		let slot_duration = sassafras_link.genesis_config().slot_duration();
+		let slot_duration = sassafras_link.genesis_config().slot_duration;
 
 		let sassafras_params = sc_consensus_sassafras::SassafrasWorkerParams {
 			client: client.clone(),
@@ -266,12 +266,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			force_authoring,
 			create_inherent_data_providers: move |_, _| async move {
 				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
-
-				let slot =
-                            sp_consensus_sassafras::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
-                                *timestamp,
-                                slot_duration,
-                        );
+				let slot = sp_consensus_sassafras::inherents::InherentDataProvider::from_timestamp_and_slot_duration(*timestamp, slot_duration);
 				Ok((slot, timestamp))
 			},
 			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(transaction_pool.clone()),

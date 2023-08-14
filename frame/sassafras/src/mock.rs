@@ -22,11 +22,12 @@ use crate::{self as pallet_sassafras, SameAuthoritiesForever, *};
 use frame_support::traits::{ConstU32, ConstU64, OnFinalize, OnInitialize};
 use scale_codec::Encode;
 use sp_consensus_sassafras::{
-	digests::PreDigest, AuthorityIndex, AuthorityPair, RingProver, SassafrasEpochConfiguration,
-	Slot, TicketBody, TicketEnvelope, TicketId, VrfSignature,
+	digests::PreDigest, AuthorityIndex, AuthorityPair, EpochConfiguration, RingProver, Slot,
+	TicketBody, TicketEnvelope, TicketId, VrfSignature,
 };
 use sp_core::{
-	crypto::{Pair, VrfSecret, Wraps},
+	crypto::{ByteArray, Pair, UncheckedFrom, VrfSecret, Wraps},
+	ed25519::Public as EphemeralPublic,
 	H256, U256,
 };
 use sp_runtime::{
@@ -100,8 +101,8 @@ frame_support::construct_runtime!(
 //
 // The redundancy factor has been set to max value to accept all submitted
 // tickets without worrying about the threshold.
-pub const TEST_EPOCH_CONFIGURATION: SassafrasEpochConfiguration =
-	SassafrasEpochConfiguration { redundancy_factor: u32::MAX, attempts_number: 32 };
+pub const TEST_EPOCH_CONFIGURATION: EpochConfiguration =
+	EpochConfiguration { redundancy_factor: u32::MAX, attempts_number: 32 };
 
 /// Build and returns test storage externalities
 pub fn new_test_ext(authorities_len: usize) -> sp_io::TestExternalities {
@@ -157,18 +158,25 @@ fn make_ticket_with_prover(
 	let epoch = Sassafras::epoch_index() + 1;
 	let randomness = Sassafras::next_randomness();
 
-	let body = TicketBody { attempt_idx: attempt, erased_public: [0; 32] };
+	// Make a dummy ephemeral public that hopefully is unique within one test instance.
+	// In the tests, the values within the erased public are just used to compare
+	// ticket bodies, so it is not important to be a valid key.
+	let mut raw: [u8; 32] = [0; 32];
+	raw.copy_from_slice(&pair.public().as_slice()[0..32]);
+	let erased_public = EphemeralPublic::unchecked_from(raw);
+
+	let body = TicketBody { attempt_idx: attempt, erased_public };
 
 	let mut sign_data = sp_consensus_sassafras::ticket_body_sign_data(&body);
 
 	let vrf_input = sp_consensus_sassafras::ticket_id_vrf_input(&randomness, attempt, epoch);
 	sign_data.push_vrf_input(vrf_input).unwrap();
 
-	let ring_signature = pair.as_ref().ring_vrf_sign(&sign_data, &prover);
+	let signature = pair.as_ref().ring_vrf_sign(&sign_data, &prover);
 
 	// Ticket-id can be generated via vrf-preout.
 	// We don't care that much about its value here.
-	TicketEnvelope { body, ring_signature }
+	TicketEnvelope { body, signature }
 }
 
 pub fn make_prover(pair: &AuthorityPair) -> RingProver {
@@ -216,11 +224,13 @@ pub fn make_ticket_body(attempt_idx: u32, pair: &AuthorityPair) -> (TicketId, Ti
 
 	let id = sp_consensus_sassafras::ticket_id(&input, &output);
 
-	// Make a dummy ephemeral public that hopefully is unique within a test instance
-	use sp_core::ByteArray;
-	let mut erased_public = [0; 32];
-	erased_public[..16].copy_from_slice(&pair.public().as_slice()[0..16]);
-	erased_public[16..].copy_from_slice(&id.to_le_bytes());
+	// Make a dummy ephemeral public that hopefully is unique within one test instance.
+	// In the tests, the values within the erased public are just used to compare
+	// ticket bodies, so it is not important to be a valid key.
+	let mut raw: [u8; 32] = [0; 32];
+	raw[..16].copy_from_slice(&pair.public().as_slice()[0..16]);
+	raw[16..].copy_from_slice(&id.to_le_bytes());
+	let erased_public = EphemeralPublic::unchecked_from(raw);
 
 	let body = TicketBody { attempt_idx, erased_public };
 

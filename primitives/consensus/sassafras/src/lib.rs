@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,18 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Primitives for Sassafras
-//! TODO-SASS-P2 : write proper docs
+//! Primitives for Sassafras consensus.
 
-// TODO davxy enable warnings
-// #![deny(warnings)]
-// #![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
+#![deny(warnings)]
+#![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
@@ -37,14 +33,17 @@ pub use sp_core::bandersnatch::{
 	vrf::{VrfInput, VrfOutput, VrfSignData, VrfSignature},
 };
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 pub mod digests;
 pub mod inherents;
 pub mod ticket;
 
 pub use ticket::{
 	slot_claim_sign_data, slot_claim_vrf_input, ticket_body_sign_data, ticket_id,
-	ticket_id_threshold, ticket_id_vrf_input, TicketBody, TicketClaim, TicketEnvelope, TicketId,
-	TicketSecret,
+	ticket_id_threshold, ticket_id_vrf_input, EphemeralPublic, EphemeralSignature, TicketBody,
+	TicketClaim, TicketEnvelope, TicketId,
 };
 
 mod app {
@@ -52,7 +51,7 @@ mod app {
 	app_crypto!(bandersnatch, SASSAFRAS);
 }
 
-/// Key type for Sassafras protocol.
+/// Key type identifier.
 pub const KEY_TYPE: KeyTypeId = sp_application_crypto::key_types::SASSAFRAS;
 
 /// Consensus engine identifier.
@@ -61,7 +60,7 @@ pub const SASSAFRAS_ENGINE_ID: ConsensusEngineId = *b"SASS";
 /// VRF output length for per-slot randomness.
 pub const RANDOMNESS_LENGTH: usize = 32;
 
-/// The index of an authority.
+/// Index of an authority.
 pub type AuthorityIndex = u32;
 
 /// Sassafras authority keypair. Necessarily equivalent to the schnorrkel public key used in
@@ -83,54 +82,42 @@ pub type SassafrasBlockWeight = u32;
 /// An equivocation proof for multiple block authorships on the same slot (i.e. double vote).
 pub type EquivocationProof<H> = sp_consensus_slots::EquivocationProof<H, AuthorityId>;
 
-/// Randomness required by some SASSAFRAS operations.
+/// Randomness required by some protocol's operations.
 pub type Randomness = [u8; RANDOMNESS_LENGTH];
 
-/// Configuration data used by the Sassafras consensus engine.
-#[derive(Clone, Encode, Decode, RuntimeDebug, PartialEq, Eq, TypeInfo)]
-pub struct SassafrasConfiguration {
-	/// The slot duration in milliseconds.
-	pub slot_duration: u64,
-	/// The duration of epoch in slots.
-	pub epoch_duration: u64,
-	/// The authorities for the epoch.
-	pub authorities: Vec<AuthorityId>,
-	/// The randomness for the epoch.
-	pub randomness: Randomness,
-	/// Tickets threshold parameters.
-	pub threshold_params: SassafrasEpochConfiguration,
-}
-
-impl SassafrasConfiguration {
-	/// Get the slot duration defined in the genesis configuration.
-	pub fn slot_duration(&self) -> SlotDuration {
-		SlotDuration::from_millis(self.slot_duration)
-	}
+/// Configuration data that can be modified on epoch change.
+#[derive(
+	Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo, Default,
+)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct EpochConfiguration {
+	/// Tickets threshold redundancy factor.
+	pub redundancy_factor: u32,
+	/// Tickets attempts for each validator.
+	pub attempts_number: u32,
 }
 
 /// Sassafras epoch information
-#[derive(Encode, Decode, PartialEq, Eq, Clone, Debug, TypeInfo)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct Epoch {
 	/// The epoch index.
 	pub epoch_idx: u64,
 	/// The starting slot of the epoch.
 	pub start_slot: Slot,
+	/// Slot duration in milliseconds.
+	pub slot_duration: SlotDuration,
+	/// Duration of epoch in slots.
+	pub epoch_duration: u64,
+	/// Authorities for the epoch.
+	pub authorities: Vec<AuthorityId>,
+	/// Randomness for the epoch.
+	pub randomness: Randomness,
 	/// Epoch configuration.
-	pub config: SassafrasConfiguration,
-}
-
-/// Configuration data used by the Sassafras consensus engine that can be modified on epoch change.
-// TODO-SASS-P3: rename to something better... like LotteryConfig
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct SassafrasEpochConfiguration {
-	/// Redundancy factor.
-	pub redundancy_factor: u32,
-	/// Number of attempts for tickets generation.
-	pub attempts_number: u32,
+	pub config: EpochConfiguration,
 }
 
 /// An opaque type used to represent the key ownership proof at the runtime API boundary.
+///
 /// The inner value is an encoded representation of the actual key ownership proof which will be
 /// parameterized when defining the runtime. At the runtime API boundary this type is unknown and
 /// as such we keep this opaque representation, implementors of the runtime API will have to make

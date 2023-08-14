@@ -150,7 +150,7 @@ fn on_first_block_after_genesis() {
 		println!("{}", b2h(RandomnessAccumulator::<Test>::get()));
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("7ca54f761c6ec87503367cb3418740b8bab9796f861b9b1cb4945344bd5e87ca"),
+			h2b("416f7e78a0390e14677782ea22102ba749eb9de7d02df46b39d1e3d6e6759c62"),
 		);
 
 		// Header data check
@@ -201,7 +201,7 @@ fn on_normal_block() {
 		println!("{}", b2h(RandomnessAccumulator::<Test>::get()));
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("7ca54f761c6ec87503367cb3418740b8bab9796f861b9b1cb4945344bd5e87ca"),
+			h2b("416f7e78a0390e14677782ea22102ba749eb9de7d02df46b39d1e3d6e6759c62"),
 		);
 
 		let header = finalize_block(end_block);
@@ -219,7 +219,7 @@ fn on_normal_block() {
 		println!("{}", b2h(RandomnessAccumulator::<Test>::get()));
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("ec9ccd9bf272de069b0e51089e7182008ed7edef3ed878bb703e9e8945ead5ed"),
+			h2b("eab1c5692bf3255ae46b2e732d061700fcd51ab57f029ad39983ceae5214a713"),
 		);
 
 		// Header data check
@@ -257,12 +257,12 @@ fn produce_epoch_change_digest_no_config() {
 		println!("{}", b2h(NextRandomness::<Test>::get()));
 		assert_eq!(
 			NextRandomness::<Test>::get(),
-			h2b("85b976e3d66ecba38053d508dbccf1a17b36958fd2c2888669e439671f9b4e09"),
+			h2b("cb52dcf3b0caca956453d42004ac1b8005a26be669c2aaf534548e0b4c872a52"),
 		);
 		println!("{}", b2h(RandomnessAccumulator::<Test>::get()));
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("f98d9bcc7f368068c93a68f8c1eb016a15612916bda89443eda9921b8402af4c"),
+			h2b("ce3e3aeae02c85a8e0c8ee0ff0b120484df4551491ac2296e40147634ca4c58c"),
 		);
 
 		let header = finalize_block(end_block);
@@ -279,12 +279,12 @@ fn produce_epoch_change_digest_no_config() {
 		println!("{}", b2h(NextRandomness::<Test>::get()));
 		assert_eq!(
 			NextRandomness::<Test>::get(),
-			h2b("85b976e3d66ecba38053d508dbccf1a17b36958fd2c2888669e439671f9b4e09"),
+			h2b("cb52dcf3b0caca956453d42004ac1b8005a26be669c2aaf534548e0b4c872a52"),
 		);
 		println!("{}", b2h(RandomnessAccumulator::<Test>::get()));
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("7e3439ef345329ca6cc0e0b1f31cfb28b462540db2258e5c7c61e4d1f366013b"),
+			h2b("1288d911ca5deb9c514149d4fdb64ebf94e63989e09e03bc69218319456d4ec9"),
 		);
 
 		// Header data check
@@ -314,7 +314,7 @@ fn produce_epoch_change_digest_with_config() {
 
 		initialize_block(start_block, start_slot, Default::default(), &pairs[0]);
 
-		let config = SassafrasEpochConfiguration { redundancy_factor: 1, attempts_number: 123 };
+		let config = EpochConfiguration { redundancy_factor: 1, attempts_number: 123 };
 		Sassafras::plan_config_change(RuntimeOrigin::root(), config.clone()).unwrap();
 
 		// We want to trigger an epoch change in this test.
@@ -340,64 +340,6 @@ fn produce_epoch_change_digest_with_config() {
 		);
 		let consensus_digest = DigestItem::Consensus(SASSAFRAS_ENGINE_ID, consensus_log.encode());
 		assert_eq!(header.digest.logs[1], consensus_digest)
-	})
-}
-
-// TODO davxy: create a read_tickets method which reads pre-constructed good tickets
-// from a file. Creating this stuff "on-the-fly" is just too much expensive
-//
-// A valid ring-context is required for this test since we are passing though the
-// `submit_ticket` call which tests for ticket validity.
-#[test]
-fn submit_tickets_with_ring_proof_check_works() {
-	let (pairs, mut ext) = new_test_ext_with_pairs(10, true);
-	let pair = &pairs[0];
-	let segments_count = 3;
-
-	ext.execute_with(|| {
-		let start_slot = Slot::from(100);
-		let start_block = 1;
-		let max_tickets: u32 = <Test as Config>::MaxTickets::get();
-		let attempts_number = segments_count * max_tickets;
-
-		// Tweak the epoch config to discard some of the tickets
-		let mut config = EpochConfig::<Test>::get();
-		config.redundancy_factor = 7;
-		config.attempts_number = attempts_number;
-		EpochConfig::<Test>::set(config);
-
-		initialize_block(start_block, start_slot, Default::default(), &pairs[0]);
-
-		// Check state before tickets submission
-		assert_eq!(
-			TicketsMeta::<Test>::get(),
-			TicketsMetadata { segments_count: 0, tickets_count: [0, 0] },
-		);
-
-		// Populate the segments via the `submit_tickets`
-		let tickets = make_tickets(attempts_number, pair);
-		let segment_len = tickets.len() / segments_count as usize;
-		for i in 0..segments_count as usize {
-			println!("Submit tickets");
-			let segment =
-				tickets[i * segment_len..(i + 1) * segment_len].to_vec().try_into().unwrap();
-			Sassafras::submit_tickets(RuntimeOrigin::none(), segment).unwrap();
-		}
-
-		// Check state after submission
-		assert_eq!(
-			TicketsMeta::<Test>::get(),
-			TicketsMetadata { segments_count, tickets_count: [0, 0] },
-		);
-
-		finalize_block(start_block);
-
-		// Check against the expected results given the known inputs
-		assert_eq!(NextTicketsSegments::<Test>::get(0).len(), 2);
-		let seg = NextTicketsSegments::<Test>::get(1);
-		assert_eq!(seg.len(), 3);
-		let seg = NextTicketsSegments::<Test>::get(2);
-		assert_eq!(seg.len(), 2);
 	})
 }
 
@@ -661,5 +603,61 @@ fn obsolete_tickets_are_removed_on_epoch_change() {
 			let body = TicketsData::<Test>::get(id).unwrap();
 			assert_eq!((id, body), epoch2_tickets[i]);
 		});
+	})
+}
+
+// TODO davxy: create a read_tickets method which reads pre-constructed good tickets
+// from a file. Creating this stuff "on-the-fly" is just too much expensive
+//
+// A valid ring-context is required for this test since we are passing though the
+// `submit_ticket` call which tests for ticket validity.
+#[test]
+fn submit_tickets_with_ring_proof_check_works() {
+	let (pairs, mut ext) = new_test_ext_with_pairs(10, true);
+	let pair = &pairs[0];
+	let segments_count = 3;
+
+	ext.execute_with(|| {
+		let start_slot = Slot::from(100);
+		let start_block = 1;
+		let max_tickets: u32 = <Test as Config>::MaxTickets::get();
+		let attempts_number = segments_count * max_tickets;
+
+		// Tweak the epoch config to discard some of the tickets
+		let mut config = EpochConfig::<Test>::get();
+		config.redundancy_factor = 7;
+		config.attempts_number = attempts_number;
+		EpochConfig::<Test>::set(config);
+
+		initialize_block(start_block, start_slot, Default::default(), &pairs[0]);
+
+		// Check state before tickets submission
+		assert_eq!(
+			TicketsMeta::<Test>::get(),
+			TicketsMetadata { segments_count: 0, tickets_count: [0, 0] },
+		);
+
+		// Populate the segments via the `submit_tickets`
+		let tickets = make_tickets(attempts_number, pair);
+		let segment_len = tickets.len() / segments_count as usize;
+		for i in 0..segments_count as usize {
+			println!("Submit tickets");
+			let segment =
+				tickets[i * segment_len..(i + 1) * segment_len].to_vec().try_into().unwrap();
+			Sassafras::submit_tickets(RuntimeOrigin::none(), segment).unwrap();
+		}
+
+		// Check state after submission
+		assert_eq!(
+			TicketsMeta::<Test>::get(),
+			TicketsMetadata { segments_count, tickets_count: [0, 0] },
+		);
+
+		finalize_block(start_block);
+
+		// Check against the expected results given the known inputs
+		assert_eq!(NextTicketsSegments::<Test>::get(0).len(), 6);
+		assert_eq!(NextTicketsSegments::<Test>::get(1).len(), 1);
+		assert_eq!(NextTicketsSegments::<Test>::get(2).len(), 2);
 	})
 }

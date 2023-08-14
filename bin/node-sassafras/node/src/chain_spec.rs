@@ -6,7 +6,9 @@ use node_sassafras_runtime::{
 use node_sassafras_runtime::{SessionConfig, SessionKeys};
 use sc_service::ChainType;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
-use sp_consensus_sassafras::{AuthorityId as SassafrasId, SassafrasEpochConfiguration};
+use sp_consensus_sassafras::{
+	AuthorityId as SassafrasId, EpochConfiguration as SassafrasEpochConfig,
+};
 use sp_core::{sr25519, Pair, Public};
 use sp_runtime::traits::{IdentifyAccount, Verify};
 
@@ -131,7 +133,7 @@ fn testnet_genesis(
 			authorities: Vec::new(),
 			#[cfg(not(feature = "use-session-pallet"))]
 			authorities: initial_authorities.iter().map(|x| x.1.clone()).collect(),
-			epoch_config: SassafrasEpochConfiguration {
+			epoch_config: SassafrasEpochConfig {
 				attempts_number: SASSAFRAS_TICKETS_MAX_ATTEMPTS_NUMBER,
 				redundancy_factor: SASSAFRAS_TICKETS_REDUNDANCY_FACTOR,
 			},

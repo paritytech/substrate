@@ -25,16 +25,15 @@ use sp_consensus_sassafras::{
 	digests::PreDigest, slot_claim_sign_data, ticket_id, ticket_id_threshold, AuthorityId, Slot,
 	TicketBody, TicketClaim, TicketEnvelope, TicketId,
 };
-use sp_core::{bandersnatch::ring_vrf::RingContext, ed25519, twox_64, ByteArray};
+use sp_core::{
+	bandersnatch::ring_vrf::RingContext, ed25519::Pair as EphemeralPair, twox_64, ByteArray,
+};
 use std::pin::Pin;
 
 /// Get secondary authority index for the given epoch and slot.
-pub(crate) fn secondary_authority_index(
-	slot: Slot,
-	config: &SassafrasConfiguration,
-) -> AuthorityIndex {
-	u64::from_le_bytes((config.randomness, slot).using_encoded(twox_64)) as AuthorityIndex %
-		config.authorities.len() as AuthorityIndex
+pub(crate) fn secondary_authority_index(slot: Slot, epoch: &Epoch) -> AuthorityIndex {
+	u64::from_le_bytes((epoch.randomness, slot).using_encoded(twox_64)) as AuthorityIndex %
+		epoch.authorities.len() as AuthorityIndex
 }
 
 /// Try to claim an epoch slot.
@@ -45,18 +44,16 @@ pub(crate) fn claim_slot(
 	maybe_ticket: Option<(TicketId, TicketBody)>,
 	keystore: &KeystorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
-	let config = &epoch.config;
-
-	if config.authorities.is_empty() {
+	if epoch.authorities.is_empty() {
 		return None
 	}
 
-	let mut vrf_sign_data = slot_claim_sign_data(&config.randomness, slot, epoch.epoch_idx);
+	let mut vrf_sign_data = slot_claim_sign_data(&epoch.randomness, slot, epoch.epoch_idx);
 
 	let (authority_idx, ticket_claim) = match maybe_ticket {
 		Some((ticket_id, ticket_data)) => {
 			log::debug!(target: LOG_TARGET, "[TRY PRIMARY (slot {slot}, tkt = {ticket_id:016x})]");
-			let (authority_idx, ticket_secret) = epoch.tickets_aux.remove(&ticket_id)?.clone();
+			let (authority_idx, ticket_secret) = epoch.tickets_aux.remove(&ticket_id)?;
 			log::debug!(
 				target: LOG_TARGET,
 				"   got ticket: auth: {}, attempt: {}",
@@ -67,19 +64,19 @@ pub(crate) fn claim_slot(
 			vrf_sign_data.push_transcript_data(&ticket_data.encode());
 
 			let data = vrf_sign_data.challenge::<32>();
-			let erased_pair = ed25519::Pair::from_seed(&ticket_secret.erased_secret);
-			let erased_signature = *erased_pair.sign(&data).as_ref();
+			let erased_pair = EphemeralPair::from_seed(&ticket_secret.seed);
+			let erased_signature = erased_pair.sign(&data);
 
 			let claim = TicketClaim { erased_signature };
 			(authority_idx, Some(claim))
 		},
 		None => {
 			log::debug!(target: LOG_TARGET, "[TRY SECONDARY (slot {slot})]");
-			(secondary_authority_index(slot, config), None)
+			(secondary_authority_index(slot, epoch), None)
 		},
 	};
 
-	let authority_id = config.authorities.get(authority_idx as usize)?;
+	let authority_id = epoch.authorities.get(authority_idx as usize)?;
 
 	let vrf_signature = keystore
 		.bandersnatch_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &vrf_sign_data)
@@ -100,25 +97,24 @@ fn generate_epoch_tickets(
 	keystore: &KeystorePtr,
 	ring_ctx: &RingContext,
 ) -> Vec<TicketEnvelope> {
-	let config = &epoch.config;
-	let max_attempts = config.threshold_params.attempts_number;
-	let redundancy_factor = config.threshold_params.redundancy_factor;
 	let mut tickets = Vec::new();
 
 	let threshold = ticket_id_threshold(
-		redundancy_factor,
-		config.epoch_duration as u32,
-		max_attempts,
-		config.authorities.len() as u32,
+		epoch.config.redundancy_factor,
+		epoch.epoch_duration as u32,
+		epoch.config.attempts_number,
+		epoch.authorities.len() as u32,
 	);
 	// TODO-SASS-P4 remove me
 	log::debug!(target: LOG_TARGET, "Generating tickets for epoch {} @ slot {}", epoch.epoch_idx, epoch.start_slot);
 	log::debug!(target: LOG_TARGET, "    threshold: {threshold:016x}");
 
 	// We need a list of raw unwrapped keys
-	let pks: Vec<_> = config.authorities.iter().map(|a| *a.as_ref()).collect();
+	let pks: Vec<_> = epoch.authorities.iter().map(|a| *a.as_ref()).collect();
 
-	for (authority_idx, authority_id) in config.authorities.iter().enumerate() {
+	let mut tickets_aux = Vec::new();
+
+	for (authority_idx, authority_id) in epoch.authorities.iter().enumerate() {
 		if !keystore.has_keys(&[(authority_id.to_raw_vec(), AuthorityId::ID)]) {
 			continue
 		}
@@ -128,7 +124,7 @@ fn generate_epoch_tickets(
 		debug!(target: LOG_TARGET, ">>> ...done");
 
 		let make_ticket = |attempt_idx| {
-			let vrf_input = ticket_id_vrf_input(&config.randomness, attempt_idx, epoch.epoch_idx);
+			let vrf_input = ticket_id_vrf_input(&epoch.randomness, attempt_idx, epoch.epoch_idx);
 
 			let vrf_preout = keystore
 				.bandersnatch_vrf_output(AuthorityId::ID, authority_id.as_ref(), &vrf_input)
@@ -139,16 +135,18 @@ fn generate_epoch_tickets(
 				return None
 			}
 
-			let (erased_pair, erased_seed) = ed25519::Pair::generate();
+			// @davxy TODO: why not generate from seed.
+			// Seed computed as f(pair.seed || ticket_id)
+			let (erased_pair, erased_seed) = EphemeralPair::generate();
 
-			let erased_public: [u8; 32] = *erased_pair.public().as_ref();
-			let ticket_body = TicketBody { attempt_idx, erased_public };
+			let erased_public = erased_pair.public();
+			let body = TicketBody { attempt_idx, erased_public };
 
 			debug!(target: LOG_TARGET, ">>> Creating ring proof for attempt {}", attempt_idx);
-			let mut sign_data = ticket_body_sign_data(&ticket_body);
+			let mut sign_data = ticket_body_sign_data(&body);
 			sign_data.push_vrf_input(vrf_input).expect("Can't fail");
 
-			let ring_signature = keystore
+			let signature = keystore
 				.bandersnatch_ring_vrf_sign(
 					AuthorityId::ID,
 					authority_id.as_ref(),
@@ -158,23 +156,25 @@ fn generate_epoch_tickets(
 				.ok()??;
 			debug!(target: LOG_TARGET, ">>> ...done");
 
-			let ticket_envelope = TicketEnvelope { body: ticket_body, ring_signature };
+			let ticket_envelope = TicketEnvelope { body, signature };
 
-			let ticket_secret = TicketSecret { attempt_idx, erased_secret: erased_seed };
+			let ticket_secret = TicketSecret { attempt_idx, seed: erased_seed };
 
 			Some((ticket_id, ticket_envelope, ticket_secret))
 		};
 
-		for attempt in 0..max_attempts {
+		for attempt in 0..epoch.config.attempts_number {
 			if let Some((ticket_id, ticket_envelope, ticket_secret)) = make_ticket(attempt) {
 				log::debug!(target: LOG_TARGET, "    → {ticket_id:016x}");
-				epoch
-					.tickets_aux
-					.insert(ticket_id, (authority_idx as AuthorityIndex, ticket_secret));
 				tickets.push(ticket_envelope);
+				tickets_aux.push((ticket_id, authority_idx as u32, ticket_secret));
 			}
 		}
 	}
+
+	tickets_aux.into_iter().for_each(|(ticket_id, authority_idx, ticket_secret)| {
+		epoch.tickets_aux.insert(ticket_id, (authority_idx, ticket_secret));
+	});
 	tickets
 }
 
@@ -188,7 +188,7 @@ struct SlotWorker<B: BlockT, C, E, I, SO, L> {
 	keystore: KeystorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
-	genesis_config: SassafrasConfiguration,
+	genesis_config: Epoch,
 }
 
 #[async_trait::async_trait]
@@ -239,7 +239,7 @@ where
 		self.epoch_changes
 			.shared_data()
 			.viable_epoch(epoch_descriptor, |slot| Epoch::genesis(&self.genesis_config, slot))
-			.map(|epoch| epoch.as_ref().config.authorities.len())
+			.map(|epoch| epoch.as_ref().authorities.len())
 	}
 
 	async fn claim_slot(
@@ -475,19 +475,8 @@ async fn start_tickets_worker<B, C, SC>(
 			_ => None,
 		};
 
-		match err {
-			None => {
-				// Cache tickets in the epoch changes tree
-				epoch_changes
-					.shared_data()
-					.epoch_mut(&epoch_identifier)
-					.map(|target_epoch| target_epoch.tickets_aux = epoch.tickets_aux);
-				// TODO-SASS-P4: currently we don't persist the tickets proofs
-				// Thus on reboot/crash we are loosing them.
-			},
-			Some(err) => {
-				error!(target: LOG_TARGET, "Unable to submit tickets: {}", err);
-			},
+		if let Some(err) = err {
+			error!(target: LOG_TARGET, "Unable to submit tickets: {}", err);
 		}
 	}
 }
@@ -611,7 +600,7 @@ where
 	};
 
 	let slot_worker = sc_consensus_slots::start_slot_worker(
-		sassafras_link.genesis_config.slot_duration(),
+		sassafras_link.genesis_config.slot_duration,
 		select_chain.clone(),
 		sc_consensus_slots::SimpleSlotWorkerToSlotWorker(slot_worker),
 		sync_oracle,
