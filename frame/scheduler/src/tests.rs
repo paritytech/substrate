@@ -90,7 +90,7 @@ fn scheduling_with_preimages_works() {
 		assert!(logger::log().is_empty());
 
 		run_to_block(4);
-		// preimage should no have been removed when executed by the scheduler
+		// preimage should not have been removed when executed by the scheduler
 		assert!(!Preimage::len(&hash).is_some());
 		assert!(!Preimage::is_requested(&hash));
 		// `log` runtime call should have executed at block 4
