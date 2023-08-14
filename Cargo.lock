@@ -2594,6 +2594,7 @@ dependencies = [
  "array-bytes",
  "assert_matches",
  "bitflags",
+ "docify",
  "environmental",
  "frame-metadata",
  "frame-support-procedural",
