@@ -3098,7 +3098,7 @@ impl<T: Config> Pallet<T> {
 			bonded_pools == reward_pools,
 			"`BondedPools` and `RewardPools` must all have the EXACT SAME key-set."
 		);
-		let mut expected_tvl = Zero::zero();
+		// let mut expected_tvl = Zero::zero();
 
 		ensure!(
 			SubPoolsStorage::<T>::iter_keys().all(|k| bonded_pools.contains(&k)),
@@ -3137,7 +3137,8 @@ impl<T: Config> Pallet<T> {
 			ensure!(!d.total_points().is_zero(), "No member should have zero points");
 			*pools_members.entry(d.pool_id).or_default() += 1;
 			all_members += 1;
-			expected_tvl += d.points;
+			// TODO
+			//expected_tvl += bonded_pool.points_to_balance(d.points);
 
 			let reward_pool = RewardPools::<T>::get(d.pool_id).unwrap();
 			if !bonded_pool.points.is_zero() {
@@ -3292,16 +3293,17 @@ impl<T: Config> sp_staking::OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pall
 		// anything here.
 		slashed_bonded: BalanceOf<T>,
 		slashed_unlocking: &BTreeMap<EraIndex, BalanceOf<T>>,
-		total_slashed: BalanceOf<T>,
+		// derive total_slashed from existing data
+		// total_slashed: BalanceOf<T>,
 	) {
 		if let Some(pool_id) = ReversePoolIdLookup::<T>::get(pool_account).defensive() {
 			// TODO: bug here: a slash toward a pool who's subpools were missing would not be
 			// tracked. write a test for it.
 			Self::deposit_event(Event::<T>::PoolSlashed { pool_id, balance: slashed_bonded });
 
-			TotalValueLocked::<T>::mutate(|tvl| {
-				tvl.saturating_reduce(total_slashed);
-			});
+			let mut new_total = slashed_bonded;
+			// TODO
+			let old_total: BalanceOf<T> = Zero::zero();
 
 			let mut sub_pools = match SubPoolsStorage::<T>::get(pool_id) {
 				Some(sub_pools) => sub_pools,
@@ -3311,6 +3313,7 @@ impl<T: Config> sp_staking::OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pall
 			for (era, slashed_balance) in slashed_unlocking.iter() {
 				if let Some(pool) = sub_pools.with_era.get_mut(era) {
 					pool.balance = *slashed_balance;
+					new_total.saturating_add(*slashed_balance);
 					Self::deposit_event(Event::<T>::UnbondingPoolSlashed {
 						era: *era,
 						pool_id,
@@ -3319,6 +3322,10 @@ impl<T: Config> sp_staking::OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pall
 				}
 			}
 			SubPoolsStorage::<T>::insert(pool_id, sub_pools);
+			let total_slashed = old_total.saturating_sub(new_total);
+			TotalValueLocked::<T>::mutate(|tvl| {
+				tvl.saturating_reduce(total_slashed);
+			});
 		}
 	}
 }
