@@ -472,13 +472,11 @@ impl<T: Config> PoolMember<T> {
 	/// Total balance of the member.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn total_balance(&self) -> BalanceOf<T> {
-		// TODO
-		self.active_balance().saturating_add(
-			self.unbonding_eras
-				.as_ref()
-				.iter()
-				.fold(BalanceOf::<T>::zero(), |acc, (_, v)| acc.saturating_add(*v)),
-		)
+		if let Some(pool) = BondedPool::<T>::get(self.pool_id).defensive() {
+			pool.points_to_balance(self.total_points())
+		} else {
+			Zero::zero()
+		}
 	}
 
 	/// Total points of this member, both active and unbonding.
