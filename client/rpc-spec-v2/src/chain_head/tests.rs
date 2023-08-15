@@ -36,6 +36,7 @@ type Header = substrate_test_runtime_client::runtime::Header;
 type Block = substrate_test_runtime_client::runtime::Block;
 const MAX_PINNED_BLOCKS: usize = 32;
 const MAX_PINNED_SECS: u64 = 60;
+const MAX_OPERATIONS: usize = 16;
 const CHAIN_GENESIS: [u8; 32] = [0; 32];
 const INVALID_HASH: [u8; 32] = [1; 32];
 const KEY: &[u8] = b":mock";
@@ -79,8 +80,11 @@ async fn setup_api() -> (
 		backend,
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-		Duration::from_secs(MAX_PINNED_SECS),
+		ChainHeadConfig {
+			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: MAX_OPERATIONS,
+		},
 	)
 	.into_rpc();
 
@@ -119,8 +123,11 @@ async fn follow_subscription_produces_blocks() {
 		backend,
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-		Duration::from_secs(MAX_PINNED_SECS),
+		ChainHeadConfig {
+			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: MAX_OPERATIONS,
+		},
 	)
 	.into_rpc();
 
@@ -177,8 +184,11 @@ async fn follow_with_runtime() {
 		backend,
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-		Duration::from_secs(MAX_PINNED_SECS),
+		ChainHeadConfig {
+			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: MAX_OPERATIONS,
+		},
 	)
 	.into_rpc();
 
@@ -285,8 +295,11 @@ async fn get_genesis() {
 		backend,
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-		Duration::from_secs(MAX_PINNED_SECS),
+		ChainHeadConfig {
+			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: MAX_OPERATIONS,
+		},
 	)
 	.into_rpc();
 
@@ -491,8 +504,11 @@ async fn call_runtime_without_flag() {
 		backend,
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-		Duration::from_secs(MAX_PINNED_SECS),
+		ChainHeadConfig {
+			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: MAX_OPERATIONS,
+		},
 	)
 	.into_rpc();
 
@@ -1117,8 +1133,11 @@ async fn separate_operation_ids_for_subscriptions() {
 		backend,
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-		Duration::from_secs(MAX_PINNED_SECS),
+		ChainHeadConfig {
+			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: MAX_OPERATIONS,
+		},
 	)
 	.into_rpc();
 
@@ -1194,8 +1213,11 @@ async fn follow_generates_initial_blocks() {
 		backend,
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-		Duration::from_secs(MAX_PINNED_SECS),
+		ChainHeadConfig {
+			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: MAX_OPERATIONS,
+		},
 	)
 	.into_rpc();
 
@@ -1322,8 +1344,11 @@ async fn follow_exceeding_pinned_blocks() {
 		backend,
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
-		2,
-		Duration::from_secs(MAX_PINNED_SECS),
+		ChainHeadConfig {
+			global_max_pinned_blocks: 2,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: MAX_OPERATIONS,
+		},
 	)
 	.into_rpc();
 
@@ -1373,8 +1398,11 @@ async fn follow_with_unpin() {
 		backend,
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
-		2,
-		Duration::from_secs(MAX_PINNED_SECS),
+		ChainHeadConfig {
+			global_max_pinned_blocks: 2,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: MAX_OPERATIONS,
+		},
 	)
 	.into_rpc();
 
@@ -1454,8 +1482,11 @@ async fn follow_prune_best_block() {
 		backend,
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-		Duration::from_secs(MAX_PINNED_SECS),
+		ChainHeadConfig {
+			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: MAX_OPERATIONS,
+		},
 	)
 	.into_rpc();
 
@@ -1611,8 +1642,11 @@ async fn follow_forks_pruned_block() {
 		backend,
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-		Duration::from_secs(MAX_PINNED_SECS),
+		ChainHeadConfig {
+			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: MAX_OPERATIONS,
+		},
 	)
 	.into_rpc();
 
@@ -1725,8 +1759,11 @@ async fn follow_report_multiple_pruned_block() {
 		backend,
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-		Duration::from_secs(MAX_PINNED_SECS),
+		ChainHeadConfig {
+			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: MAX_OPERATIONS,
+		},
 	)
 	.into_rpc();
 
@@ -1930,8 +1967,11 @@ async fn pin_block_references() {
 		backend.clone(),
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
-		3,
-		Duration::from_secs(MAX_PINNED_SECS),
+		ChainHeadConfig {
+			global_max_pinned_blocks: 3,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: MAX_OPERATIONS,
+		},
 	)
 	.into_rpc();
 
@@ -2040,8 +2080,11 @@ async fn follow_finalized_before_new_block() {
 		backend,
 		Arc::new(TaskExecutor::default()),
 		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-		Duration::from_secs(MAX_PINNED_SECS),
+		ChainHeadConfig {
+			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: MAX_OPERATIONS,
+		},
 	)
 	.into_rpc();
 
@@ -2118,4 +2161,101 @@ async fn follow_finalized_before_new_block() {
 		best_block_hash: format!("{:?}", block_2_hash),
 	});
 	assert_eq!(event, expected);
+}
+
+#[tokio::test]
+async fn ensure_operation_limits_works() {
+	let child_info = ChildInfo::new_default(CHILD_STORAGE_KEY);
+	let builder = TestClientBuilder::new().add_extra_child_storage(
+		&child_info,
+		KEY.to_vec(),
+		CHILD_VALUE.to_vec(),
+	);
+	let backend = builder.backend();
+	let mut client = Arc::new(builder.build());
+
+	// Configure the chainHead with maximum 1 ongoing operations.
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		Arc::new(TaskExecutor::default()),
+		CHAIN_GENESIS,
+		ChainHeadConfig {
+			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECS),
+			subscription_max_ongoing_operations: 1,
+		},
+	)
+	.into_rpc();
+
+	let mut sub = api.subscribe("chainHead_unstable_follow", [true]).await.unwrap();
+	let sub_id = sub.subscription_id();
+	let sub_id = serde_json::to_string(&sub_id).unwrap();
+
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+	// Ensure the imported block is propagated and pinned for this subscription.
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::Initialized(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::NewBlock(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::BestBlockChanged(_)
+	);
+
+	let block_hash = format!("{:?}", block.header.hash());
+	let key = hex_string(&KEY);
+
+	let items = vec![
+		StorageQuery { key: key.clone(), query_type: StorageQueryType::DescendantsHashes },
+		StorageQuery { key: key.clone(), query_type: StorageQueryType::DescendantsHashes },
+		StorageQuery { key: key.clone(), query_type: StorageQueryType::DescendantsValues },
+		StorageQuery { key: key.clone(), query_type: StorageQueryType::DescendantsValues },
+	];
+
+	let response: MethodResponse = api
+		.call("chainHead_unstable_storage", rpc_params![&sub_id, &block_hash, items])
+		.await
+		.unwrap();
+	let operation_id = match response {
+		MethodResponse::Started(started) => {
+			// Check discarded items.
+			assert_eq!(started.discarded_items.unwrap(), 3);
+			started.operation_id
+		},
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+	// No value associated with the provided key.
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut sub).await,
+			FollowEvent::OperationStorageDone(done) if done.operation_id == operation_id
+	);
+
+	// The storage is finished and capactiy must be released.
+	let alice_id = AccountKeyring::Alice.to_account_id();
+	// Hex encoded scale encoded bytes representing the call parameters.
+	let call_parameters = hex_string(&alice_id.encode());
+	let response: MethodResponse = api
+		.call(
+			"chainHead_unstable_call",
+			[&sub_id, &block_hash, "AccountNonceApi_account_nonce", &call_parameters],
+		)
+		.await
+		.unwrap();
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+
+	// Response propagated to `chainHead_follow`.
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut sub).await,
+			FollowEvent::OperationCallDone(done) if done.operation_id == operation_id && done.output == "0x0000000000000000"
+	);
 }

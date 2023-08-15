@@ -40,12 +40,14 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionManagement<Block, BE> {
 	pub fn new(
 		global_max_pinned_blocks: usize,
 		local_max_pin_duration: Duration,
+		max_ongoing_operations: usize,
 		backend: Arc<BE>,
 	) -> Self {
 		SubscriptionManagement {
 			inner: RwLock::new(SubscriptionsInner::new(
 				global_max_pinned_blocks,
 				local_max_pin_duration,
+				max_ongoing_operations,
 				backend,
 			)),
 		}
@@ -110,15 +112,18 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionManagement<Block, BE> {
 
 	/// Ensure the block remains pinned until the return object is dropped.
 	///
-	/// Returns a [`BlockGuard`] that pins and unpins the block hash in RAII manner.
-	/// Returns an error if the block hash is not pinned for the subscription or
-	/// the subscription ID is invalid.
+	/// Returns a [`BlockGuard`] that pins and unpins the block hash in RAII manner
+	/// and reserves capacity for ogoing operations.
+	///
+	/// Returns an error if the block hash is not pinned for the subscription,
+	/// the subscription ID is invalid or the limit of ongoing operations was exceeded.
 	pub fn lock_block(
 		&self,
 		sub_id: &str,
 		hash: Block::Hash,
+		to_reserve: usize,
 	) -> Result<BlockGuard<Block, BE>, SubscriptionManagementError> {
 		let mut inner = self.inner.write();
-		inner.lock_block(sub_id, hash)
+		inner.lock_block(sub_id, hash, to_reserve)
 	}
 }
