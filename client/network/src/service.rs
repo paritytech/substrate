@@ -933,10 +933,9 @@ where
 		peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		let Some(set_id) = self.notification_protocol_ids.get(&protocol) else {
-			return Err(format!(
-				"Cannot add peers to reserved set of unknown protocol: {}",
-				protocol
-			))
+			return Err(
+				format!("Cannot add peers to reserved set of unknown protocol: {}", protocol)
+			)
 		};
 
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
@@ -965,10 +964,9 @@ where
 		peers: Vec<PeerId>,
 	) -> Result<(), String> {
 		let Some(set_id) = self.notification_protocol_ids.get(&protocol) else {
-			return Err(format!(
-				"Cannot remove peers from reserved set of unknown protocol: {}",
-				protocol
-			))
+			return Err(
+				format!("Cannot remove peers from reserved set of unknown protocol: {}", protocol)
+			)
 		};
 
 		for peer_id in peers.into_iter() {
