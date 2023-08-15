@@ -19,6 +19,25 @@ use crate::*;
 use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Mint a new unique item with the given `collection`, `item`, and other minting configuration
+	/// details.
+	///
+	/// This function performs the minting of a new unique item. It checks if the item does not
+	/// already exist in the given collection, and if the max supply limit (if configured) is not
+	/// reached. It also reserves the required deposit for the item and sets the item details
+	/// accordingly.
+	///
+	/// # Errors
+	///
+	/// This function returns a dispatch error in the following cases:
+	/// - If the collection ID is invalid ([`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - If the item already exists in the collection
+	///   ([`AlreadyExists`](crate::Error::AlreadyExists)).
+	/// - If the item configuration already exists
+	///   ([`InconsistentItemConfig`](crate::Error::InconsistentItemConfig)).
+	/// - If the max supply limit (if configured) for the collection is reached
+	///   ([`MaxSupplyReached`](crate::Error::MaxSupplyReached)).
+	/// - If any error occurs in the `with_details_and_config` closure.
 	pub fn do_mint(
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -163,6 +182,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Burns the specified item with the given `collection`, `item`, and `with_details`.
+	///
+	/// # Errors
+	///
+	/// This function returns a dispatch error in the following cases:
+	/// - If the collection ID is invalid ([`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - If the item is locked ([`ItemLocked`](crate::Error::ItemLocked)).
 	pub fn do_burn(
 		collection: T::CollectionId,
 		item: T::ItemId,
