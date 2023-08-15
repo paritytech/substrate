@@ -120,8 +120,8 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 	/// * `stash` - The stash of the staker whom the slash was applied to.
 	/// * `slashed_active` - The new bonded balance of the staker after the slash was applied.
 	/// * `slashed_unlocking` - A map of slashed eras, and the balance of that unlocking chunk after
-	/// * `slashed_total` - The aggregated balance that was lost due to the slash
 	///   the slash is applied. Any era not present in the map is not affected at all.
+	/// * `slashed_total` - The aggregated balance that was lost due to the slash.
 	fn on_slash(
 		_stash: &AccountId,
 		_slashed_active: Balance,

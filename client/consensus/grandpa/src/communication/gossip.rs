@@ -546,9 +546,7 @@ impl<N: Ord> Peers<N> {
 		who: &PeerId,
 		update: NeighborPacket<N>,
 	) -> Result<Option<&View<N>>, Misbehavior> {
-		let Some(peer) = self.inner.get_mut(who) else {
-			return Ok(None)
-		};
+		let Some(peer) = self.inner.get_mut(who) else { return Ok(None) };
 
 		let invalid_change = peer.view.set_id > update.set_id ||
 			peer.view.round > update.round && peer.view.set_id == update.set_id ||
