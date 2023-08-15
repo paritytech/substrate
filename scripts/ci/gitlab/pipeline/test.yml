@@ -68,8 +68,10 @@ cargo-clippy:
     - .docker-env
     - .test-refs
   script:
+    - echo $RUSTFLAGS
+    - cargo version && cargo clippy --version
     - rusty-cachier snapshot create
-    - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo clippy --locked --all-targets
+    - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo clippy --locked --all-targets --workspace
     - rusty-cachier cache upload
 
 cargo-check-benches:
