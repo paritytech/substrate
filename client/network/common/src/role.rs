@@ -24,7 +24,7 @@ use codec::{self, Encode, EncodeLike, Input, Output};
 /// > **Note**: This enum is different from the `Role` enum. The `Role` enum indicates what a
 /// >			node says about itself, while `ObservedRole` is a `Role` merged with the
 /// >			information known locally about that node.
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ObservedRole {
 	/// Full node.
 	Full,
@@ -38,6 +38,18 @@ impl ObservedRole {
 	/// Returns `true` for `ObservedRole::Light`.
 	pub fn is_light(&self) -> bool {
 		matches!(self, Self::Light)
+	}
+}
+
+impl From<Roles> for ObservedRole {
+	fn from(roles: Roles) -> Self {
+		if roles.is_authority() {
+			ObservedRole::Authority
+		} else if roles.is_full() {
+			ObservedRole::Full
+		} else {
+			ObservedRole::Light
+		}
 	}
 }
 

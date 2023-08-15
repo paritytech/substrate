@@ -24,17 +24,18 @@ use super::{
 };
 use crate::{communication::grandpa_protocol_name, environment::SharedVoterSetState};
 use futures::prelude::*;
-use parity_scale_codec::Encode;
+use parity_scale_codec::{DecodeAll, Encode};
 use sc_network::{
 	config::{MultiaddrWithPeerId, Role},
 	event::Event as NetworkEvent,
+	service::traits::{Direction, MessageSink, NotificationEvent, NotificationService},
 	types::ProtocolName,
 	Multiaddr, NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 	NetworkSyncForkRequest, NotificationSenderError, NotificationSenderT as NotificationSender,
 	PeerId, ReputationChange,
 };
 use sc_network_common::{
-	role::ObservedRole,
+	role::{ObservedRole, Roles},
 	sync::{SyncEvent as SyncStreamEvent, SyncEventStream},
 };
 use sc_network_gossip::Validator;
@@ -125,6 +126,12 @@ impl NetworkPeers for TestNetwork {
 	fn sync_num_connected(&self) -> usize {
 		unimplemented!();
 	}
+
+	fn peer_role(&self, _peer_id: PeerId, handshake: Vec<u8>) -> Option<ObservedRole> {
+		Roles::decode_all(&mut &handshake[..])
+			.ok()
+			.and_then(|role| Some(ObservedRole::from(role)))
+	}
 }
 
 impl NetworkEventStream for TestNetwork {
@@ -213,10 +220,65 @@ impl NetworkSyncForkRequest<Hash, NumberFor<Block>> for TestSync {
 	fn set_sync_fork_request(&self, _peers: Vec<PeerId>, _hash: Hash, _number: NumberFor<Block>) {}
 }
 
+#[derive(Debug)]
+pub(crate) struct TestNotificationService {
+	rx: TracingUnboundedReceiver<NotificationEvent>,
+}
+
+#[async_trait::async_trait]
+impl NotificationService for TestNotificationService {
+	/// Instruct `Notifications` to open a new substream for `peer`.
+	async fn open_substream(&mut self, _peer: PeerId) -> Result<(), ()> {
+		unimplemented!();
+	}
+
+	/// Instruct `Notifications` to close substream for `peer`.
+	async fn close_substream(&mut self, _peer: PeerId) -> Result<(), ()> {
+		unimplemented!();
+	}
+
+	/// Send synchronous `notification` to `peer`.
+	fn send_sync_notification(&self, _peer: &PeerId, _notification: Vec<u8>) {
+		unimplemented!();
+	}
+
+	/// Send asynchronous `notification` to `peer`, allowing sender to exercise backpressure.
+	async fn send_async_notification(
+		&self,
+		_peer: &PeerId,
+		_notification: Vec<u8>,
+	) -> Result<(), sc_network::error::Error> {
+		unimplemented!();
+	}
+
+	/// Set handshake for the notification protocol replacing the old handshake.
+	async fn set_handshake(&mut self, _handshake: Vec<u8>) -> Result<(), ()> {
+		unimplemented!();
+	}
+
+	/// Get next event from the `Notifications` event stream.
+	async fn next_event(&mut self) -> Option<NotificationEvent> {
+		self.rx.next().await
+	}
+
+	fn clone(&mut self) -> Result<Box<dyn NotificationService>, ()> {
+		unimplemented!();
+	}
+
+	fn protocol(&self) -> &ProtocolName {
+		unimplemented!();
+	}
+
+	fn message_sink(&self, _peer: &PeerId) -> Option<Box<dyn MessageSink>> {
+		unimplemented!();
+	}
+}
+
 pub(crate) struct Tester {
 	pub(crate) net_handle: super::NetworkBridge<Block, TestNetwork, TestSync>,
 	gossip_validator: Arc<GossipValidator<Block>>,
 	pub(crate) events: TracingUnboundedReceiver<Event>,
+	pub(crate) notification_tx: TracingUnboundedSender<NotificationEvent>,
 }
 
 impl Tester {
@@ -281,6 +343,9 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 // needs to run in a tokio runtime.
 pub(crate) fn make_test_network() -> (impl Future<Output = Tester>, TestNetwork) {
 	let (tx, rx) = tracing_unbounded("test", 100_000);
+	let (notification_tx, notification_rx) = tracing_unbounded("test-notification", 100_000);
+
+	let notification_service = TestNotificationService { rx: notification_rx };
 	let net = TestNetwork { sender: tx };
 	let sync = TestSync {};
 
@@ -295,14 +360,22 @@ pub(crate) fn make_test_network() -> (impl Future<Output = Tester>, TestNetwork)
 		}
 	}
 
-	let bridge =
-		super::NetworkBridge::new(net.clone(), sync, config(), voter_set_state(), None, None);
+	let bridge = super::NetworkBridge::new(
+		net.clone(),
+		sync,
+		Box::new(notification_service),
+		config(),
+		voter_set_state(),
+		None,
+		None,
+	);
 
 	(
 		futures::future::ready(Tester {
 			gossip_validator: bridge.validator.clone(),
 			net_handle: bridge,
 			events: rx,
+			notification_tx,
 		}),
 		net,
 	)
@@ -387,63 +460,62 @@ fn good_commit_leads_to_relay() {
 			let commit_to_send = encoded_commit.clone();
 			let network_bridge = tester.net_handle.clone();
 
-			// asking for global communication will cause the test network
-			// to send us an event asking us for a stream. use it to
-			// send a message.
+			// `NetworkBridge` will be operational as soon as it's created and it's
+			// waiting for events from the network. Send it events that inform that
+			// a notification stream was opened and that a notification was received.
+			//
+			// Since each protocol has its own notification stream, events need not be filtered.
 			let sender_id = id;
-			let send_message = tester.filter_network_events(move |event| match event {
-				Event::EventStream(sender) => {
-					// Add the sending peer and send the commit
-					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
-						remote: sender_id,
-						protocol: grandpa_protocol_name::NAME.into(),
+
+			let send_message = async move {
+				let _ = tester.notification_tx.unbounded_send(
+					NotificationEvent::NotificationStreamOpened {
+						peer: sender_id,
+						direction: Direction::Inbound,
 						negotiated_fallback: None,
-						role: ObservedRole::Full,
-						received_handshake: vec![],
-					});
+						handshake: Roles::FULL.encode(),
+					},
+				);
+				let _ = tester.notification_tx.unbounded_send(
+					NotificationEvent::NotificationReceived {
+						peer: sender_id,
+						notification: commit_to_send.clone(),
+					},
+				);
 
-					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
-						remote: sender_id,
-						messages: vec![(
-							grandpa_protocol_name::NAME.into(),
-							commit_to_send.clone().into(),
-						)],
-					});
-
-					// Add a random peer which will be the recipient of this message
-					let receiver_id = PeerId::random();
-					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
-						remote: receiver_id,
-						protocol: grandpa_protocol_name::NAME.into(),
+				// Add a random peer which will be the recipient of this message
+				let receiver_id = PeerId::random();
+				let _ = tester.notification_tx.unbounded_send(
+					NotificationEvent::NotificationStreamOpened {
+						peer: receiver_id,
+						direction: Direction::Inbound,
 						negotiated_fallback: None,
-						role: ObservedRole::Full,
-						received_handshake: vec![],
+						handshake: Roles::FULL.encode(),
+					},
+				);
+
+				// Announce its local set being on the current set id through a neighbor
+				// packet, otherwise it won't be eligible to receive the commit
+				let _ = {
+					let update = gossip::VersionedNeighborPacket::V1(gossip::NeighborPacket {
+						round: Round(round),
+						set_id: SetId(set_id),
+						commit_finalized_height: 1,
 					});
 
-					// Announce its local set has being on the current set id through a neighbor
-					// packet, otherwise it won't be eligible to receive the commit
-					let _ = {
-						let update = gossip::VersionedNeighborPacket::V1(gossip::NeighborPacket {
-							round: Round(round),
-							set_id: SetId(set_id),
-							commit_finalized_height: 1,
-						});
+					let msg = gossip::GossipMessage::<Block>::Neighbor(update);
 
-						let msg = gossip::GossipMessage::<Block>::Neighbor(update);
+					let _ = tester.notification_tx.unbounded_send(
+						NotificationEvent::NotificationReceived {
+							peer: receiver_id,
+							notification: msg.encode(),
+						},
+					);
+				};
 
-						sender.unbounded_send(NetworkEvent::NotificationsReceived {
-							remote: receiver_id,
-							messages: vec![(
-								grandpa_protocol_name::NAME.into(),
-								msg.encode().into(),
-							)],
-						})
-					};
-
-					true
-				},
-				_ => false,
-			});
+				tester
+			}
+			.boxed();
 
 			// when the commit comes in, we'll tell the callback it was good.
 			let handle_commit = commits_in.into_future().map(|(item, _)| match item.unwrap() {
@@ -539,31 +611,32 @@ fn bad_commit_leads_to_report() {
 			let commit_to_send = encoded_commit.clone();
 			let network_bridge = tester.net_handle.clone();
 
-			// asking for global communication will cause the test network
-			// to send us an event asking us for a stream. use it to
-			// send a message.
+			// `NetworkBridge` will be operational as soon as it's created and it's
+			// waiting for events from the network. Send it events that inform that
+			// a notification stream was opened and that a notification was received.
+			//
+			// Since each protocol has its own notification stream, events need not be filtered.
 			let sender_id = id;
-			let send_message = tester.filter_network_events(move |event| match event {
-				Event::EventStream(sender) => {
-					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
-						remote: sender_id,
-						protocol: grandpa_protocol_name::NAME.into(),
-						negotiated_fallback: None,
-						role: ObservedRole::Full,
-						received_handshake: vec![],
-					});
-					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
-						remote: sender_id,
-						messages: vec![(
-							grandpa_protocol_name::NAME.into(),
-							commit_to_send.clone().into(),
-						)],
-					});
 
-					true
-				},
-				_ => false,
-			});
+			let send_message = async move {
+				let _ = tester.notification_tx.unbounded_send(
+					NotificationEvent::NotificationStreamOpened {
+						peer: sender_id,
+						direction: Direction::Inbound,
+						negotiated_fallback: None,
+						handshake: Roles::FULL.encode(),
+					},
+				);
+				let _ = tester.notification_tx.unbounded_send(
+					NotificationEvent::NotificationReceived {
+						peer: sender_id,
+						notification: commit_to_send.clone(),
+					},
+				);
+
+				tester
+			}
+			.boxed();
 
 			// when the commit comes in, we'll tell the callback it was bad.
 			let handle_commit = commits_in.into_future().map(|(item, _)| match item.unwrap() {

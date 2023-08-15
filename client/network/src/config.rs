@@ -23,10 +23,11 @@
 
 pub use crate::{
 	discovery::DEFAULT_KADEMLIA_REPLICATION_FACTOR,
-	protocol::NotificationsSink,
+	protocol::{notification_service, NotificationsSink, ProtocolHandlePair},
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
+	service::traits::NotificationService,
 	types::ProtocolName,
 };
 
@@ -42,7 +43,6 @@ pub use sc_network_common::{
 	sync::{warp::WarpSyncProvider, SyncMode},
 	ExHashT,
 };
-use sc_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::Block as BlockT;
 
 use std::{
@@ -449,14 +449,14 @@ impl Default for SetConfig {
 ///
 /// > **Note**: As new fields might be added in the future, please consider using the `new` method
 /// >			and modifiers instead of creating this struct manually.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct NonDefaultSetConfig {
 	/// Name of the notifications protocols of this set. A substream on this set will be
 	/// considered established once this protocol is open.
 	///
 	/// > **Note**: This field isn't present for the default set, as this is handled internally
 	/// > by the networking code.
-	pub notifications_protocol: ProtocolName,
+	protocol_name: ProtocolName,
 
 	/// If the remote reports that it doesn't support the protocol indicated in the
 	/// `notifications_protocol` field, then each of these fallback names will be tried one by
@@ -464,37 +464,84 @@ pub struct NonDefaultSetConfig {
 	///
 	/// If a fallback is used, it will be reported in
 	/// `sc_network::protocol::event::Event::NotificationStreamOpened::negotiated_fallback`
-	pub fallback_names: Vec<ProtocolName>,
+	fallback_names: Vec<ProtocolName>,
 
 	/// Handshake of the protocol
 	///
 	/// NOTE: Currently custom handshakes are not fully supported. See issue #5685 for more
 	/// details. This field is temporarily used to allow moving the hardcoded block announcement
 	/// protocol out of `protocol.rs`.
-	pub handshake: Option<NotificationHandshake>,
+	handshake: Option<NotificationHandshake>,
 
 	/// Maximum allowed size of single notifications.
-	pub max_notification_size: u64,
+	max_notification_size: u64,
 
 	/// Base configuration.
-	pub set_config: SetConfig,
+	set_config: SetConfig,
+
+	/// Notification handle.
+	///
+	/// Notification handle is created during `NonDefaultSetConfig` creation and its other half,
+	/// `Box<dyn NotificationService>` is given to the protocol created the config and
+	/// `ProtocolHandle` is given to `Notifications` when it initializes itself. This handle allows
+	/// `Notifications ` to communicate with the protocol directly without relaying events through
+	/// `sc-network.`
+	protocol_handle_pair: ProtocolHandlePair,
 }
 
 impl NonDefaultSetConfig {
 	/// Creates a new [`NonDefaultSetConfig`]. Zero slots and accepts only reserved nodes.
-	pub fn new(notifications_protocol: ProtocolName, max_notification_size: u64) -> Self {
-		Self {
-			notifications_protocol,
-			max_notification_size,
-			fallback_names: Vec::new(),
-			handshake: None,
-			set_config: SetConfig {
-				in_peers: 0,
-				out_peers: 0,
-				reserved_nodes: Vec::new(),
-				non_reserved_mode: NonReservedPeerMode::Deny,
+	/// Also returns an object which allows the protocol to communicate with `Notifications`.
+	pub fn new(
+		protocol_name: ProtocolName,
+		fallback_names: Vec<ProtocolName>,
+		max_notification_size: u64,
+		handshake: Option<NotificationHandshake>,
+		set_config: SetConfig,
+	) -> (Self, Box<dyn NotificationService>) {
+		let (protocol_handle_pair, notification_service) =
+			notification_service(protocol_name.clone());
+		(
+			Self {
+				protocol_name,
+				max_notification_size,
+				fallback_names,
+				handshake,
+				set_config,
+				protocol_handle_pair,
 			},
-		}
+			notification_service,
+		)
+	}
+
+	/// Get reference to protocol name.
+	pub fn protocol_name(&self) -> &ProtocolName {
+		&self.protocol_name
+	}
+
+	/// Get reference to fallback protocol names.
+	pub fn fallback_names(&self) -> impl Iterator<Item = &ProtocolName> {
+		self.fallback_names.iter()
+	}
+
+	/// Get reference to handshake.
+	pub fn handshake(&self) -> &Option<NotificationHandshake> {
+		&self.handshake
+	}
+
+	/// Get maximum notification size.
+	pub fn max_notification_size(&self) -> u64 {
+		self.max_notification_size
+	}
+
+	/// Get reference to `SetConfig`.
+	pub fn set_config(&self) -> &SetConfig {
+		&self.set_config
+	}
+
+	/// Take `ProtocolHandlePair` from `NonDefaultSetConfig`
+	pub fn take_protocol_handle(self) -> ProtocolHandlePair {
+		self.protocol_handle_pair
 	}
 
 	/// Modifies the configuration to allow non-reserved nodes.
@@ -698,9 +745,6 @@ pub struct Params<Block: BlockT> {
 
 	/// Block announce protocol configuration
 	pub block_announce_config: NonDefaultSetConfig,
-
-	/// TX channel for direct communication with `SyncingEngine` and `Protocol`.
-	pub tx: TracingUnboundedSender<crate::event::SyncEvent<Block>>,
 }
 
 /// Full network configuration.

@@ -46,7 +46,7 @@ use finality_grandpa::{
 	Message::{Precommit, Prevote, PrimaryPropose},
 };
 use parity_scale_codec::{Decode, DecodeAll, Encode};
-use sc_network::{NetworkBlock, NetworkSyncForkRequest, ReputationChange};
+use sc_network::{NetworkBlock, NetworkSyncForkRequest, NotificationService, ReputationChange};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sp_keystore::KeystorePtr;
@@ -247,6 +247,7 @@ impl<B: BlockT, N: Network<B>, S: Syncing<B>> NetworkBridge<B, N, S> {
 	pub(crate) fn new(
 		service: N,
 		sync: S,
+		notification_service: Box<dyn NotificationService>,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		prometheus_registry: Option<&Registry>,
@@ -260,6 +261,7 @@ impl<B: BlockT, N: Network<B>, S: Syncing<B>> NetworkBridge<B, N, S> {
 		let gossip_engine = Arc::new(Mutex::new(GossipEngine::new(
 			service.clone(),
 			sync.clone(),
+			notification_service,
 			protocol,
 			validator.clone(),
 			prometheus_registry,

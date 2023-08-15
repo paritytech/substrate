@@ -22,6 +22,7 @@ use crate::{
 	peer_store::PeerStore,
 	protocol::notifications::{Notifications, NotificationsOut, ProtocolConfig},
 	protocol_controller::{ProtoSetConfig, ProtocolController, SetId},
+	service::traits::{NotificationEvent, ValidationResult},
 };
 
 use futures::{future::BoxFuture, prelude::*};
@@ -70,6 +71,8 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 			.timeout(Duration::from_secs(20))
 			.boxed();
 
+		let (protocol_handle_pair, mut notif_service) =
+			crate::protocol::notifications::service::notification_service("/foo".into());
 		let peer_store = PeerStore::new(if index == 0 {
 			keypairs.iter().skip(1).map(|keypair| keypair.public().to_peer_id()).collect()
 		} else {
@@ -95,12 +98,16 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 			inner: Notifications::new(
 				vec![controller_handle],
 				from_controller,
-				iter::once(ProtocolConfig {
-					name: "/foo".into(),
-					fallback_names: Vec::new(),
-					handshake: Vec::new(),
-					max_notification_size: 1024 * 1024,
-				}),
+				&None,
+				iter::once((
+					ProtocolConfig {
+						name: "/foo".into(),
+						fallback_names: Vec::new(),
+						handshake: Vec::new(),
+						max_notification_size: 1024 * 1024,
+					},
+					protocol_handle_pair,
+				)),
 			),
 			peer_store_future: peer_store.run().boxed(),
 			protocol_controller_future: controller.run().boxed(),
@@ -118,6 +125,16 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		};
 
 		let runtime = tokio::runtime::Runtime::new().unwrap();
+		runtime.spawn(async move {
+			loop {
+				if let NotificationEvent::ValidateInboundSubstream { result_tx, .. } =
+					notif_service.next_event().await.unwrap()
+				{
+					result_tx.send(ValidationResult::Accept).unwrap();
+				}
+			}
+		});
+
 		let mut swarm = SwarmBuilder::with_executor(
 			transport,
 			behaviour,

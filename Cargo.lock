@@ -9296,6 +9296,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tokio-test",
  "tokio-util",
  "unsigned-varint",
@@ -9352,11 +9353,13 @@ name = "sc-network-gossip"
 version = "0.10.0-dev"
 dependencies = [
  "ahash 0.8.3",
+ "async-trait",
  "futures",
  "futures-timer",
  "libp2p-identity",
  "log",
  "multiaddr",
+ "parity-scale-codec",
  "quickcheck",
  "sc-network",
  "sc-network-common",

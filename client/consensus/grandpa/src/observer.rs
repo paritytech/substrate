@@ -28,6 +28,7 @@ use futures::prelude::*;
 use log::{debug, info, warn};
 
 use sc_client_api::backend::Backend;
+use sc_network::NotificationService;
 use sc_telemetry::TelemetryHandle;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
@@ -168,6 +169,7 @@ pub fn run_grandpa_observer<BE, Block: BlockT, Client, N, S, SC>(
 	link: LinkHalf<Block, Client, SC>,
 	network: N,
 	sync: S,
+	notification_service: Box<dyn NotificationService>,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Send>
 where
 	BE: Backend<Block> + Unpin + 'static,
@@ -189,6 +191,7 @@ where
 	let network = NetworkBridge::new(
 		network,
 		sync,
+		notification_service,
 		config.clone(),
 		persistent_data.set_state.clone(),
 		None,
@@ -414,14 +417,14 @@ mod tests {
 
 	use futures::executor;
 
-	/// Ensure `Future` implementation of `ObserverWork` is polling its `NetworkBridge`. Regression
-	/// test for bug introduced in d4fbb897c and fixed in b7af8b339.
+	/// Ensure `Future` implementation of `ObserverWork` is polling its `NetworkBridge`.
+	/// Regression test for bug introduced in d4fbb897c and fixed in b7af8b339.
 	///
-	/// When polled, `NetworkBridge` forwards reputation change requests from the `GossipValidator`
-	/// to the underlying `dyn Network`. This test triggers a reputation change by calling
-	/// `GossipValidator::validate` with an invalid gossip message. After polling the `ObserverWork`
-	/// which should poll the `NetworkBridge`, the reputation change should be forwarded to the test
-	/// network.
+	/// When polled, `NetworkBridge` forwards reputation change requests from the
+	/// `GossipValidator` to the underlying `dyn Network`. This test triggers a reputation change
+	/// by calling `GossipValidator::validate` with an invalid gossip message. After polling the
+	/// `ObserverWork` which should poll the `NetworkBridge`, the reputation change should be
+	/// forwarded to the test network.
 	#[test]
 	fn observer_work_polls_underlying_network_bridge() {
 		// Create a test network.
@@ -462,12 +465,6 @@ mod tests {
 			// Poll the observer once and have it forward the reputation change from the gossip
 			// validator to the test network.
 			assert!(observer.now_or_never().is_none());
-
-			// Ignore initial event stream request by gossip engine.
-			match tester.events.next().now_or_never() {
-				Some(Some(Event::EventStream(_))) => {},
-				_ => panic!("expected event stream request"),
-			};
 
 			assert_matches!(tester.events.next().now_or_never(), Some(Some(Event::Report(_, _))));
 		});

@@ -59,7 +59,7 @@ use sc_network::{
 	request_responses::ProtocolConfig as RequestResponseConfig,
 	types::ProtocolName,
 	Multiaddr, NetworkBlock, NetworkService, NetworkStateInfo, NetworkSyncForkRequest,
-	NetworkWorker,
+	NetworkWorker, NotificationService,
 };
 use sc_network_common::{
 	role::Roles,
@@ -243,6 +243,7 @@ pub struct Peer<D, BlockImport> {
 	imported_blocks_stream: Pin<Box<dyn Stream<Item = BlockImportNotification<Block>> + Send>>,
 	finality_notification_stream: Pin<Box<dyn Stream<Item = FinalityNotification<Block>> + Send>>,
 	listen_addr: Multiaddr,
+	notification_services: HashMap<ProtocolName, Box<dyn NotificationService>>,
 }
 
 impl<D, B> Peer<D, B>
@@ -268,8 +269,8 @@ where
 	}
 
 	/// Returns the number of peers we're connected to.
-	pub fn num_peers(&self) -> usize {
-		self.network.num_connected_peers()
+	pub async fn num_peers(&self) -> usize {
+		self.sync_service.status().await.unwrap().num_connected_peers as usize
 	}
 
 	/// Returns the number of downloaded blocks.
@@ -508,8 +509,17 @@ where
 		self.network.service()
 	}
 
+	/// Get `SyncingService`.
 	pub fn sync_service(&self) -> &Arc<SyncingService<Block>> {
 		&self.sync_service
+	}
+
+	/// Take notification handle for enabled protocol.
+	pub fn take_notification_service(
+		&mut self,
+		protocol: &ProtocolName,
+	) -> Option<Box<dyn NotificationService>> {
+		self.notification_services.remove(protocol)
 	}
 
 	/// Get a reference to the network worker.
@@ -803,6 +813,23 @@ where
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;
+
+		let (notif_configs, notif_handles): (Vec<_>, Vec<_>) = config
+			.notifications_protocols
+			.into_iter()
+			.map(|p| {
+				let (config, handle) = NonDefaultSetConfig::new(
+					p.clone(),
+					Vec::new(),
+					1024 * 1024,
+					None,
+					Default::default(),
+				);
+
+				(config, (p, handle))
+			})
+			.unzip();
+
 		if let Some(connect_to) = config.connect_to_peers {
 			let addrs = connect_to
 				.iter()
@@ -868,13 +895,18 @@ where
 			protocol_config
 		};
 
+		let peer_store = PeerStore::new(
+			network_config.boot_nodes.iter().map(|bootnode| bootnode.peer_id).collect(),
+		);
+		let peer_store_handle = peer_store.handle();
+		self.spawn_task(peer_store.run().boxed());
+
 		let block_announce_validator = config
 			.block_announce_validator
 			.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator));
 		let (chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
 
-		let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 		let (engine, sync_service, block_announce_config) =
 			sc_network_sync::engine::SyncingEngine::new(
 				Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
@@ -890,7 +922,7 @@ where
 				block_request_protocol_config.name.clone(),
 				state_request_protocol_config.name.clone(),
 				Some(warp_protocol_config.name.clone()),
-				rx,
+				peer_store_handle.clone(),
 			)
 			.unwrap();
 		let sync_service_import_queue = Box::new(sync_service.clone());
@@ -908,21 +940,9 @@ where
 			full_net_config.add_request_response_protocol(config);
 		}
 
-		for protocol in config.notifications_protocols {
-			full_net_config.add_notification_protocol(NonDefaultSetConfig {
-				notifications_protocol: protocol,
-				fallback_names: Vec::new(),
-				max_notification_size: 1024 * 1024,
-				handshake: None,
-				set_config: Default::default(),
-			});
+		for config in notif_configs {
+			full_net_config.add_notification_protocol(config);
 		}
-
-		let peer_store = PeerStore::new(
-			network_config.boot_nodes.iter().map(|bootnode| bootnode.peer_id).collect(),
-		);
-		let peer_store_handle = peer_store.handle();
-		self.spawn_task(peer_store.run().boxed());
 
 		let genesis_hash =
 			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
@@ -938,7 +958,6 @@ where
 			fork_id,
 			metrics_registry: None,
 			block_announce_config,
-			tx,
 		})
 		.unwrap();
 
@@ -974,6 +993,7 @@ where
 				backend: Some(backend),
 				imported_blocks_stream,
 				finality_notification_stream,
+				notification_services: HashMap::from_iter(notif_handles.into_iter()),
 				block_import,
 				verifier,
 				network,
@@ -986,20 +1006,6 @@ where
 	/// Used to spawn background tasks, e.g. the block request protocol handler.
 	fn spawn_task(&self, f: BoxFuture<'static, ()>) {
 		tokio::spawn(f);
-	}
-
-	/// Polls the testnet until all peers are connected to each other.
-	///
-	/// Must be executed in a task context.
-	fn poll_until_connected(&mut self, cx: &mut FutureContext) -> Poll<()> {
-		self.poll(cx);
-
-		let num_peers = self.peers().len();
-		if self.peers().iter().all(|p| p.num_peers() == num_peers - 1) {
-			return Poll::Ready(())
-		}
-
-		Poll::Pending
 	}
 
 	async fn is_in_sync(&mut self) -> bool {
@@ -1079,10 +1085,27 @@ where
 	}
 
 	/// Run the network until all peers are connected to each other.
-	///
-	/// Calls `poll_until_connected` repeatedly with the runtime passed as parameter.
 	async fn run_until_connected(&mut self) {
-		futures::future::poll_fn::<(), _>(|cx| self.poll_until_connected(cx)).await;
+		let num_peers = self.peers().len();
+		let sync_services =
+			self.peers().iter().map(|info| info.sync_service.clone()).collect::<Vec<_>>();
+
+		'outer: loop {
+			for sync_service in &sync_services {
+				if sync_service.status().await.unwrap().num_connected_peers as usize !=
+					num_peers - 1
+				{
+					futures::future::poll_fn::<(), _>(|cx| {
+						self.poll(cx);
+						Poll::Ready(())
+					})
+					.await;
+					continue 'outer
+				}
+			}
+
+			break
+		}
 	}
 
 	/// Polls the testnet. Processes all the pending actions.

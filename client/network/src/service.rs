@@ -54,6 +54,7 @@ use crate::{
 	ReputationChange,
 };
 
+use codec::DecodeAll;
 use either::Either;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
@@ -72,7 +73,10 @@ use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 
-use sc_network_common::ExHashT;
+use sc_network_common::{
+	role::{ObservedRole, Roles},
+	ExHashT,
+};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
 
@@ -92,7 +96,7 @@ use std::{
 
 pub use behaviour::{InboundFailure, OutboundFailure, ResponseFailure};
 pub use libp2p::identity::{DecodingError, Keypair, PublicKey};
-pub use protocol::NotificationsSink;
+pub use protocol::{NotificationCommand, NotificationsSink, ProtocolHandle};
 
 mod metrics;
 mod out_events;
@@ -130,6 +134,8 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	protocol_handles: Vec<protocol_controller::ProtocolHandle>,
 	/// Shortcut to sync protocol handle (`protocol_handles[0]`).
 	sync_protocol_handle: protocol_controller::ProtocolHandle,
+	/// Handle to `PeerStore`.
+	peer_store_handle: PeerStoreHandle,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -197,7 +203,7 @@ where
 		)?;
 		for notification_protocol in &notification_protocols {
 			ensure_addresses_consistent_with_transport(
-				notification_protocol.set_config.reserved_nodes.iter().map(|x| &x.multiaddr),
+				notification_protocol.set_config().reserved_nodes.iter().map(|x| &x.multiaddr),
 				&network_config.transport,
 			)?;
 		}
@@ -239,7 +245,7 @@ where
 					.map(|cfg| usize::try_from(cfg.max_response_size).unwrap_or(usize::MAX));
 				let notifs_max = notification_protocols
 					.iter()
-					.map(|cfg| usize::try_from(cfg.max_notification_size).unwrap_or(usize::MAX));
+					.map(|cfg| usize::try_from(cfg.max_notification_size()).unwrap_or(usize::MAX));
 
 				// A "default" max is added to cover all the other protocols: ping, identify,
 				// kademlia, block announces, and transactions.
@@ -271,7 +277,7 @@ where
 
 		// We must prepend a hardcoded default peer set to notification protocols.
 		let all_peer_sets_iter = iter::once(&network_config.default_peers_set)
-			.chain(notification_protocols.iter().map(|protocol| &protocol.set_config));
+			.chain(notification_protocols.iter().map(|protocol| protocol.set_config()));
 
 		let (protocol_handles, protocol_controllers): (Vec<_>, Vec<_>) = all_peer_sets_iter
 			.enumerate()
@@ -310,20 +316,8 @@ where
 			iter::once(&params.block_announce_config)
 				.chain(notification_protocols.iter())
 				.enumerate()
-				.map(|(index, protocol)| {
-					(protocol.notifications_protocol.clone(), SetId::from(index))
-				})
+				.map(|(index, protocol)| (protocol.protocol_name().clone(), SetId::from(index)))
 				.collect();
-
-		let protocol = Protocol::new(
-			From::from(&params.role),
-			notification_protocols.clone(),
-			params.block_announce_config,
-			params.peer_store.clone(),
-			protocol_handles.clone(),
-			from_protocol_controllers,
-			params.tx,
-		)?;
 
 		let known_addresses = {
 			// Collect all reserved nodes and bootnodes addresses.
@@ -334,7 +328,7 @@ where
 				.map(|reserved| (reserved.peer_id, reserved.multiaddr.clone()))
 				.chain(notification_protocols.iter().flat_map(|protocol| {
 					protocol
-						.set_config
+						.set_config()
 						.reserved_nodes
 						.iter()
 						.map(|reserved| (reserved.peer_id, reserved.multiaddr.clone()))
@@ -386,6 +380,16 @@ where
 
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let external_addresses = Arc::new(Mutex::new(HashSet::new()));
+
+		let protocol = Protocol::new(
+			From::from(&params.role),
+			&params.metrics_registry,
+			notification_protocols,
+			params.block_announce_config,
+			params.peer_store.clone(),
+			protocol_handles.clone(),
+			from_protocol_controllers,
+		)?;
 
 		// Build the swarm.
 		let (mut swarm, bandwidth): (Swarm<Behaviour<B>>, _) = {
@@ -516,6 +520,7 @@ where
 			notification_protocol_ids,
 			protocol_handles,
 			sync_protocol_handle,
+			peer_store_handle: params.peer_store.clone(),
 			_marker: PhantomData,
 			_block: Default::default(),
 		});
@@ -978,6 +983,16 @@ where
 
 	fn sync_num_connected(&self) -> usize {
 		self.num_connected.load(Ordering::Relaxed)
+	}
+
+	fn peer_role(&self, peer_id: PeerId, handshake: Vec<u8>) -> Option<ObservedRole> {
+		match Roles::decode_all(&mut &handshake[..]) {
+			Ok(role) => Some(role.into()),
+			Err(_) => {
+				log::debug!(target: "sub-libp2p", "handshake doesn't contain peer role: {handshake:?}");
+				self.peer_store_handle.peer_role(&peer_id)
+			},
+		}
 	}
 }
 

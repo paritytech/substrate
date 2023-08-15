@@ -22,9 +22,11 @@
 pub use self::{
 	behaviour::{Notifications, NotificationsOut, ProtocolConfig},
 	handler::{NotificationsSink, NotifsHandlerError, Ready},
+	service::{notification_service, NotificationCommand, ProtocolHandle, ProtocolHandlePair},
 };
 
 mod behaviour;
 mod handler;
+mod service;
 mod tests;
 mod upgrade;

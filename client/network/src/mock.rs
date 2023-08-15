@@ -20,6 +20,7 @@
 
 use crate::{peer_store::PeerStoreProvider, protocol_controller::ProtocolHandle, ReputationChange};
 use libp2p::PeerId;
+use sc_network_common::role::ObservedRole;
 use std::collections::HashSet;
 
 /// No-op `PeerStore`.
@@ -47,6 +48,14 @@ impl PeerStoreProvider for MockPeerStore {
 	fn peer_reputation(&self, _peer_id: &PeerId) -> i32 {
 		// Make sure that the peer is not banned.
 		0
+	}
+
+	fn peer_role(&self, _peer_id: &PeerId) -> Option<ObservedRole> {
+		None
+	}
+
+	fn set_peer_role(&mut self, _peer_id: &PeerId, _role: ObservedRole) {
+		unimplemented!();
 	}
 
 	fn outgoing_candidates(&self, _count: usize, _ignored: HashSet<&PeerId>) -> Vec<PeerId> {

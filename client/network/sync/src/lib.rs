@@ -55,6 +55,7 @@ use sc_network::{
 	},
 	request_responses::{IfDisconnected, RequestFailure},
 	types::ProtocolName,
+	NotificationService,
 };
 use sc_network_common::{
 	role::Roles,
@@ -1405,8 +1406,8 @@ where
 		block_request_protocol_name: ProtocolName,
 		state_request_protocol_name: ProtocolName,
 		warp_sync_protocol_name: Option<ProtocolName>,
-	) -> Result<(Self, NonDefaultSetConfig), ClientError> {
-		let block_announce_config = Self::get_block_announce_proto_config(
+	) -> Result<(Self, NonDefaultSetConfig, Box<dyn NotificationService>), ClientError> {
+		let (block_announce_config, notification_service) = Self::get_block_announce_proto_config(
 			protocol_id,
 			fork_id,
 			roles,
@@ -1445,10 +1446,7 @@ where
 			state_request_protocol_name,
 			warp_sync_params,
 			warp_sync_protocol_name,
-			block_announce_protocol_name: block_announce_config
-				.notifications_protocol
-				.clone()
-				.into(),
+			block_announce_protocol_name: block_announce_config.protocol_name().clone().into(),
 			pending_responses: HashMap::new(),
 			import_queue,
 			metrics: if let Some(r) = &metrics_registry {
@@ -1465,7 +1463,7 @@ where
 		};
 
 		sync.reset_sync_start_point()?;
-		Ok((sync, block_announce_config))
+		Ok((sync, block_announce_config, notification_service))
 	}
 
 	/// Returns the median seen block number.
@@ -1933,7 +1931,7 @@ where
 		best_number: NumberFor<B>,
 		best_hash: B::Hash,
 		genesis_hash: B::Hash,
-	) -> NonDefaultSetConfig {
+	) -> (NonDefaultSetConfig, Box<dyn NotificationService>) {
 		let block_announces_protocol = {
 			let genesis_hash = genesis_hash.as_ref();
 			if let Some(ref fork_id) = fork_id {
@@ -1947,14 +1945,11 @@ where
 			}
 		};
 
-		NonDefaultSetConfig {
-			notifications_protocol: block_announces_protocol.into(),
-			fallback_names: iter::once(
-				format!("/{}/block-announces/1", protocol_id.as_ref()).into(),
-			)
-			.collect(),
-			max_notification_size: MAX_BLOCK_ANNOUNCE_SIZE,
-			handshake: Some(NotificationHandshake::new(BlockAnnouncesHandshake::<B>::build(
+		NonDefaultSetConfig::new(
+			block_announces_protocol.into(),
+			iter::once(format!("/{}/block-announces/1", protocol_id.as_ref()).into()).collect(),
+			MAX_BLOCK_ANNOUNCE_SIZE,
+			Some(NotificationHandshake::new(BlockAnnouncesHandshake::<B>::build(
 				roles,
 				best_number,
 				best_hash,
@@ -1962,13 +1957,13 @@ where
 			))),
 			// NOTE: `set_config` will be ignored by `protocol.rs` as the block announcement
 			// protocol is still hardcoded into the peerset.
-			set_config: SetConfig {
+			SetConfig {
 				in_peers: 0,
 				out_peers: 0,
 				reserved_nodes: Vec::new(),
 				non_reserved_mode: NonReservedPeerMode::Deny,
 			},
-		}
+		)
 	}
 
 	fn decode_block_response(response: &[u8]) -> Result<OpaqueBlockResponse, String> {
@@ -3189,7 +3184,7 @@ mod test {
 		let import_queue = Box::new(sc_consensus::import_queue::mock::MockImportQueueHandle::new());
 		let (_chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3256,7 +3251,7 @@ mod test {
 		let (_chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
 
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3438,7 +3433,7 @@ mod test {
 		let (_chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
 
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3565,7 +3560,7 @@ mod test {
 			NetworkServiceProvider::new();
 		let info = client.info();
 
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3723,7 +3718,7 @@ mod test {
 
 		let info = client.info();
 
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -3866,7 +3861,7 @@ mod test {
 
 		let info = client.info();
 
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -4011,7 +4006,7 @@ mod test {
 		let mut client = Arc::new(TestClientBuilder::new().build());
 		let blocks = (0..3).map(|_| build_block(&mut client, None, false)).collect::<Vec<_>>();
 
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -4057,7 +4052,7 @@ mod test {
 
 		let empty_client = Arc::new(TestClientBuilder::new().build());
 
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			empty_client.clone(),
 			ProtocolId::from("test-protocol-name"),
@@ -4111,7 +4106,7 @@ mod test {
 		let import_queue = Box::new(sc_consensus::import_queue::mock::MockImportQueueHandle::new());
 		let (_chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),

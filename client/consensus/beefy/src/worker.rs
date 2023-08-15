@@ -1125,12 +1125,16 @@ pub(crate) mod tests {
 		let api = Arc::new(TestApi::with_validator_set(&genesis_validator_set));
 		let network = peer.network_service().clone();
 		let sync = peer.sync_service().clone();
+		let notification_service = peer
+			.take_notification_service(&crate::tests::beefy_gossip_proto_name())
+			.unwrap();
 		let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
 		let (gossip_validator, gossip_report_stream) = GossipValidator::new(known_peers.clone());
 		let gossip_validator = Arc::new(gossip_validator);
 		let gossip_engine = GossipEngine::new(
 			network.clone(),
 			sync.clone(),
+			notification_service,
 			"/beefy/1",
 			gossip_validator.clone(),
 			None,

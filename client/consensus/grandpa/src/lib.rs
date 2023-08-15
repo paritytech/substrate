@@ -68,7 +68,7 @@ use sc_client_api::{
 	TransactionFor,
 };
 use sc_consensus::BlockImport;
-use sc_network::types::ProtocolName;
+use sc_network::{types::ProtocolName, NotificationService};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
@@ -691,6 +691,8 @@ pub struct GrandpaParams<Block: BlockT, C, N, S, SC, VR> {
 	pub network: N,
 	/// Event stream for syncing-related events.
 	pub sync: S,
+	/// Handle for interacting with `Notifications`.
+	pub notification_service: Box<dyn NotificationService>,
 	/// A voting rule used to potentially restrict target votes.
 	pub voting_rule: VR,
 	/// The prometheus metrics registry.
@@ -711,21 +713,21 @@ pub struct GrandpaParams<Block: BlockT, C, N, S, SC, VR> {
 /// For standard protocol name see [`crate::protocol_standard_name`].
 pub fn grandpa_peers_set_config(
 	protocol_name: ProtocolName,
-) -> sc_network::config::NonDefaultSetConfig {
+) -> (sc_network::config::NonDefaultSetConfig, Box<dyn NotificationService>) {
 	use communication::grandpa_protocol_name;
-	sc_network::config::NonDefaultSetConfig {
-		notifications_protocol: protocol_name,
-		fallback_names: grandpa_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect(),
+	sc_network::config::NonDefaultSetConfig::new(
+		protocol_name,
+		grandpa_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect(),
 		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
-		max_notification_size: 1024 * 1024,
-		handshake: None,
-		set_config: sc_network::config::SetConfig {
+		1024 * 1024,
+		None,
+		sc_network::config::SetConfig {
 			in_peers: 0,
 			out_peers: 0,
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
 		},
-	}
+	)
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -748,6 +750,7 @@ where
 		link,
 		network,
 		sync,
+		notification_service,
 		voting_rule,
 		prometheus_registry,
 		shared_voter_state,
@@ -774,6 +777,7 @@ where
 	let network = NetworkBridge::new(
 		network,
 		sync,
+		notification_service,
 		config.clone(),
 		persistent_data.set_state.clone(),
 		prometheus_registry.as_ref(),

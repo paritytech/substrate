@@ -21,12 +21,13 @@
 //! Usage:
 //!
 //! - Use [`StatementHandlerPrototype::new`] to create a prototype.
-//! - Pass the return value of [`StatementHandlerPrototype::set_config`] to the network
-//! configuration as an extra peers set.
+//! - Pass the `NonDefaultSetConfig` returned from [`StatementHandlerPrototype::new`] to the network
+//!   configuration as an extra peers set.
 //! - Use [`StatementHandlerPrototype::build`] then [`StatementHandler::run`] to obtain a
 //! `Future` that processes statements.
 
 use crate::config::*;
+
 use codec::{Decode, Encode};
 use futures::{channel::oneshot, prelude::*, stream::FuturesUnordered, FutureExt};
 use libp2p::{multiaddr, PeerId};
@@ -34,7 +35,7 @@ use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network::{
 	config::{NonDefaultSetConfig, NonReservedPeerMode, SetConfig},
 	error,
-	event::Event,
+	service::traits::{NotificationEvent, NotificationService, ValidationResult},
 	types::ProtocolName,
 	utils::{interval, LruHashSet},
 	NetworkEventStream, NetworkNotification, NetworkPeers,
@@ -103,35 +104,35 @@ impl Metrics {
 /// Prototype for a [`StatementHandler`].
 pub struct StatementHandlerPrototype {
 	protocol_name: ProtocolName,
+	notification_service: Box<dyn NotificationService>,
 }
 
 impl StatementHandlerPrototype {
 	/// Create a new instance.
-	pub fn new<Hash: AsRef<[u8]>>(genesis_hash: Hash, fork_id: Option<&str>) -> Self {
+	pub fn new<Hash: AsRef<[u8]>>(
+		genesis_hash: Hash,
+		fork_id: Option<&str>,
+	) -> (Self, NonDefaultSetConfig) {
 		let genesis_hash = genesis_hash.as_ref();
 		let protocol_name = if let Some(fork_id) = fork_id {
 			format!("/{}/{}/statement/1", array_bytes::bytes2hex("", genesis_hash), fork_id)
 		} else {
 			format!("/{}/statement/1", array_bytes::bytes2hex("", genesis_hash))
 		};
-
-		Self { protocol_name: protocol_name.into() }
-	}
-
-	/// Returns the configuration of the set to put in the network configuration.
-	pub fn set_config(&self) -> NonDefaultSetConfig {
-		NonDefaultSetConfig {
-			notifications_protocol: self.protocol_name.clone(),
-			fallback_names: Vec::new(),
-			max_notification_size: MAX_STATEMENT_SIZE,
-			handshake: None,
-			set_config: SetConfig {
+		let (config, notification_service) = NonDefaultSetConfig::new(
+			protocol_name.clone().into(),
+			Vec::new(),
+			MAX_STATEMENT_SIZE,
+			None,
+			SetConfig {
 				in_peers: 0,
 				out_peers: 0,
 				reserved_nodes: Vec::new(),
 				non_reserved_mode: NonReservedPeerMode::Deny,
 			},
-		}
+		);
+
+		(Self { protocol_name: protocol_name.into(), notification_service }, config)
 	}
 
 	/// Turns the prototype into the actual handler.
@@ -149,7 +150,6 @@ impl StatementHandlerPrototype {
 		metrics_registry: Option<&Registry>,
 		executor: impl Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send,
 	) -> error::Result<StatementHandler<N, S>> {
-		let net_event_stream = network.event_stream("statement-handler-net");
 		let sync_event_stream = sync.event_stream("statement-handler-sync");
 		let (queue_sender, mut queue_receiver) = async_channel::bounded(100_000);
 
@@ -178,6 +178,7 @@ impl StatementHandlerPrototype {
 
 		let handler = StatementHandler {
 			protocol_name: self.protocol_name,
+			notification_service: self.notification_service,
 			propagate_timeout: (Box::pin(interval(PROPAGATE_TIMEOUT))
 				as Pin<Box<dyn Stream<Item = ()> + Send>>)
 				.fuse(),
@@ -185,7 +186,6 @@ impl StatementHandlerPrototype {
 			pending_statements_peers: HashMap::new(),
 			network,
 			sync,
-			net_event_stream: net_event_stream.fuse(),
 			sync_event_stream: sync_event_stream.fuse(),
 			peers: HashMap::new(),
 			statement_store,
@@ -221,10 +221,10 @@ pub struct StatementHandler<
 	network: N,
 	/// Syncing service.
 	sync: S,
-	/// Stream of networking events.
-	net_event_stream: stream::Fuse<Pin<Box<dyn Stream<Item = Event> + Send>>>,
 	/// Receiver for syncing-related events.
 	sync_event_stream: stream::Fuse<Pin<Box<dyn Stream<Item = SyncEvent> + Send>>>,
+	/// Notification service.
+	notification_service: Box<dyn NotificationService>,
 	// All connected peers
 	peers: HashMap<PeerId, Peer>,
 	statement_store: Arc<dyn StatementStore>,
@@ -263,20 +263,20 @@ where
 						log::warn!(target: LOG_TARGET, "Inconsistent state, no peers for pending statement!");
 					}
 				},
-				network_event = self.net_event_stream.next() => {
-					if let Some(network_event) = network_event {
-						self.handle_network_event(network_event).await;
-					} else {
-						// Networking has seemingly closed. Closing as well.
-						return;
-					}
-				},
 				sync_event = self.sync_event_stream.next() => {
 					if let Some(sync_event) = sync_event {
 						self.handle_sync_event(sync_event);
 					} else {
 						// Syncing has seemingly closed. Closing as well.
 						return;
+					}
+				}
+				event = self.notification_service.next_event().fuse() => {
+					if let Some(event) = event {
+						self.handle_notification_event(event)
+					} else {
+						// `Notifications` has seemingly closed. Closing as well.
+						return
 					}
 				}
 			}
@@ -308,14 +308,19 @@ where
 		}
 	}
 
-	async fn handle_network_event(&mut self, event: Event) {
+	fn handle_notification_event(&mut self, event: NotificationEvent) {
 		match event {
-			Event::Dht(_) => {},
-			Event::NotificationStreamOpened { remote, protocol, role, .. }
-				if protocol == self.protocol_name =>
-			{
+			NotificationEvent::ValidateInboundSubstream { result_tx, .. } => {
+				let _ = result_tx.send(ValidationResult::Accept);
+			},
+			NotificationEvent::NotificationStreamOpened { peer, handshake, .. } => {
+				let Some(role) = self.network.peer_role(peer, handshake) else {
+					log::debug!(target: LOG_TARGET, "role for {peer} couldn't be determined");
+					return;
+				};
+
 				let _was_in = self.peers.insert(
-					remote,
+					peer,
 					Peer {
 						known_statements: LruHashSet::new(
 							NonZeroUsize::new(MAX_KNOWN_STATEMENTS).expect("Constant is nonzero"),
@@ -325,39 +330,26 @@ where
 				);
 				debug_assert!(_was_in.is_none());
 			},
-			Event::NotificationStreamClosed { remote, protocol }
-				if protocol == self.protocol_name =>
-			{
-				let _peer = self.peers.remove(&remote);
+			NotificationEvent::NotificationStreamClosed { peer } => {
+				let _peer = self.peers.remove(&peer);
 				debug_assert!(_peer.is_some());
 			},
+			NotificationEvent::NotificationReceived { peer, notification } => {
+				// Accept statements only when node is not major syncing
+				if self.sync.is_major_syncing() {
+					log::trace!(
+						target: LOG_TARGET,
+						"{peer}: Ignoring statements while major syncing or offline"
+					);
+					return
+				}
 
-			Event::NotificationsReceived { remote, messages } => {
-				for (protocol, message) in messages {
-					if protocol != self.protocol_name {
-						continue
-					}
-					// Accept statements only when node is not major syncing
-					if self.sync.is_major_syncing() {
-						log::trace!(
-							target: LOG_TARGET,
-							"{remote}: Ignoring statements while major syncing or offline"
-						);
-						continue
-					}
-					if let Ok(statements) = <Statements as Decode>::decode(&mut message.as_ref()) {
-						self.on_statements(remote, statements);
-					} else {
-						log::debug!(
-							target: LOG_TARGET,
-							"Failed to decode statement list from {remote}"
-						);
-					}
+				if let Ok(statements) = <Statements as Decode>::decode(&mut notification.as_ref()) {
+					self.on_statements(peer, statements);
+				} else {
+					log::debug!(target: LOG_TARGET, "Failed to decode statement list from {peer}");
 				}
 			},
-
-			// Not our concern.
-			Event::NotificationStreamOpened { .. } | Event::NotificationStreamClosed { .. } => {},
 		}
 	}
 

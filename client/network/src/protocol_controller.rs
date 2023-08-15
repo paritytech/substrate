@@ -840,6 +840,7 @@ mod tests {
 	use super::*;
 	use crate::{peer_store::PeerStoreProvider, ReputationChange};
 	use libp2p::PeerId;
+	use sc_network_common::role::ObservedRole;
 	use sc_utils::mpsc::{tracing_unbounded, TryRecvError};
 	use std::collections::HashSet;
 
@@ -851,8 +852,10 @@ mod tests {
 			fn is_banned(&self, peer_id: &PeerId) -> bool;
 			fn register_protocol(&self, protocol_handle: ProtocolHandle);
 			fn report_disconnect(&mut self, peer_id: PeerId);
+			fn set_peer_role(&mut self, peer_id: &PeerId, role: ObservedRole);
 			fn report_peer(&mut self, peer_id: PeerId, change: ReputationChange);
 			fn peer_reputation(&self, peer_id: &PeerId) -> i32;
+			fn peer_role(&self, peer_id: &PeerId) -> Option<ObservedRole>;
 			fn outgoing_candidates<'a>(&self, count: usize, ignored: HashSet<&'a PeerId>) -> Vec<PeerId>;
 		}
 	}

@@ -834,17 +834,17 @@ where
 	}
 
 	// create transactions protocol and add it to the list of supported protocols of
-	// `network_params`
-	let transactions_handler_proto = sc_network_transactions::TransactionsHandlerPrototype::new(
-		protocol_id.clone(),
-		client
-			.block_hash(0u32.into())
-			.ok()
-			.flatten()
-			.expect("Genesis block exists; qed"),
-		config.chain_spec.fork_id(),
-	);
-	net_config.add_notification_protocol(transactions_handler_proto.set_config());
+	let (transactions_handler_proto, transactions_config) =
+		sc_network_transactions::TransactionsHandlerPrototype::new(
+			protocol_id.clone(),
+			client
+				.block_hash(0u32.into())
+				.ok()
+				.flatten()
+				.expect("Genesis block exists; qed"),
+			config.chain_spec.fork_id(),
+		);
+	net_config.add_notification_protocol(transactions_config);
 
 	// Create `PeerStore` and initialize it with bootnode peer ids.
 	let peer_store = PeerStore::new(
@@ -858,7 +858,6 @@ where
 	let peer_store_handle = peer_store.handle();
 	spawn_handle.spawn("peer-store", Some("networking"), peer_store.run());
 
-	let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
 	let (engine, sync_service, block_announce_config) = SyncingEngine::new(
 		Roles::from(&config.role),
@@ -874,7 +873,7 @@ where
 		block_request_protocol_name,
 		state_request_protocol_name,
 		warp_request_protocol_name,
-		rx,
+		peer_store_handle.clone(),
 	)?;
 	let sync_service_import_queue = sync_service.clone();
 	let sync_service = Arc::new(sync_service);
@@ -895,7 +894,6 @@ where
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_announce_config,
-		tx,
 	};
 
 	let has_bootnodes = !network_params.network_config.network_config.boot_nodes.is_empty();
