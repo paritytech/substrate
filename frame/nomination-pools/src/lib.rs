@@ -3098,7 +3098,7 @@ impl<T: Config> Pallet<T> {
 			bonded_pools == reward_pools,
 			"`BondedPools` and `RewardPools` must all have the EXACT SAME key-set."
 		);
-		// let mut expected_tvl = Zero::zero();
+		let mut expected_tvl = Zero::zero();
 
 		ensure!(
 			SubPoolsStorage::<T>::iter_keys().all(|k| bonded_pools.contains(&k)),
@@ -3137,8 +3137,6 @@ impl<T: Config> Pallet<T> {
 			ensure!(!d.total_points().is_zero(), "No member should have zero points");
 			*pools_members.entry(d.pool_id).or_default() += 1;
 			all_members += 1;
-			// TODO
-			//expected_tvl += bonded_pool.points_to_balance(d.points);
 
 			let reward_pool = RewardPools::<T>::get(d.pool_id).unwrap();
 			if !bonded_pool.points.is_zero() {
@@ -3193,12 +3191,17 @@ impl<T: Config> Pallet<T> {
 				"depositor must always have MinCreateBond stake in the pool, except for when the \
 				pool is being destroyed and the depositor is the last member",
 			);
+			expected_tvl += T::Staking::total_stake(&bonded_pool.bonded_account())
+				.expect("all pools must have total stake");
+
 			Ok(())
 		})?;
+
 		ensure!(
 			MaxPoolMembers::<T>::get().map_or(true, |max| all_members <= max),
 			Error::<T>::MaxPoolMembers
 		);
+		assert_eq!(TotalValueLocked::<T>::get(), expected_tvl);
 
 		if level <= 1 {
 			return Ok(())
