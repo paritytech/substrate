@@ -1283,7 +1283,7 @@ where
 		}
 		let frame = self.top_frame_mut();
 		let info = frame.terminate();
-		frame.nested_storage.terminate(&info, beneficiary);
+		frame.nested_storage.terminate(&info, beneficiary.clone());
 
 		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);

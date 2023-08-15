@@ -39,7 +39,7 @@ use sp_runtime::{
 	traits::{Saturating, Zero},
 	FixedPointNumber, FixedU128,
 };
-use sp_std::{marker::PhantomData, vec, vec::Vec};
+use sp_std::{marker::PhantomData, ops::Deref, vec, vec::Vec};
 
 /// Deposit that uses the native fungible's balance type.
 pub type DepositOf<T> = Deposit<BalanceOf<T>>;
@@ -225,7 +225,16 @@ impl Diff {
 }
 
 /// The beneficiary of a contract termination.
-type BeneficiaryOf<T> = AccountIdOf<T>;
+#[derive(RuntimeDebugNoBound, Clone, PartialEq, Eq)]
+pub struct Beneficiary<T: Config>(AccountIdOf<T>);
+
+impl<T: Config> Deref for Beneficiary<T> {
+	type Target = AccountIdOf<T>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
 
 /// The status of a contract.
 ///
@@ -233,7 +242,7 @@ type BeneficiaryOf<T> = AccountIdOf<T>;
 #[derive(RuntimeDebugNoBound, Clone, PartialEq, Eq)]
 pub enum ContractStatus<T: Config> {
 	Alive,
-	Terminated(BeneficiaryOf<T>),
+	Terminated(Beneficiary<T>),
 }
 
 /// Records information to charge or refund a plain account.
@@ -262,7 +271,7 @@ enum Contribution<T: Config> {
 	Checked(DepositOf<T>),
 	/// The contract was terminated. In this process the [`Diff`] was converted into a [`Deposit`]
 	/// in order to calculate the refund.
-	Terminated(DepositOf<T>, BeneficiaryOf<T>),
+	Terminated(DepositOf<T>, Beneficiary<T>),
 }
 
 impl<T: Config> Contribution<T> {
@@ -486,10 +495,12 @@ where
 	/// This will manipulate the meter so that all storage deposit accumulated in
 	/// `contract_info` will be refunded to the `origin` of the meter. And the free
 	/// (`reducible_balance`) will be sent to the `beneficiary`.
-	pub fn terminate(&mut self, info: &ContractInfo<T>, beneficiary: &T::AccountId) {
+	pub fn terminate(&mut self, info: &ContractInfo<T>, beneficiary: T::AccountId) {
 		debug_assert!(self.is_alive());
-		self.own_contribution =
-			Contribution::Terminated(Deposit::Refund(info.total_deposit()), beneficiary.clone());
+		self.own_contribution = Contribution::Terminated(
+			Deposit::Refund(info.total_deposit()),
+			Beneficiary(beneficiary),
+		);
 	}
 
 	/// [`Self::charge`] does not enforce the storage limit since we want to do this check as late
@@ -621,7 +632,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 			// Whatever is left in the contract is sent to the termination beneficiary.
 			T::Currency::transfer(
 				&contract,
-				beneficiary,
+				&*beneficiary,
 				T::Currency::reducible_balance(&contract, Preservation::Expendable, Polite),
 				Preservation::Expendable,
 			)?;
@@ -883,7 +894,7 @@ mod tests {
 							origin: ALICE,
 							contract: CHARLIE,
 							amount: Deposit::Refund(119),
-							status: ContractStatus::Terminated(CHARLIE),
+							status: ContractStatus::Terminated(Beneficiary(CHARLIE)),
 						},
 						Charge {
 							origin: ALICE,
@@ -925,7 +936,7 @@ mod tests {
 			let mut nested1 = nested0.nested(BalanceOf::<Test>::zero());
 			nested1.charge(&Diff { items_removed: 5, ..Default::default() });
 			nested1.charge(&Diff { bytes_added: 20, ..Default::default() });
-			nested1.terminate(&nested1_info, &CHARLIE);
+			nested1.terminate(&nested1_info, CHARLIE);
 			nested0.enforce_limit(Some(&mut nested1_info)).unwrap();
 			nested0.absorb(nested1, &CHARLIE, None);
 
