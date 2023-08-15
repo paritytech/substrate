@@ -232,15 +232,13 @@ pub mod pallet {
 			type BlockWeights = ();
 			type BlockLength = ();
 			type DbWeight = ();
-			#[verbatim]
+			#[runtime_type]
 			type RuntimeEvent = ();
-			#[verbatim]
+			#[runtime_type]
 			type RuntimeOrigin = ();
-			#[verbatim]
+			#[runtime_type]
 			type RuntimeCall = ();
-			#[verbatim]
-			type Block = ();
-			#[verbatim]
+			#[runtime_type]
 			type PalletInfo = ();
 			type BaseCallFilter = frame_support::traits::Everything;
 			type BlockHashCount = frame_support::traits::ConstU64<10>;
@@ -336,7 +334,7 @@ pub mod pallet {
 
 		/// The Block type used by the runtime. This is used by `construct_runtime` to retrieve the
 		/// extrinsics or other block specific data as needed.
-		#[pallet::no_default_bounds]
+		#[pallet::no_default]
 		type Block: Parameter + Member + traits::Block<Hash = Self::Hash>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).

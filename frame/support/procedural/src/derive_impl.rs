@@ -28,13 +28,13 @@ use syn::{
 };
 
 mod keyword {
-	syn::custom_keyword!(verbatim);
+	syn::custom_keyword!(runtime_type);
 }
 
 #[derive(derive_syn_parse::Parse, PartialEq, Eq)]
 pub enum PalletAttrType {
-	#[peek(keyword::verbatim, name = "verbatim")]
-	Verbatim(keyword::verbatim),
+	#[peek(keyword::runtime_type, name = "runtime_type")]
+	RuntimeType(keyword::runtime_type),
 }
 
 #[derive(derive_syn_parse::Parse)]
@@ -66,7 +66,7 @@ pub struct DeriveImplAttrArgs {
 	pub disambiguation_path: Option<Path>,
 	_comma: Option<Token![,]>,
 	#[parse_if(_comma.is_some())]
-	pub replace_verbatim: Option<LitBool>,
+	pub inject_runtime_types: Option<LitBool>,
 }
 
 impl ForeignPath for DeriveImplAttrArgs {
@@ -81,7 +81,7 @@ impl ToTokens for DeriveImplAttrArgs {
 		tokens.extend(self._as.to_token_stream());
 		tokens.extend(self.disambiguation_path.to_token_stream());
 		tokens.extend(self._comma.to_token_stream());
-		tokens.extend(self.replace_verbatim.to_token_stream());
+		tokens.extend(self.inject_runtime_types.to_token_stream());
 	}
 }
 
@@ -117,7 +117,7 @@ fn combine_impls(
 	foreign_impl: ItemImpl,
 	default_impl_path: Path,
 	disambiguation_path: Path,
-	replace_verbatim: bool,
+	inject_runtime_types: bool,
 ) -> ItemImpl {
 	let (existing_local_keys, existing_unsupported_items): (HashSet<ImplItem>, HashSet<ImplItem>) =
 		local_impl
@@ -136,17 +136,19 @@ fn combine_impls(
 				// do not copy colliding items that have an ident
 				return None
 			}
-			if let ImplItem::Type(item) = item.clone() {
-				if replace_verbatim {
-					let mut item = item.clone();
-					if let Ok(Some(PalletAttr { typ: PalletAttrType::Verbatim(_), .. })) =
-						take_first_item_pallet_attr::<PalletAttr>(&mut item)
-					{
-						let modified_item: ImplItem = parse_quote! {
+			if let ImplItem::Type(typ) = item.clone() {
+				let mut typ = typ.clone();
+				if let Ok(Some(PalletAttr { typ: PalletAttrType::RuntimeType(_), .. })) =
+					take_first_item_pallet_attr::<PalletAttr>(&mut typ)
+				{
+					let item: ImplItem = if inject_runtime_types {
+						parse_quote! {
 							type #ident = #ident;
-						};
-						return Some(modified_item)
-					}
+						}
+					} else {
+						item
+					};
+					return Some(item)
 				}
 				// modify and insert uncolliding type items
 				let modified_item: ImplItem = parse_quote! {
@@ -183,7 +185,7 @@ pub fn derive_impl(
 	foreign_tokens: TokenStream2,
 	local_tokens: TokenStream2,
 	disambiguation_path: Option<Path>,
-	replace_verbatim: Option<LitBool>,
+	inject_runtime_types: Option<LitBool>,
 ) -> Result<TokenStream2> {
 	let local_impl = parse2::<ItemImpl>(local_tokens)?;
 	let foreign_impl = parse2::<ItemImpl>(foreign_tokens)?;
@@ -202,7 +204,7 @@ pub fn derive_impl(
 			)),
 	};
 
-	let replace_verbatim = match replace_verbatim {
+	let inject_runtime_types = match inject_runtime_types {
 		Some(LitBool { value, .. }) => value,
 		_ => true,
 	};
@@ -212,7 +214,7 @@ pub fn derive_impl(
 		foreign_impl,
 		default_impl_path,
 		disambiguation_path,
-		replace_verbatim,
+		inject_runtime_types,
 	);
 
 	Ok(quote!(#combined_impl))

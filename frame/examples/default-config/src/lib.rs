@@ -146,6 +146,9 @@ pub mod tests {
 
 	#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 	impl frame_system::Config for Runtime {
+		// these items are defined by frame-system as `no_default`, so we must specify them here.
+		type Block = Block;
+
 		// all of this is coming from `frame_system::config_preludes::TestDefaultConfig`.
 
 		// type Nonce = u32;
@@ -172,7 +175,6 @@ pub mod tests {
 		// These are marked as `#[verbatim]`. Hence, they are being injected as
 		// defaults with same names.
 
-		// type Block = Block;
 		// type RuntimeOrigin = RuntimeOrigin;
 		// type RuntimeCall = RuntimeCall;
 		// type RuntimeEvent = RuntimeEvent;
