@@ -127,6 +127,7 @@ pallet-transaction-storage = { version = "4.0.0-dev", default-features = false, 
 pallet-uniques = { version = "4.0.0-dev", default-features = false, path = "../../../frame/uniques" }
 pallet-vesting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/vesting" }
 pallet-whitelist = { version = "4.0.0-dev", default-features = false, path = "../../../frame/whitelist" }
+tasks-example = { version = "4.0.0-dev", path = '../../../frame/examples/tasks-example', default-features = false }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder", optional = true }

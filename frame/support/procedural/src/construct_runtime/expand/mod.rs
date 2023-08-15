@@ -25,6 +25,7 @@ mod metadata;
 mod origin;
 mod outer_enums;
 mod slash_reason;
+mod task;
 mod unsigned;
 
 pub use call::expand_outer_dispatch;
@@ -37,4 +38,5 @@ pub use metadata::expand_runtime_metadata;
 pub use origin::expand_outer_origin;
 pub use outer_enums::{expand_outer_enum, OuterEnumType};
 pub use slash_reason::expand_outer_slash_reason;
+pub use task::expand_outer_task;
 pub use unsigned::expand_outer_validate_unsigned;

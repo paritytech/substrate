@@ -33,6 +33,7 @@ pub mod inherent;
 pub mod origin;
 pub mod pallet_struct;
 pub mod storage;
+pub mod tasks;
 pub mod type_value;
 pub mod validate_unsigned;
 

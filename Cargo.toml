@@ -155,6 +155,7 @@ members = [
 	"frame/examples/dev-mode",
 	"frame/examples/split",
 	"frame/examples/default-config",
+	"frame/examples/tasks-example",
 	"frame/executive",
 	"frame/nis",
 	"frame/grandpa",

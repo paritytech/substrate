@@ -50,6 +50,8 @@ pub mod pallet {
 			+ From<RawOrigin<Self::AccountId>>;
 		/// The runtime call type.
 		type RuntimeCall;
+		/// Contains an aggregation of all tasks in this runtime.
+		type RuntimeTask;
 		/// The runtime event type.
 		type RuntimeEvent: Parameter
 			+ Member
