@@ -2735,6 +2735,7 @@ mod unbond {
 				);
 
 				// When the root kicks then its ok
+				// Account with ID 100 is kicked.
 				assert_ok!(Pools::fully_unbond(RuntimeOrigin::signed(900), 100));
 
 				assert_eq!(
@@ -2755,6 +2756,7 @@ mod unbond {
 				);
 
 				// When the bouncer kicks then its ok
+				// Account with ID 200 is kicked.
 				assert_ok!(Pools::fully_unbond(RuntimeOrigin::signed(902), 200));
 
 				assert_eq!(
@@ -2793,7 +2795,7 @@ mod unbond {
 				);
 				assert_eq!(
 					*UnbondingBalanceMap::get().get(&default_bonded_account()).unwrap(),
-					vec![(3, 200)],
+					vec![(3, 100), (3, 200)],
 				);
 			});
 	}
