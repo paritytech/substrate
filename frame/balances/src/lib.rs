@@ -731,7 +731,7 @@ pub mod pallet {
 
 			let wipeout = new_free < existential_deposit;
 			debug_assert!(
-				!wipeout || <T::Balance as Zero>::is_zero(&new_free),
+				!wipeout || new_free.is_zero(),
 				"Attempt to force balance to be {:?} but this is less than ED {:?}",
 				new_free,
 				existential_deposit
