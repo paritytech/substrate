@@ -122,7 +122,7 @@ use frame_support::{
 		ConstU32, Contains, Get, Randomness, Time,
 	},
 	weights::Weight,
-	BoundedVec, RuntimeDebug, RuntimeDebugNoBound,
+	BoundedVec, RuntimeDebugNoBound,
 };
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, EventRecord, Pallet as System};
 use pallet_contracts_primitives::{
@@ -132,7 +132,10 @@ use pallet_contracts_primitives::{
 };
 use scale_info::TypeInfo;
 use smallvec::Array;
-use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, Zero};
+use sp_runtime::{
+	traits::{Convert, Hash, Saturating, StaticLookup, Zero},
+	RuntimeDebug,
+};
 use sp_std::{fmt::Debug, prelude::*};
 
 pub use crate::{
