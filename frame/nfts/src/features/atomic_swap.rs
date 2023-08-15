@@ -17,6 +17,8 @@
 
 //! This module contains helper functions for performing atomic swaps implemented in the NFTs
 //! pallet.
+//! The bitflag [`PalletFeature::Swaps`] needs to be set in [`Config::Features`] for NFTs
+//! to have the functionality defined in this module.
 
 use crate::*;
 use frame_support::{

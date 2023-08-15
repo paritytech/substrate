@@ -17,6 +17,8 @@
 
 //! This module contains helper methods to configure attributes for items and collections in the
 //! NFTs pallet.
+//! The bitflag [`PalletFeature::Attributes`] needs to be set in [`Config::Features`] for NFTs
+//! to have the functionality defined in this module.
 
 use crate::*;
 use frame_support::pallet_prelude::*;
@@ -205,7 +207,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Sets multiple attributes for an item or a collection.
 	///
 	/// This function checks the pre-signed data is valid and updates the attributes of an item or
-	/// collection. It is limited by [`T::MaxAttributesPerCall`] to prevent excessive storage
+	/// collection. It is limited by [`Config::MaxAttributesPerCall`] to prevent excessive storage
 	/// consumption in a single transaction.
 	///
 	/// - `origin`: The account initiating the transaction.

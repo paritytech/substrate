@@ -139,7 +139,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// - `input`: A vector of (Account, Role) tuples.
 	///
-	/// Returns a grouped vector of (Account, Roles) tuples.
+	/// Returns a grouped vector of `(Account, Roles)` tuples.
 	pub fn group_roles_by_account(
 		input: Vec<(T::AccountId, CollectionRole)>,
 	) -> Vec<(T::AccountId, CollectionRoles)> {

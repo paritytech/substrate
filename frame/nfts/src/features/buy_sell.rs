@@ -17,6 +17,8 @@
 
 //! This module contains helper functions to perform the buy and sell functionalities of the NFTs
 //! pallet.
+//! The bitflag [`PalletFeature::Trading`] needs to be set in the [`Config::Features`] for NFTs
+//! to have the functionality defined in this module.
 
 use crate::*;
 use frame_support::{
