@@ -457,11 +457,11 @@ impl Parse for Input {
 /// The type of the prefix the storage alias is using.
 #[derive(Clone, Copy)]
 enum PrefixType {
-	/// Use the backwards compatible way to determine the prefix.
+	/// Use the compatibility way to determine the prefix.
 	///
 	/// If generics are passed, this is assumed to be a pallet and the pallet name should be used.
 	/// Otherwise use the verbatim passed name as prefix.
-	Backwards,
+	Compatibility,
 	/// Use the verbatim ident as prefix.
 	Verbatim,
 	/// Use the given type that needs to implement `PalletInfoAccess` to determine the name. This
@@ -477,7 +477,7 @@ pub fn storage_alias(attributes: TokenStream, input: TokenStream) -> Result<Toke
 	let crate_ = generate_crate_access_2018("frame-support")?;
 
 	let prefix_type = if attributes.is_empty() {
-		PrefixType::Backwards
+		PrefixType::Compatibility
 	} else if syn::parse2::<prefix_types::verbatim>(attributes.clone()).is_ok() {
 		PrefixType::Verbatim
 	} else if syn::parse2::<prefix_types::pallet_name>(attributes.clone()).is_ok() {
@@ -549,7 +549,7 @@ fn generate_storage_instance(
 		.unwrap_or_default();
 
 	let (pallet_prefix, impl_generics, type_generics) = match prefix_type {
-		PrefixType::Backwards =>
+		PrefixType::Compatibility =>
 			if !impl_generics_used_by_prefix.is_empty() {
 				let type_generics = impl_generics_used_by_prefix.iter().map(|g| &g.ident);
 				let impl_generics = impl_generics_used_by_prefix.iter();
