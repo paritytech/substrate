@@ -74,11 +74,7 @@ use sp_consensus::block_validation::{
 use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_keystore::KeystorePtr;
 use sp_runtime::traits::{Block as BlockT, BlockIdTo, NumberFor, Zero};
-use std::{
-	str::FromStr,
-	sync::Arc,
-	time::{Duration, SystemTime},
-};
+use std::{str::FromStr, sync::Arc, time::SystemTime};
 
 /// Full client type.
 pub type TFullClient<TBl, TRtApi, TExec> =
@@ -636,24 +632,13 @@ where
 	)
 	.into_rpc();
 
-	// Maximum pinned blocks across all connections.
-	// This number is large enough to consider immediate blocks.
-	// Note: This should never exceed the `PINNING_CACHE_SIZE` from client/db.
-	const MAX_PINNED_BLOCKS: usize = 512;
-
-	// Any block of any subscription should not be pinned more than
-	// this constant. When a subscription contains a block older than this,
-	// the subscription becomes subject to termination.
-	// Note: This should be enough for immediate blocks.
-	const MAX_PINNED_SECONDS: u64 = 60;
-
 	let chain_head_v2 = sc_rpc_spec_v2::chain_head::ChainHead::new(
 		client.clone(),
 		backend.clone(),
 		task_executor.clone(),
 		client.info().genesis_hash,
-		MAX_PINNED_BLOCKS,
-		Duration::from_secs(MAX_PINNED_SECONDS),
+		// Defaults to sensible limits for the `ChainHead`.
+		sc_rpc_spec_v2::chain_head::ChainHeadConfig::default(),
 	)
 	.into_rpc();
 
