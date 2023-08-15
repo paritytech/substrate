@@ -71,8 +71,8 @@ Use `# Examples as much as possible. These are great ways to further demonstrate
 
 You can also consider having an `# Error` section optionally. Of course, this only applies if there is a `Result` being returned, and if the `Error` variants are overly complicated.
 
-Strive to include correct links to other items in your written docs as much as possible. In other words, avoid \`some_func\` and instead use \[\`some_fund\`\]. Read more about how to correctly use links in your rust-docs [here](https://doc.rust-lang.org/rustdoc/write-documentation/linking-to-items-by-name.html#valid-links) and [here](https://rust-lang.github.io/rfcs/1946-intra-rustdoc-links.html#additions-to-the-documentation-syntax).
 Strive to include correct links to other items in your written docs as much as possible. In other words, avoid `` `some_func` `` and instead use ``[`some_func`]``.
+Read more about how to correctly use links in your rust-docs [here](https://doc.rust-lang.org/rustdoc/write-documentation/linking-to-items-by-name.html#valid-links) and [here](https://rust-lang.github.io/rfcs/1946-intra-rustdoc-links.html#additions-to-the-documentation-syntax).
 
 
 > While you are linking, you might become conscious of the fact that you are in need of linking to (too many) foreign items in order to explain your API. This is leaning more towards API-Design rather than documentation, but it is a warning that the subject API might be slightly wrong. For example, most "glue" traits[^1] in `frame/support` should be designed and documented without making hard assumptions about particular pallets that implement them.

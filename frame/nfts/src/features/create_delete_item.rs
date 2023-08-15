@@ -22,23 +22,25 @@ use crate::*;
 use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	/// Mints a new item in the specified collection and assigns it to the `mint_to` account.
+	/// Mint a new unique item with the given `collection`, `item`, and other minting configuration
+	/// details.
 	///
-	/// This function is used to mint a new item in the specified `collection` and assign it to the
-	/// `mint_to` account. The minting process involves creating the item, setting its attributes
-	/// and metadata, and reserving the required deposit amount from the `maybe_depositor` account.
-	/// The minting process is configurable through the provided `item_config` parameter. The
-	/// `with_details_and_config` closure is called to validate the provided `collection_details`
-	/// and `collection_config` before minting the item.
+	/// This function performs the minting of a new unique item. It checks if the item does not
+	/// already exist in the given collection, and if the max supply limit (if configured) is not
+	/// reached. It also reserves the required deposit for the item and sets the item details
+	/// accordingly.
 	///
-	/// - `collection`: The collection ID in which the item is minted.
-	/// - `item`: The ID of the newly minted item.
-	/// - `maybe_depositor`: The optional account that deposits the required amount for the item.
-	/// - `mint_to`: The account that receives the newly minted item.
-	/// - `item_config`: The configuration settings for the newly minted item.
-	/// - `with_details_and_config`: A closure to perform custom validation for minting the item. It
-	///   is called with the `collection_details` and `collection_config`, allowing custom checks to
-	///   be performed.
+	/// # Errors
+	///
+	/// This function returns a dispatch error in the following cases:
+	/// - If the collection ID is invalid ([`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - If the item already exists in the collection
+	///   ([`AlreadyExists`](crate::Error::AlreadyExists)).
+	/// - If the item configuration already exists
+	///   ([`InconsistentItemConfig`](crate::Error::InconsistentItemConfig)).
+	/// - If the max supply limit (if configured) for the collection is reached
+	///   ([`MaxSupplyReached`](crate::Error::MaxSupplyReached)).
+	/// - If any error occurs in the `with_details_and_config` closure.
 	pub fn do_mint(
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -196,16 +198,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	/// Burns the specified item from the collection.
+	/// Burns the specified item with the given `collection`, `item`, and `with_details`.
 	///
-	/// This function burns the specified `item` from the specified `collection`. The item's owner
-	/// can call this function to remove the item permanently from the collection. Any associated
-	/// deposit and metadata will be cleared from the item. Custom logic can be executed using the
-	/// `with_details` closure to perform additional checks or actions before burning the item.
+	/// # Errors
 	///
-	/// - `collection`: The ID of the collection from which the item will be burned.
-	/// - `item`: The ID of the item to be burned.
-	/// - `with_details`: A closure to perform custom validation or actions before burning the item.
+	/// This function returns a dispatch error in the following cases:
+	/// - If the collection ID is invalid ([`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - If the item is locked ([`ItemLocked`](crate::Error::ItemLocked)).
 	pub fn do_burn(
 		collection: T::CollectionId,
 		item: T::ItemId,
