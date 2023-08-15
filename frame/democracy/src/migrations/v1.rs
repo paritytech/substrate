@@ -159,7 +159,7 @@ mod test {
 		tests::{Test as T, *},
 		types::*,
 	};
-	use frame_support::bounded_vec;
+	use sp_core::bounded_vec;
 
 	#[allow(deprecated)]
 	#[test]
