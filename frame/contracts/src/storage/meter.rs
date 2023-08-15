@@ -463,6 +463,9 @@ where
 		// We need to make sure that the contract's account exists.
 		T::Currency::transfer(origin, contract, ed, Preservation::Preserve)?;
 
+		// A consumer is added at account creation and remove it on termination, otherwise the
+		// runtime could remove the account. As long as a contract exists its account must exist.
+		// With the consumer a correct runtime cannot remove the account.
 		System::<T>::inc_consumers(contract)?;
 
 		// Normally, deposit charges are deferred to be able to coalesce them with refunds.
