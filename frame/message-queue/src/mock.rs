@@ -295,10 +295,15 @@ where
 	ext
 }
 
-/// Run this closure in test externalities.
-pub fn test_closure<R>(f: impl FnOnce() -> R) -> R {
-	let mut ext = new_test_ext::<Test>();
-	ext.execute_with(f)
+/// Run the function pointer inside externalities and asserts the try_state hook at the end.
+pub fn build_and_execute<T: Config>(test: impl FnOnce() -> ())
+where
+	BlockNumberFor<T>: From<u32>,
+{
+	new_test_ext::<T>().execute_with(|| {
+		test();
+		MessageQueue::do_try_state().expect("All invariants must hold after a test");
+	});
 }
 
 /// Set the weight of a specific weight function.

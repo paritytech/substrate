@@ -15,21 +15,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Bags-List Pallet
+//! > Made with *Substrate*, for *Polkadot*.
 //!
-//! A semi-sorted list, where items hold an `AccountId` based on some `Score`. The
-//! `AccountId` (`id` for short) might be synonym to a `voter` or `nominator` in some context, and
-//! `Score` signifies the chance of each id being included in the final
-//! [`SortedListProvider::iter`].
+//! [![github]](https://github.com/paritytech/substrate/frame/fast-unstake) -
+//! [![polkadot]](https://polkadot.network)
 //!
-//! It implements [`frame_election_provider_support::SortedListProvider`] to provide a semi-sorted
-//! list of accounts to another pallet. It needs some other pallet to give it some information about
-//! the weights of accounts via [`frame_election_provider_support::ScoreProvider`].
+//! [polkadot]:
+//!     https://img.shields.io/badge/polkadot-E6007A?style=for-the-badge&logo=polkadot&logoColor=white
+//! [github]:
+//!     https://img.shields.io/badge/github-8da0cb?style=for-the-badge&labelColor=555555&logo=github
 //!
-//! This pallet is not configurable at genesis. Whoever uses it should call appropriate functions of
-//! the `SortedListProvider` (e.g. `on_insert`, or `unsafe_regenerate`) at their genesis.
+//!  # Bags-List Pallet
 //!
-//! # Goals
+//! An onchain implementation of a semi-sorted linked list, with permissionless sorting and update
+//! operations.
+//!
+//! ## Pallet API
+//!
+//! See the [`pallet`] module for more information about the interfaces this pallet exposes,
+//! including its configuration trait, dispatchables, storage items, events and errors.
+//!
+//! This pallet provides an implementation of
+//! [`frame_election_provider_support::SortedListProvider`] and it can typically be used by another
+//! pallet via this API.
+//!
+//! ## Overview
+//!
+//! This pallet splits `AccountId`s into different bags. Within a bag, these `AccountId`s are stored
+//! as nodes in a linked-list manner. This pallet then provides iteration over all bags, which
+//! basically allows an infinitely large list of items to be kept in a sorted manner.
+//!
+//! Each bags has a upper and lower range of scores, denoted by [`Config::BagThresholds`]. All nodes
+//! within a bag must be within the range of the bag. If not, the permissionless [`Pallet::rebag`]
+//! can be used to move any node to the right bag.
+//!
+//! Once a `rebag` happens, the order within a node is still not enforced. To move a node to the
+//! optimal position in a bag, the [`Pallet::put_in_front_of`] or [`Pallet::put_in_front_of_other`]
+//! can be used.
+//!
+//! Additional reading, about how this pallet is used in the context of Polkadot's staking system:
+//! <https://polkadot.network/blog/staking-update-september-2021/#bags-list-in-depth>
+//!
+//! ## Examples
+//!
+//! See [`example`] for a diagram of `rebag` and `put_in_front_of` operations.
+//!
+//! ## Low Level / Implementation Details
 //!
 //! The data structure exposed by this pallet aims to be optimized for:
 //!
@@ -37,7 +68,7 @@
 //! - iteration over the top* N items by score, where the precise ordering of items doesn't
 //!   particularly matter.
 //!
-//! # Details
+//! ### Further Details
 //!
 //! - items are kept in bags, which are delineated by their range of score (See
 //!   [`Config::BagThresholds`]).
@@ -52,6 +83,44 @@
 //!   insertion.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(doc)]
+#[cfg_attr(doc, aquamarine::aquamarine)]
+///
+/// In this example, assuming each node has an equal id and score (eg. node 21 has a score of 21),
+/// the node 22 can be moved from bag 1 to bag 0 with the `rebag` operation.
+///
+/// Once the whole list is iterated, assuming the above above rebag happens, the order of iteration
+/// would be: `25, 21, 22, 12, 22, 5, 7, 3`.
+///
+/// Moreover, in bag2, node 7 can be moved to the front of node 5 with the `put_in_front_of`, as it
+/// has a higher score.
+///
+/// ```mermaid
+/// graph LR
+/// 	Bag0 --> Bag1 --> Bag2
+///
+/// 	subgraph Bag0[Bag 0: 21-30 DOT]
+/// 		direction LR
+/// 		25 --> 21 --> 22X[22]
+/// 	end
+///
+/// 	subgraph Bag1[Bag 1: 11-20 DOT]
+/// 		direction LR
+/// 		12 --> 22
+/// 	end
+///
+/// 	subgraph Bag2[Bag 2: 0-10 DOT]
+/// 		direction LR
+/// 		5 --> 7 --> 3
+/// 	end
+///
+/// 	style 22X stroke-dasharray: 5 5,opacity:50%
+/// ```
+///
+/// The equivalent of this in code would be:
+#[doc = docify::embed!("src/tests.rs", examples_work)]
+pub mod example {}
 
 use codec::FullCodec;
 use frame_election_provider_support::{ScoreProvider, SortedListProvider};
@@ -240,9 +309,11 @@ pub mod pallet {
 		/// Move the caller's Id directly in front of `lighter`.
 		///
 		/// The dispatch origin for this call must be _Signed_ and can only be called by the Id of
-		/// the account going in front of `lighter`.
+		/// the account going in front of `lighter`. Fee is payed by the origin under all
+		/// circumstances.
 		///
-		/// Only works if
+		/// Only works if:
+		///
 		/// - both nodes are within the same bag,
 		/// - and `origin` has a greater `Score` than `lighter`.
 		#[pallet::call_index(1)]
@@ -253,6 +324,24 @@ pub mod pallet {
 		) -> DispatchResult {
 			let heavier = ensure_signed(origin)?;
 			let lighter = T::Lookup::lookup(lighter)?;
+			List::<T, I>::put_in_front_of(&lighter, &heavier)
+				.map_err::<Error<T, I>, _>(Into::into)
+				.map_err::<DispatchError, _>(Into::into)
+		}
+
+		/// Same as [`Pallet::put_in_front_of`], but it can be called by anyone.
+		///
+		/// Fee is paid by the origin under all circumstances.
+		#[pallet::call_index(2)]
+		#[pallet::weight(T::WeightInfo::put_in_front_of())]
+		pub fn put_in_front_of_other(
+			origin: OriginFor<T>,
+			heavier: AccountIdLookupOf<T>,
+			lighter: AccountIdLookupOf<T>,
+		) -> DispatchResult {
+			let _ = ensure_signed(origin)?;
+			let lighter = T::Lookup::lookup(lighter)?;
+			let heavier = T::Lookup::lookup(heavier)?;
 			List::<T, I>::put_in_front_of(&lighter, &heavier)
 				.map_err::<Error<T, I>, _>(Into::into)
 				.map_err::<DispatchError, _>(Into::into)

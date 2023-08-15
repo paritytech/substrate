@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(feature = "unsafe-debug")]
+use crate::unsafe_debug::ExecutionObserver;
 use crate::{
 	gas::GasMeter,
 	storage::{self, DepositAccount, WriteOutcome},
@@ -30,8 +32,9 @@ use frame_support::{
 	ensure,
 	storage::{with_transaction, TransactionOutcome},
 	traits::{
-		tokens::{Fortitude::Polite, Preservation::Expendable},
-		Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time,
+		fungible::{Inspect, Mutate},
+		tokens::{Fortitude::Polite, Preservation},
+		Contains, OriginTrait, Randomness, Time,
 	},
 	weights::Weight,
 	Blake2_128Concat, BoundedVec, StorageHasher,
@@ -343,7 +346,17 @@ pub trait Ext: sealing::Sealed {
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
-#[derive(Clone, Copy, PartialEq)]
+#[derive(
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	sp_core::RuntimeDebug,
+	codec::Decode,
+	codec::Encode,
+	codec::MaxEncodedLen,
+	scale_info::TypeInfo,
+)]
 pub enum ExportedFunction {
 	/// The constructor function which is executed on deployment of a contract.
 	Constructor,
@@ -903,10 +916,20 @@ where
 			// Every non delegate call or instantiate also optionally transfers the balance.
 			self.initial_transfer()?;
 
+			#[cfg(feature = "unsafe-debug")]
+			let (code_hash, input_clone) = {
+				let code_hash = *executable.code_hash();
+				T::Debug::before_call(&code_hash, entry_point, &input_data);
+				(code_hash, input_data.clone())
+			};
+
 			// Call into the Wasm blob.
 			let output = executable
 				.execute(self, &entry_point, input_data)
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
+
+			#[cfg(feature = "unsafe-debug")]
+			T::Debug::after_call(&code_hash, entry_point, input_clone, &output);
 
 			// Avoid useless work that would be reverted anyways.
 			if output.did_revert() {
@@ -1100,13 +1123,15 @@ where
 
 	/// Transfer some funds from `from` to `to`.
 	fn transfer(
-		existence_requirement: ExistenceRequirement,
+		preservation: Preservation,
 		from: &T::AccountId,
 		to: &T::AccountId,
 		value: BalanceOf<T>,
 	) -> DispatchResult {
-		T::Currency::transfer(from, to, value, existence_requirement)
-			.map_err(|_| Error::<T>::TransferFailed)?;
+		if !value.is_zero() && from != to {
+			T::Currency::transfer(from, to, value, preservation)
+				.map_err(|_| Error::<T>::TransferFailed)?;
+		}
 		Ok(())
 	}
 
@@ -1130,7 +1155,7 @@ where
 			Origin::Root if value.is_zero() => return Ok(()),
 			Origin::Root => return DispatchError::RootNotAllowed.into(),
 		};
-		Self::transfer(ExistenceRequirement::KeepAlive, &caller, &frame.account_id, value)
+		Self::transfer(Preservation::Preserve, &caller, &frame.account_id, value)
 	}
 
 	/// Reference to the current (top) frame.
@@ -1278,7 +1303,6 @@ where
 	}
 
 	fn terminate(&mut self, beneficiary: &AccountIdOf<Self::T>) -> Result<(), DispatchError> {
-		use frame_support::traits::fungible::Inspect;
 		if self.is_recursive() {
 			return Err(Error::<T>::TerminatedWhileReentrant.into())
 		}
@@ -1286,11 +1310,11 @@ where
 		let info = frame.terminate();
 		frame.nested_storage.terminate(&info);
 		System::<T>::dec_consumers(&frame.account_id);
-		T::Currency::transfer(
+		Self::transfer(
+			Preservation::Expendable,
 			&frame.account_id,
 			beneficiary,
-			T::Currency::reducible_balance(&frame.account_id, Expendable, Polite),
-			ExistenceRequirement::AllowDeath,
+			T::Currency::reducible_balance(&frame.account_id, Preservation::Expendable, Polite),
 		)?;
 		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);
@@ -1314,7 +1338,7 @@ where
 	}
 
 	fn transfer(&mut self, to: &T::AccountId, value: BalanceOf<T>) -> DispatchResult {
-		Self::transfer(ExistenceRequirement::KeepAlive, &self.top_frame().account_id, to, value)
+		Self::transfer(Preservation::Preserve, &self.top_frame().account_id, to, value)
 	}
 
 	fn get_storage(&mut self, key: &Key<T>) -> Option<Vec<u8>> {
@@ -1377,7 +1401,7 @@ where
 	}
 
 	fn balance(&self) -> BalanceOf<T> {
-		T::Currency::free_balance(&self.top_frame().account_id)
+		T::Currency::balance(&self.top_frame().account_id)
 	}
 
 	fn value_transferred(&self) -> BalanceOf<T> {
@@ -1808,7 +1832,7 @@ mod tests {
 			set_balance(&origin, 100);
 			set_balance(&dest, 0);
 
-			MockStack::transfer(ExistenceRequirement::KeepAlive, &origin, &dest, 55).unwrap();
+			MockStack::transfer(Preservation::Preserve, &origin, &dest, 55).unwrap();
 
 			assert_eq!(get_balance(&origin), 45);
 			assert_eq!(get_balance(&dest), 55);
@@ -1946,7 +1970,7 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			set_balance(&origin, 0);
 
-			let result = MockStack::transfer(ExistenceRequirement::KeepAlive, &origin, &dest, 100);
+			let result = MockStack::transfer(Preservation::Preserve, &origin, &dest, 100);
 
 			assert_eq!(result, Err(Error::<Test>::TransferFailed.into()));
 			assert_eq!(get_balance(&origin), 0);

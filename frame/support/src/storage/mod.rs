@@ -1428,6 +1428,7 @@ mod private {
 	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
 	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
 	impl<T: Encode> Sealed for BTreeSet<T> {}
+	impl<'a, T: EncodeLike<U>, U: Encode> Sealed for codec::Ref<'a, T, U> {}
 
 	macro_rules! impl_sealed_for_tuple {
 		($($elem:ident),+) => {
