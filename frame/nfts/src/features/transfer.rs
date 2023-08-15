@@ -33,7 +33,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// This function performs the actual transfer of an NFT to the destination account.
 	/// It checks various conditions like item lock status and transferability settings
 	/// for the collection and item before transferring the NFT.
-  ///
+	///
 	/// # Errors
 	///
 	/// This function returns a dispatch error in the following cases:
