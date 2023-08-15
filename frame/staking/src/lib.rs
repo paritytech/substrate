@@ -526,7 +526,7 @@ impl<T: Config> StakingLedger<T> {
 			}
 
 			if unlocking_balance >= value {
-				break
+				break;
 			}
 		}
 
@@ -563,7 +563,7 @@ impl<T: Config> StakingLedger<T> {
 		slash_era: EraIndex,
 	) -> BalanceOf<T> {
 		if slash_amount.is_zero() {
-			return Zero::zero()
+			return Zero::zero();
 		}
 
 		use sp_runtime::PerThing as _;
@@ -656,7 +656,7 @@ impl<T: Config> StakingLedger<T> {
 		let mut slashed_unlocking = BTreeMap::<_, _>::new();
 		for i in slash_chunks_priority {
 			if remaining_slash.is_zero() {
-				break
+				break;
 			}
 
 			if let Some(chunk) = self.unlocking.get_mut(i).defensive() {
@@ -664,15 +664,21 @@ impl<T: Config> StakingLedger<T> {
 				// write the new slashed value of this chunk to the map.
 				slashed_unlocking.insert(chunk.era, chunk.value);
 			} else {
-				break
+				break;
 			}
 		}
 
 		// clean unlocking chunks that are set to zero.
 		self.unlocking.retain(|c| !c.value.is_zero());
 
-		T::EventListeners::on_slash(&self.stash, self.active, &slashed_unlocking);
-		pre_slash_total.saturating_sub(self.total)
+		let final_slashed_amount = pre_slash_total.saturating_sub(self.total);
+		T::EventListeners::on_slash(
+			&self.stash,
+			self.active,
+			&slashed_unlocking,
+			final_slashed_amount,
+		);
+		final_slashed_amount
 	}
 }
 

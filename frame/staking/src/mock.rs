@@ -278,6 +278,7 @@ impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
 		_pool_account: &AccountId,
 		slashed_bonded: Balance,
 		slashed_chunks: &BTreeMap<EraIndex, Balance>,
+		_total_slashed: Balance,
 	) {
 		LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
 	}
@@ -723,9 +724,9 @@ pub(crate) fn on_offence_in_era(
 	for &(bonded_era, start_session) in bonded_eras.iter() {
 		if bonded_era == era {
 			let _ = Staking::on_offence(offenders, slash_fraction, start_session, disable_strategy);
-			return
+			return;
 		} else if bonded_era > era {
-			break
+			break;
 		}
 	}
 

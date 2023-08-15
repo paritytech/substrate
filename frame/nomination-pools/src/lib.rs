@@ -578,9 +578,10 @@ impl<T: Config> PoolMember<T> {
 	) -> Result<(), Error<T>> {
 		if let Some(new_points) = self.points.checked_sub(&points_dissolved) {
 			match self.unbonding_eras.get_mut(&unbonding_era) {
-				Some(already_unbonding_points) =>
+				Some(already_unbonding_points) => {
 					*already_unbonding_points =
-						already_unbonding_points.saturating_add(points_issued),
+						already_unbonding_points.saturating_add(points_issued)
+				},
 				None => self
 					.unbonding_eras
 					.try_insert(unbonding_era, points_issued)
@@ -703,13 +704,13 @@ impl<T: Config> Commission<T> {
 
 			// do not throttle if `to` is the same or a decrease in commission.
 			if *to <= commission_as_percent {
-				return false
+				return false;
 			}
 			// Test for `max_increase` throttling.
 			//
 			// Throttled if the attempted increase in commission is greater than `max_increase`.
 			if (*to).saturating_sub(commission_as_percent) > t.max_increase {
-				return true
+				return true;
 			}
 
 			// Test for `min_delay` throttling.
@@ -732,7 +733,7 @@ impl<T: Config> Commission<T> {
 						blocks_surpassed < t.min_delay
 					}
 				},
-			)
+			);
 		}
 		false
 	}
@@ -790,7 +791,7 @@ impl<T: Config> Commission<T> {
 		);
 		if let Some(old) = self.max.as_mut() {
 			if new_max > *old {
-				return Err(Error::<T>::MaxCommissionRestricted.into())
+				return Err(Error::<T>::MaxCommissionRestricted.into());
 			}
 			*old = new_max;
 		} else {
@@ -1039,8 +1040,8 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	fn can_nominate(&self, who: &T::AccountId) -> bool {
-		self.is_root(who) ||
-			self.roles.nominator.as_ref().map_or(false, |nominator| nominator == who)
+		self.is_root(who)
+			|| self.roles.nominator.as_ref().map_or(false, |nominator| nominator == who)
 	}
 
 	fn can_kick(&self, who: &T::AccountId) -> bool {
@@ -1137,9 +1138,9 @@ impl<T: Config> BondedPool<T> {
 
 		// any unbond must comply with the balance condition:
 		ensure!(
-			is_full_unbond ||
-				balance_after_unbond >=
-					if is_depositor {
+			is_full_unbond
+				|| balance_after_unbond
+					>= if is_depositor {
 						Pallet::<T>::depositor_min_bond()
 					} else {
 						MinJoinBond::<T>::get()
@@ -1171,7 +1172,7 @@ impl<T: Config> BondedPool<T> {
 			},
 			(false, true) => {
 				// the depositor can simply not be unbonded permissionlessly, period.
-				return Err(Error::<T>::DoesNotHavePermission.into())
+				return Err(Error::<T>::DoesNotHavePermission.into());
 			},
 		};
 
@@ -2813,7 +2814,7 @@ impl<T: Config> Pallet<T> {
 		let balance = T::U256ToBalance::convert;
 		if current_balance.is_zero() || current_points.is_zero() || points.is_zero() {
 			// There is nothing to unbond
-			return Zero::zero()
+			return Zero::zero();
 		}
 
 		// Equivalent of (current_balance / current_points) * points
@@ -2846,7 +2847,7 @@ impl<T: Config> Pallet<T> {
 		// will be zero.
 		let pending_rewards = member.pending_rewards(current_reward_counter)?;
 		if pending_rewards.is_zero() {
-			return Ok(pending_rewards)
+			return Ok(pending_rewards);
 		}
 
 		// IFF the reward is non-zero alter the member and reward pool info.
@@ -2969,10 +2970,12 @@ impl<T: Config> Pallet<T> {
 			Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
 
 		let (points_issued, bonded) = match extra {
-			BondExtra::FreeBalance(amount) =>
-				(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
-			BondExtra::Rewards =>
-				(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed),
+			BondExtra::FreeBalance(amount) => {
+				(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount)
+			},
+			BondExtra::Rewards => {
+				(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed)
+			},
 		};
 
 		bonded_pool.ok_to_be_open()?;
@@ -3088,7 +3091,7 @@ impl<T: Config> Pallet<T> {
 	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
 	pub fn do_try_state(level: u8) -> Result<(), TryRuntimeError> {
 		if level.is_zero() {
-			return Ok(())
+			return Ok(());
 		}
 		// note: while a bit wacky, since they have the same key, even collecting to vec should
 		// result in the same set of keys, in the same order.
@@ -3156,8 +3159,8 @@ impl<T: Config> Pallet<T> {
 		RewardPools::<T>::iter_keys().try_for_each(|id| -> Result<(), TryRuntimeError> {
 			// the sum of the pending rewards must be less than the leftover balance. Since the
 			// reward math rounds down, we might accumulate some dust here.
-			let pending_rewards_lt_leftover_bal = RewardPool::<T>::current_balance(id) >=
-				pools_members_pending_rewards.get(&id).copied().unwrap_or_default();
+			let pending_rewards_lt_leftover_bal = RewardPool::<T>::current_balance(id)
+				>= pools_members_pending_rewards.get(&id).copied().unwrap_or_default();
 			if !pending_rewards_lt_leftover_bal {
 				log::warn!(
 					"pool {:?}, sum pending rewards = {:?}, remaining balance = {:?}",
@@ -3188,8 +3191,8 @@ impl<T: Config> Pallet<T> {
 
 			let depositor = PoolMembers::<T>::get(&bonded_pool.roles.depositor).unwrap();
 			ensure!(
-				bonded_pool.is_destroying_and_only_depositor(depositor.active_points()) ||
-					depositor.active_points() >= MinCreateBond::<T>::get(),
+				bonded_pool.is_destroying_and_only_depositor(depositor.active_points())
+					|| depositor.active_points() >= MinCreateBond::<T>::get(),
 				"depositor must always have MinCreateBond stake in the pool, except for when the \
 				pool is being destroyed and the depositor is the last member",
 			);
@@ -3201,7 +3204,7 @@ impl<T: Config> Pallet<T> {
 		);
 
 		if level <= 1 {
-			return Ok(())
+			return Ok(());
 		}
 
 		for (pool_id, _pool) in BondedPools::<T>::iter() {
@@ -3254,7 +3257,7 @@ impl<T: Config> Pallet<T> {
 				let (current_reward_counter, _) = reward_pool
 					.current_reward_counter(pool_member.pool_id, bonded_pool.points, commission)
 					.ok()?;
-				return pool_member.pending_rewards(current_reward_counter).ok()
+				return pool_member.pending_rewards(current_reward_counter).ok();
 			}
 		}
 
@@ -3293,17 +3296,12 @@ impl<T: Config> sp_staking::OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pall
 		// anything here.
 		slashed_bonded: BalanceOf<T>,
 		slashed_unlocking: &BTreeMap<EraIndex, BalanceOf<T>>,
-		// derive total_slashed from existing data
-		// total_slashed: BalanceOf<T>,
+		total_slashed: BalanceOf<T>,
 	) {
 		if let Some(pool_id) = ReversePoolIdLookup::<T>::get(pool_account).defensive() {
 			// TODO: bug here: a slash toward a pool who's subpools were missing would not be
 			// tracked. write a test for it.
 			Self::deposit_event(Event::<T>::PoolSlashed { pool_id, balance: slashed_bonded });
-
-			let mut new_total = slashed_bonded;
-			// TODO
-			let old_total: BalanceOf<T> = Zero::zero();
 
 			let mut sub_pools = match SubPoolsStorage::<T>::get(pool_id) {
 				Some(sub_pools) => sub_pools,
@@ -3313,7 +3311,6 @@ impl<T: Config> sp_staking::OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pall
 			for (era, slashed_balance) in slashed_unlocking.iter() {
 				if let Some(pool) = sub_pools.with_era.get_mut(era) {
 					pool.balance = *slashed_balance;
-					new_total.saturating_add(*slashed_balance);
 					Self::deposit_event(Event::<T>::UnbondingPoolSlashed {
 						era: *era,
 						pool_id,
@@ -3322,7 +3319,7 @@ impl<T: Config> sp_staking::OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pall
 				}
 			}
 			SubPoolsStorage::<T>::insert(pool_id, sub_pools);
-			let total_slashed = old_total.saturating_sub(new_total);
+
 			TotalValueLocked::<T>::mutate(|tvl| {
 				tvl.saturating_reduce(total_slashed);
 			});
