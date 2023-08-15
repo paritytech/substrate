@@ -127,20 +127,17 @@ impl LimitOperations {
 	/// Returns nothing if there's no space available, else returns a permit
 	/// that guarantees that at least one operation can be executed.
 	fn reserve_at_most(&self, to_reserve: usize) -> Option<PermitOperations> {
-		if to_reserve == 0 {
+		let num_ops = std::cmp::min(self.semaphore.available_permits(), to_reserve);
+
+		if num_ops == 0 {
 			return None
 		}
 
-		let mut permit = Arc::clone(&self.semaphore).try_acquire_owned().ok()?;
-		let mut num_ops = 1;
+		let permits = Arc::clone(&self.semaphore)
+			.try_acquire_many_owned(num_ops.try_into().ok()?)
+			.ok()?;
 
-		while num_ops < to_reserve {
-			let Ok(new_permit) = Arc::clone(&self.semaphore).try_acquire_owned() else { break };
-			permit.merge(new_permit);
-			num_ops += 1;
-		}
-
-		Some(PermitOperations { num_ops, _permit: permit })
+		Some(PermitOperations { num_ops, _permit: permits })
 	}
 }
 
