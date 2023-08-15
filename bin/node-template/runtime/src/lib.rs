@@ -312,6 +312,25 @@ mod runtime {
 	}
 }
 
+// frame_support::tt_call!{
+//     macro = [{ frame_system::tt_default_parts_v2 }] 
+// 	frame_support = [{ frame_support }] 
+// 	~~> frame_support::match_and_insert! {
+//         target =
+//         [{
+//             #[frame_support::construct_runtime_v2] 
+// 			mod runtime {
+//                 #[frame::runtime] 
+// 				pub struct Runtime2; 
+				
+// 				#[frame::pallets]
+//                 pub struct AllPallets { System : frame_system, }
+//             }
+//         }] 
+// 		pattern = [{ System : frame_system }]
+//     }
+// }
+
 /// The address format for describing accounts.
 pub type Address = sp_runtime::MultiAddress<AccountId, ()>;
 /// Block header type as expected by this runtime.

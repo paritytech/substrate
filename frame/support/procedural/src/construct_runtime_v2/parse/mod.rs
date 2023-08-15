@@ -40,7 +40,7 @@ pub struct Def {
 impl Def {
 	pub fn try_from(mut item: syn::ItemMod) -> syn::Result<Self> {
 		let input_main: TokenStream2 = item.to_token_stream().into();
-		// println!("input_main: {}", input_main);
+		println!("input_main: {}", input_main);
         let item_span = item.span();
 		let items = &mut item
 			.content
@@ -64,7 +64,7 @@ impl Def {
 				},
 				Some(RuntimeAttr::Pallets(span)) if pallets.is_none() => {
 					let input: TokenStream2 = item.to_token_stream().into();
-					let input_copy = input_main.clone();
+					let input_copy: TokenStream2 = input_main.clone();
 					let definition = syn::parse2::<pallets::AllPalletsDeclaration>(input)?;
 					let res = match definition.clone() {
 						AllPalletsDeclaration::Implicit(implicit_def) =>
@@ -74,16 +74,20 @@ impl Def {
 						AllPalletsDeclaration::Explicit(explicit_decl) => check_pallet_number(
 							input_copy.clone().into(),
 							explicit_decl.pallets.len(),
-						).and_then(|_| {
-							construct_runtime_explicit_to_explicit_expanded(input_copy.into(), explicit_decl)
-						}),
+						).and_then(
+							|_| Ok(input_copy)
+							// |_| {
+							// 	construct_runtime_explicit_to_explicit_expanded(input_copy.into(), explicit_decl)
+							// }
+						),
 						AllPalletsDeclaration::ExplicitExpanded(explicit_decl) =>
 							check_pallet_number(input_copy.clone().into(), explicit_decl.pallets.len())
 								.and_then(|_| Ok(input_copy)),
 					}?;	
 					// println!("definition: {:?}", definition);
-					// println!("res: {}", res);
-					// let p = syn::parse2::<pallets::AllPalletsDeclaration>(res)?;			
+					println!("res: {}", res);
+					// let p = syn::parse2::<pallets::AllPalletsDeclaration>(res)?;	
+					// let res = quote::quote!();		
 					pallets = Some((definition, res));
 				},
                 Some(attr) => {
