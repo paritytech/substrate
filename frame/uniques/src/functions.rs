@@ -25,6 +25,15 @@ use frame_support::{
 use sp_runtime::{DispatchError, DispatchResult};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Perform a transfer of an item from one account to another within a collection.
+	///
+	/// # Errors
+	/// This function returns a dispatch error in the following cases:
+	/// - The collection or item does not exist
+	///   ([`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - The collection is frozen, and no transfers are allowed ([`Frozen`](crate::Error::Frozen)).
+	/// - The item is locked, and transfers are not permitted ([`Locked`](crate::Error::Locked)).
+	/// - The `with_details` closure returns an error.
 	pub fn do_transfer(
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -49,8 +58,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let origin = details.owner;
 		details.owner = dest;
 
-		// The approved account has to be reset to None, because otherwise pre-approve attack would
-		// be possible, where the owner can approve their second account before making the
+		// The approved account has to be reset to `None`, because otherwise pre-approve attack
+		// would be possible, where the owner can approve their second account before making the
 		// transaction and then claiming the item back.
 		details.approved = None;
 
@@ -66,6 +75,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Create a new collection with the provided details.
+	///
+	/// # Errors
+	/// This function returns a dispatch error in the following cases:
+	/// - If the collection ID is already in use ([`InUse`](crate::Error::InUse)).
+	/// - If reserving the deposit fails (e.g., insufficient funds).
 	pub fn do_create_collection(
 		collection: T::CollectionId,
 		owner: T::AccountId,
@@ -99,6 +114,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Destroy a collection along with its associated items and metadata.
+	///
+	/// # Errors
+	/// This function returns a dispatch error in the following cases:
+	/// - The collection does not exist ([`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - The provided witness does not match the actual counts
+	///   ([`BadWitness`](crate::Error::BadWitness)).
+	/// - The caller is not the owner of the collection
+	///   ([`NoPermission`](crate::Error::NoPermission)).
 	pub fn do_destroy_collection(
 		collection: T::CollectionId,
 		witness: DestroyWitness,
@@ -141,6 +165,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
+	/// Mint (create) a new item within a collection and assign ownership to an account.
+	///
+	/// # Errors
+	/// This function returns a dispatch error in the following cases:
+	/// - The item already exists in the collection
+	///   ([`AlreadyExists`](crate::Error::AlreadyExists)).
+	/// - The collection does not exist ([`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - The provided closure `with_details` returns an error.
+	/// - The collection has reached its maximum supply
+	///   ([`MaxSupplyReached`](crate::Error::MaxSupplyReached)).
+	/// - An arithmetic overflow occurs when incrementing the number of items in the collection.
+	/// - The currency reserve operation for the item deposit fails for any reason.
 	pub fn do_mint(
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -187,6 +223,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Burn (destroy) an item from a collection.
+	///
+	/// # Errors
+	/// This function returns a `Dispatch` error in the following cases:
+	/// - The item is locked and burns are not permitted ([`Locked`](crate::Error::Locked)).
+	/// - The collection or item does not exist
+	///   ([`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - The `with_details` closure returns an error.
 	pub fn do_burn(
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -218,6 +262,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Set or remove the price for an item in a collection.
+	///
+	/// # Errors
+	/// This function returns a dispatch error in the following cases:
+	/// - The item or collection does not exist ([`UnknownItem`](crate::Error::UnknownItem) or
+	///   [`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - The sender is not the owner of the item ([`NoPermission`](crate::Error::NoPermission)).
 	pub fn do_set_price(
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -244,6 +295,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Buy an item from a collection.
+	///
+	/// # Errors
+	/// This function returns a dispatch error in the following cases:
+	/// - The item or collection does not exist ([`UnknownItem`](crate::Error::UnknownItem) or
+	///   [`UnknownCollection`](crate::Error::UnknownCollection)).
+	/// - The buyer is the current owner of the item ([`NoPermission`](crate::Error::NoPermission)).
+	/// - The item is not for sale ([`NotForSale`](crate::Error::NotForSale)).
+	/// - The bid price is lower than the item's sale price
+	///   ([`BidTooLow`](crate::Error::BidTooLow)).
+	/// - The item is set to be sold only to a specific buyer, and the provided buyer is not the
+	///   whitelisted buyer ([`NoPermission`](crate::Error::NoPermission)).
+	/// - The currency transfer between the buyer and the owner fails for any reason.
 	pub fn do_buy_item(
 		collection: T::CollectionId,
 		item: T::ItemId,

@@ -53,6 +53,41 @@ use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 pub(crate) const LOG_TARGET: &str = "rpc-spec-v2";
 
+/// The configuration of [`ChainHead`].
+pub struct ChainHeadConfig {
+	/// The maximum number of pinned blocks across all subscriptions.
+	pub global_max_pinned_blocks: usize,
+	/// The maximum duration that a block is allowed to be pinned per subscription.
+	pub subscription_max_pinned_duration: Duration,
+	/// The maximum number of ongoing operations per subscription.
+	pub subscription_max_ongoing_operations: usize,
+}
+
+/// Maximum pinned blocks across all connections.
+/// This number is large enough to consider immediate blocks.
+/// Note: This should never exceed the `PINNING_CACHE_SIZE` from client/db.
+const MAX_PINNED_BLOCKS: usize = 512;
+
+/// Any block of any subscription should not be pinned more than
+/// this constant. When a subscription contains a block older than this,
+/// the subscription becomes subject to termination.
+/// Note: This should be enough for immediate blocks.
+const MAX_PINNED_DURATION: Duration = Duration::from_secs(60);
+
+/// The maximum number of ongoing operations per subscription.
+/// Note: The lower limit imposed by the spec is 16.
+const MAX_ONGOING_OPERATIONS: usize = 16;
+
+impl Default for ChainHeadConfig {
+	fn default() -> Self {
+		ChainHeadConfig {
+			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
+			subscription_max_pinned_duration: MAX_PINNED_DURATION,
+			subscription_max_ongoing_operations: MAX_ONGOING_OPERATIONS,
+		}
+	}
+}
+
 /// An API for chain head RPC calls.
 pub struct ChainHead<BE: Backend<Block>, Block: BlockT, Client> {
 	/// Substrate client.
@@ -76,8 +111,7 @@ impl<BE: Backend<Block>, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 		backend: Arc<BE>,
 		executor: SubscriptionTaskExecutor,
 		genesis_hash: GenesisHash,
-		max_pinned_blocks: usize,
-		max_pinned_duration: Duration,
+		config: ChainHeadConfig,
 	) -> Self {
 		let genesis_hash = hex_string(&genesis_hash.as_ref());
 		Self {
@@ -85,8 +119,9 @@ impl<BE: Backend<Block>, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 			backend: backend.clone(),
 			executor,
 			subscriptions: Arc::new(SubscriptionManagement::new(
-				max_pinned_blocks,
-				max_pinned_duration,
+				config.global_max_pinned_blocks,
+				config.subscription_max_pinned_duration,
+				config.subscription_max_ongoing_operations,
 				backend,
 			)),
 			genesis_hash,
@@ -197,12 +232,10 @@ where
 		follow_subscription: String,
 		hash: Block::Hash,
 	) -> RpcResult<MethodResponse> {
-		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash) {
+		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash, 1) {
 			Ok(block) => block,
-			Err(SubscriptionManagementError::SubscriptionAbsent) => {
-				// Invalid invalid subscription ID.
-				return Ok(MethodResponse::LimitReached)
-			},
+			Err(SubscriptionManagementError::SubscriptionAbsent) |
+			Err(SubscriptionManagementError::ExceededLimits) => return Ok(MethodResponse::LimitReached),
 			Err(SubscriptionManagementError::BlockHashAbsent) => {
 				// Block is not part of the subscription.
 				return Err(ChainHeadRpcError::InvalidBlock.into())
@@ -252,12 +285,10 @@ where
 		follow_subscription: String,
 		hash: Block::Hash,
 	) -> RpcResult<Option<String>> {
-		let _block_guard = match self.subscriptions.lock_block(&follow_subscription, hash) {
+		let _block_guard = match self.subscriptions.lock_block(&follow_subscription, hash, 1) {
 			Ok(block) => block,
-			Err(SubscriptionManagementError::SubscriptionAbsent) => {
-				// Invalid invalid subscription ID.
-				return Ok(None)
-			},
+			Err(SubscriptionManagementError::SubscriptionAbsent) |
+			Err(SubscriptionManagementError::ExceededLimits) => return Ok(None),
 			Err(SubscriptionManagementError::BlockHashAbsent) => {
 				// Block is not part of the subscription.
 				return Err(ChainHeadRpcError::InvalidBlock.into())
@@ -306,21 +337,27 @@ where
 			.transpose()?
 			.map(ChildInfo::new_default_from_vec);
 
-		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash) {
-			Ok(block) => block,
-			Err(SubscriptionManagementError::SubscriptionAbsent) => {
-				// Invalid invalid subscription ID.
-				return Ok(MethodResponse::LimitReached)
-			},
-			Err(SubscriptionManagementError::BlockHashAbsent) => {
-				// Block is not part of the subscription.
-				return Err(ChainHeadRpcError::InvalidBlock.into())
-			},
-			Err(_) => return Err(ChainHeadRpcError::InvalidBlock.into()),
-		};
+		let block_guard =
+			match self.subscriptions.lock_block(&follow_subscription, hash, items.len()) {
+				Ok(block) => block,
+				Err(SubscriptionManagementError::SubscriptionAbsent) |
+				Err(SubscriptionManagementError::ExceededLimits) => return Ok(MethodResponse::LimitReached),
+				Err(SubscriptionManagementError::BlockHashAbsent) => {
+					// Block is not part of the subscription.
+					return Err(ChainHeadRpcError::InvalidBlock.into())
+				},
+				Err(_) => return Err(ChainHeadRpcError::InvalidBlock.into()),
+			};
 
 		let storage_client = ChainHeadStorage::<Client, Block, BE>::new(self.client.clone());
 		let operation_id = block_guard.operation_id();
+
+		// The number of operations we are allowed to execute.
+		let num_operations = block_guard.num_reserved();
+		let discarded = items.len().saturating_sub(num_operations);
+		let mut items = items;
+		items.truncate(num_operations);
+
 		let fut = async move {
 			storage_client.generate_events(block_guard, hash, items, child_trie);
 		};
@@ -329,7 +366,7 @@ where
 			.spawn_blocking("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 		Ok(MethodResponse::Started(MethodResponseStarted {
 			operation_id,
-			discarded_items: Some(0),
+			discarded_items: Some(discarded),
 		}))
 	}
 
@@ -342,9 +379,10 @@ where
 	) -> RpcResult<MethodResponse> {
 		let call_parameters = Bytes::from(parse_hex_param(call_parameters)?);
 
-		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash) {
+		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash, 1) {
 			Ok(block) => block,
-			Err(SubscriptionManagementError::SubscriptionAbsent) => {
+			Err(SubscriptionManagementError::SubscriptionAbsent) |
+			Err(SubscriptionManagementError::ExceededLimits) => {
 				// Invalid invalid subscription ID.
 				return Ok(MethodResponse::LimitReached)
 			},

@@ -37,14 +37,14 @@ mod cli {
 		rerun_if_git_head_changed();
 	}
 
-	/// Build shell completion scripts for all known shells
+	/// Build shell completion scripts for all known shells.
 	fn build_shell_completion() {
 		for shell in Shell::value_variants() {
 			build_completion(shell);
 		}
 	}
 
-	/// Build the shell auto-completion for a given Shell
+	/// Build the shell auto-completion for a given Shell.
 	fn build_completion(shell: &Shell) {
 		let outdir = match env::var_os("OUT_DIR") {
 			None => return,
