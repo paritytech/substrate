@@ -16,5 +16,5 @@ as a minor version bump.
 
 ### Added
 
--  Introduce `Payees`` and `PayoutDestination` with `Split` variant, which starts a lazy migration to move existing `Payee` items to a new `Payees` storage item.
+-  Introduce `Payees` and `PayoutDestination` with `Split` variant, which starts a lazy migration to move existing `Payee` items to a new `Payees` storage item.
 [#14451](https://github.com/paritytech/substrate/pull/14451)
