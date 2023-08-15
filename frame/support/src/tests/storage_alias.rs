@@ -37,6 +37,10 @@ fn storage_alias_works() {
 		#[crate::storage_alias]
 		pub type GenericData<T> =
 			StorageMap<Test2, Blake2_128Concat, BlockNumberFor<T>, BlockNumberFor<T>>;
+
+		#[crate::storage_alias]
+		pub type GenericDataPallet<T: Config> =
+			StorageMap<Pallet<T>, Blake2_128Concat, BlockNumberFor<T>, BlockNumberFor<T>>;
 	});
 }
 
