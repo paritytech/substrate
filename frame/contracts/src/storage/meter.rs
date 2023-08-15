@@ -632,7 +632,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 			// Whatever is left in the contract is sent to the termination beneficiary.
 			T::Currency::transfer(
 				&contract,
-				&*beneficiary,
+				&**beneficiary,
 				T::Currency::reducible_balance(&contract, Preservation::Expendable, Polite),
 				Preservation::Expendable,
 			)?;
