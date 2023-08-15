@@ -296,9 +296,9 @@ mod test {
 		DepositOf, Voting, VotingOf,
 	};
 	use frame_support::{
-		assert_ok,
+		assert_ok, parameter_types,
 		traits::{Currency, OnRuntimeUpgrade, ReservableCurrency, WithdrawReasons},
-		BoundedVec, parameter_types,
+		BoundedVec,
 	};
 	use frame_system::pallet_prelude::BlockNumberFor;
 	use sp_core::ConstU32;
