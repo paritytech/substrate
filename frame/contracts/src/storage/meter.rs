@@ -447,6 +447,8 @@ where
 		// We need to make sure that the contract's account exists.
 		T::Currency::transfer(origin, contract, ed, Preservation::Preserve)?;
 
+		System::<T>::inc_consumers(contract)?;
+
 		// Normally, deposit charges are deferred to be able to coalesce them with refunds.
 		// However, we need to charge immediately so that the account is created before
 		// charges possibly below the ed are collected and fail.
@@ -589,7 +591,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 			},
 		}
 		if terminated {
-			System::<T>::dec_providers(&contract)?;
+			System::<T>::dec_consumers(&contract);
 		}
 		Ok(())
 	}
