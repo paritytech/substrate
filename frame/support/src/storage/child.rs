@@ -23,7 +23,7 @@
 
 use codec::{Codec, Decode, Encode};
 pub use sp_core::storage::{ChildInfo, ChildType, StateVersion};
-use sp_io::{KillStorageResult, MultiRemovalResults};
+pub use sp_io::{KillStorageResult, MultiRemovalResults};
 use sp_std::prelude::*;
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.

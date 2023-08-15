@@ -192,7 +192,7 @@ mod test {
 	use super::*;
 	use crate::mock::{Test as T, *};
 
-	use sp_core::bounded_vec;
+	use sp_runtime::bounded_vec;
 
 	#[test]
 	fn migration_works() {

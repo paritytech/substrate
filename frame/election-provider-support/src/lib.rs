@@ -82,7 +82,7 @@
 //! # use frame_election_provider_support::{*, data_provider};
 //! # use sp_npos_elections::{Support, Assignment};
 //! # use frame_support::traits::ConstU32;
-//! # use frame_support::bounded_vec;
+//! # use sp_runtime::bounded_vec;
 //!
 //! type AccountId = u64;
 //! type Balance = u64;
