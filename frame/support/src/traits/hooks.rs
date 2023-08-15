@@ -204,7 +204,7 @@ impl OnRuntimeUpgrade for Tuple {
 	/// <https://github.com/paritytech/substrate/issues/13681>.
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		Err("If you see this error the implementation of `pub fn try_runtime_upgrade` in your `Executive` pallet is probably old and `post_upgrade` checks will *not* be executed. Please update your implementation of `Executive` `pub fn try_runtime_upgrade` to match Substrate master (https://github.com/paritytech/substrate/blob/master/frame/executive/src/lib.rs).".into())
+		Err("If you see this error, the implementation of `pub fn try_runtime_upgrade` in your `Executive` pallet is probably old and `post_upgrade` checks will *not* be executed. Please update your implementation of `Executive` `pub fn try_runtime_upgrade` to match Substrate master (https://github.com/paritytech/substrate/blob/master/frame/executive/src/lib.rs).".into())
 	}
 }
 
