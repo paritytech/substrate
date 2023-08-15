@@ -578,7 +578,12 @@ pub mod pallet {
 			}
 		}
 
-		/// Check all assumptions about [`crate::Config`].
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_: BlockNumberFor<T>) -> Result<(), sp_runtime::TryRuntimeError> {
+			Self::do_try_state()
+		}
+
+		/// Check all compile-time assumptions about [`crate::Config`].
 		fn integrity_test() {
 			assert!(!MaxMessageLenOf::<T>::get().is_zero(), "HeapSize too low");
 		}
@@ -1103,6 +1108,106 @@ impl<T: Config> Pallet<T> {
 		}
 		page.skip_first(is_processed);
 		ItemExecutionStatus::Executed(is_processed)
+	}
+
+	/// Ensure the correctness of state of this pallet.
+	///
+	/// # Assumptions-
+	///
+	/// If `serviceHead` points to a ready Queue, then BookState of that Queue has:
+	///
+	/// * `message_count` > 0
+	/// * `size` > 0
+	/// * `end` > `begin`
+	/// * Some(ready_neighbours)
+	/// * If `ready_neighbours.next` == self.origin, then `ready_neighbours.prev` == self.origin
+	///   (only queue in ring)
+	///
+	/// For Pages(begin to end-1) in BookState:
+	///
+	/// * `remaining` > 0
+	/// * `remaining_size` > 0
+	/// * `first` <= `last`
+	/// * Every page can be decoded into peek_* functions
+	#[cfg(any(test, feature = "try-runtime"))]
+	pub fn do_try_state() -> Result<(), sp_runtime::TryRuntimeError> {
+		// Checking memory corruption for BookStateFor
+		ensure!(
+			BookStateFor::<T>::iter_keys().count() == BookStateFor::<T>::iter_values().count(),
+			"Memory Corruption in BookStateFor"
+		);
+		// Checking memory corruption for Pages
+		ensure!(
+			Pages::<T>::iter_keys().count() == Pages::<T>::iter_values().count(),
+			"Memory Corruption in Pages"
+		);
+
+		// No state to check
+		if ServiceHead::<T>::get().is_none() {
+			return Ok(())
+		}
+
+		//loop around this origin
+		let starting_origin = ServiceHead::<T>::get().unwrap();
+
+		while let Some(head) = Self::bump_service_head(&mut WeightMeter::max_limit()) {
+			ensure!(
+				BookStateFor::<T>::contains_key(&head),
+				"Service head must point to an existing book"
+			);
+
+			let head_book_state = BookStateFor::<T>::get(&head);
+			ensure!(
+				head_book_state.message_count > 0,
+				"There must be some messages if in ReadyRing"
+			);
+			ensure!(head_book_state.size > 0, "There must be some message size if in ReadyRing");
+			ensure!(
+				head_book_state.end > head_book_state.begin,
+				"End > Begin if unprocessed messages exists"
+			);
+			ensure!(
+				head_book_state.ready_neighbours.is_some(),
+				"There must be neighbours if in ReadyRing"
+			);
+
+			if head_book_state.ready_neighbours.as_ref().unwrap().next == head {
+				ensure!(
+					head_book_state.ready_neighbours.as_ref().unwrap().prev == head,
+					"Can only happen if only queue in ReadyRing"
+				);
+			}
+
+			for page_index in head_book_state.begin..head_book_state.end {
+				let page = Pages::<T>::get(&head, page_index).unwrap();
+				let remaining_messages = page.remaining;
+				let mut counted_remaining_messages = 0;
+				ensure!(
+					remaining_messages > 0.into(),
+					"These must be some messages that have not been processed yet!"
+				);
+
+				for i in 0..u32::MAX {
+					if let Some((_, processed, _)) = page.peek_index(i as usize) {
+						if !processed {
+							counted_remaining_messages += 1;
+						}
+					} else {
+						break
+					}
+				}
+
+				ensure!(
+					remaining_messages == counted_remaining_messages.into(),
+					"Memory Corruption"
+				);
+			}
+
+			if head_book_state.ready_neighbours.as_ref().unwrap().next == starting_origin {
+				break
+			}
+		}
+		Ok(())
 	}
 
 	/// Print the pages in each queue and the messages in each page.
