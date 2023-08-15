@@ -536,7 +536,10 @@ impl<T: Config> Pallet<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{mock::*, ElectionCompute, ElectionError, Error, Event, Perbill, Phase};
+	use crate::{
+		mock::*, ElectionBoundsBuilder, ElectionCompute, ElectionError, Error, Event, Perbill,
+		Phase,
+	};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
 	#[test]
@@ -565,13 +568,14 @@ mod tests {
 	fn data_provider_should_respect_target_limits() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given a reduced expectation of maximum electable targets
-			MaxElectableTargets::set(2);
+			let new_bounds = ElectionBoundsBuilder::default().targets_count(2.into()).build();
+			ElectionsBounds::set(new_bounds);
 			// and a data provider that does not respect limits
 			DataProviderAllowBadData::set(true);
 
 			assert_noop!(
 				MultiPhase::create_snapshot(),
-				ElectionError::DataProvider("Snapshot too big for submission."),
+				ElectionError::DataProvider("Ensure targets bounds: bounds exceeded."),
 			);
 		})
 	}
@@ -580,13 +584,14 @@ mod tests {
 	fn data_provider_should_respect_voter_limits() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given a reduced expectation of maximum electing voters
-			MaxElectingVoters::set(2);
+			let new_bounds = ElectionBoundsBuilder::default().voters_count(2.into()).build();
+			ElectionsBounds::set(new_bounds);
 			// and a data provider that does not respect limits
 			DataProviderAllowBadData::set(true);
 
 			assert_noop!(
 				MultiPhase::create_snapshot(),
-				ElectionError::DataProvider("Snapshot too big for submission."),
+				ElectionError::DataProvider("Ensure voters bounds: bounds exceeded."),
 			);
 		})
 	}

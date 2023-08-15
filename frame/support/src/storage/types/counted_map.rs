@@ -612,8 +612,9 @@ mod test {
 			assert_eq!(A::count(), 2);
 
 			// Insert an existing key, shouldn't increment counted values.
-			A::insert(3, 11);
+			A::insert(3, 12);
 
+			assert_eq!(A::try_get(3), Ok(12));
 			assert_eq!(A::count(), 2);
 
 			// Remove non-existing.
@@ -706,17 +707,17 @@ mod test {
 			// Try succeed mutate existing to existing.
 			A::try_mutate_exists(1, |query| {
 				assert_eq!(*query, Some(43));
-				*query = Some(43);
+				*query = Some(45);
 				Result::<(), ()>::Ok(())
 			})
 			.unwrap();
 
-			assert_eq!(A::try_get(1), Ok(43));
+			assert_eq!(A::try_get(1), Ok(45));
 			assert_eq!(A::count(), 4);
 
 			// Try succeed mutate existing to non-existing.
 			A::try_mutate_exists(1, |query| {
-				assert_eq!(*query, Some(43));
+				assert_eq!(*query, Some(45));
 				*query = None;
 				Result::<(), ()>::Ok(())
 			})

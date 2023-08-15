@@ -24,4 +24,5 @@ std = [
 	"sp-api/std",
 	"sp-std/std",
 	"serde_json/std",
+	"sp-runtime/std"
 ]

@@ -15,9 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// tag::description[]
 //! Cryptographic utilities.
-// end::description[]
 
 use crate::{ed25519, sr25519};
 #[cfg(feature = "std")]
@@ -486,7 +484,7 @@ pub trait ByteArray: AsRef<[u8]> + AsMut<[u8]> + for<'a> TryFrom<&'a [u8], Error
 }
 
 /// Trait suitable for typical cryptographic key public type.
-pub trait Public: CryptoType + ByteArray + Derive + PartialEq + Eq + Clone + Send {}
+pub trait Public: CryptoType + ByteArray + Derive + PartialEq + Eq + Clone + Send + Sync {}
 
 /// An opaque 32-byte cryptographic identifier.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -1144,6 +1142,8 @@ pub mod key_types {
 	pub const ACCOUNT: KeyTypeId = KeyTypeId(*b"acco");
 	/// Key type for Aura module, built-in. Identified as `aura`.
 	pub const AURA: KeyTypeId = KeyTypeId(*b"aura");
+	/// Key type for BEEFY module.
+	pub const BEEFY: KeyTypeId = KeyTypeId(*b"beef");
 	/// Key type for ImOnline module, built-in. Identified as `imon`.
 	pub const IM_ONLINE: KeyTypeId = KeyTypeId(*b"imon");
 	/// Key type for AuthorityDiscovery module, built-in. Identified as `audi`.

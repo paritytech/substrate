@@ -38,10 +38,24 @@ std = [
 	"sp-api/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"pallet-balances/std",
+	"pallet-preimage/std",
+	"sp-core/std",
+	"sp-io/std"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"frame-benchmarking/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
+	"pallet-preimage/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks"
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-preimage/try-runtime",
+	"sp-runtime/try-runtime"
+]

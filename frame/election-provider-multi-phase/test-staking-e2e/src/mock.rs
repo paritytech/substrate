@@ -17,7 +17,6 @@
 
 #![allow(dead_code)]
 
-use _feps::ExtendedBalance;
 use frame_support::{
 	assert_ok, dispatch::UnfilteredDispatchable, parameter_types, traits, traits::Hooks,
 	weights::constants,
@@ -42,7 +41,10 @@ use sp_std::prelude::*;
 use std::collections::BTreeMap;
 
 use codec::Decode;
-use frame_election_provider_support::{onchain, ElectionDataProvider, SequentialPhragmen, Weight};
+use frame_election_provider_support::{
+	bounds::ElectionBoundsBuilder, onchain, ElectionDataProvider, ExtendedBalance,
+	SequentialPhragmen, Weight,
+};
 use pallet_election_provider_multi_phase::{
 	unsigned::MinerConfig, Call, ElectionCompute, QueuedSolution, SolutionAccuracyOf,
 };
@@ -172,8 +174,6 @@ parameter_types! {
 	// we expect a minimum of 3 blocks in signed phase and unsigned phases before trying
 	// enetering in emergency phase after the election failed.
 	pub static MinBlocksBeforeEmergency: BlockNumber = 3;
-	pub static MaxElectingVoters: VoterIndex = 1000;
-	pub static MaxElectableTargets: TargetIndex = 1000;
 	pub static MaxActiveValidators: u32 = 1000;
 	pub static OffchainRepeat: u32 = 5;
 	pub static MinerMaxLength: u32 = 256;
@@ -181,8 +181,8 @@ parameter_types! {
 	pub static TransactionPriority: transaction_validity::TransactionPriority = 1;
 	#[derive(Debug)]
 	pub static MaxWinners: u32 = 100;
-	pub static MaxVotesPerVoter: u32 = 16;
-	pub static MaxNominations: u32 = 16;
+	pub static ElectionBounds: frame_election_provider_support::bounds::ElectionBounds = ElectionBoundsBuilder::default()
+		.voters_count(1_000.into()).targets_count(1_000.into()).build();
 }
 
 impl pallet_election_provider_multi_phase::Config for Runtime {
@@ -211,9 +211,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type GovernanceFallback = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, ()>;
 	type ForceOrigin = EnsureRoot<AccountId>;
-	type MaxElectableTargets = MaxElectableTargets;
-	type MaxElectingVoters = MaxElectingVoters;
 	type MaxWinners = MaxWinners;
+	type ElectionBounds = ElectionBounds;
 	type BenchmarkingConfig = NoopElectionProviderBenchmarkConfig;
 	type WeightInfo = ();
 }
@@ -252,8 +251,10 @@ impl pallet_bags_list::Config for Runtime {
 	type Score = VoteWeight;
 }
 
+/// Upper limit on the number of NPOS nominations.
+const MAX_QUOTA_NOMINATIONS: u32 = 16;
+
 impl pallet_staking::Config for Runtime {
-	type MaxNominations = MaxNominations;
 	type Currency = Balances;
 	type CurrencyBalance = Balance;
 	type UnixTime = Timestamp;
@@ -274,6 +275,7 @@ impl pallet_staking::Config for Runtime {
 	type ElectionProvider = ElectionProviderMultiPhase;
 	type GenesisElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type VoterList = BagsList;
+	type NominationsQuota = pallet_staking::FixedNominationsQuota<MAX_QUOTA_NOMINATIONS>;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = HistoryDepth;
@@ -306,8 +308,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = MaxWinners;
-	type VotersBound = VotersBound;
-	type TargetsBound = TargetsBound;
+	type Bounds = ElectionBounds;
 }
 
 pub struct NoopElectionProviderBenchmarkConfig;

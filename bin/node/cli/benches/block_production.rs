@@ -88,6 +88,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		offchain_worker: OffchainWorkerConfig { enabled: true, indexing_enabled: false },
 		force_authoring: false,
 		disable_grandpa: false,
+		disable_beefy: false,
 		dev_key_seed: Some(Sr25519Keyring::Alice.to_seed()),
 		tracing_targets: None,
 		tracing_receiver: Default::default(),
