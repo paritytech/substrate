@@ -535,8 +535,8 @@ fn generate_storage_instance(
 	is_counted_map: bool,
 	prefix_type: PrefixType,
 ) -> Result<StorageInstance> {
-	if let Some(ident) = prefix.get_ident().filter(|i| *i == "_") {
-		return Err(Error::new(ident.span(), "`_` is not allowed as prefix by `storage_alias`."))
+	if let Type::Infer(_) = prefix {
+		return Err(Error::new(prefix.span(), "`_` is not allowed as prefix by `storage_alias`."))
 	}
 
 	let impl_generics_used_by_prefix = storage_generics
