@@ -18,3 +18,9 @@ lazy_static = "1.4.0"
 strum = { version = "0.24.1", features = ["derive"], default-features = false }
 sp-core = { version = "21.0.0", path = "../core" }
 sp-runtime = { version = "24.0.0", path = "../runtime" }
+
+[features]
+# This feature adds Bandersnatch crypto primitives.
+# It should not be used in production since the implementation and interface may still
+# be subject to significant changes.
+bandersnatch-experimental = ["sp-core/bandersnatch-experimental"]
