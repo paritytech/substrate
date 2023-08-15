@@ -39,7 +39,7 @@ use sp_runtime::{
 	traits::{Saturating, Zero},
 	FixedPointNumber, FixedU128,
 };
-use sp_std::{marker::PhantomData, ops::Deref, vec, vec::Vec};
+use sp_std::{marker::PhantomData, vec, vec::Vec};
 
 /// Deposit that uses the native fungible's balance type.
 pub type DepositOf<T> = Deposit<BalanceOf<T>>;
@@ -224,25 +224,13 @@ impl Diff {
 	}
 }
 
-/// The beneficiary of a contract termination.
-#[derive(RuntimeDebugNoBound, Clone, PartialEq, Eq)]
-pub struct Beneficiary<T: Config>(AccountIdOf<T>);
-
-impl<T: Config> Deref for Beneficiary<T> {
-	type Target = AccountIdOf<T>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
 /// The status of a contract.
 ///
 /// In case of termination the beneficiary is indicated.
 #[derive(RuntimeDebugNoBound, Clone, PartialEq, Eq)]
 pub enum ContractStatus<T: Config> {
 	Alive,
-	Terminated(Beneficiary<T>),
+	Terminated { beneficiary: AccountIdOf<T> },
 }
 
 /// Records information to charge or refund a plain account.
@@ -270,8 +258,9 @@ enum Contribution<T: Config> {
 	/// its execution. In this process the [`Diff`] was converted into a [`Deposit`].
 	Checked(DepositOf<T>),
 	/// The contract was terminated. In this process the [`Diff`] was converted into a [`Deposit`]
-	/// in order to calculate the refund.
-	Terminated(DepositOf<T>, Beneficiary<T>),
+	/// in order to calculate the refund. Upon termination the `reducible_balance` in the
+	/// contract's account is transferred to the [`beneficiary`].
+	Terminated { deposit: DepositOf<T>, beneficiary: AccountIdOf<T> },
 }
 
 impl<T: Config> Contribution<T> {
@@ -279,7 +268,8 @@ impl<T: Config> Contribution<T> {
 	fn update_contract(&self, info: Option<&mut ContractInfo<T>>) -> DepositOf<T> {
 		match self {
 			Self::Alive(diff) => diff.update_contract::<T>(info),
-			Self::Terminated(deposit, _) | Self::Checked(deposit) => deposit.clone(),
+			Self::Terminated { deposit, beneficiary: _ } | Self::Checked(deposit) =>
+				deposit.clone(),
 		}
 	}
 }
@@ -364,8 +354,8 @@ where
 	/// True if the contract is terminated.
 	fn is_terminated(&self) -> ContractStatus<T> {
 		match &self.own_contribution {
-			Contribution::Terminated(_, beneficiary) =>
-				ContractStatus::Terminated(beneficiary.clone()),
+			Contribution::Terminated { deposit: _, beneficiary } =>
+				ContractStatus::Terminated { beneficiary: beneficiary.clone() },
 			_ => ContractStatus::Alive,
 		}
 	}
@@ -497,10 +487,10 @@ where
 	/// (`reducible_balance`) will be sent to the `beneficiary`.
 	pub fn terminate(&mut self, info: &ContractInfo<T>, beneficiary: T::AccountId) {
 		debug_assert!(self.is_alive());
-		self.own_contribution = Contribution::Terminated(
-			Deposit::Refund(info.total_deposit()),
-			Beneficiary(beneficiary),
-		);
+		self.own_contribution = Contribution::Terminated {
+			deposit: Deposit::Refund(info.total_deposit()),
+			beneficiary,
+		};
 	}
 
 	/// [`Self::charge`] does not enforce the storage limit since we want to do this check as late
@@ -627,12 +617,12 @@ impl<T: Config> Ext<T> for ReservingExt {
 				}
 			},
 		}
-		if let ContractStatus::<T>::Terminated(beneficiary) = status {
+		if let ContractStatus::<T>::Terminated { beneficiary } = status {
 			System::<T>::dec_consumers(&contract);
 			// Whatever is left in the contract is sent to the termination beneficiary.
 			T::Currency::transfer(
 				&contract,
-				&**beneficiary,
+				&beneficiary,
 				T::Currency::reducible_balance(&contract, Preservation::Expendable, Polite),
 				Preservation::Expendable,
 			)?;
@@ -894,7 +884,7 @@ mod tests {
 							origin: ALICE,
 							contract: CHARLIE,
 							amount: Deposit::Refund(119),
-							status: ContractStatus::Terminated(Beneficiary(CHARLIE)),
+							status: ContractStatus::Terminated { beneficiary: CHARLIE },
 						},
 						Charge {
 							origin: ALICE,
