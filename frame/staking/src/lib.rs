@@ -312,10 +312,9 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Saturating, StaticLookup, Zero},
 	Perbill, Perquintill, Rounding, RuntimeDebug,
 };
-pub use sp_staking::StakerStatus;
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
-	EraIndex, OnStakingUpdate, SessionIndex,
+	EraIndex, OnStakingUpdate, PayoutDestinationOpt, PayoutSplitOpt, SessionIndex, StakerStatus,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
@@ -409,6 +408,26 @@ pub enum PayoutDestination<AccountId> {
 impl<AccountId> Default for PayoutDestination<AccountId> {
 	fn default() -> Self {
 		PayoutDestination::Stake
+	}
+}
+
+impl<AccountId: Clone> PayoutDestination<AccountId> {
+	pub fn from_opt(
+		v: PayoutDestinationOpt<AccountId>,
+		stash: &AccountId,
+		ctlr: &AccountId,
+	) -> Self {
+		match v {
+			PayoutDestinationOpt::Stake => PayoutDestination::Stake,
+			PayoutDestinationOpt::Controller => PayoutDestination::Deposit(ctlr.clone()),
+			PayoutDestinationOpt::Account(a) => PayoutDestination::Deposit(a),
+			PayoutDestinationOpt::Split((p, o)) =>
+				if o == PayoutSplitOpt::Stash {
+					PayoutDestination::Split((p.clone(), stash.clone()))
+				} else {
+					PayoutDestination::Split((p.clone(), ctlr.clone()))
+				},
+		}
 	}
 }
 

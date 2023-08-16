@@ -24,7 +24,7 @@ use crate::currency_to_vote::CurrencyToVote;
 use codec::{FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::RuntimeDebug;
-use sp_runtime::{DispatchError, DispatchResult, Saturating};
+use sp_runtime::{DispatchError, DispatchResult, Saturating, Perbill};
 use sp_std::{collections::btree_map::BTreeMap, ops::Sub, vec::Vec};
 
 pub mod offence;
@@ -47,6 +47,24 @@ pub enum StakerStatus<AccountId> {
 	Validator,
 	/// Declaring desire to nominate, delegate, or generally approve of the given set of others.
 	Nominator(Vec<AccountId>),
+}
+
+// A enum to aid in configuring a payout destination without knowing the stash and controller
+// accounts beforehand.
+#[derive(PartialEq, Copy, Clone)]
+pub enum PayoutDestinationOpt<AccountId> {
+	Stake,
+	Controller,
+	Account(AccountId),
+	Split((Perbill, PayoutSplitOpt)),
+}
+
+// Options for splitting payouts. These are used to alias the stash and controller accounts, which
+// are assumed not to be known at the time at usage.
+#[derive(PartialEq, Copy, Clone)]
+pub enum PayoutSplitOpt {
+	Stash,
+	Controller,
 }
 
 /// A struct that reflects stake that an account has in the staking system. Provides a set of

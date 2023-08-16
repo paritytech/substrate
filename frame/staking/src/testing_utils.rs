@@ -34,49 +34,6 @@ use sp_std::prelude::*;
 
 const SEED: u32 = 0;
 
-// A helper enum to configure a payout destination without knowing the stash and controller
-// accounts beforehand.
-#[derive(PartialEq, Copy, Clone)]
-pub enum PayoutDestinationOpt<AccountId> {
-	Stake,
-	Controller,
-	Account(AccountId),
-	Split((Perbill, PayoutSplitOpt)),
-}
-
-// Options for splitting payouts. These are used to alias the stash and controller accounts, which
-// are not know at the time at usage.
-#[derive(PartialEq, Copy, Clone)]
-pub enum PayoutSplitOpt {
-	Stash,
-	Controller,
-}
-
-impl<AccountId> Default for PayoutDestinationOpt<AccountId> {
-	fn default() -> Self {
-		PayoutDestinationOpt::Stake
-	}
-}
-
-// A helper for converting a `PayoutDestinationOpt` value into a `PayoutDestination` value.
-pub fn opt_to_payout_destination<AccountId: Clone>(
-	v: PayoutDestinationOpt<AccountId>,
-	stash: &AccountId,
-	ctlr: &AccountId,
-) -> PayoutDestination<AccountId> {
-	match v {
-		PayoutDestinationOpt::Stake => PayoutDestination::Stake,
-		PayoutDestinationOpt::Controller => PayoutDestination::Deposit(ctlr.clone()),
-		PayoutDestinationOpt::Account(a) => PayoutDestination::Deposit(a),
-		PayoutDestinationOpt::Split((p, o)) =>
-			if o == PayoutSplitOpt::Stash {
-				PayoutDestination::Split((p.clone(), stash.clone()))
-			} else {
-				PayoutDestination::Split((p.clone(), ctlr.clone()))
-			},
-	}
-}
-
 /// This function removes all validators and nominators from storage.
 pub fn clear_validators_and_nominators<T: Config>() {
 	#[allow(deprecated)]
@@ -124,7 +81,7 @@ pub fn create_stash_controller<T: Config>(
 	Staking::<T>::bond(
 		RawOrigin::Signed(staker.clone()).into(),
 		amount,
-		opt_to_payout_destination::<T::AccountId>(destination_opt, &staker, &staker),
+		PayoutDestination::from_opt(destination_opt, &staker, &staker),
 	)?;
 	Ok((staker.clone(), staker))
 }
@@ -147,7 +104,7 @@ pub fn create_unique_stash_controller<T: Config>(
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
 		amount,
-		opt_to_payout_destination::<T::AccountId>(destination_opt, &stash, &controller),
+		PayoutDestination::from_opt(destination_opt, &stash, &controller),
 	)?;
 
 	// update ledger to be a *different* controller to stash
@@ -206,7 +163,7 @@ pub fn create_validators_with_seed<T: Config>(
 	let mut validators: Vec<AccountIdLookupOf<T>> = Vec::with_capacity(max as usize);
 	for i in 0..max {
 		let (stash, controller) =
-			create_stash_controller::<T>(i + seed, balance_factor, Default::default())?;
+			create_stash_controller::<T>(i + seed, balance_factor, PayoutDestinationOpt::Stake)?;
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;
@@ -247,7 +204,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 	for i in 0..validators {
 		let balance_factor = if randomize_stake { rng.next_u32() % 255 + 10 } else { 100u32 };
 		let (v_stash, v_controller) =
-			create_stash_controller::<T>(i, balance_factor, Default::default())?;
+			create_stash_controller::<T>(i, balance_factor, PayoutDestinationOpt::Stake)?;
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
@@ -261,8 +218,11 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 	// Create nominators
 	for j in 0..nominators {
 		let balance_factor = if randomize_stake { rng.next_u32() % 255 + 10 } else { 100u32 };
-		let (_n_stash, n_controller) =
-			create_stash_controller::<T>(u32::MAX - j, balance_factor, Default::default())?;
+		let (_n_stash, n_controller) = create_stash_controller::<T>(
+			u32::MAX - j,
+			balance_factor,
+			PayoutDestinationOpt::Stake,
+		)?;
 
 		// Have them randomly validate
 		let mut available_validators = validator_chosen.clone();

@@ -41,9 +41,7 @@ use sp_staking::{
 };
 use sp_std::prelude::*;
 use substrate_test_utils::assert_eq_uvec;
-use testing_utils::{
-	create_stash_controller, create_unique_stash_controller, PayoutDestinationOpt,
-};
+use testing_utils::{create_stash_controller, create_unique_stash_controller};
 
 #[test]
 fn set_staking_configs_works() {
@@ -238,7 +236,8 @@ fn basic_setup_works() {
 fn change_controller_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		let (stash, controller) =
-			create_unique_stash_controller::<Test>(0, 100, Default::default(), false).unwrap();
+			create_unique_stash_controller::<Test>(0, 100, PayoutDestinationOpt::Stake, false)
+				.unwrap();
 
 		// ensure `stash` and `controller` are bonded as stash controller pair.
 		assert_eq!(Staking::bonded(&stash), Some(controller));
@@ -862,9 +861,13 @@ fn double_staking_should_fail() {
 	// * an account already bonded as controller can nominate.
 	ExtBuilder::default().build_and_execute(|| {
 		let arbitrary_value = 5;
-		let (stash, controller) =
-			create_unique_stash_controller::<Test>(0, arbitrary_value, Default::default(), false)
-				.unwrap();
+		let (stash, controller) = create_unique_stash_controller::<Test>(
+			0,
+			arbitrary_value,
+			PayoutDestinationOpt::Stake,
+			false,
+		)
+		.unwrap();
 
 		// 4 = not used so far,  stash => not allowed.
 		assert_noop!(
@@ -892,9 +895,13 @@ fn double_controlling_attempt_should_fail() {
 	//   account.
 	ExtBuilder::default().build_and_execute(|| {
 		let arbitrary_value = 5;
-		let (stash, _) =
-			create_unique_stash_controller::<Test>(0, arbitrary_value, Default::default(), false)
-				.unwrap();
+		let (stash, _) = create_unique_stash_controller::<Test>(
+			0,
+			arbitrary_value,
+			PayoutDestinationOpt::Stake,
+			false,
+		)
+		.unwrap();
 
 		// Note that controller (same as stash) is reused => no-op.
 		assert_noop!(
@@ -4269,7 +4276,8 @@ fn payout_creates_controller() {
 
 		// create a stash/controller pair and nominate
 		let (stash, controller) =
-			create_unique_stash_controller::<Test>(0, 100, Default::default(), false).unwrap();
+			create_unique_stash_controller::<Test>(0, 100, PayoutDestinationOpt::Stake, false)
+				.unwrap();
 		assert_ok!(Staking::set_payee(
 			RuntimeOrigin::signed(controller),
 			PayoutDestination::Deposit(controller)
