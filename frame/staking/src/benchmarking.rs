@@ -585,7 +585,7 @@ benchmarks! {
 			true,
 			true,
 			PayoutRoute::Alias(
-				PayoutDestinationAlias::Split(Perbill::from_percent(50), PayoutSplitOpt::Controller)
+				PayoutDestinationAlias::Split((Perbill::from_percent(50), PayoutSplitOpt::Controller))
 			),
 		)?;
 
