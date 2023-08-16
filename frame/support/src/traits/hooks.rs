@@ -106,7 +106,10 @@ pub trait OnRuntimeUpgrade {
 		Weight::zero()
 	}
 
-	/// See [`Hooks::on_runtime_upgrade`].
+	/// Executes `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` hooks for a migration.
+	///
+	/// This is required for testing a [`Tuple`] of migrations where the tuple contains
+	/// order-dependent migrations.
 	#[cfg(feature = "try-runtime")]
 	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
 		let maybe_state = if checks {
@@ -128,13 +131,13 @@ pub trait OnRuntimeUpgrade {
 		Ok(weight)
 	}
 
-	/// See [`Hooks::on_runtime_upgrade`].
+	/// See [`Hooks::pre_upgrade`].
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		Ok(Vec::new())
 	}
 
-	/// See [`Hooks::on_runtime_upgrade`].
+	/// See [`Hooks::post_upgrade`].
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		Ok(())
@@ -151,9 +154,6 @@ impl OnRuntimeUpgrade for Tuple {
 		weight
 	}
 
-	// We are executing pre- and post-checks sequentially in order to be able to test several
-	// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
-	// hooks for tuples are a noop.
 	#[cfg(feature = "try-runtime")]
 	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
 		let mut weight = Weight::zero();
@@ -189,22 +189,24 @@ impl OnRuntimeUpgrade for Tuple {
 		Ok(weight)
 	}
 
-	/// `Executive` used to directly call AllPalletsWithSystem::post_upgrade() which is now a noop.
-	/// If a runtime is running an old version of `Exeuctive`, return an error instead of silently
-	/// doing nothing which can lead to confusion. See
-	/// <https://github.com/paritytech/substrate/issues/13681>.
+	/// [`OnRuntimeUpgrade::pre_upgrade`] should not be used on [`Tuple`].
+	///
+	/// Instead, implementors should use [`OnRuntimeUpgrade::try_on_runtime_upgrade`] which
+	/// internally calls `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` for each tuple
+	/// member in sequence, enabling testing of order-dependent migrations.
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
-		Err("If you see this error, the implementation of `pub fn try_runtime_upgrade` in your `Executive` pallet is probably old and `pre_upgrade` checks will *not* be executed. Please update your implementation of `Executive` `pub fn try_runtime_upgrade` to match Substrate master (https://github.com/paritytech/substrate/blob/master/frame/executive/src/lib.rs).".into())
+		Err("Usage of `pre_upgrade` with Tuples is deprecated. Please use `try_on_runtime_upgrade` instead, which internally calls `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` for each tuple member.".into())
 	}
 
-	/// `Executive` used to directly call AllPalletsWithSystem::post_upgrade() which is now a noop.
-	/// If a runtime is running an old version of `Exeuctive`, return an error instead of silently
-	/// doing nothing which can lead to confusion. See
-	/// <https://github.com/paritytech/substrate/issues/13681>.
+	/// [`OnRuntimeUpgrade::post_upgrade`] should not be used on [`Tuple`].
+	///
+	/// Instead, implementors should use [`OnRuntimeUpgrade::try_on_runtime_upgrade`] which
+	/// internally calls `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` for each tuple
+	/// member in sequence, enabling testing of order-dependent migrations.
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		Err("If you see this error, the implementation of `pub fn try_runtime_upgrade` in your `Executive` pallet is probably old and `post_upgrade` checks will *not* be executed. Please update your implementation of `Executive` `pub fn try_runtime_upgrade` to match Substrate master (https://github.com/paritytech/substrate/blob/master/frame/executive/src/lib.rs).".into())
+		Err("Usage of `post_upgrade` with Tuples is deprecated. Please use `try_on_runtime_upgrade` instead, which internally calls `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` for each tuple member.".into())
 	}
 }
 
