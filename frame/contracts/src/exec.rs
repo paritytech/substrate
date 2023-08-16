@@ -22,7 +22,7 @@ use crate::{
 	storage::{self, WriteOutcome},
 	BalanceOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo, ContractInfoOf,
 	DebugBufferVec, Determinism, Error, Event, Nonce, Origin, Pallet as Contracts, Schedule,
-	System, WasmBlob, LOG_TARGET,
+	WasmBlob, LOG_TARGET,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
@@ -1284,7 +1284,6 @@ where
 		let frame = self.top_frame_mut();
 		let info = frame.terminate();
 		frame.nested_storage.terminate(&info);
-		System::<T>::dec_consumers(&frame.account_id);
 		Self::transfer(
 			Preservation::Expendable,
 			&frame.account_id,
