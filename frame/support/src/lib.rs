@@ -170,8 +170,8 @@ impl TypeId for PalletId {
 /// It requires that the given prefix type implements [`Get<'static str>`](traits::Get).
 ///
 /// 4. Let the macro "guess" what kind of prefix type to use. This only supports verbatim or
-///    pallet name. The macro uses the presence of generic arguments to the prefix type as
-///    an indication that it should use the pallet name as the `prefix`:
+///    pallet name. The macro uses the presence of generic arguments to the prefix type as an
+///    indication that it should use the pallet name as the `prefix`:
 #[doc = docify::embed!("src/tests/storage_alias.rs", storage_alias_guess)]
 pub use frame_support_procedural::storage_alias;
 

@@ -21,7 +21,7 @@ mod changeset;
 mod offchain;
 
 use self::changeset::OverlayedChangeSet;
-use crate::{backend::Backend, stats::StateMachineStats, DefaultError, BackendTransaction};
+use crate::{backend::Backend, stats::StateMachineStats, BackendTransaction, DefaultError};
 use codec::{Decode, Encode};
 use hash_db::Hasher;
 pub use offchain::OffchainOverlayedChanges;

@@ -26,7 +26,7 @@ use serde::de::DeserializeOwned;
 use sp_core::H256;
 use sp_inherents::{InherentData, InherentDataProvider};
 use sp_runtime::{
-	traits::{Header, NumberFor, One, HashingFor},
+	traits::{HashingFor, Header, NumberFor, One},
 	Digest,
 };
 use sp_state_machine::TestExternalities;
@@ -124,10 +124,8 @@ async fn run<Block: BlockT, HostFns: HostFunctions>(
 		full_extensions(executor.clone()),
 	)?;
 
-	let storage_changes = changes.drain_storage_changes(
-		&externalities.backend,
-		externalities.state_version,
-	)?;
+	let storage_changes =
+		changes.drain_storage_changes(&externalities.backend, externalities.state_version)?;
 
 	externalities
 		.backend

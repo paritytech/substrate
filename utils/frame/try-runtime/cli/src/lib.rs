@@ -379,7 +379,7 @@ use sp_externalities::Extensions;
 use sp_inherents::InherentData;
 use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
-	traits::{BlakeTwo256, Block as BlockT, NumberFor, Hash as HashT, HashingFor},
+	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, HashingFor, NumberFor},
 	DeserializeOwned, Digest,
 };
 use sp_state_machine::{
