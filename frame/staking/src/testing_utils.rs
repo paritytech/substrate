@@ -74,14 +74,14 @@ pub fn create_funded_user_with_balance<T: Config>(
 pub fn create_stash_controller<T: Config>(
 	n: u32,
 	balance_factor: u32,
-	destination_opt: PayoutDestinationOpt<T::AccountId>,
+	destination: PayoutDestinationOpt<T::AccountId>,
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
 	let staker = create_funded_user::<T>("stash", n, balance_factor);
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
 	Staking::<T>::bond(
 		RawOrigin::Signed(staker.clone()).into(),
 		amount,
-		PayoutDestination::from_opt(destination_opt, &staker, &staker),
+		PayoutDestination::from_opt(destination, &staker, &staker),
 	)?;
 	Ok((staker.clone(), staker))
 }
@@ -90,7 +90,7 @@ pub fn create_stash_controller<T: Config>(
 pub fn create_unique_stash_controller<T: Config>(
 	n: u32,
 	balance_factor: u32,
-	destination_opt: PayoutDestinationOpt<T::AccountId>,
+	destination: PayoutDestinationOpt<T::AccountId>,
 	dead_controller: bool,
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
 	let stash = create_funded_user::<T>("stash", n, balance_factor);
@@ -104,7 +104,7 @@ pub fn create_unique_stash_controller<T: Config>(
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
 		amount,
-		PayoutDestination::from_opt(destination_opt, &stash, &controller),
+		PayoutDestination::from_opt(destination, &stash, &controller),
 	)?;
 
 	// update ledger to be a *different* controller to stash
