@@ -32,7 +32,7 @@ use sp_runtime::{
 	traits::{Bounded, One, StaticLookup, TrailingZeroInput, Zero},
 	Perbill, Percent,
 };
-use sp_staking::{currency_to_vote::CurrencyToVote, PayoutRoute, SessionIndex};
+use sp_staking::{currency_to_vote::CurrencyToVote, SessionIndex};
 use sp_std::prelude::*;
 
 pub use frame_benchmarking::v1::{
