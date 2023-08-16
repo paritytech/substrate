@@ -725,20 +725,10 @@ pub mod v5 {
 		}
 	}
 
-	/// This migration summarizes and initializes the TotalValueLocked StorageValue for all Pools.
+	/// This migration summarizes and initializes the [`TotalValueLocked`] for all Pools.
 	pub struct VersionUncheckedMigrateV5ToV6<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for VersionUncheckedMigrateV5ToV6<T> {
 		fn on_runtime_upgrade() -> Weight {
-			let current = Pallet::<T>::current_storage_version();
-			let onchain = Pallet::<T>::on_chain_storage_version();
-
-			log!(
-				info,
-				"Running migration with current storage version {:?} / onchain {:?}",
-				current,
-				onchain
-			);
-
 			let migrated = BondedPools::<T>::count();
 			let tvl: BalanceOf<T> = BondedPools::<T>::iter()
 				.map(|(id, inner)| {
@@ -750,7 +740,7 @@ pub mod v5 {
 
 			TotalValueLocked::<T>::set(tvl);
 
-			log!(info, "Upgraded {} pools, storage to version {:?}", migrated, current);
+			log!(info, "Upgraded {} pools", migrated);
 
 			// reads: migrated * (BondedPools +  Staking::total_stake) + count + onchain
 			// version
