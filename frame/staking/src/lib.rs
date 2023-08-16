@@ -316,7 +316,7 @@ use sp_runtime::{
 pub use sp_staking::StakerStatus;
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
-	EraIndex, OnStakingUpdate, PayoutDestinationOpt, PayoutSplitOpt, SessionIndex,
+	EraIndex, OnStakingUpdate, PayoutDestinationAlias, PayoutSplitOpt, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
@@ -406,6 +406,11 @@ pub enum PayoutDestination<AccountId> {
 	Forgo,
 }
 
+pub enum PayoutDestinationOpt<AccountId> {
+	Direct(PayoutDestination<AccountId>),
+	Alias(PayoutDestinationAlias),
+}
+
 impl<AccountId: Clone> PayoutDestination<AccountId> {
 	/// NOTE: This function can be removed once lazy migration to `PayoutDestination` is completed.
 	pub fn from_reward_destination(
@@ -428,15 +433,16 @@ impl<AccountId: Clone> PayoutDestination<AccountId> {
 		ctlr: &AccountId,
 	) -> Self {
 		match v {
-			PayoutDestinationOpt::Stake => PayoutDestination::Stake,
-			PayoutDestinationOpt::Controller => PayoutDestination::Deposit(ctlr.clone()),
-			PayoutDestinationOpt::Account(a) => PayoutDestination::Deposit(a),
-			PayoutDestinationOpt::Split((p, o)) =>
-				if o == PayoutSplitOpt::Stash {
-					PayoutDestination::Split((p.clone(), stash.clone()))
-				} else {
-					PayoutDestination::Split((p.clone(), ctlr.clone()))
-				},
+			PayoutDestinationOpt::Direct(destination) => destination,
+			PayoutDestinationOpt::Alias(alias) => match alias {
+				PayoutDestinationAlias::Controller => PayoutDestination::Deposit(ctlr.clone()),
+				PayoutDestinationAlias::Split((percent, dest)) =>
+					if dest == PayoutSplitOpt::Stash {
+						PayoutDestination::Split((percent, stash.clone()))
+					} else {
+						PayoutDestination::Split((percent, ctlr.clone()))
+					},
+			},
 		}
 	}
 }

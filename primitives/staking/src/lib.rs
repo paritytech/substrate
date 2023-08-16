@@ -52,10 +52,10 @@ pub enum StakerStatus<AccountId> {
 // A enum to aid in configuring a payout destination without knowing the stash and controller
 // accounts beforehand.
 #[derive(PartialEq, Copy, Clone)]
-pub enum PayoutDestinationOpt<AccountId> {
-	Stake,
+pub enum PayoutDestinationAlias {
+	/// Alias for the controller account.
 	Controller,
-	Account(AccountId),
+	// Alias for a split payout destination either for the stash or controller account.
 	Split((Perbill, PayoutSplitOpt)),
 }
 

@@ -235,9 +235,13 @@ fn basic_setup_works() {
 #[test]
 fn change_controller_works() {
 	ExtBuilder::default().build_and_execute(|| {
-		let (stash, controller) =
-			create_unique_stash_controller::<Test>(0, 100, PayoutDestinationOpt::Stake, false)
-				.unwrap();
+		let (stash, controller) = create_unique_stash_controller::<Test>(
+			0,
+			100,
+			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+			false,
+		)
+		.unwrap();
 
 		// ensure `stash` and `controller` are bonded as stash controller pair.
 		assert_eq!(Staking::bonded(&stash), Some(controller));
@@ -708,8 +712,12 @@ fn nominating_and_rewards_should_work() {
 fn set_payee_also_updates_payee_destination() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Given
-		let (stash, _) =
-			create_stash_controller::<Test>(12, 13, PayoutDestinationOpt::Stake).unwrap();
+		let (stash, _) = create_stash_controller::<Test>(
+			12,
+			13,
+			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+		)
+		.unwrap();
 		Payees::<Test>::remove(stash);
 		// Value to be migrated
 		Payee::<Test>::insert(stash, RewardDestination::Stash);
@@ -738,8 +746,12 @@ fn update_payee_works() {
 		);
 
 		// Given
-		let (stash, controller) =
-			create_stash_controller::<Test>(12, 13, PayoutDestinationOpt::Stake).unwrap();
+		let (stash, controller) = create_stash_controller::<Test>(
+			12,
+			13,
+			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+		)
+		.unwrap();
 		Payees::<Test>::remove(stash);
 		// Value to be migrated
 		Payee::<Test>::insert(stash, RewardDestination::Staked);
@@ -760,8 +772,12 @@ fn update_payee_charges_on_invalid_migration() {
 		// `update_payee` is used to lazily migrate `Payee` records into `Payees` records.
 
 		// Given
-		let (stash, controller) =
-			create_stash_controller::<Test>(12, 13, PayoutDestinationOpt::Stake).unwrap();
+		let (stash, controller) = create_stash_controller::<Test>(
+			12,
+			13,
+			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+		)
+		.unwrap();
 		Payees::<Test>::remove(stash);
 
 		// When
@@ -784,8 +800,12 @@ fn get_destination_payout_migrates_payee() {
 		// records if they have not already been.
 
 		// Given
-		let (stash, controller) =
-			create_stash_controller::<Test>(12, 13, PayoutDestinationOpt::Stake).unwrap();
+		let (stash, controller) = create_stash_controller::<Test>(
+			12,
+			13,
+			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+		)
+		.unwrap();
 		Payees::<Test>::remove(stash);
 		Payee::<Test>::insert(stash, RewardDestination::Staked);
 
@@ -864,7 +884,7 @@ fn double_staking_should_fail() {
 		let (stash, controller) = create_unique_stash_controller::<Test>(
 			0,
 			arbitrary_value,
-			PayoutDestinationOpt::Stake,
+			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
 			false,
 		)
 		.unwrap();
@@ -898,7 +918,7 @@ fn double_controlling_attempt_should_fail() {
 		let (stash, _) = create_unique_stash_controller::<Test>(
 			0,
 			arbitrary_value,
-			PayoutDestinationOpt::Stake,
+			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
 			false,
 		)
 		.unwrap();
@@ -4275,9 +4295,13 @@ fn payout_creates_controller() {
 		bond_validator(11, balance);
 
 		// create a stash/controller pair and nominate
-		let (stash, controller) =
-			create_unique_stash_controller::<Test>(0, 100, PayoutDestinationOpt::Stake, false)
-				.unwrap();
+		let (stash, controller) = create_unique_stash_controller::<Test>(
+			0,
+			100,
+			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+			false,
+		)
+		.unwrap();
 		assert_ok!(Staking::set_payee(
 			RuntimeOrigin::signed(controller),
 			PayoutDestination::Deposit(controller)
@@ -5261,9 +5285,12 @@ fn capped_stakers_works() {
 		// can create `max - validator_count` validators
 		let mut some_existing_validator = AccountId::default();
 		for i in 0..max - validator_count {
-			let (_, controller) =
-				create_stash_controller::<Test>(i + 10_000_000, 100, PayoutDestinationOpt::Stake)
-					.unwrap();
+			let (_, controller) = create_stash_controller::<Test>(
+				i + 10_000_000,
+				100,
+				PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+			)
+			.unwrap();
 			assert_ok!(Staking::validate(
 				RuntimeOrigin::signed(controller),
 				ValidatorPrefs::default()
@@ -5272,8 +5299,12 @@ fn capped_stakers_works() {
 		}
 
 		// but no more
-		let (_, last_validator) =
-			create_stash_controller::<Test>(1337, 100, PayoutDestinationOpt::Stake).unwrap();
+		let (_, last_validator) = create_stash_controller::<Test>(
+			1337,
+			100,
+			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+		)
+		.unwrap();
 
 		assert_noop!(
 			Staking::validate(RuntimeOrigin::signed(last_validator), ValidatorPrefs::default()),
@@ -5283,16 +5314,23 @@ fn capped_stakers_works() {
 		// same with nominators
 		let mut some_existing_nominator = AccountId::default();
 		for i in 0..max - nominator_count {
-			let (_, controller) =
-				create_stash_controller::<Test>(i + 20_000_000, 100, PayoutDestinationOpt::Stake)
-					.unwrap();
+			let (_, controller) = create_stash_controller::<Test>(
+				i + 20_000_000,
+				100,
+				PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+			)
+			.unwrap();
 			assert_ok!(Staking::nominate(RuntimeOrigin::signed(controller), vec![1]));
 			some_existing_nominator = controller;
 		}
 
 		// one more is too many.
-		let (_, last_nominator) =
-			create_stash_controller::<Test>(30_000_000, 100, PayoutDestinationOpt::Stake).unwrap();
+		let (_, last_nominator) = create_stash_controller::<Test>(
+			30_000_000,
+			100,
+			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+		)
+		.unwrap();
 		assert_noop!(
 			Staking::nominate(RuntimeOrigin::signed(last_nominator), vec![1]),
 			Error::<Test>::TooManyNominators

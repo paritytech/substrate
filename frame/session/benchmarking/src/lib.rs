@@ -62,7 +62,7 @@ benchmarks! {
 			MaxNominationsOf::<T>::get(),
 			false,
 			true,
-			PayoutDestinationOpt::Stake,
+			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
 
@@ -80,7 +80,7 @@ benchmarks! {
 			MaxNominationsOf::<T>::get(),
 			false,
 			true,
-			PayoutDestinationOpt::Stake,
+			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::decode(&mut TrailingZeroInput::zeroes()).unwrap();

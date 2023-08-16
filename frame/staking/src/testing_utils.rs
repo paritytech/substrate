@@ -162,8 +162,11 @@ pub fn create_validators_with_seed<T: Config>(
 ) -> Result<Vec<AccountIdLookupOf<T>>, &'static str> {
 	let mut validators: Vec<AccountIdLookupOf<T>> = Vec::with_capacity(max as usize);
 	for i in 0..max {
-		let (stash, controller) =
-			create_stash_controller::<T>(i + seed, balance_factor, PayoutDestinationOpt::Stake)?;
+		let (stash, controller) = create_stash_controller::<T>(
+			i + seed,
+			balance_factor,
+			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+		)?;
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;
@@ -203,8 +206,11 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 	// Create validators
 	for i in 0..validators {
 		let balance_factor = if randomize_stake { rng.next_u32() % 255 + 10 } else { 100u32 };
-		let (v_stash, v_controller) =
-			create_stash_controller::<T>(i, balance_factor, PayoutDestinationOpt::Stake)?;
+		let (v_stash, v_controller) = create_stash_controller::<T>(
+			i,
+			balance_factor,
+			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+		)?;
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
@@ -221,7 +227,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 		let (_n_stash, n_controller) = create_stash_controller::<T>(
 			u32::MAX - j,
 			balance_factor,
-			PayoutDestinationOpt::Stake,
+			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
 		)?;
 
 		// Have them randomly validate
