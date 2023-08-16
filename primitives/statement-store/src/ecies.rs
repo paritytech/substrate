@@ -135,7 +135,7 @@ mod test {
 
 	#[test]
 	fn basic_x25519_encryption() {
-		let sk = SecretKey::new(OsRng);
+		let sk = SecretKey::random_from_rng(OsRng);
 		let pk = PublicKey::from(&sk);
 
 		let plain_message = b"An important secret message";
@@ -159,7 +159,7 @@ mod test {
 
 	#[test]
 	fn fails_on_bad_data() {
-		let sk = SecretKey::new(OsRng);
+		let sk = SecretKey::random_from_rng(OsRng);
 		let pk = PublicKey::from(&sk);
 
 		let plain_message = b"An important secret message";
