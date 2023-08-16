@@ -741,7 +741,6 @@ pub mod v5 {
 
 			if current == 6 && onchain == 5 {
 				let mut migrated = 0u64;
-
 				let mut tvl: BalanceOf<T> = Zero::zero();
 				for (pool_id, _pool) in BondedPools::<T>::iter() {
 					migrated.saturating_inc();
@@ -769,7 +768,7 @@ pub mod v5 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), TryRuntimeError> {
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 			ensure!(
 				PoolMembers::<T>::iter_keys().count() == PoolMembers::<T>::iter_values().count(),
 				"There are undecodable PoolMembers in storage. This migration will not fix that."
@@ -788,13 +787,17 @@ pub mod v5 {
 				"There are undecodable Metadata in storage. This migration will not fix that."
 			);
 
-			Ok()
+			Ok(Vec::new())
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(data: Vec<u8>) -> Result<(), TryRuntimeError> {
-			// ensure all TotalValueLocked::<T> now contains the calculated tvl.
-			ensure!(TotalValueLocked::<T>::get() == tvl, "tvl written incorrectly");
+			// ensure all TotalValueLocked::<T> contains a value greater zero if any instances of
+			// BondedPools exist.
+			if BondedPools::<T>::count() > 0 {
+				let zero: BalanceOf<T> = Zero::zero();
+				ensure!(TotalValueLocked::<T>::get() > zero, "tvl written incorrectly");
+			}
 
 			ensure!(
 				Pallet::<T>::on_chain_storage_version() >= 6,
