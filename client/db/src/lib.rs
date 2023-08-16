@@ -185,9 +185,9 @@ impl<B: BlockT> StorageIterator<HashingFor<B>> for RawIter<B> {
 	}
 }
 
-impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
-	type Error = <DbState<B> as StateBackend<HashFor<B>>>::Error;
-	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
+impl<B: BlockT> StateBackend<HashingFor<B>> for RefTrackingState<B> {
+	type Error = <DbState<B> as StateBackend<HashingFor<B>>>::Error;
+	type TrieBackendStorage = <DbState<B> as StateBackend<HashingFor<B>>>::TrieBackendStorage;
 	type RawIter = RawIter<B>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -242,7 +242,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, BackendTransaction<HashFor<B>>) {
+	) -> (B::Hash, BackendTransaction<HashingFor<B>>) {
 		self.state.storage_root(delta, state_version)
 	}
 
@@ -251,7 +251,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, BackendTransaction<HashFor<B>>) {
+	) -> (B::Hash, bool, BackendTransaction<HashingFor<B>>) {
 		self.state.child_storage_root(child_info, delta, state_version)
 	}
 

@@ -97,7 +97,7 @@ pub struct Proposal<Block: BlockT, Proof> {
 	/// Proof that was recorded while building the block.
 	pub proof: Proof,
 	/// The storage changes while building this block.
-	pub storage_changes: sp_state_machine::StorageChanges<HashFor<Block>>,
+	pub storage_changes: sp_state_machine::StorageChanges<HashingFor<Block>>,
 }
 
 /// Error that is returned when [`ProofRecording`] requested to record a proof,

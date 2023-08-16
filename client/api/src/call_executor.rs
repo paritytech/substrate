@@ -26,7 +26,7 @@ use sp_state_machine::{OverlayedChanges, StorageProof};
 use std::cell::RefCell;
 
 use crate::execution_extensions::ExecutionExtensions;
-use sp_api::{HashFor, ProofRecorder};
+use sp_api::{HashingFor, ProofRecorder};
 
 /// Executor Provider
 pub trait ExecutorProvider<Block: BlockT> {
@@ -72,7 +72,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 		at_hash: B::Hash,
 		method: &str,
 		call_data: &[u8],
-		changes: &RefCell<OverlayedChanges<HashFor<B>>>,
+		changes: &RefCell<OverlayedChanges<HashingFor<B>>>,
 		proof_recorder: &Option<ProofRecorder<B>>,
 		call_context: CallContext,
 		extensions: &RefCell<Extensions>,

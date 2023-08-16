@@ -26,7 +26,7 @@ use serde::de::DeserializeOwned;
 use sp_core::H256;
 use sp_inherents::{InherentData, InherentDataProvider};
 use sp_runtime::{
-	traits::{Header, NumberFor, One, HashFor},
+	traits::{Header, NumberFor, One, HashingFor},
 	Digest,
 };
 use sp_state_machine::TestExternalities;
@@ -93,7 +93,7 @@ where
 
 /// Call `method` with `data` and return the result. `externalities` will not change.
 fn dry_run<T: Decode, Block: BlockT, HostFns: HostFunctions>(
-	externalities: &TestExternalities<HashFor<Block>>,
+	externalities: &TestExternalities<HashingFor<Block>>,
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
@@ -111,7 +111,7 @@ fn dry_run<T: Decode, Block: BlockT, HostFns: HostFunctions>(
 
 /// Call `method` with `data` and actually save storage changes to `externalities`.
 async fn run<Block: BlockT, HostFns: HostFunctions>(
-	externalities: &mut TestExternalities<HashFor<Block>>,
+	externalities: &mut TestExternalities<HashingFor<Block>>,
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
@@ -142,7 +142,7 @@ async fn next_empty_block<
 	HostFns: HostFunctions,
 	BBIP: BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>>,
 >(
-	externalities: &mut TestExternalities<HashFor<Block>>,
+	externalities: &mut TestExternalities<HashingFor<Block>>,
 	executor: &WasmExecutor<HostFns>,
 	parent_height: NumberFor<Block>,
 	parent_hash: Block::Hash,

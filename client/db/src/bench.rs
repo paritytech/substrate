@@ -341,9 +341,9 @@ fn state_err() -> String {
 	"State is not open".into()
 }
 
-impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
-	type Error = <DbState<B> as StateBackend<HashFor<B>>>::Error;
-	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
+impl<B: BlockT> StateBackend<HashingFor<B>> for BenchmarkingState<B> {
+	type Error = <DbState<B> as StateBackend<HashingFor<B>>>::Error;
+	type TrieBackendStorage = <DbState<B> as StateBackend<HashingFor<B>>>::TrieBackendStorage;
 	type RawIter = RawIter<B>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -422,7 +422,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, BackendTransaction<HashFor<B>>) {
+	) -> (B::Hash, BackendTransaction<HashingFor<B>>) {
 		self.state
 			.borrow()
 			.as_ref()
@@ -434,7 +434,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, BackendTransaction<HashFor<B>>) {
+	) -> (B::Hash, bool, BackendTransaction<HashingFor<B>>) {
 		self.state
 			.borrow()
 			.as_ref()
@@ -458,8 +458,8 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 
 	fn commit(
 		&self,
-		storage_root: <HashFor<B> as Hasher>::Out,
-		mut transaction: BackendTransaction<HashFor<B>>,
+		storage_root: <HashingFor<B> as Hasher>::Out,
+		mut transaction: BackendTransaction<HashingFor<B>>,
 		main_storage_changes: StorageCollection,
 		child_storage_changes: ChildStorageCollection,
 	) -> Result<(), Self::Error> {

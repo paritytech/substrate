@@ -175,7 +175,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// Inject storage data into the database.
 	fn update_db_storage(
 		&mut self,
-		update: BackendTransaction<HashFor<Block>>,
+		update: BackendTransaction<HashingFor<Block>>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Set genesis state. If `commit` is `false` the state is saved in memory, but is not written

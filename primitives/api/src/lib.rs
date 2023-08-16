@@ -457,7 +457,7 @@ pub use sp_api_proc_macro::mock_impl_runtime_apis;
 pub type ProofRecorder<B> = sp_trie::recorder::Recorder<HashingFor<B>>;
 
 #[cfg(feature = "std")]
-pub type StorageChanges<Block> = sp_state_machine::StorageChanges<HashFor<Block>>;
+pub type StorageChanges<Block> = sp_state_machine::StorageChanges<HashingFor<Block>>;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
@@ -559,7 +559,7 @@ pub trait ApiExt<Block: BlockT> {
 	/// api functions.
 	///
 	/// After executing this function, all collected changes are reset.
-	fn into_storage_changes<B: StateBackend<HashFor<Block>>>(
+	fn into_storage_changes<B: StateBackend<HashingFor<Block>>>(
 		&self,
 		backend: &B,
 		parent_hash: Block::Hash,
@@ -584,7 +584,7 @@ pub struct CallApiAtParams<'a, Block: BlockT> {
 	/// The encoded arguments of the function.
 	pub arguments: Vec<u8>,
 	/// The overlayed changes that are on top of the state.
-	pub overlayed_changes: &'a RefCell<OverlayedChanges<HashFor<Block>>>,
+	pub overlayed_changes: &'a RefCell<OverlayedChanges<HashingFor<Block>>>,
 	/// The call context of this call.
 	pub call_context: CallContext,
 	/// The optional proof recorder for recording storage accesses.

@@ -26,7 +26,7 @@ use sp_core::traits::{CallContext, CodeExecutor, RuntimeCode};
 use sp_externalities::Extensions;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, HashFor},
+	traits::{Block as BlockT, HashingFor},
 };
 use sp_state_machine::{backend::AsTrieBackend, Ext, OverlayedChanges, StateMachine, StorageProof};
 use std::{cell::RefCell, sync::Arc};
@@ -199,7 +199,7 @@ where
 		at_hash: Block::Hash,
 		method: &str,
 		call_data: &[u8],
-		changes: &RefCell<OverlayedChanges<HashFor<Block>>>,
+		changes: &RefCell<OverlayedChanges<HashingFor<Block>>>,
 		recorder: &Option<ProofRecorder<Block>>,
 		call_context: CallContext,
 		extensions: &RefCell<Extensions>,

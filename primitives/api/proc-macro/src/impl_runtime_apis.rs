@@ -229,7 +229,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block> + 'static> {
 				call: &'static C,
 				transaction_depth: std::cell::RefCell<u16>,
-				changes: std::cell::RefCell<#crate_::OverlayedChanges<#crate_::HashFor<Block>>>,
+				changes: std::cell::RefCell<#crate_::OverlayedChanges<#crate_::HashingFor<Block>>>,
 				recorder: std::option::Option<#crate_::ProofRecorder<Block>>,
 				call_context: #crate_::CallContext,
 				extensions: std::cell::RefCell<#crate_::Extensions>,
@@ -300,7 +300,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					})
 				}
 
-				fn into_storage_changes<B: #crate_::StateBackend<#crate_::HashFor<Block>>>(
+				fn into_storage_changes<B: #crate_::StateBackend<#crate_::HashingFor<Block>>>(
 					&self,
 					backend: &B,
 					parent_hash: Block::Hash,

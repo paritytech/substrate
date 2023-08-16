@@ -38,7 +38,7 @@ use sp_core::{
 	},
 };
 use sp_runtime::{
-	traits::{Block as BlockT, HashFor},
+	traits::{Block as BlockT, HashingFor},
 	StateVersion,
 };
 use sp_state_machine::TestExternalities;
@@ -108,13 +108,13 @@ impl<B: BlockT> Snapshot<B> {
 /// bits and pieces to it, and can be loaded remotely.
 pub struct RemoteExternalities<B: BlockT> {
 	/// The inner externalities.
-	pub inner_ext: TestExternalities<HashFor<B>>,
+	pub inner_ext: TestExternalities<HashingFor<B>>,
 	/// The block hash it which we created this externality env.
 	pub block_hash: B::Hash,
 }
 
 impl<B: BlockT> Deref for RemoteExternalities<B> {
-	type Target = TestExternalities<HashFor<B>>;
+	type Target = TestExternalities<HashingFor<B>>;
 	fn deref(&self) -> &Self::Target {
 		&self.inner_ext
 	}
@@ -569,7 +569,7 @@ where
 		&self,
 		prefix: StorageKey,
 		at: B::Hash,
-		pending_ext: &mut TestExternalities<HashFor<B>>,
+		pending_ext: &mut TestExternalities<HashingFor<B>>,
 	) -> Result<Vec<KeyValue>, &'static str> {
 		let start = Instant::now();
 		let mut sp = Spinner::with_timer(Spinners::Dots, "Scraping keys...".into());
@@ -761,7 +761,7 @@ where
 	async fn load_child_remote(
 		&self,
 		top_kv: &[KeyValue],
-		pending_ext: &mut TestExternalities<HashFor<B>>,
+		pending_ext: &mut TestExternalities<HashingFor<B>>,
 	) -> Result<ChildKeyValues, &'static str> {
 		let child_roots = top_kv
 			.into_iter()
@@ -819,7 +819,7 @@ where
 	/// cache, we can also optimize further.
 	async fn load_top_remote(
 		&self,
-		pending_ext: &mut TestExternalities<HashFor<B>>,
+		pending_ext: &mut TestExternalities<HashingFor<B>>,
 	) -> Result<TopKeyValues, &'static str> {
 		let config = self.as_online();
 		let at = self
@@ -921,7 +921,7 @@ where
 	/// Must be called after `init_remote_client`.
 	async fn load_remote_and_maybe_save(
 		&mut self,
-	) -> Result<TestExternalities<HashFor<B>>, &'static str> {
+	) -> Result<TestExternalities<HashingFor<B>>, &'static str> {
 		let state_version =
 			StateApi::<B::Hash>::runtime_version(self.as_online().rpc_client(), None)
 				.await

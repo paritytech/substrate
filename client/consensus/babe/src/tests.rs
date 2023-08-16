@@ -194,8 +194,8 @@ impl Verifier<TestBlock> for TestVerifier {
 	/// presented to the User in the logs.
 	async fn verify(
 		&mut self,
-		mut block: BlockImportParams<TestBlock, ()>,
-	) -> Result<BlockImportParams<TestBlock, ()>, String> {
+		mut block: BlockImportParams<TestBlock>,
+	) -> Result<BlockImportParams<TestBlock>, String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).
 		(self.mutator)(&mut block.header, Stage::PostSeal);
 		self.inner.verify(block).await
@@ -229,7 +229,7 @@ impl TestNetFactory for BabeTestNet {
 		let block_import = PanickingBlockImport(block_import);
 
 		let data_block_import =
-			Mutex::new(Some(Box::new(block_import.clone()) as BoxBlockImport<_, _>));
+			Mutex::new(Some(Box::new(block_import.clone()) as BoxBlockImport<_>));
 		(
 			BlockImportAdapter::new(block_import),
 			None,

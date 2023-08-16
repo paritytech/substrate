@@ -53,7 +53,7 @@ const LOG_TARGET: &str = "slots";
 /// The changes that need to applied to the storage to create the state for a block.
 ///
 /// See [`sp_state_machine::StorageChanges`] for more information.
-pub type StorageChanges<Block> = sp_state_machine::StorageChanges<HashFor<Block>>;
+pub type StorageChanges<Block> = sp_state_machine::StorageChanges<HashingFor<Block>>;
 
 /// The result of [`SlotWorker::on_slot`].
 #[derive(Debug, Clone)]
