@@ -17,12 +17,13 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use futures::channel::oneshot;
+use parking_lot::Mutex;
 use sc_client_api::Backend;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{hash_map::Entry, HashMap},
-	sync::{atomic::AtomicBool, Arc, Mutex},
+	sync::{atomic::AtomicBool, Arc},
 	time::{Duration, Instant},
 };
 
@@ -152,15 +153,6 @@ struct PermitOperations {
 	num_ops: usize,
 	/// The permit for these operations.
 	_permit: tokio::sync::OwnedSemaphorePermit,
-}
-
-impl PermitOperations {
-	/// Returns the number of reserved elements for this permit.
-	///
-	/// This can be smaller than the number of items requested via [`LimitOperations::reserve()`].
-	fn num_reserved(&self) -> usize {
-		self.num_ops
-	}
 }
 
 /// The state of one operation.
