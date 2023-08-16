@@ -34,9 +34,8 @@ use frame_support::{
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::{historical::Pallet as Historical, Pallet as Session, *};
 use pallet_staking::{
-	benchmarking::create_validator_with_nominators,
-	testing_utils::create_validators,
-	MaxNominationsOf, PayoutRoute, PayoutDestination
+	benchmarking::create_validator_with_nominators, testing_utils::create_validators,
+	MaxNominationsOf, PayoutDestination, PayoutRoute,
 };
 
 const MAX_VALIDATORS: u32 = 1000;

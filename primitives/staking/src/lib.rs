@@ -24,7 +24,7 @@ use crate::currency_to_vote::CurrencyToVote;
 use codec::{FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::RuntimeDebug;
-use sp_runtime::{DispatchError, DispatchResult, Saturating, Perbill};
+use sp_runtime::{DispatchError, DispatchResult, Perbill, Saturating};
 use sp_std::{collections::btree_map::BTreeMap, ops::Sub, vec::Vec};
 
 pub mod offence;
