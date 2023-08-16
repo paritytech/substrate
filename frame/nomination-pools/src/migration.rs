@@ -726,8 +726,8 @@ pub mod v5 {
 	}
 
 	/// This migration summarizes and initializes the TotalValueLocked StorageValue for all Pools.
-	pub struct MigrateToV6<T>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> OnRuntimeUpgrade for MigrateToV6<T> {
+	pub struct VersionUncheckedMigrateV5ToV6<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> OnRuntimeUpgrade for VersionUncheckedMigrateV5ToV6<T> {
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();
 			let onchain = Pallet::<T>::on_chain_storage_version();
@@ -739,31 +739,24 @@ pub mod v5 {
 				onchain
 			);
 
-			if current == 6 && onchain == 5 {
-				let migrated = BondedPools::<T>::count();
-				let tvl: BalanceOf<T> = BondedPools::<T>::iter()
-					.map(|(id, inner)| {
-						T::Staking::total_stake(&BondedPool { id, inner }.bonded_account())
-							.unwrap_or_default()
-					})
-					.reduce(|acc, balance| acc + balance)
-					.unwrap_or_default();
+			let migrated = BondedPools::<T>::count();
+			let tvl: BalanceOf<T> = BondedPools::<T>::iter()
+				.map(|(id, inner)| {
+					T::Staking::total_stake(&BondedPool { id, inner }.bonded_account())
+						.unwrap_or_default()
+				})
+				.reduce(|acc, balance| acc + balance)
+				.unwrap_or_default();
 
-				TotalValueLocked::<T>::set(tvl);
+			TotalValueLocked::<T>::set(tvl);
 
-				current.put::<Pallet<T>>();
-				log!(info, "Upgraded {} pools, storage to version {:?}", migrated, current);
+			log!(info, "Upgraded {} pools, storage to version {:?}", migrated, current);
 
-				// reads: migrated * (BondedPools +  Staking::total_stake) + count + onchain
-				// version
-				//
-				// writes: current version + TVL
-				T::DbWeight::get()
-					.reads_writes(migrated.saturating_mul(2).saturating_add(2).into(), 2)
-			} else {
-				log!(info, "Migration did not execute. This probably should be removed");
-				T::DbWeight::get().reads(1)
-			}
+			// reads: migrated * (BondedPools +  Staking::total_stake) + count + onchain
+			// version
+			//
+			// writes: current version + TVL
+			T::DbWeight::get().reads_writes(migrated.saturating_mul(2).saturating_add(2).into(), 2)
 		}
 
 		#[cfg(feature = "try-runtime")]
@@ -825,4 +818,16 @@ pub mod v5 {
 			Ok(())
 		}
 	}
+
+	/// [`VersionUncheckedMigrateV5ToV6`] wrapped in a
+	/// [`frame_support::migrations::VersionedRuntimeUpgrade`], ensuring the migration is only
+	/// performed when on-chain version is 5.
+	#[cfg(feature = "experimental")]
+	pub type VersionCheckedMigrateV5ToV6<T, I> = frame_support::migrations::VersionedRuntimeUpgrade<
+		5,
+		6,
+		VersionUncheckedMigrateV5ToV6<T, I>,
+		crate::pallet::Pallet<T, I>,
+		<T as frame_system::Config>::DbWeight,
+	>;
 }
