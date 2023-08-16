@@ -409,6 +409,7 @@ pub enum PayoutDestination<AccountId> {
 // Used for testing and benchmarking where stash and controller accounts are sometimes generated
 // after providing the desired `PayoutDestination`. In such scenarios the provided `Alias` variant
 // is used. If payout destination accounts are already known, `Direct` can be used.
+#[derive(PartialEq, Copy, Clone)]
 pub enum PayoutRoute<AccountId> {
 	Direct(PayoutDestination<AccountId>),
 	Alias(PayoutDestinationAlias),
