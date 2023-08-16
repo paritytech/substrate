@@ -25,6 +25,7 @@ mod mock;
 
 use sp_runtime::traits::{One, StaticLookup, TrailingZeroInput};
 use sp_std::{prelude::*, vec};
+use sp_staking::PayoutDestinationOpt;
 
 use frame_benchmarking::v1::benchmarks;
 use frame_support::{
@@ -35,7 +36,7 @@ use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::{historical::Pallet as Historical, Pallet as Session, *};
 use pallet_staking::{
 	benchmarking::create_validator_with_nominators,
-	testing_utils::{create_validators, PayoutDestinationOpt},
+	testing_utils::create_validators,
 	MaxNominationsOf,
 };
 

@@ -21,6 +21,7 @@ pallet-session = { version = "4.0.0-dev", default-features = false, path = "../.
 pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../staking" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking", features = ["serde"] }
 sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
@@ -44,6 +45,7 @@ std = [
 	"rand/std",
 	"sp-runtime/std",
 	"sp-session/std",
+	"sp-staking/std",
 	"sp-std/std",
 	"frame-election-provider-support/std",
 	"pallet-balances/std",
@@ -60,5 +62,6 @@ runtime-benchmarks = [
 	"frame-system/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks"
+	"sp-runtime/runtime-benchmarks",
+	"sp-staking/runtime-benchmarks"
 ]

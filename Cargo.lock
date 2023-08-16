@@ -7066,6 +7066,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-session",
+ "sp-staking",
  "sp-std",
 ]
 
