@@ -19,8 +19,8 @@
 
 #[cfg(test)]
 mod block_import;
-
-pub mod service;
+#[cfg(test)]
+mod service;
 #[cfg(test)]
 mod sync;
 

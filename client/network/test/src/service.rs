@@ -262,7 +262,7 @@ impl TestNetworkBuilder {
 
 /// Builds two nodes and their associated events stream.
 /// The nodes are connected together and have the `PROTOCOL_NAME` protocol registered.
-pub fn build_nodes_one_proto() -> (
+fn build_nodes_one_proto() -> (
 	Arc<TestNetworkService>,
 	impl Stream<Item = Event>,
 	Arc<TestNetworkService>,

@@ -25,6 +25,6 @@ pub use self::{
 };
 
 mod behaviour;
-pub mod handler;
+mod handler;
 mod tests;
 mod upgrade;
