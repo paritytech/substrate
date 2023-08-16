@@ -17,11 +17,9 @@
 
 //! Primitives related to tickets.
 
-use crate::{Randomness, RingVrfSignature, VrfInput, VrfOutput, VrfSignData, SASSAFRAS_ENGINE_ID};
+use crate::RingVrfSignature;
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_consensus_slots::Slot;
-use sp_std::vec::Vec;
 
 pub use sp_core::ed25519::{Public as EphemeralPublic, Signature as EphemeralSignature};
 
@@ -38,9 +36,10 @@ pub type TicketId = u128;
 pub struct TicketBody {
 	/// Attempt index.
 	pub attempt_idx: u32,
-	/// Ed25519 ephemeral public key representing ticket ownersip.
-	/// (i.e. whoever has the secret, is the owner)
+	/// Ephemeral public key which gets erased when the ticket is claimed.
 	pub erased_public: EphemeralPublic,
+	/// Ephemeral public key which gets exposed when the ticket is claimed.
+	pub revealed_public: EphemeralPublic,
 }
 
 /// Ticket ring vrf signature.
@@ -58,68 +57,8 @@ pub struct TicketEnvelope {
 /// Ticket claim information filled by the block author.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct TicketClaim {
-	/// Signature to claim ownership of `TicketBody::erased_public`.
+	/// Signature verified via `TicketBody::erased_public`.
 	pub erased_signature: EphemeralSignature,
-}
-
-fn vrf_input_from_data(
-	domain: &[u8],
-	data: impl IntoIterator<Item = impl AsRef<[u8]>>,
-) -> VrfInput {
-	let raw = data.into_iter().fold(Vec::new(), |mut v, e| {
-		let bytes = e.as_ref();
-		v.extend_from_slice(bytes);
-		let len = u8::try_from(bytes.len()).expect("private function with well known inputs; qed");
-		v.extend_from_slice(&len.to_le_bytes());
-		v
-	});
-	VrfInput::new(domain, raw)
-}
-
-/// VRF input to claim slot ownership during block production.
-///
-/// Input randomness is current epoch randomness.
-pub fn slot_claim_vrf_input(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfInput {
-	vrf_input_from_data(
-		b"sassafras-claim-v1.0",
-		[randomness.as_slice(), &slot.to_le_bytes(), &epoch.to_le_bytes()],
-	)
-}
-
-/// Signing-data to claim slot ownership during block production.
-///
-/// Input randomness is current epoch randomness.
-pub fn slot_claim_sign_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfSignData {
-	let vrf_input = slot_claim_vrf_input(randomness, slot, epoch);
-	VrfSignData::new_unchecked(&SASSAFRAS_ENGINE_ID, Some("slot-claim-transcript"), Some(vrf_input))
-}
-
-/// VRF input to generate the ticket id.
-///
-/// Input randomness is current epoch randomness.
-pub fn ticket_id_vrf_input(randomness: &Randomness, attempt: u32, epoch: u64) -> VrfInput {
-	vrf_input_from_data(
-		b"sassafras-ticket-v1.0",
-		[randomness.as_slice(), &attempt.to_le_bytes(), &epoch.to_le_bytes()],
-	)
-}
-
-/// Data to be signed via ring-vrf.
-pub fn ticket_body_sign_data(ticket_body: &TicketBody) -> VrfSignData {
-	VrfSignData::new_unchecked(
-		&SASSAFRAS_ENGINE_ID,
-		&[b"ticket-body-transcript", ticket_body.encode().as_slice()],
-		[],
-	)
-}
-
-/// Get ticket-id for a given vrf input and output.
-///
-/// Input generally obtained via `ticket_id_vrf_input`.
-/// Output can be obtained directly using the vrf secret key or from the signature.
-pub fn ticket_id(vrf_input: &VrfInput, vrf_output: &VrfOutput) -> TicketId {
-	let bytes = vrf_output.make_bytes::<16>(b"vrf-out", vrf_input);
-	u128::from_le_bytes(bytes)
 }
 
 /// Computes the ticket-id maximum allowed values for a given epoch.
@@ -127,7 +66,7 @@ pub fn ticket_id(vrf_input: &VrfInput, vrf_output: &VrfOutput) -> TicketId {
 /// Only ticket identifiers below this threshold should be considered for slot
 /// assignment.
 ///
-/// The value is computed as `T = TicketId::MAX·(redundancy*slots)/(attempts*validators)`, where:
+/// The value is computed as `T = TicketId::MAX*(redundancy*slots)/(attempts*validators)`, where:
 /// - `redundancy`: redundancy factor;
 /// - `slots`: number of slots in epoch;
 /// - `attempts`: max number of tickets attempts per validator;

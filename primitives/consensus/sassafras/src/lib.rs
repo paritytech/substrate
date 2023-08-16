@@ -38,11 +38,11 @@ use serde::{Deserialize, Serialize};
 
 pub mod digests;
 pub mod ticket;
+pub mod vrf;
 
 pub use ticket::{
-	slot_claim_sign_data, slot_claim_vrf_input, ticket_body_sign_data, ticket_id,
-	ticket_id_threshold, ticket_id_vrf_input, EphemeralPublic, EphemeralSignature, TicketBody,
-	TicketClaim, TicketEnvelope, TicketId,
+	ticket_id_threshold, EphemeralPublic, EphemeralSignature, TicketBody, TicketClaim,
+	TicketEnvelope, TicketId,
 };
 
 mod app {
