@@ -123,7 +123,6 @@ impl<T: UnlockConfig> UnlockAndUnreserveAllFunds<T> {
 		BTreeMap<T::AccountId, BalanceOf<T>>,
 		frame_support::weights::Weight,
 	) {
-		// use crate::Voting;
 		use sp_runtime::Saturating;
 
 		let members = Members::<T>::get();
