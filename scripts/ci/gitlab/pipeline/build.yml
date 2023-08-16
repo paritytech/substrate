@@ -15,7 +15,7 @@
   variables:
     RUSTFLAGS: "-D warnings"
   script:
-    - cargo install --locked --git https://github.com/paritytech/try-runtime-cli
+    - cargo install --locked --git https://github.com/paritytech/try-runtime-cli --rev a93c9b5abe5d31a4cf1936204f7e5c489184b521
     - git clone
       --depth=1
       --branch="$PIPELINE_SCRIPTS_TAG"
