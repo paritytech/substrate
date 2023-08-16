@@ -619,7 +619,7 @@ impl<H: Hasher> OverlayedChanges<H> {
 	/// Generate the storage root using `backend` and all changes
 	/// as seen by the current transaction.
 	///
-	/// Returns the storage root and if the storage root was cached.
+	/// Returns the storage root and whether it was already cached.
 	pub fn storage_root<B: Backend<H>>(
 		&mut self,
 		backend: &B,
