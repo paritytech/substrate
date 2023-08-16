@@ -262,11 +262,13 @@ test-frame-support:
     - cargo version
     - cargo +1.70.0-x86_64-unknown-linux-gnu version
     - rm -rf target
-    - time cargo test -q --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml --test construct_runtime_ui
-    - rm -rf target
     - time cargo +1.70.0-x86_64-unknown-linux-gnu test -q --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml --test construct_runtime_ui || true
     - rm -rf target
+    - time cargo test -q --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml --test construct_runtime_ui
+    - rm -rf target
     - rustup install 1.70
+    - cargo version
+    - cargo +1.70.0-x86_64-unknown-linux-gnu version
     - time cargo +1.70.0-x86_64-unknown-linux-gnu test -q --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml --test construct_runtime_ui
 
 # This job runs tests that don't work with cargo-nextest in test-linux-stable
