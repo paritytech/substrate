@@ -53,8 +53,6 @@ pub trait UnlockConfig: 'static {
 	type PalletId: Get<LockIdentifier>;
 	/// The DB weight as configured in the runtime to calculate the correct weight.
 	type DbWeight: Get<RuntimeDbWeight>;
-	/// The block number as configured in the runtime.
-	type BlockNumber: Parameter + Zero + Copy + Ord;
 }
 
 #[storage_alias(dynamic)]
@@ -331,7 +329,6 @@ mod test {
 		assert_ok, parameter_types,
 		traits::{Currency, OnRuntimeUpgrade, ReservableCurrency, WithdrawReasons},
 	};
-	use frame_system::pallet_prelude::BlockNumberFor;
 
 	parameter_types! {
 		const PalletName: &'static str = "Elections";
@@ -341,7 +338,6 @@ mod test {
 	impl super::UnlockConfig for UnlockConfigImpl {
 		type Currency = Balances;
 		type AccountId = u64;
-		type BlockNumber = BlockNumberFor<Test>;
 		type DbWeight = ();
 		type PalletName = PalletName;
 		type MaxVotesPerVoter = PhragmenMaxVoters;
