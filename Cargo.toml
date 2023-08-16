@@ -52,7 +52,6 @@ members = [
 	"client/network/light",
 	"client/network/sync",
 	"client/network/test",
-	"client/network/fuzzer",
 	"client/offchain",
 	"client/allocator",
 	"client/proposer-metrics",
