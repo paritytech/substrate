@@ -42,6 +42,7 @@ k256 = { version = "0.13.1", default-features = false, features = ["ecdsa"] }
 environmental = { version = "1.1.4", default-features = false }
 sp-genesis-builder = { version = "0.1.0", default-features=false, path = "../../primitives/genesis-builder" }
 serde_json = { version = "1.0.85", default-features = false, features = ["alloc"] }
+docify = "0.2.1"
 
 aquamarine = { version = "0.3.2" }
 

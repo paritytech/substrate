@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Various basic types for use in the Nfts pallet.
+//! This module contains various basic types and data structures used in the NFTs pallet.
 
 use super::*;
 use crate::macros::*;
@@ -29,36 +29,49 @@ use frame_support::{
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 
+/// A type alias for handling balance deposits.
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
+/// A type alias representing the details of a collection.
 pub(super) type CollectionDetailsFor<T, I> =
 	CollectionDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
+/// A type alias for keeping track of approvals used by a single item.
 pub(super) type ApprovalsOf<T, I = ()> = BoundedBTreeMap<
 	<T as SystemConfig>::AccountId,
 	Option<BlockNumberFor<T>>,
 	<T as Config<I>>::ApprovalsLimit,
 >;
+/// A type alias for keeping track of approvals for an item's attributes.
 pub(super) type ItemAttributesApprovals<T, I = ()> =
 	BoundedBTreeSet<<T as SystemConfig>::AccountId, <T as Config<I>>::ItemAttributesApprovalsLimit>;
+/// A type that holds the deposit for a single item.
 pub(super) type ItemDepositOf<T, I> =
 	ItemDeposit<DepositBalanceOf<T, I>, <T as SystemConfig>::AccountId>;
+/// A type that holds the deposit amount for an item's attribute.
 pub(super) type AttributeDepositOf<T, I> =
 	AttributeDeposit<DepositBalanceOf<T, I>, <T as SystemConfig>::AccountId>;
+/// A type that holds the deposit amount for an item's metadata.
 pub(super) type ItemMetadataDepositOf<T, I> =
 	ItemMetadataDeposit<DepositBalanceOf<T, I>, <T as SystemConfig>::AccountId>;
+/// A type that holds the details of a single item.
 pub(super) type ItemDetailsFor<T, I> =
 	ItemDetails<<T as SystemConfig>::AccountId, ItemDepositOf<T, I>, ApprovalsOf<T, I>>;
+/// A type alias for an accounts balance.
 pub(super) type BalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
+/// A type alias to represent the price of an item.
 pub(super) type ItemPrice<T, I = ()> = BalanceOf<T, I>;
+/// A type alias for the tips held by a single item.
 pub(super) type ItemTipOf<T, I = ()> = ItemTip<
 	<T as Config<I>>::CollectionId,
 	<T as Config<I>>::ItemId,
 	<T as SystemConfig>::AccountId,
 	BalanceOf<T, I>,
 >;
+/// A type alias for the settings configuration of a collection.
 pub(super) type CollectionConfigFor<T, I = ()> =
 	CollectionConfig<BalanceOf<T, I>, BlockNumberFor<T>, <T as Config<I>>::CollectionId>;
+/// A type alias for the pre-signed minting configuration for a specified collection.
 pub(super) type PreSignedMintOf<T, I = ()> = PreSignedMint<
 	<T as Config<I>>::CollectionId,
 	<T as Config<I>>::ItemId,
@@ -66,6 +79,7 @@ pub(super) type PreSignedMintOf<T, I = ()> = PreSignedMint<
 	BlockNumberFor<T>,
 	BalanceOf<T, I>,
 >;
+/// A type alias for the pre-signed minting configuration on the attribute level of an item.
 pub(super) type PreSignedAttributesOf<T, I = ()> = PreSignedAttributes<
 	<T as Config<I>>::CollectionId,
 	<T as Config<I>>::ItemId,
