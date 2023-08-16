@@ -406,6 +406,9 @@ pub enum PayoutDestination<AccountId> {
 	Forgo,
 }
 
+// Used for testing and benchmarking where stash and controller accounts are some times generated
+// after providing the desired `PayoutDestination`. In such scenarios the provided `Alias` variant
+// is used. If payout destination accounts are already known, `Direct` can be used.
 pub enum PayoutRoute<AccountId> {
 	Direct(PayoutDestination<AccountId>),
 	Alias(PayoutDestinationAlias),
@@ -427,8 +430,8 @@ impl<AccountId: Clone> PayoutDestination<AccountId> {
 		}
 	}
 
-	// NOTE: the `ctlr` parameter can be discontinued after the lazy migration to `PayoutDestination`
-	// is completed.
+	// NOTE: the `ctlr` parameter can be discontinued after the lazy migration to
+	// `PayoutDestination` is completed.
 	pub fn from_route(v: PayoutRoute<AccountId>, stash: &AccountId, ctlr: &AccountId) -> Self {
 		match v {
 			PayoutRoute::Direct(destination) => destination,
