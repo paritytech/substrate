@@ -619,3 +619,28 @@ fn test_has_identity() {
 		));
 	});
 }
+
+#[test]
+fn test_genesis_config_should_register_identities() {
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
+	pallet_identity::GenesisConfig::<Test> {
+		identities: vec![(1, "One".to_string()), (2, "Two".to_string()), (3, "Three".to_string())],
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
+	let mut ext: sp_io::TestExternalities = t.into();
+	ext.execute_with(|| {
+		assert_eq!(
+			Identity::identity(1).unwrap().info.display,
+			Data::Raw(b"One".to_vec().try_into().unwrap())
+		);
+		assert_eq!(
+			Identity::identity(2).unwrap().info.display,
+			Data::Raw(b"Two".to_vec().try_into().unwrap())
+		);
+		assert_eq!(
+			Identity::identity(3).unwrap().info.display,
+			Data::Raw(b"Three".to_vec().try_into().unwrap())
+		);
+	});
+}

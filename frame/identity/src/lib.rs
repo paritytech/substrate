@@ -222,7 +222,9 @@ pub mod pallet {
 					account,
 					Registration {
 						info: IdentityInfo {
-							display: Data::Raw(BoundedVec::try_from(name.encode()).unwrap()),
+							display: Data::Raw(
+								BoundedVec::try_from(name.as_bytes().to_vec()).unwrap(),
+							),
 							twitter: Data::None,
 							riot: Data::None,
 							email: Data::None,
