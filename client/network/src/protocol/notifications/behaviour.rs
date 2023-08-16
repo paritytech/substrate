@@ -24,7 +24,6 @@ use crate::{
 	types::ProtocolName,
 };
 
-use anyhow::{bail, ensure};
 use bytes::BytesMut;
 use fnv::FnvHashMap;
 use futures::{channel::oneshot, prelude::*};
@@ -393,24 +392,12 @@ impl Notifications {
 		set_id: crate::peerset::SetId,
 		handshake_message: impl Into<Vec<u8>>,
 	) {
-		if let Err(e) = self.try_set_notif_protocol_handshake(set_id, handshake_message) {
-			log::error!(target: "sub-libp2p", "{}", e);
-			debug_assert!(false);
-		}
-	}
-
-	/// Modifies the handshake of the given notifications protocol.
-	pub fn try_set_notif_protocol_handshake(
-		&mut self,
-		set_id: crate::peerset::SetId,
-		handshake_message: impl Into<Vec<u8>>,
-	) -> anyhow::Result<()> {
 		if let Some(p) = self.notif_protocols.get_mut(usize::from(set_id)) {
 			*p.handshake.write() = handshake_message.into();
 		} else {
-			bail!("Unknown handshake change set: {:?}", set_id);
+			log::error!(target: "sub-libp2p", "Unknown handshake change set: {:?}", set_id);
+			debug_assert!(false);
 		}
-		Ok(())
 	}
 
 	/// Returns the number of discovered nodes that we keep in memory.
@@ -430,32 +417,16 @@ impl Notifications {
 
 	/// Disconnects the given peer if we are connected to it.
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId, set_id: crate::peerset::SetId) {
-		if let Err(e) = self.try_disconnect_peer(peer_id, set_id) {
-			log::error!(target: "sub-libp2p", "{}", e);
-			debug_assert!(false);
-		}
-	}
-
-	/// Disconnects the given peer if we are connected to it.
-	pub fn try_disconnect_peer(
-		&mut self,
-		peer_id: &PeerId,
-		set_id: crate::peerset::SetId,
-	) -> anyhow::Result<()> {
 		trace!(target: "sub-libp2p", "External API => Disconnect({}, {:?})", peer_id, set_id);
-		self.try_disconnect_peer_inner(peer_id, set_id)
+		self.disconnect_peer_inner(peer_id, set_id);
 	}
 
 	/// Inner implementation of `disconnect_peer`.
-	fn try_disconnect_peer_inner(
-		&mut self,
-		peer_id: &PeerId,
-		set_id: crate::peerset::SetId,
-	) -> anyhow::Result<()> {
+	fn disconnect_peer_inner(&mut self, peer_id: &PeerId, set_id: crate::peerset::SetId) {
 		let mut entry = if let Entry::Occupied(entry) = self.peers.entry((*peer_id, set_id)) {
 			entry
 		} else {
-			return Ok(());
+			return
 		};
 
 		match mem::replace(entry.get_mut(), PeerState::Poisoned) {
@@ -511,8 +482,12 @@ impl Notifications {
 					*connec_state = ConnectionState::OpeningThenClosing;
 				}
 
-				ensure!(!connections.iter().any(|(_, s)| matches!(s, ConnectionState::Open(_))));
-				ensure!(!connections.iter().any(|(_, s)| matches!(s, ConnectionState::Opening)));
+				debug_assert!(!connections
+					.iter()
+					.any(|(_, s)| matches!(s, ConnectionState::Open(_))));
+				debug_assert!(!connections
+					.iter()
+					.any(|(_, s)| matches!(s, ConnectionState::Opening)));
 
 				*entry.into_mut() = PeerState::Disabled { connections, backoff_until: None }
 			},
@@ -531,7 +506,7 @@ impl Notifications {
 						target: "sub-libp2p",
 						"State mismatch in libp2p: no entry in incoming for incoming peer"
 					);
-					return Ok(());
+					return
 				};
 
 				inc.alive = false;
@@ -549,7 +524,7 @@ impl Notifications {
 					*connec_state = ConnectionState::Closing;
 				}
 
-				ensure!(!connections
+				debug_assert!(!connections
 					.iter()
 					.any(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote)));
 				*entry.into_mut() = PeerState::Disabled { connections, backoff_until }
@@ -558,8 +533,7 @@ impl Notifications {
 			PeerState::Poisoned => {
 				error!(target: "sub-libp2p", "State of {:?} is poisoned", peer_id)
 			},
-		};
-		Ok(())
+		}
 	}
 
 	/// Returns the list of reserved peers.
@@ -578,18 +552,6 @@ impl Notifications {
 
 	/// Function that is called when the peerset wants us to connect to a peer.
 	fn peerset_report_connect(&mut self, peer_id: PeerId, set_id: crate::peerset::SetId) {
-		if let Err(e) = self.try_peerset_report_connect(peer_id, set_id) {
-			log::error!(target: "sub-libp2p", "{}", e);
-			debug_assert!(false);
-		}
-	}
-
-	/// Function that is called when the peerset wants us to connect to a peer.
-	fn try_peerset_report_connect(
-		&mut self,
-		peer_id: PeerId,
-		set_id: crate::peerset::SetId,
-	) -> anyhow::Result<()> {
 		// If `PeerId` is unknown to us, insert an entry, start dialing, and return early.
 		let mut occ_entry = match self.peers.entry((peer_id, set_id)) {
 			Entry::Occupied(entry) => entry,
@@ -604,7 +566,7 @@ impl Notifications {
 				trace!(target: "sub-libp2p", "Libp2p <= Dial {}", entry.key().0);
 				self.events.push_back(ToSwarm::Dial { opts: entry.key().0.into() });
 				entry.insert(PeerState::Requested);
-				return Ok(());
+				return
 			},
 		};
 
@@ -671,7 +633,7 @@ impl Notifications {
 
 			// Disabled => Enabled
 			PeerState::Disabled { mut connections, backoff_until } => {
-				ensure!(!connections
+				debug_assert!(!connections
 					.iter()
 					.any(|(_, s)| { matches!(s, ConnectionState::Open(_)) }));
 
@@ -692,7 +654,7 @@ impl Notifications {
 				} else {
 					// If no connection is available, switch to `DisabledPendingEnable` in order
 					// to try again later.
-					ensure!(connections.iter().any(|(_, s)| {
+					debug_assert!(connections.iter().any(|(_, s)| {
 						matches!(s, ConnectionState::OpeningThenClosing | ConnectionState::Closing)
 					}));
 					trace!(
@@ -760,10 +722,10 @@ impl Notifications {
 			},
 
 			PeerState::Poisoned => {
-				bail!("State of {:?} is poisoned", occ_entry.key());
+				error!(target: "sub-libp2p", "State of {:?} is poisoned", occ_entry.key());
+				debug_assert!(false);
 			},
-		};
-		Ok(())
+		}
 	}
 
 	/// Function that is called when the peerset wants us to disconnect from a peer.
@@ -773,7 +735,7 @@ impl Notifications {
 			Entry::Vacant(entry) => {
 				trace!(target: "sub-libp2p", "PSM => Drop({}, {:?}): Already disabled.",
 					entry.key().0, set_id);
-				return;
+				return
 			},
 		};
 
@@ -881,7 +843,7 @@ impl Notifications {
 			self.incoming.remove(pos)
 		} else {
 			error!(target: "sub-libp2p", "PSM => Accept({:?}): Invalid index", index);
-			return;
+			return
 		};
 
 		if !incoming.alive {
@@ -896,14 +858,14 @@ impl Notifications {
 					self.peerset.dropped(incoming.set_id, incoming.peer_id, DropReason::Unknown);
 				},
 			}
-			return;
+			return
 		}
 
 		let state = match self.peers.get_mut(&(incoming.peer_id, incoming.set_id)) {
 			Some(s) => s,
 			None => {
 				debug_assert!(false);
-				return;
+				return
 			},
 		};
 
@@ -916,7 +878,7 @@ impl Notifications {
 						"PSM => Accept({:?}, {}, {:?}): Ignoring obsolete incoming index, we are already awaiting {:?}.",
 						index, incoming.peer_id, incoming.set_id, incoming_index
 					);
-					return;
+					return
 				} else if index > incoming_index {
 					error!(
 						target: "sub-libp2p",
@@ -924,7 +886,7 @@ impl Notifications {
 						index, incoming.peer_id, incoming.set_id, incoming_index
 					);
 					debug_assert!(false);
-					return;
+					return
 				}
 
 				trace!(target: "sub-libp2p", "PSM => Accept({:?}, {}, {:?}): Enabling connections.",
@@ -967,20 +929,20 @@ impl Notifications {
 			self.incoming.remove(pos)
 		} else {
 			error!(target: "sub-libp2p", "PSM => Reject({:?}): Invalid index", index);
-			return;
+			return
 		};
 
 		if !incoming.alive {
 			trace!(target: "sub-libp2p", "PSM => Reject({:?}, {}, {:?}): Obsolete incoming, \
 				ignoring", index, incoming.peer_id, incoming.set_id);
-			return;
+			return
 		}
 
 		let state = match self.peers.get_mut(&(incoming.peer_id, incoming.set_id)) {
 			Some(s) => s,
 			None => {
 				debug_assert!(false);
-				return;
+				return
 			},
 		};
 
@@ -993,7 +955,7 @@ impl Notifications {
 						"PSM => Reject({:?}, {}, {:?}): Ignoring obsolete incoming index, we are already awaiting {:?}.",
 						index, incoming.peer_id, incoming.set_id, incoming_index
 					);
-					return;
+					return
 				} else if index > incoming_index {
 					error!(
 						target: "sub-libp2p",
@@ -1001,7 +963,7 @@ impl Notifications {
 						index, incoming.peer_id, incoming.set_id, incoming_index
 					);
 					debug_assert!(false);
-					return;
+					return
 				}
 
 				trace!(target: "sub-libp2p", "PSM => Reject({:?}, {}, {:?}): Rejecting connections.",
@@ -1030,914 +992,6 @@ impl Notifications {
 				"State mismatch in libp2p: Expected alive incoming. Got {:?}.",
 				peer),
 		}
-	}
-
-	/// TODO
-	pub fn try_on_swarm_event(
-		&mut self,
-		event: FromSwarm<<Notifications as NetworkBehaviour>::ConnectionHandler>,
-	) -> anyhow::Result<()> {
-		match event {
-			FromSwarm::ConnectionEstablished(ConnectionEstablished {
-				peer_id,
-				endpoint,
-				connection_id,
-				..
-			}) => {
-				for set_id in (0..self.notif_protocols.len()).map(crate::peerset::SetId::from) {
-					match self.peers.entry((peer_id, set_id)).or_insert(PeerState::Poisoned) {
-						// Requested | PendingRequest => Enabled
-						st @ &mut PeerState::Requested
-						| st @ &mut PeerState::PendingRequest { .. } => {
-							trace!(target: "sub-libp2p",
-								"Libp2p => Connected({}, {:?}, {:?}): Connection was requested by PSM.",
-								peer_id, set_id, endpoint
-							);
-							trace!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open({:?})", peer_id, connection_id, set_id);
-							self.events.push_back(ToSwarm::NotifyHandler {
-								peer_id,
-								handler: NotifyHandler::One(connection_id),
-								event: NotifsHandlerIn::Open { protocol_index: set_id.into() },
-							});
-
-							let mut connections = SmallVec::new();
-							connections.push((connection_id, ConnectionState::Opening));
-							*st = PeerState::Enabled { connections };
-						},
-
-						// Poisoned gets inserted above if the entry was missing.
-						// Ø | Backoff => Disabled
-						st @ &mut PeerState::Poisoned | st @ &mut PeerState::Backoff { .. } => {
-							let backoff_until =
-								if let PeerState::Backoff { timer_deadline, .. } = st {
-									Some(*timer_deadline)
-								} else {
-									None
-								};
-							trace!(target: "sub-libp2p",
-								"Libp2p => Connected({}, {:?}, {:?}, {:?}): Not requested by PSM, disabling.",
-								peer_id, set_id, endpoint, connection_id);
-
-							let mut connections = SmallVec::new();
-							connections.push((connection_id, ConnectionState::Closed));
-							*st = PeerState::Disabled { connections, backoff_until };
-						},
-
-						// In all other states, add this new connection to the list of closed
-						// inactive connections.
-						PeerState::Incoming { connections, .. }
-						| PeerState::Disabled { connections, .. }
-						| PeerState::DisabledPendingEnable { connections, .. }
-						| PeerState::Enabled { connections, .. } => {
-							trace!(target: "sub-libp2p",
-								"Libp2p => Connected({}, {:?}, {:?}, {:?}): Secondary connection. Leaving closed.",
-								peer_id, set_id, endpoint, connection_id);
-							connections.push((connection_id, ConnectionState::Closed));
-						},
-					}
-				}
-			},
-			FromSwarm::ConnectionClosed(ConnectionClosed { peer_id, connection_id, .. }) => {
-				for set_id in (0..self.notif_protocols.len()).map(crate::peerset::SetId::from) {
-					let mut entry =
-						if let Entry::Occupied(entry) = self.peers.entry((peer_id, set_id)) {
-							entry
-						} else {
-							bail!("inject_connection_closed: State mismatch in the custom protos handler");
-						};
-
-					match mem::replace(entry.get_mut(), PeerState::Poisoned) {
-						// Disabled => Disabled | Backoff | Ø
-						PeerState::Disabled { mut connections, backoff_until } => {
-							trace!(target: "sub-libp2p", "Libp2p => Disconnected({}, {:?}, {:?}): Disabled.",
-								peer_id, set_id, connection_id);
-
-							if let Some(pos) =
-								connections.iter().position(|(c, _)| *c == connection_id)
-							{
-								connections.remove(pos);
-							} else {
-								bail!("inject_connection_closed: State mismatch in the custom protos handler");
-							}
-
-							if connections.is_empty() {
-								if let Some(until) = backoff_until {
-									let now = Instant::now();
-									if until > now {
-										let delay_id = self.next_delay_id;
-										self.next_delay_id.0 += 1;
-										let delay = futures_timer::Delay::new(until - now);
-										self.delays.push(
-											async move {
-												delay.await;
-												(delay_id, peer_id, set_id)
-											}
-											.boxed(),
-										);
-
-										*entry.get_mut() = PeerState::Backoff {
-											timer: delay_id,
-											timer_deadline: until,
-										};
-									} else {
-										entry.remove();
-									}
-								} else {
-									entry.remove();
-								}
-							} else {
-								*entry.get_mut() =
-									PeerState::Disabled { connections, backoff_until };
-							}
-						},
-
-						// DisabledPendingEnable => DisabledPendingEnable | Backoff
-						PeerState::DisabledPendingEnable {
-							mut connections,
-							timer_deadline,
-							timer,
-						} => {
-							trace!(
-								target: "sub-libp2p",
-								"Libp2p => Disconnected({}, {:?}, {:?}): Disabled but pending enable.",
-								peer_id, set_id, connection_id
-							);
-
-							if let Some(pos) =
-								connections.iter().position(|(c, _)| *c == connection_id)
-							{
-								connections.remove(pos);
-							} else {
-								bail!("inject_connection_closed: State mismatch in the custom protos handler");
-							}
-
-							if connections.is_empty() {
-								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.peerset.dropped(set_id, peer_id, DropReason::Unknown);
-								*entry.get_mut() = PeerState::Backoff { timer, timer_deadline };
-							} else {
-								*entry.get_mut() = PeerState::DisabledPendingEnable {
-									connections,
-									timer_deadline,
-									timer,
-								};
-							}
-						},
-
-						// Incoming => Incoming | Disabled | Backoff | Ø
-						PeerState::Incoming { mut connections, backoff_until, incoming_index } => {
-							trace!(
-								target: "sub-libp2p",
-								"Libp2p => Disconnected({}, {:?}, {:?}): OpenDesiredByRemote.",
-								peer_id, set_id, connection_id
-							);
-
-							ensure!(connections
-								.iter()
-								.any(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote)));
-
-							if let Some(pos) =
-								connections.iter().position(|(c, _)| *c == connection_id)
-							{
-								connections.remove(pos);
-							} else {
-								bail!("inject_connection_closed: State mismatch in the custom protos handler");
-							}
-
-							let no_desired_left = !connections
-								.iter()
-								.any(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote));
-
-							// If no connection is `OpenDesiredByRemote` anymore, clean up the
-							// peerset incoming request.
-							if no_desired_left {
-								// In the incoming state, we don't report "Dropped" straight away.
-								// Instead we will report "Dropped" if receive the corresponding
-								// "Accept".
-								if let Some(state) = self
-									.incoming
-									.iter_mut()
-									.find(|i| i.alive && i.set_id == set_id && i.peer_id == peer_id)
-								{
-									state.alive = false;
-								} else {
-									bail!(
-										"State mismatch in libp2p: no entry in \
-										incoming corresponding to an incoming state in peers"
-									);
-								}
-							}
-
-							if connections.is_empty() {
-								if let Some(until) = backoff_until {
-									let now = Instant::now();
-									if until > now {
-										let delay_id = self.next_delay_id;
-										self.next_delay_id.0 += 1;
-										let delay = futures_timer::Delay::new(until - now);
-										self.delays.push(
-											async move {
-												delay.await;
-												(delay_id, peer_id, set_id)
-											}
-											.boxed(),
-										);
-
-										*entry.get_mut() = PeerState::Backoff {
-											timer: delay_id,
-											timer_deadline: until,
-										};
-									} else {
-										entry.remove();
-									}
-								} else {
-									entry.remove();
-								}
-							} else if no_desired_left {
-								// If no connection is `OpenDesiredByRemote` anymore, switch to
-								// `Disabled`.
-								*entry.get_mut() =
-									PeerState::Disabled { connections, backoff_until };
-							} else {
-								*entry.get_mut() = PeerState::Incoming {
-									connections,
-									backoff_until,
-									incoming_index,
-								};
-							}
-						},
-
-						// Enabled => Enabled | Backoff
-						// Peers are always backed-off when disconnecting while Enabled.
-						PeerState::Enabled { mut connections } => {
-							trace!(
-								target: "sub-libp2p",
-								"Libp2p => Disconnected({}, {:?}, {:?}): Enabled.",
-								peer_id, set_id, connection_id
-							);
-
-							ensure!(connections.iter().any(|(_, s)| matches!(
-								s,
-								ConnectionState::Opening | ConnectionState::Open(_)
-							)));
-
-							if let Some(pos) =
-								connections.iter().position(|(c, _)| *c == connection_id)
-							{
-								let (_, state) = connections.remove(pos);
-								if let ConnectionState::Open(_) = state {
-									if let Some((replacement_pos, replacement_sink)) = connections
-										.iter()
-										.enumerate()
-										.find_map(|(num, (_, s))| match s {
-											ConnectionState::Open(s) => Some((num, s.clone())),
-											_ => None,
-										}) {
-										if pos <= replacement_pos {
-											trace!(
-												target: "sub-libp2p",
-												"External API <= Sink replaced({}, {:?})",
-												peer_id, set_id
-											);
-											let event = NotificationsOut::CustomProtocolReplaced {
-												peer_id,
-												set_id,
-												notifications_sink: replacement_sink,
-											};
-											self.events.push_back(ToSwarm::GenerateEvent(event));
-										}
-									} else {
-										trace!(
-											target: "sub-libp2p", "External API <= Closed({}, {:?})",
-											peer_id, set_id
-										);
-										let event = NotificationsOut::CustomProtocolClosed {
-											peer_id,
-											set_id,
-										};
-										self.events.push_back(ToSwarm::GenerateEvent(event));
-									}
-								}
-							} else {
-								bail!("inject_connection_closed: State mismatch in the custom protos handler");
-							}
-
-							if connections.is_empty() {
-								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.peerset.dropped(set_id, peer_id, DropReason::Unknown);
-								let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
-
-								let delay_id = self.next_delay_id;
-								self.next_delay_id.0 += 1;
-								let delay = futures_timer::Delay::new(Duration::from_secs(ban_dur));
-								self.delays.push(
-									async move {
-										delay.await;
-										(delay_id, peer_id, set_id)
-									}
-									.boxed(),
-								);
-
-								*entry.get_mut() = PeerState::Backoff {
-									timer: delay_id,
-									timer_deadline: Instant::now() + Duration::from_secs(ban_dur),
-								};
-							} else if !connections.iter().any(|(_, s)| {
-								matches!(s, ConnectionState::Opening | ConnectionState::Open(_))
-							}) {
-								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.peerset.dropped(set_id, peer_id, DropReason::Unknown);
-
-								*entry.get_mut() =
-									PeerState::Disabled { connections, backoff_until: None };
-							} else {
-								*entry.get_mut() = PeerState::Enabled { connections };
-							}
-						},
-
-						PeerState::Requested
-						| PeerState::PendingRequest { .. }
-						| PeerState::Backoff { .. } => {
-							// This is a serious bug either in this state machine or in libp2p.
-							bail!("`inject_connection_closed` called for unknown peer {}", peer_id);
-						},
-						PeerState::Poisoned => {
-							bail!("State of peer {} is poisoned", peer_id);
-						},
-					}
-				}
-			},
-			FromSwarm::DialFailure(DialFailure { peer_id, error, .. }) => {
-				if let DialError::Transport(errors) = error {
-					for (addr, error) in errors.iter() {
-						trace!(target: "sub-libp2p", "Libp2p => Reach failure for {:?} through {:?}: {:?}", peer_id, addr, error);
-					}
-				}
-
-				if let Some(peer_id) = peer_id {
-					trace!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id);
-
-					for set_id in (0..self.notif_protocols.len()).map(crate::peerset::SetId::from) {
-						if let Entry::Occupied(mut entry) = self.peers.entry((peer_id, set_id)) {
-							match mem::replace(entry.get_mut(), PeerState::Poisoned) {
-								// The peer is not in our list.
-								st @ PeerState::Backoff { .. } => {
-									*entry.into_mut() = st;
-								},
-
-								// "Basic" situation: we failed to reach a peer that the peerset
-								// requested.
-								st @ PeerState::Requested
-								| st @ PeerState::PendingRequest { .. } => {
-									trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-									self.peerset.dropped(set_id, peer_id, DropReason::Unknown);
-
-									let now = Instant::now();
-									let ban_duration = match st {
-										PeerState::PendingRequest { timer_deadline, .. }
-											if timer_deadline > now =>
-										{
-											cmp::max(timer_deadline - now, Duration::from_secs(5))
-										},
-										_ => Duration::from_secs(5),
-									};
-
-									let delay_id = self.next_delay_id;
-									self.next_delay_id.0 += 1;
-									let delay = futures_timer::Delay::new(ban_duration);
-									let peer_id = peer_id;
-									self.delays.push(
-										async move {
-											delay.await;
-											(delay_id, peer_id, set_id)
-										}
-										.boxed(),
-									);
-
-									*entry.into_mut() = PeerState::Backoff {
-										timer: delay_id,
-										timer_deadline: now + ban_duration,
-									};
-								},
-
-								// We can still get dial failures even if we are already connected
-								// to the peer, as an extra diagnostic for an earlier attempt.
-								st @ PeerState::Disabled { .. }
-								| st @ PeerState::Enabled { .. }
-								| st @ PeerState::DisabledPendingEnable { .. }
-								| st @ PeerState::Incoming { .. } => {
-									*entry.into_mut() = st;
-								},
-
-								PeerState::Poisoned => {
-									bail!("State of {:?} is poisoned", peer_id);
-								},
-							}
-						}
-					}
-				}
-			},
-			FromSwarm::ListenerClosed(_) => {},
-			FromSwarm::ListenFailure(_) => {},
-			FromSwarm::ListenerError(_) => {},
-			FromSwarm::ExpiredExternalAddr(_) => {},
-			FromSwarm::NewListener(_) => {},
-			FromSwarm::ExpiredListenAddr(_) => {},
-			FromSwarm::NewExternalAddr(_) => {},
-			FromSwarm::AddressChange(_) => {},
-			FromSwarm::NewListenAddr(_) => {},
-		};
-		Ok(())
-	}
-
-	/// TODO
-	pub fn try_on_connection_handler_event(
-		&mut self,
-		peer_id: PeerId,
-		connection_id: ConnectionId,
-		event: THandlerOutEvent<Self>,
-	) -> anyhow::Result<()> {
-		match event {
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index } => {
-				let set_id = crate::peerset::SetId::from(protocol_index);
-
-				trace!(target: "sub-libp2p",
-					"Handler({:?}, {:?}]) => OpenDesiredByRemote({:?})",
-					peer_id, connection_id, set_id);
-
-				let mut entry = if let Entry::Occupied(entry) = self.peers.entry((peer_id, set_id))
-				{
-					entry
-				} else {
-					bail!("OpenDesiredByRemote: State mismatch in the custom protos handler");
-				};
-
-				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
-					// Incoming => Incoming
-					PeerState::Incoming { mut connections, backoff_until, incoming_index } => {
-						ensure!(connections
-							.iter()
-							.any(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote)));
-						if let Some((_, connec_state)) =
-							connections.iter_mut().find(|(c, _)| *c == connection_id)
-						{
-							if let ConnectionState::Closed = *connec_state {
-								*connec_state = ConnectionState::OpenDesiredByRemote;
-							} else {
-								// Connections in `OpeningThenClosing` and `Closing` state can be
-								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
-								// messages.
-								// Since an `Open` and/or a `Close` message have already been sent,
-								// there is nothing much that can be done about this anyway.
-								ensure!(matches!(
-									connec_state,
-									ConnectionState::OpeningThenClosing | ConnectionState::Closing
-								));
-							}
-						} else {
-							bail!(
-								"OpenDesiredByRemote: State mismatch in the custom protos handler"
-							);
-						}
-
-						*entry.into_mut() =
-							PeerState::Incoming { connections, backoff_until, incoming_index };
-					},
-
-					PeerState::Enabled { mut connections } => {
-						ensure!(connections.iter().any(|(_, s)| matches!(
-							s,
-							ConnectionState::Opening | ConnectionState::Open(_)
-						)));
-
-						if let Some((_, connec_state)) =
-							connections.iter_mut().find(|(c, _)| *c == connection_id)
-						{
-							if let ConnectionState::Closed = *connec_state {
-								trace!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open({:?})",
-									peer_id, connection_id, set_id);
-								self.events.push_back(ToSwarm::NotifyHandler {
-									peer_id,
-									handler: NotifyHandler::One(connection_id),
-									event: NotifsHandlerIn::Open { protocol_index: set_id.into() },
-								});
-								*connec_state = ConnectionState::Opening;
-							} else {
-								// Connections in `OpeningThenClosing`, `Opening`, and `Closing`
-								// state can be in a Closed phase, and as such can emit
-								// `OpenDesiredByRemote` messages.
-								// Since an `Open` message haS already been sent, there is nothing
-								// more to do.
-								ensure!(matches!(
-									connec_state,
-									ConnectionState::OpenDesiredByRemote
-										| ConnectionState::Closing | ConnectionState::Opening
-								));
-							}
-						} else {
-							bail!("OpenDesiredByRemote: State mismatch in the custom protos handler"
-							);
-						}
-
-						*entry.into_mut() = PeerState::Enabled { connections };
-					},
-
-					// Disabled => Disabled | Incoming
-					PeerState::Disabled { mut connections, backoff_until } => {
-						if let Some((_, connec_state)) =
-							connections.iter_mut().find(|(c, _)| *c == connection_id)
-						{
-							if let ConnectionState::Closed = *connec_state {
-								*connec_state = ConnectionState::OpenDesiredByRemote;
-
-								let incoming_id = self.next_incoming_index;
-								self.next_incoming_index.0 += 1;
-
-								trace!(target: "sub-libp2p", "PSM <= Incoming({}, {:?}, {:?}).",
-									peer_id, set_id, incoming_id);
-								self.peerset.incoming(set_id, peer_id, incoming_id);
-								self.incoming.push(IncomingPeer {
-									peer_id,
-									set_id,
-									alive: true,
-									incoming_id,
-								});
-
-								*entry.into_mut() = PeerState::Incoming {
-									connections,
-									backoff_until,
-									incoming_index: incoming_id,
-								};
-							} else {
-								// Connections in `OpeningThenClosing` and `Closing` state can be
-								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
-								// messages.
-								// We ignore them.
-								ensure!(matches!(
-									connec_state,
-									ConnectionState::OpeningThenClosing | ConnectionState::Closing
-								));
-								*entry.into_mut() =
-									PeerState::Disabled { connections, backoff_until };
-							}
-						} else {
-							bail!("OpenDesiredByRemote: State mismatch in the custom protos handler"
-							);
-						}
-					},
-
-					// DisabledPendingEnable => Enabled | DisabledPendingEnable
-					PeerState::DisabledPendingEnable { mut connections, timer, timer_deadline } => {
-						if let Some((_, connec_state)) =
-							connections.iter_mut().find(|(c, _)| *c == connection_id)
-						{
-							if let ConnectionState::Closed = *connec_state {
-								trace!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open({:?})",
-									peer_id, connection_id, set_id);
-								self.events.push_back(ToSwarm::NotifyHandler {
-									peer_id,
-									handler: NotifyHandler::One(connection_id),
-									event: NotifsHandlerIn::Open { protocol_index: set_id.into() },
-								});
-								*connec_state = ConnectionState::Opening;
-
-								*entry.into_mut() = PeerState::Enabled { connections };
-							} else {
-								// Connections in `OpeningThenClosing` and `Closing` state can be
-								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
-								// messages.
-								// We ignore them.
-								ensure!(matches!(
-									connec_state,
-									ConnectionState::OpeningThenClosing | ConnectionState::Closing
-								));
-								*entry.into_mut() = PeerState::DisabledPendingEnable {
-									connections,
-									timer,
-									timer_deadline,
-								};
-							}
-						} else {
-							bail!(
-								"OpenDesiredByRemote: State mismatch in the custom protos handler"
-							);
-						}
-					},
-
-					state => {
-						bail!("OpenDesiredByRemote: Unexpected state in the custom protos handler: {:?}",
-							   state);
-					},
-				};
-			},
-
-			NotifsHandlerOut::CloseDesired { protocol_index } => {
-				let set_id = crate::peerset::SetId::from(protocol_index);
-
-				trace!(target: "sub-libp2p",
-					"Handler({}, {:?}) => CloseDesired({:?})",
-					peer_id, connection_id, set_id);
-
-				let mut entry = if let Entry::Occupied(entry) = self.peers.entry((peer_id, set_id))
-				{
-					entry
-				} else {
-					bail!("CloseDesired: State mismatch in the custom protos handler");
-				};
-
-				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
-					// Enabled => Enabled | Disabled
-					PeerState::Enabled { mut connections } => {
-						ensure!(connections.iter().any(|(_, s)| matches!(
-							s,
-							ConnectionState::Opening | ConnectionState::Open(_)
-						)));
-
-						let pos = if let Some(pos) =
-							connections.iter().position(|(c, _)| *c == connection_id)
-						{
-							pos
-						} else {
-							bail!("CloseDesired: State mismatch in the custom protos handler");
-						};
-
-						if matches!(connections[pos].1, ConnectionState::Closing) {
-							*entry.into_mut() = PeerState::Enabled { connections };
-							return Ok(());
-						}
-
-						ensure!(matches!(connections[pos].1, ConnectionState::Open(_)));
-						connections[pos].1 = ConnectionState::Closing;
-
-						trace!(target: "sub-libp2p", "Handler({}, {:?}) <= Close({:?})", peer_id, connection_id, set_id);
-						self.events.push_back(ToSwarm::NotifyHandler {
-							peer_id,
-							handler: NotifyHandler::One(connection_id),
-							event: NotifsHandlerIn::Close { protocol_index: set_id.into() },
-						});
-
-						if let Some((replacement_pos, replacement_sink)) =
-							connections.iter().enumerate().find_map(|(num, (_, s))| match s {
-								ConnectionState::Open(s) => Some((num, s.clone())),
-								_ => None,
-							}) {
-							if pos <= replacement_pos {
-								trace!(target: "sub-libp2p", "External API <= Sink replaced({:?}, {:?})", peer_id, set_id);
-								let event = NotificationsOut::CustomProtocolReplaced {
-									peer_id,
-									set_id,
-									notifications_sink: replacement_sink,
-								};
-								self.events.push_back(ToSwarm::GenerateEvent(event));
-							}
-
-							*entry.into_mut() = PeerState::Enabled { connections };
-						} else {
-							// List of open connections wasn't empty before but now it is.
-							if !connections
-								.iter()
-								.any(|(_, s)| matches!(s, ConnectionState::Opening))
-							{
-								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.peerset.dropped(set_id, peer_id, DropReason::Refused);
-								*entry.into_mut() =
-									PeerState::Disabled { connections, backoff_until: None };
-							} else {
-								*entry.into_mut() = PeerState::Enabled { connections };
-							}
-
-							trace!(target: "sub-libp2p", "External API <= Closed({}, {:?})", peer_id, set_id);
-							let event = NotificationsOut::CustomProtocolClosed { peer_id, set_id };
-							self.events.push_back(ToSwarm::GenerateEvent(event));
-						}
-					},
-
-					// All connections in `Disabled` and `DisabledPendingEnable` have been sent a
-					// `Close` message already, and as such ignore any `CloseDesired` message.
-					state @ PeerState::Disabled { .. }
-					| state @ PeerState::DisabledPendingEnable { .. } => {
-						*entry.into_mut() = state;
-					},
-					state => {
-						error!(target: "sub-libp2p",
-							"Unexpected state in the custom protos handler: {:?}",
-							state);
-					},
-				}
-			},
-
-			NotifsHandlerOut::CloseResult { protocol_index } => {
-				let set_id = crate::peerset::SetId::from(protocol_index);
-
-				trace!(target: "sub-libp2p",
-					"Handler({}, {:?}) => CloseResult({:?})",
-					peer_id, connection_id, set_id);
-
-				match self.peers.get_mut(&(peer_id, set_id)) {
-					// Move the connection from `Closing` to `Closed`.
-					Some(PeerState::Incoming { connections, .. })
-					| Some(PeerState::DisabledPendingEnable { connections, .. })
-					| Some(PeerState::Disabled { connections, .. })
-					| Some(PeerState::Enabled { connections, .. }) => {
-						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)| {
-							*c == connection_id && matches!(s, ConnectionState::Closing)
-						}) {
-							*connec_state = ConnectionState::Closed;
-						} else {
-							bail!("CloseResult: State mismatch in the custom protos handler");
-						}
-					},
-
-					state => {
-						bail!(
-							"CloseResult: Unexpected state in the custom protos handler: {:?}",
-							state
-						);
-					},
-				}
-			},
-
-			NotifsHandlerOut::OpenResultOk {
-				protocol_index,
-				negotiated_fallback,
-				received_handshake,
-				notifications_sink,
-				..
-			} => {
-				let set_id = crate::peerset::SetId::from(protocol_index);
-				trace!(target: "sub-libp2p",
-					"Handler({}, {:?}) => OpenResultOk({:?})",
-					peer_id, connection_id, set_id);
-
-				match self.peers.get_mut(&(peer_id, set_id)) {
-					Some(PeerState::Enabled { connections, .. }) => {
-						ensure!(connections.iter().any(|(_, s)| matches!(
-							s,
-							ConnectionState::Opening | ConnectionState::Open(_)
-						)));
-						let any_open =
-							connections.iter().any(|(_, s)| matches!(s, ConnectionState::Open(_)));
-
-						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)| {
-							*c == connection_id && matches!(s, ConnectionState::Opening)
-						}) {
-							if !any_open {
-								trace!(target: "sub-libp2p", "External API <= Open({}, {:?})", peer_id, set_id);
-								let event = NotificationsOut::CustomProtocolOpen {
-									peer_id,
-									set_id,
-									negotiated_fallback,
-									received_handshake,
-									notifications_sink: notifications_sink.clone(),
-								};
-								self.events.push_back(ToSwarm::GenerateEvent(event));
-							}
-							*connec_state = ConnectionState::Open(notifications_sink);
-						} else if let Some((_, connec_state)) =
-							connections.iter_mut().find(|(c, s)| {
-								*c == connection_id
-									&& matches!(s, ConnectionState::OpeningThenClosing)
-							}) {
-							*connec_state = ConnectionState::Closing;
-						} else {
-							bail!("OpenResultOk State mismatch in the custom protos handler");
-						}
-					},
-
-					Some(PeerState::Incoming { connections, .. })
-					| Some(PeerState::DisabledPendingEnable { connections, .. })
-					| Some(PeerState::Disabled { connections, .. }) => {
-						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)| {
-							*c == connection_id && matches!(s, ConnectionState::OpeningThenClosing)
-						}) {
-							*connec_state = ConnectionState::Closing;
-						} else {
-							bail!("OpenResultOk State mismatch in the custom protos handler");
-						}
-					},
-
-					state => {
-						bail!(
-							"OpenResultOk: Unexpected state in the custom protos handler: {:?}",
-							state
-						);
-					},
-				}
-			},
-
-			NotifsHandlerOut::OpenResultErr { protocol_index } => {
-				let set_id = crate::peerset::SetId::from(protocol_index);
-				trace!(target: "sub-libp2p",
-					"Handler({:?}, {:?}) => OpenResultErr({:?})",
-					peer_id, connection_id, set_id);
-
-				let mut entry = if let Entry::Occupied(entry) = self.peers.entry((peer_id, set_id))
-				{
-					entry
-				} else {
-					bail!("OpenResultErr: State mismatch in the custom protos handler");
-				};
-
-				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
-					PeerState::Enabled { mut connections } => {
-						ensure!(connections.iter().any(|(_, s)| matches!(
-							s,
-							ConnectionState::Opening | ConnectionState::Open(_)
-						)));
-
-						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)| {
-							*c == connection_id && matches!(s, ConnectionState::Opening)
-						}) {
-							*connec_state = ConnectionState::Closed;
-						} else if let Some((_, connec_state)) =
-							connections.iter_mut().find(|(c, s)| {
-								*c == connection_id
-									&& matches!(s, ConnectionState::OpeningThenClosing)
-							}) {
-							*connec_state = ConnectionState::Closing;
-						} else {
-							bail!("OpenResultErr: State mismatch in the custom protos handler");
-						}
-
-						if !connections.iter().any(|(_, s)| {
-							matches!(s, ConnectionState::Opening | ConnectionState::Open(_))
-						}) {
-							trace!(target: "sub-libp2p", "PSM <= Dropped({:?}, {:?})", peer_id, set_id);
-							self.peerset.dropped(set_id, peer_id, DropReason::Refused);
-
-							let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
-							*entry.into_mut() = PeerState::Disabled {
-								connections,
-								backoff_until: Some(Instant::now() + Duration::from_secs(ban_dur)),
-							};
-						} else {
-							*entry.into_mut() = PeerState::Enabled { connections };
-						}
-					},
-					mut state @ PeerState::Incoming { .. }
-					| mut state @ PeerState::DisabledPendingEnable { .. }
-					| mut state @ PeerState::Disabled { .. } => {
-						match &mut state {
-							PeerState::Incoming { connections, .. }
-							| PeerState::Disabled { connections, .. }
-							| PeerState::DisabledPendingEnable { connections, .. } => {
-								if let Some((_, connec_state)) =
-									connections.iter_mut().find(|(c, s)| {
-										*c == connection_id
-											&& matches!(s, ConnectionState::OpeningThenClosing)
-									}) {
-									*connec_state = ConnectionState::Closing;
-								} else {
-									bail!("OpenResultErr: State mismatch in the custom protos handler");
-								}
-							},
-							_ => unreachable!(
-								"Match branches are the same as the one on which we
-							enter this block; qed"
-							),
-						};
-
-						*entry.into_mut() = state;
-					},
-					state => {
-						bail!("Unexpected state in the custom protos handler: {:?}", state);
-					},
-				};
-			},
-
-			NotifsHandlerOut::Notification { protocol_index, message } => {
-				let set_id = crate::peerset::SetId::from(protocol_index);
-				if self.is_open(&peer_id, set_id) {
-					trace!(
-						target: "sub-libp2p",
-						"Handler({:?}) => Notification({}, {:?}, {} bytes)",
-						connection_id,
-						peer_id,
-						set_id,
-						message.len()
-					);
-					trace!(
-						target: "sub-libp2p",
-						"External API <= Message({}, {:?})",
-						peer_id,
-						set_id,
-					);
-					let event = NotificationsOut::Notification { peer_id, set_id, message };
-
-					self.events.push_back(ToSwarm::GenerateEvent(event));
-				} else {
-					trace!(
-						target: "sub-libp2p",
-						"Handler({:?}) => Post-close notification({}, {:?}, {} bytes)",
-						connection_id,
-						peer_id,
-						set_id,
-						message.len()
-					);
-				}
-			},
-		};
-		Ok(())
 	}
 }
 
@@ -1996,9 +1050,428 @@ impl NetworkBehaviour for Notifications {
 	}
 
 	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
-		if let Err(e) = self.try_on_swarm_event(event) {
-			log::error!(target: "sub-libp2p", "{}", e);
-			debug_assert!(false);
+		match event {
+			FromSwarm::ConnectionEstablished(ConnectionEstablished {
+				peer_id,
+				endpoint,
+				connection_id,
+				..
+			}) => {
+				for set_id in (0..self.notif_protocols.len()).map(crate::peerset::SetId::from) {
+					match self.peers.entry((peer_id, set_id)).or_insert(PeerState::Poisoned) {
+						// Requested | PendingRequest => Enabled
+						st @ &mut PeerState::Requested |
+						st @ &mut PeerState::PendingRequest { .. } => {
+							trace!(target: "sub-libp2p",
+								"Libp2p => Connected({}, {:?}, {:?}): Connection was requested by PSM.",
+								peer_id, set_id, endpoint
+							);
+							trace!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open({:?})", peer_id, connection_id, set_id);
+							self.events.push_back(ToSwarm::NotifyHandler {
+								peer_id,
+								handler: NotifyHandler::One(connection_id),
+								event: NotifsHandlerIn::Open { protocol_index: set_id.into() },
+							});
+
+							let mut connections = SmallVec::new();
+							connections.push((connection_id, ConnectionState::Opening));
+							*st = PeerState::Enabled { connections };
+						},
+
+						// Poisoned gets inserted above if the entry was missing.
+						// Ø | Backoff => Disabled
+						st @ &mut PeerState::Poisoned | st @ &mut PeerState::Backoff { .. } => {
+							let backoff_until =
+								if let PeerState::Backoff { timer_deadline, .. } = st {
+									Some(*timer_deadline)
+								} else {
+									None
+								};
+							trace!(target: "sub-libp2p",
+								"Libp2p => Connected({}, {:?}, {:?}, {:?}): Not requested by PSM, disabling.",
+								peer_id, set_id, endpoint, connection_id);
+
+							let mut connections = SmallVec::new();
+							connections.push((connection_id, ConnectionState::Closed));
+							*st = PeerState::Disabled { connections, backoff_until };
+						},
+
+						// In all other states, add this new connection to the list of closed
+						// inactive connections.
+						PeerState::Incoming { connections, .. } |
+						PeerState::Disabled { connections, .. } |
+						PeerState::DisabledPendingEnable { connections, .. } |
+						PeerState::Enabled { connections, .. } => {
+							trace!(target: "sub-libp2p",
+								"Libp2p => Connected({}, {:?}, {:?}, {:?}): Secondary connection. Leaving closed.",
+								peer_id, set_id, endpoint, connection_id);
+							connections.push((connection_id, ConnectionState::Closed));
+						},
+					}
+				}
+			},
+			FromSwarm::ConnectionClosed(ConnectionClosed { peer_id, connection_id, .. }) => {
+				for set_id in (0..self.notif_protocols.len()).map(crate::peerset::SetId::from) {
+					let mut entry = if let Entry::Occupied(entry) =
+						self.peers.entry((peer_id, set_id))
+					{
+						entry
+					} else {
+						error!(target: "sub-libp2p", "inject_connection_closed: State mismatch in the custom protos handler");
+						debug_assert!(false);
+						return
+					};
+
+					match mem::replace(entry.get_mut(), PeerState::Poisoned) {
+						// Disabled => Disabled | Backoff | Ø
+						PeerState::Disabled { mut connections, backoff_until } => {
+							trace!(target: "sub-libp2p", "Libp2p => Disconnected({}, {:?}, {:?}): Disabled.",
+								peer_id, set_id, connection_id);
+
+							if let Some(pos) =
+								connections.iter().position(|(c, _)| *c == connection_id)
+							{
+								connections.remove(pos);
+							} else {
+								debug_assert!(false);
+								error!(target: "sub-libp2p",
+									"inject_connection_closed: State mismatch in the custom protos handler");
+							}
+
+							if connections.is_empty() {
+								if let Some(until) = backoff_until {
+									let now = Instant::now();
+									if until > now {
+										let delay_id = self.next_delay_id;
+										self.next_delay_id.0 += 1;
+										let delay = futures_timer::Delay::new(until - now);
+										self.delays.push(
+											async move {
+												delay.await;
+												(delay_id, peer_id, set_id)
+											}
+											.boxed(),
+										);
+
+										*entry.get_mut() = PeerState::Backoff {
+											timer: delay_id,
+											timer_deadline: until,
+										};
+									} else {
+										entry.remove();
+									}
+								} else {
+									entry.remove();
+								}
+							} else {
+								*entry.get_mut() =
+									PeerState::Disabled { connections, backoff_until };
+							}
+						},
+
+						// DisabledPendingEnable => DisabledPendingEnable | Backoff
+						PeerState::DisabledPendingEnable {
+							mut connections,
+							timer_deadline,
+							timer,
+						} => {
+							trace!(
+								target: "sub-libp2p",
+								"Libp2p => Disconnected({}, {:?}, {:?}): Disabled but pending enable.",
+								peer_id, set_id, connection_id
+							);
+
+							if let Some(pos) =
+								connections.iter().position(|(c, _)| *c == connection_id)
+							{
+								connections.remove(pos);
+							} else {
+								error!(target: "sub-libp2p",
+									"inject_connection_closed: State mismatch in the custom protos handler");
+								debug_assert!(false);
+							}
+
+							if connections.is_empty() {
+								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
+								self.peerset.dropped(set_id, peer_id, DropReason::Unknown);
+								*entry.get_mut() = PeerState::Backoff { timer, timer_deadline };
+							} else {
+								*entry.get_mut() = PeerState::DisabledPendingEnable {
+									connections,
+									timer_deadline,
+									timer,
+								};
+							}
+						},
+
+						// Incoming => Incoming | Disabled | Backoff | Ø
+						PeerState::Incoming { mut connections, backoff_until, incoming_index } => {
+							trace!(
+								target: "sub-libp2p",
+								"Libp2p => Disconnected({}, {:?}, {:?}): OpenDesiredByRemote.",
+								peer_id, set_id, connection_id
+							);
+
+							debug_assert!(connections
+								.iter()
+								.any(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote)));
+
+							if let Some(pos) =
+								connections.iter().position(|(c, _)| *c == connection_id)
+							{
+								connections.remove(pos);
+							} else {
+								error!(target: "sub-libp2p",
+									"inject_connection_closed: State mismatch in the custom protos handler");
+								debug_assert!(false);
+							}
+
+							let no_desired_left = !connections
+								.iter()
+								.any(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote));
+
+							// If no connection is `OpenDesiredByRemote` anymore, clean up the
+							// peerset incoming request.
+							if no_desired_left {
+								// In the incoming state, we don't report "Dropped" straight away.
+								// Instead we will report "Dropped" if receive the corresponding
+								// "Accept".
+								if let Some(state) = self
+									.incoming
+									.iter_mut()
+									.find(|i| i.alive && i.set_id == set_id && i.peer_id == peer_id)
+								{
+									state.alive = false;
+								} else {
+									error!(target: "sub-libp2p", "State mismatch in libp2p: no entry in \
+										incoming corresponding to an incoming state in peers");
+									debug_assert!(false);
+								}
+							}
+
+							if connections.is_empty() {
+								if let Some(until) = backoff_until {
+									let now = Instant::now();
+									if until > now {
+										let delay_id = self.next_delay_id;
+										self.next_delay_id.0 += 1;
+										let delay = futures_timer::Delay::new(until - now);
+										self.delays.push(
+											async move {
+												delay.await;
+												(delay_id, peer_id, set_id)
+											}
+											.boxed(),
+										);
+
+										*entry.get_mut() = PeerState::Backoff {
+											timer: delay_id,
+											timer_deadline: until,
+										};
+									} else {
+										entry.remove();
+									}
+								} else {
+									entry.remove();
+								}
+							} else if no_desired_left {
+								// If no connection is `OpenDesiredByRemote` anymore, switch to
+								// `Disabled`.
+								*entry.get_mut() =
+									PeerState::Disabled { connections, backoff_until };
+							} else {
+								*entry.get_mut() = PeerState::Incoming {
+									connections,
+									backoff_until,
+									incoming_index,
+								};
+							}
+						},
+
+						// Enabled => Enabled | Backoff
+						// Peers are always backed-off when disconnecting while Enabled.
+						PeerState::Enabled { mut connections } => {
+							trace!(
+								target: "sub-libp2p",
+								"Libp2p => Disconnected({}, {:?}, {:?}): Enabled.",
+								peer_id, set_id, connection_id
+							);
+
+							debug_assert!(connections.iter().any(|(_, s)| matches!(
+								s,
+								ConnectionState::Opening | ConnectionState::Open(_)
+							)));
+
+							if let Some(pos) =
+								connections.iter().position(|(c, _)| *c == connection_id)
+							{
+								let (_, state) = connections.remove(pos);
+								if let ConnectionState::Open(_) = state {
+									if let Some((replacement_pos, replacement_sink)) = connections
+										.iter()
+										.enumerate()
+										.find_map(|(num, (_, s))| match s {
+											ConnectionState::Open(s) => Some((num, s.clone())),
+											_ => None,
+										}) {
+										if pos <= replacement_pos {
+											trace!(
+												target: "sub-libp2p",
+												"External API <= Sink replaced({}, {:?})",
+												peer_id, set_id
+											);
+											let event = NotificationsOut::CustomProtocolReplaced {
+												peer_id,
+												set_id,
+												notifications_sink: replacement_sink,
+											};
+											self.events.push_back(ToSwarm::GenerateEvent(event));
+										}
+									} else {
+										trace!(
+											target: "sub-libp2p", "External API <= Closed({}, {:?})",
+											peer_id, set_id
+										);
+										let event = NotificationsOut::CustomProtocolClosed {
+											peer_id,
+											set_id,
+										};
+										self.events.push_back(ToSwarm::GenerateEvent(event));
+									}
+								}
+							} else {
+								error!(target: "sub-libp2p",
+									"inject_connection_closed: State mismatch in the custom protos handler");
+								debug_assert!(false);
+							}
+
+							if connections.is_empty() {
+								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
+								self.peerset.dropped(set_id, peer_id, DropReason::Unknown);
+								let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
+
+								let delay_id = self.next_delay_id;
+								self.next_delay_id.0 += 1;
+								let delay = futures_timer::Delay::new(Duration::from_secs(ban_dur));
+								self.delays.push(
+									async move {
+										delay.await;
+										(delay_id, peer_id, set_id)
+									}
+									.boxed(),
+								);
+
+								*entry.get_mut() = PeerState::Backoff {
+									timer: delay_id,
+									timer_deadline: Instant::now() + Duration::from_secs(ban_dur),
+								};
+							} else if !connections.iter().any(|(_, s)| {
+								matches!(s, ConnectionState::Opening | ConnectionState::Open(_))
+							}) {
+								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
+								self.peerset.dropped(set_id, peer_id, DropReason::Unknown);
+
+								*entry.get_mut() =
+									PeerState::Disabled { connections, backoff_until: None };
+							} else {
+								*entry.get_mut() = PeerState::Enabled { connections };
+							}
+						},
+
+						PeerState::Requested |
+						PeerState::PendingRequest { .. } |
+						PeerState::Backoff { .. } => {
+							// This is a serious bug either in this state machine or in libp2p.
+							error!(target: "sub-libp2p",
+								"`inject_connection_closed` called for unknown peer {}",
+								peer_id);
+							debug_assert!(false);
+						},
+						PeerState::Poisoned => {
+							error!(target: "sub-libp2p", "State of peer {} is poisoned", peer_id);
+							debug_assert!(false);
+						},
+					}
+				}
+			},
+			FromSwarm::DialFailure(DialFailure { peer_id, error, .. }) => {
+				if let DialError::Transport(errors) = error {
+					for (addr, error) in errors.iter() {
+						trace!(target: "sub-libp2p", "Libp2p => Reach failure for {:?} through {:?}: {:?}", peer_id, addr, error);
+					}
+				}
+
+				if let Some(peer_id) = peer_id {
+					trace!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id);
+
+					for set_id in (0..self.notif_protocols.len()).map(crate::peerset::SetId::from) {
+						if let Entry::Occupied(mut entry) = self.peers.entry((peer_id, set_id)) {
+							match mem::replace(entry.get_mut(), PeerState::Poisoned) {
+								// The peer is not in our list.
+								st @ PeerState::Backoff { .. } => {
+									*entry.into_mut() = st;
+								},
+
+								// "Basic" situation: we failed to reach a peer that the peerset
+								// requested.
+								st @ PeerState::Requested |
+								st @ PeerState::PendingRequest { .. } => {
+									trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
+									self.peerset.dropped(set_id, peer_id, DropReason::Unknown);
+
+									let now = Instant::now();
+									let ban_duration = match st {
+										PeerState::PendingRequest { timer_deadline, .. }
+											if timer_deadline > now =>
+											cmp::max(timer_deadline - now, Duration::from_secs(5)),
+										_ => Duration::from_secs(5),
+									};
+
+									let delay_id = self.next_delay_id;
+									self.next_delay_id.0 += 1;
+									let delay = futures_timer::Delay::new(ban_duration);
+									let peer_id = peer_id;
+									self.delays.push(
+										async move {
+											delay.await;
+											(delay_id, peer_id, set_id)
+										}
+										.boxed(),
+									);
+
+									*entry.into_mut() = PeerState::Backoff {
+										timer: delay_id,
+										timer_deadline: now + ban_duration,
+									};
+								},
+
+								// We can still get dial failures even if we are already connected
+								// to the peer, as an extra diagnostic for an earlier attempt.
+								st @ PeerState::Disabled { .. } |
+								st @ PeerState::Enabled { .. } |
+								st @ PeerState::DisabledPendingEnable { .. } |
+								st @ PeerState::Incoming { .. } => {
+									*entry.into_mut() = st;
+								},
+
+								PeerState::Poisoned => {
+									error!(target: "sub-libp2p", "State of {:?} is poisoned", peer_id);
+									debug_assert!(false);
+								},
+							}
+						}
+					}
+				}
+			},
+			FromSwarm::ListenerClosed(_) => {},
+			FromSwarm::ListenFailure(_) => {},
+			FromSwarm::ListenerError(_) => {},
+			FromSwarm::ExpiredExternalAddr(_) => {},
+			FromSwarm::NewListener(_) => {},
+			FromSwarm::ExpiredListenAddr(_) => {},
+			FromSwarm::NewExternalAddr(_) => {},
+			FromSwarm::AddressChange(_) => {},
+			FromSwarm::NewListenAddr(_) => {},
 		}
 	}
 
@@ -2008,9 +1481,522 @@ impl NetworkBehaviour for Notifications {
 		connection_id: ConnectionId,
 		event: THandlerOutEvent<Self>,
 	) {
-		if let Err(e) = self.try_on_connection_handler_event(peer_id, connection_id, event) {
-			log::error!(target: "sub-libp2p", "{}", e);
-			debug_assert!(false);
+		match event {
+			NotifsHandlerOut::OpenDesiredByRemote { protocol_index } => {
+				let set_id = crate::peerset::SetId::from(protocol_index);
+
+				trace!(target: "sub-libp2p",
+					"Handler({:?}, {:?}]) => OpenDesiredByRemote({:?})",
+					peer_id, connection_id, set_id);
+
+				let mut entry = if let Entry::Occupied(entry) = self.peers.entry((peer_id, set_id))
+				{
+					entry
+				} else {
+					error!(
+						target: "sub-libp2p",
+						"OpenDesiredByRemote: State mismatch in the custom protos handler"
+					);
+					debug_assert!(false);
+					return
+				};
+
+				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
+					// Incoming => Incoming
+					PeerState::Incoming { mut connections, backoff_until, incoming_index } => {
+						debug_assert!(connections
+							.iter()
+							.any(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote)));
+						if let Some((_, connec_state)) =
+							connections.iter_mut().find(|(c, _)| *c == connection_id)
+						{
+							if let ConnectionState::Closed = *connec_state {
+								*connec_state = ConnectionState::OpenDesiredByRemote;
+							} else {
+								// Connections in `OpeningThenClosing` and `Closing` state can be
+								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
+								// messages.
+								// Since an `Open` and/or a `Close` message have already been sent,
+								// there is nothing much that can be done about this anyway.
+								debug_assert!(matches!(
+									connec_state,
+									ConnectionState::OpeningThenClosing | ConnectionState::Closing
+								));
+							}
+						} else {
+							error!(
+								target: "sub-libp2p",
+								"OpenDesiredByRemote: State mismatch in the custom protos handler"
+							);
+							debug_assert!(false);
+						}
+
+						*entry.into_mut() =
+							PeerState::Incoming { connections, backoff_until, incoming_index };
+					},
+
+					PeerState::Enabled { mut connections } => {
+						debug_assert!(connections.iter().any(|(_, s)| matches!(
+							s,
+							ConnectionState::Opening | ConnectionState::Open(_)
+						)));
+
+						if let Some((_, connec_state)) =
+							connections.iter_mut().find(|(c, _)| *c == connection_id)
+						{
+							if let ConnectionState::Closed = *connec_state {
+								trace!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open({:?})",
+									peer_id, connection_id, set_id);
+								self.events.push_back(ToSwarm::NotifyHandler {
+									peer_id,
+									handler: NotifyHandler::One(connection_id),
+									event: NotifsHandlerIn::Open { protocol_index: set_id.into() },
+								});
+								*connec_state = ConnectionState::Opening;
+							} else {
+								// Connections in `OpeningThenClosing`, `Opening`, and `Closing`
+								// state can be in a Closed phase, and as such can emit
+								// `OpenDesiredByRemote` messages.
+								// Since an `Open` message haS already been sent, there is nothing
+								// more to do.
+								debug_assert!(matches!(
+									connec_state,
+									ConnectionState::OpenDesiredByRemote |
+										ConnectionState::Closing | ConnectionState::Opening
+								));
+							}
+						} else {
+							error!(
+								target: "sub-libp2p",
+								"OpenDesiredByRemote: State mismatch in the custom protos handler"
+							);
+							debug_assert!(false);
+						}
+
+						*entry.into_mut() = PeerState::Enabled { connections };
+					},
+
+					// Disabled => Disabled | Incoming
+					PeerState::Disabled { mut connections, backoff_until } => {
+						if let Some((_, connec_state)) =
+							connections.iter_mut().find(|(c, _)| *c == connection_id)
+						{
+							if let ConnectionState::Closed = *connec_state {
+								*connec_state = ConnectionState::OpenDesiredByRemote;
+
+								let incoming_id = self.next_incoming_index;
+								self.next_incoming_index.0 += 1;
+
+								trace!(target: "sub-libp2p", "PSM <= Incoming({}, {:?}, {:?}).",
+									peer_id, set_id, incoming_id);
+								self.peerset.incoming(set_id, peer_id, incoming_id);
+								self.incoming.push(IncomingPeer {
+									peer_id,
+									set_id,
+									alive: true,
+									incoming_id,
+								});
+
+								*entry.into_mut() = PeerState::Incoming {
+									connections,
+									backoff_until,
+									incoming_index: incoming_id,
+								};
+							} else {
+								// Connections in `OpeningThenClosing` and `Closing` state can be
+								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
+								// messages.
+								// We ignore them.
+								debug_assert!(matches!(
+									connec_state,
+									ConnectionState::OpeningThenClosing | ConnectionState::Closing
+								));
+								*entry.into_mut() =
+									PeerState::Disabled { connections, backoff_until };
+							}
+						} else {
+							error!(
+								target: "sub-libp2p",
+								"OpenDesiredByRemote: State mismatch in the custom protos handler"
+							);
+							debug_assert!(false);
+						}
+					},
+
+					// DisabledPendingEnable => Enabled | DisabledPendingEnable
+					PeerState::DisabledPendingEnable { mut connections, timer, timer_deadline } => {
+						if let Some((_, connec_state)) =
+							connections.iter_mut().find(|(c, _)| *c == connection_id)
+						{
+							if let ConnectionState::Closed = *connec_state {
+								trace!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open({:?})",
+									peer_id, connection_id, set_id);
+								self.events.push_back(ToSwarm::NotifyHandler {
+									peer_id,
+									handler: NotifyHandler::One(connection_id),
+									event: NotifsHandlerIn::Open { protocol_index: set_id.into() },
+								});
+								*connec_state = ConnectionState::Opening;
+
+								*entry.into_mut() = PeerState::Enabled { connections };
+							} else {
+								// Connections in `OpeningThenClosing` and `Closing` state can be
+								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
+								// messages.
+								// We ignore them.
+								debug_assert!(matches!(
+									connec_state,
+									ConnectionState::OpeningThenClosing | ConnectionState::Closing
+								));
+								*entry.into_mut() = PeerState::DisabledPendingEnable {
+									connections,
+									timer,
+									timer_deadline,
+								};
+							}
+						} else {
+							error!(
+								target: "sub-libp2p",
+								"OpenDesiredByRemote: State mismatch in the custom protos handler"
+							);
+							debug_assert!(false);
+						}
+					},
+
+					state => {
+						error!(target: "sub-libp2p",
+							   "OpenDesiredByRemote: Unexpected state in the custom protos handler: {:?}",
+							   state);
+						debug_assert!(false);
+					},
+				};
+			},
+
+			NotifsHandlerOut::CloseDesired { protocol_index } => {
+				let set_id = crate::peerset::SetId::from(protocol_index);
+
+				trace!(target: "sub-libp2p",
+					"Handler({}, {:?}) => CloseDesired({:?})",
+					peer_id, connection_id, set_id);
+
+				let mut entry = if let Entry::Occupied(entry) = self.peers.entry((peer_id, set_id))
+				{
+					entry
+				} else {
+					error!(target: "sub-libp2p", "CloseDesired: State mismatch in the custom protos handler");
+					debug_assert!(false);
+					return
+				};
+
+				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
+					// Enabled => Enabled | Disabled
+					PeerState::Enabled { mut connections } => {
+						debug_assert!(connections.iter().any(|(_, s)| matches!(
+							s,
+							ConnectionState::Opening | ConnectionState::Open(_)
+						)));
+
+						let pos = if let Some(pos) =
+							connections.iter().position(|(c, _)| *c == connection_id)
+						{
+							pos
+						} else {
+							error!(target: "sub-libp2p",
+								"CloseDesired: State mismatch in the custom protos handler");
+							debug_assert!(false);
+							return
+						};
+
+						if matches!(connections[pos].1, ConnectionState::Closing) {
+							*entry.into_mut() = PeerState::Enabled { connections };
+							return
+						}
+
+						debug_assert!(matches!(connections[pos].1, ConnectionState::Open(_)));
+						connections[pos].1 = ConnectionState::Closing;
+
+						trace!(target: "sub-libp2p", "Handler({}, {:?}) <= Close({:?})", peer_id, connection_id, set_id);
+						self.events.push_back(ToSwarm::NotifyHandler {
+							peer_id,
+							handler: NotifyHandler::One(connection_id),
+							event: NotifsHandlerIn::Close { protocol_index: set_id.into() },
+						});
+
+						if let Some((replacement_pos, replacement_sink)) =
+							connections.iter().enumerate().find_map(|(num, (_, s))| match s {
+								ConnectionState::Open(s) => Some((num, s.clone())),
+								_ => None,
+							}) {
+							if pos <= replacement_pos {
+								trace!(target: "sub-libp2p", "External API <= Sink replaced({:?}, {:?})", peer_id, set_id);
+								let event = NotificationsOut::CustomProtocolReplaced {
+									peer_id,
+									set_id,
+									notifications_sink: replacement_sink,
+								};
+								self.events.push_back(ToSwarm::GenerateEvent(event));
+							}
+
+							*entry.into_mut() = PeerState::Enabled { connections };
+						} else {
+							// List of open connections wasn't empty before but now it is.
+							if !connections
+								.iter()
+								.any(|(_, s)| matches!(s, ConnectionState::Opening))
+							{
+								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
+								self.peerset.dropped(set_id, peer_id, DropReason::Refused);
+								*entry.into_mut() =
+									PeerState::Disabled { connections, backoff_until: None };
+							} else {
+								*entry.into_mut() = PeerState::Enabled { connections };
+							}
+
+							trace!(target: "sub-libp2p", "External API <= Closed({}, {:?})", peer_id, set_id);
+							let event = NotificationsOut::CustomProtocolClosed { peer_id, set_id };
+							self.events.push_back(ToSwarm::GenerateEvent(event));
+						}
+					},
+
+					// All connections in `Disabled` and `DisabledPendingEnable` have been sent a
+					// `Close` message already, and as such ignore any `CloseDesired` message.
+					state @ PeerState::Disabled { .. } |
+					state @ PeerState::DisabledPendingEnable { .. } => {
+						*entry.into_mut() = state;
+					},
+					state => {
+						error!(target: "sub-libp2p",
+							"Unexpected state in the custom protos handler: {:?}",
+							state);
+					},
+				}
+			},
+
+			NotifsHandlerOut::CloseResult { protocol_index } => {
+				let set_id = crate::peerset::SetId::from(protocol_index);
+
+				trace!(target: "sub-libp2p",
+					"Handler({}, {:?}) => CloseResult({:?})",
+					peer_id, connection_id, set_id);
+
+				match self.peers.get_mut(&(peer_id, set_id)) {
+					// Move the connection from `Closing` to `Closed`.
+					Some(PeerState::Incoming { connections, .. }) |
+					Some(PeerState::DisabledPendingEnable { connections, .. }) |
+					Some(PeerState::Disabled { connections, .. }) |
+					Some(PeerState::Enabled { connections, .. }) => {
+						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)| {
+							*c == connection_id && matches!(s, ConnectionState::Closing)
+						}) {
+							*connec_state = ConnectionState::Closed;
+						} else {
+							error!(target: "sub-libp2p",
+								"CloseResult: State mismatch in the custom protos handler");
+							debug_assert!(false);
+						}
+					},
+
+					state => {
+						error!(target: "sub-libp2p",
+							   "CloseResult: Unexpected state in the custom protos handler: {:?}",
+							   state);
+						debug_assert!(false);
+					},
+				}
+			},
+
+			NotifsHandlerOut::OpenResultOk {
+				protocol_index,
+				negotiated_fallback,
+				received_handshake,
+				notifications_sink,
+				..
+			} => {
+				let set_id = crate::peerset::SetId::from(protocol_index);
+				trace!(target: "sub-libp2p",
+					"Handler({}, {:?}) => OpenResultOk({:?})",
+					peer_id, connection_id, set_id);
+
+				match self.peers.get_mut(&(peer_id, set_id)) {
+					Some(PeerState::Enabled { connections, .. }) => {
+						debug_assert!(connections.iter().any(|(_, s)| matches!(
+							s,
+							ConnectionState::Opening | ConnectionState::Open(_)
+						)));
+						let any_open =
+							connections.iter().any(|(_, s)| matches!(s, ConnectionState::Open(_)));
+
+						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)| {
+							*c == connection_id && matches!(s, ConnectionState::Opening)
+						}) {
+							if !any_open {
+								trace!(target: "sub-libp2p", "External API <= Open({}, {:?})", peer_id, set_id);
+								let event = NotificationsOut::CustomProtocolOpen {
+									peer_id,
+									set_id,
+									negotiated_fallback,
+									received_handshake,
+									notifications_sink: notifications_sink.clone(),
+								};
+								self.events.push_back(ToSwarm::GenerateEvent(event));
+							}
+							*connec_state = ConnectionState::Open(notifications_sink);
+						} else if let Some((_, connec_state)) =
+							connections.iter_mut().find(|(c, s)| {
+								*c == connection_id &&
+									matches!(s, ConnectionState::OpeningThenClosing)
+							}) {
+							*connec_state = ConnectionState::Closing;
+						} else {
+							error!(target: "sub-libp2p",
+								"OpenResultOk State mismatch in the custom protos handler");
+							debug_assert!(false);
+						}
+					},
+
+					Some(PeerState::Incoming { connections, .. }) |
+					Some(PeerState::DisabledPendingEnable { connections, .. }) |
+					Some(PeerState::Disabled { connections, .. }) => {
+						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)| {
+							*c == connection_id && matches!(s, ConnectionState::OpeningThenClosing)
+						}) {
+							*connec_state = ConnectionState::Closing;
+						} else {
+							error!(target: "sub-libp2p",
+								"OpenResultOk State mismatch in the custom protos handler");
+							debug_assert!(false);
+						}
+					},
+
+					state => {
+						error!(target: "sub-libp2p",
+							   "OpenResultOk: Unexpected state in the custom protos handler: {:?}",
+							   state);
+						debug_assert!(false);
+					},
+				}
+			},
+
+			NotifsHandlerOut::OpenResultErr { protocol_index } => {
+				let set_id = crate::peerset::SetId::from(protocol_index);
+				trace!(target: "sub-libp2p",
+					"Handler({:?}, {:?}) => OpenResultErr({:?})",
+					peer_id, connection_id, set_id);
+
+				let mut entry = if let Entry::Occupied(entry) = self.peers.entry((peer_id, set_id))
+				{
+					entry
+				} else {
+					error!(target: "sub-libp2p", "OpenResultErr: State mismatch in the custom protos handler");
+					debug_assert!(false);
+					return
+				};
+
+				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
+					PeerState::Enabled { mut connections } => {
+						debug_assert!(connections.iter().any(|(_, s)| matches!(
+							s,
+							ConnectionState::Opening | ConnectionState::Open(_)
+						)));
+
+						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)| {
+							*c == connection_id && matches!(s, ConnectionState::Opening)
+						}) {
+							*connec_state = ConnectionState::Closed;
+						} else if let Some((_, connec_state)) =
+							connections.iter_mut().find(|(c, s)| {
+								*c == connection_id &&
+									matches!(s, ConnectionState::OpeningThenClosing)
+							}) {
+							*connec_state = ConnectionState::Closing;
+						} else {
+							error!(target: "sub-libp2p",
+								"OpenResultErr: State mismatch in the custom protos handler");
+							debug_assert!(false);
+						}
+
+						if !connections.iter().any(|(_, s)| {
+							matches!(s, ConnectionState::Opening | ConnectionState::Open(_))
+						}) {
+							trace!(target: "sub-libp2p", "PSM <= Dropped({:?}, {:?})", peer_id, set_id);
+							self.peerset.dropped(set_id, peer_id, DropReason::Refused);
+
+							let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
+							*entry.into_mut() = PeerState::Disabled {
+								connections,
+								backoff_until: Some(Instant::now() + Duration::from_secs(ban_dur)),
+							};
+						} else {
+							*entry.into_mut() = PeerState::Enabled { connections };
+						}
+					},
+					mut state @ PeerState::Incoming { .. } |
+					mut state @ PeerState::DisabledPendingEnable { .. } |
+					mut state @ PeerState::Disabled { .. } => {
+						match &mut state {
+							PeerState::Incoming { connections, .. } |
+							PeerState::Disabled { connections, .. } |
+							PeerState::DisabledPendingEnable { connections, .. } => {
+								if let Some((_, connec_state)) =
+									connections.iter_mut().find(|(c, s)| {
+										*c == connection_id &&
+											matches!(s, ConnectionState::OpeningThenClosing)
+									}) {
+									*connec_state = ConnectionState::Closing;
+								} else {
+									error!(target: "sub-libp2p",
+										"OpenResultErr: State mismatch in the custom protos handler");
+									debug_assert!(false);
+								}
+							},
+							_ => unreachable!(
+								"Match branches are the same as the one on which we
+							enter this block; qed"
+							),
+						};
+
+						*entry.into_mut() = state;
+					},
+					state => {
+						error!(target: "sub-libp2p",
+							"Unexpected state in the custom protos handler: {:?}",
+							state);
+						debug_assert!(false);
+					},
+				};
+			},
+
+			NotifsHandlerOut::Notification { protocol_index, message } => {
+				let set_id = crate::peerset::SetId::from(protocol_index);
+				if self.is_open(&peer_id, set_id) {
+					trace!(
+						target: "sub-libp2p",
+						"Handler({:?}) => Notification({}, {:?}, {} bytes)",
+						connection_id,
+						peer_id,
+						set_id,
+						message.len()
+					);
+					trace!(
+						target: "sub-libp2p",
+						"External API <= Message({}, {:?})",
+						peer_id,
+						set_id,
+					);
+					let event = NotificationsOut::Notification { peer_id, set_id, message };
+
+					self.events.push_back(ToSwarm::GenerateEvent(event));
+				} else {
+					trace!(
+						target: "sub-libp2p",
+						"Handler({:?}) => Post-close notification({}, {:?}, {} bytes)",
+						connection_id,
+						peer_id,
+						set_id,
+						message.len()
+					);
+				}
+			},
 		}
 	}
 
@@ -2020,7 +2006,7 @@ impl NetworkBehaviour for Notifications {
 		_params: &mut impl PollParameters,
 	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
 		if let Some(event) = self.events.pop_front() {
-			return Poll::Ready(event);
+			return Poll::Ready(event)
 		}
 
 		// Poll for instructions from the peerset.
@@ -2041,7 +2027,7 @@ impl NetworkBehaviour for Notifications {
 				},
 				Poll::Ready(None) => {
 					error!(target: "sub-libp2p", "Peerset receiver stream has returned None");
-					break;
+					break
 				},
 				Poll::Pending => break,
 			}
@@ -2106,7 +2092,7 @@ impl NetworkBehaviour for Notifications {
 		}
 
 		if let Some(event) = self.events.pop_front() {
-			return Poll::Ready(event);
+			return Poll::Ready(event)
 		}
 
 		Poll::Pending
@@ -2128,9 +2114,8 @@ mod tests {
 				(ConnectionState::Closing, ConnectionState::Closing) => true,
 				(ConnectionState::Opening, ConnectionState::Opening) => true,
 				(ConnectionState::OpeningThenClosing, ConnectionState::OpeningThenClosing) => true,
-				(ConnectionState::OpenDesiredByRemote, ConnectionState::OpenDesiredByRemote) => {
-					true
-				},
+				(ConnectionState::OpenDesiredByRemote, ConnectionState::OpenDesiredByRemote) =>
+					true,
 				(ConnectionState::Open(_), ConnectionState::Open(_)) => true,
 				_ => false,
 			}
@@ -3693,7 +3678,7 @@ mod tests {
 				.await;
 
 				if notif.peers.get(&(peer, set_id)).is_none() {
-					break;
+					break
 				}
 			}
 		})
@@ -3808,7 +3793,7 @@ mod tests {
 					assert!(std::matches!(connections[0], (_, ConnectionState::Closing)));
 
 					if timer_deadline != &prev_instant {
-						break;
+						break
 					}
 				} else {
 					panic!("invalid state");
