@@ -406,7 +406,7 @@ pub enum PayoutDestination<AccountId> {
 	Forgo,
 }
 
-// Used for testing and benchmarking where stash and controller accounts are some times generated
+// Used for testing and benchmarking where stash and controller accounts are sometimes generated
 // after providing the desired `PayoutDestination`. In such scenarios the provided `Alias` variant
 // is used. If payout destination accounts are already known, `Direct` can be used.
 pub enum PayoutRoute<AccountId> {
