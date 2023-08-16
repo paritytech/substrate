@@ -114,11 +114,11 @@ mod storage_types {
 
 /// The types of prefixes the storage alias macro supports.
 mod prefix_types {
-	// Use the verbatim passed name as prefix.
+	// Use the verbatim/unmodified input name as the prefix.
 	syn::custom_keyword!(verbatim);
-	// The passed type is a pallet and its pallet name should be used as prefix.
+	// The input type is a pallet and its pallet name should be used as the prefix.
 	syn::custom_keyword!(pallet_name);
-	// The passed type implements `Get<'static str>` and this str should be used as prefix.
+	// The input type implements `Get<'static str>` and this `str` should be used as the prefix.
 	syn::custom_keyword!(dynamic);
 }
 
@@ -454,20 +454,21 @@ impl Parse for Input {
 	}
 }
 
-/// The type of the prefix the storage alias is using.
+/// Defines which type of prefix the storage alias is using.
 #[derive(Clone, Copy)]
 enum PrefixType {
-	/// Use the compatibility way to determine the prefix.
+	/// An appropriate prefix will be determined automatically.
 	///
 	/// If generics are passed, this is assumed to be a pallet and the pallet name should be used.
 	/// Otherwise use the verbatim passed name as prefix.
 	Compatibility,
-	/// Use the verbatim ident as prefix.
+	/// The provided ident/name will be used as the prefix.
 	Verbatim,
-	/// Use the given type that needs to implement `PalletInfoAccess` to determine the name. This
-	/// name is then used as prefix.
+	/// The provided type will be used to determine the prefix. This type must
+	/// implement `PalletInfoAccess` which specifies the proper name. This
+	/// name is then used as the prefix.
 	PalletName,
-	/// Use the given type that needs to implement `Get<'static str>` to determine the prefix.
+	/// Uses the provided type implementing `Get<'static str>` to determine the prefix.
 	Dynamic,
 }
 

@@ -131,10 +131,10 @@ impl TypeId for PalletId {
 
 /// Generate a [`#[pallet::storage]`](pallet_macros::storage) alias outside of a pallet.
 ///
-/// This storage alias works similar to the [`#[pallet::storage]`](pallet_macros::storage)
-/// attribute macro. It supports [`storage::types::StorageValue`],
-/// [`storage::types::StorageMap`], [`storage::types::StorageDoubleMap`] and
-/// [`storage::types::StorageNMap`]. The main difference to the normal
+/// This storage alias works similarly to the [`#[pallet::storage]`](pallet_macros::storage)
+/// attribute macro. It supports [`StorageValue`](storage::types::StorageValue),
+/// [`StorageMap`](storage::types::StorageMap), [`StorageDoubleMap`](storage::types::StorageDoubleMap) and
+/// [`StorageNMap`](storage::types::StorageNMap). The main difference to the normal
 /// [`#[pallet::storage]`](pallet_macros::storage) is the flexibility around declaring the
 /// storage prefix to use. The storage prefix determines where to find the value in the
 /// storage. [`#[pallet::storage]`](pallet_macros::storage) uses the name of the pallet as
@@ -146,21 +146,21 @@ impl TypeId for PalletId {
 /// # Examples
 ///
 /// There are different ways to declare the `prefix` to use. The `prefix` type can either be
-/// declared explicetly by passing it to the macro as attribute or by letting the macro guess
-/// on what the `prefix` type is. The `prefix` is always passed as first generic argument to
+/// declared explicetly by passing it to the macro as an attribute or by letting the macro guess
+/// on what the `prefix` type is. The `prefix` is always passed as the first generic argument to
 /// the type declaration. When using [`#[pallet::storage]`](pallet_macros::storage) this first
 /// generic argument is always `_`. Besides declaring the `prefix`, the rest of the type
 /// declaration works as with [`#[pallet::storage]`](pallet_macros::storage).
 ///
-/// 1. Use the `verbatim` prefix type. This prefix type uses the given identifier as `prefix`:
+/// 1. Use the `verbatim` prefix type. This prefix type uses the given identifier as the `prefix`:
 #[doc = docify::embed!("src/tests/storage_alias.rs", verbatim_attribute)]
 ///
-/// 2. Use the `pallet_name` prefix type. This prefix type uses name of pallet as configured in
-///    [`construct_runtime!`] as `prefix`:
+/// 2. Use the `pallet_name` prefix type. This prefix type uses the name of the pallet as configured in
+///    [`construct_runtime!`] as the `prefix`:
 #[doc = docify::embed!("src/tests/storage_alias.rs", pallet_name_attribute)]
 /// It requires that the given prefix type implements
 /// [`PalletInfoAccess`](traits::PalletInfoAccess) (which is always the case for FRAME pallet
-/// structs). In the example above `Pallet<T>` is the prefix type.
+/// structs). In the example above, `Pallet<T>` is the prefix type.
 ///
 /// 3. Use the `dynamic` prefix type. This prefix type calls [`Get::get()`](traits::Get::get)
 ///    to get the `prefix`:
@@ -169,7 +169,7 @@ impl TypeId for PalletId {
 ///
 /// 4. Let the macro "guess" what kind of prefix type to use. This only supports verbatim or
 ///    pallet name. The macro uses the presence of generic arguments to the prefix type as
-///    indication to use the pallet name:
+///    an indication that it should use the pallet name as the `prefix`:
 #[doc = docify::embed!("src/tests/storage_alias.rs", storage_alias_guess)]
 pub use frame_support_procedural::storage_alias;
 
