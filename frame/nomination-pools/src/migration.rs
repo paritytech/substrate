@@ -740,27 +740,26 @@ pub mod v5 {
 			);
 
 			if current == 6 && onchain == 5 {
-				let mut migrated = 0u64;
-				let mut tvl: BalanceOf<T> = Zero::zero();
-				for (pool_id, _pool) in BondedPools::<T>::iter() {
-					migrated.saturating_inc();
-					if let Some(bonded_pool) = BondedPool::<T>::get(pool_id) {
-						tvl = tvl.saturating_add(
-							T::Staking::total_stake(&bonded_pool.bonded_account())
-								.unwrap_or_default(),
-						);
-					}
-				}
+				let migrated = BondedPools::<T>::count();
+				let tvl: BalanceOf<T> = BondedPools::<T>::iter()
+					.map(|(id, inner)| {
+						T::Staking::total_stake(&BondedPool { id, inner }.bonded_account())
+							.unwrap_or_default()
+					})
+					.reduce(|acc, balance| acc + balance)
+					.unwrap_or_default();
+
 				TotalValueLocked::<T>::set(tvl);
 
 				current.put::<Pallet<T>>();
 				log!(info, "Upgraded {} pools, storage to version {:?}", migrated, current);
 
-				// reads: migrated * (BondedPools + BondedPool + Staking::total_stake) + onchain
+				// reads: migrated * (BondedPools +  Staking::total_stake) + count + onchain
 				// version
 				//
 				// writes: current version + TVL
-				T::DbWeight::get().reads_writes(migrated.saturating_mul(3) + 1, 2)
+				T::DbWeight::get()
+					.reads_writes(migrated.saturating_mul(2).saturating_add(2).into(), 2)
 			} else {
 				log!(info, "Migration did not execute. This probably should be removed");
 				T::DbWeight::get().reads(1)
