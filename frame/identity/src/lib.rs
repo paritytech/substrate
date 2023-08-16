@@ -79,7 +79,6 @@ mod types;
 pub mod weights;
 
 use frame_support::traits::{BalanceStatus, Currency, OnUnbalanced, ReservableCurrency};
-use scale_info::prelude::string::String;
 use sp_runtime::traits::{AppendZerosInput, Hash, Saturating, StaticLookup, Zero};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
@@ -204,7 +203,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub identities: Vec<(T::AccountId, String)>,
+		pub identities: Vec<(T::AccountId, Vec<u8>)>,
 	}
 
 	#[cfg(feature = "std")]
@@ -222,9 +221,7 @@ pub mod pallet {
 					account,
 					Registration {
 						info: IdentityInfo {
-							display: Data::Raw(
-								BoundedVec::try_from(name.as_bytes().to_vec()).unwrap(),
-							),
+							display: Data::Raw(BoundedVec::try_from(name.clone()).unwrap()),
 							twitter: Data::None,
 							riot: Data::None,
 							email: Data::None,
