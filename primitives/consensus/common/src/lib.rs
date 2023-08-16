@@ -25,7 +25,7 @@ use std::{sync::Arc, time::Duration};
 
 use futures::prelude::*;
 use sp_runtime::{
-	traits::{Block as BlockT, HashFor},
+	traits::{Block as BlockT, HashingFor},
 	Digest,
 };
 use sp_state_machine::StorageProof;

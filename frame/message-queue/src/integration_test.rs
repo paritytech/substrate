@@ -22,8 +22,8 @@
 
 use crate::{
 	mock::{
-		new_test_ext, CountingMessageProcessor, IntoWeight, MockedWeightInfo, NumMessagesProcessed,
-		YieldingQueues,
+		build_and_execute, CountingMessageProcessor, IntoWeight, MockedWeightInfo,
+		NumMessagesProcessed, YieldingQueues,
 	},
 	mock_helpers::MessageOrigin,
 	*,
@@ -123,7 +123,7 @@ fn stress_test_enqueue_and_service() {
 	let max_msg_len = MaxMessageLenOf::<Test>::get();
 	let mut rng = StdRng::seed_from_u64(42);
 
-	new_test_ext::<Test>().execute_with(|| {
+	build_and_execute::<Test>(|| {
 		let mut msgs_remaining = 0;
 		for _ in 0..blocks {
 			// Start by enqueuing a large number of messages.
@@ -171,7 +171,7 @@ fn stress_test_queue_suspension() {
 	let max_msg_len = MaxMessageLenOf::<Test>::get();
 	let mut rng = StdRng::seed_from_u64(41);
 
-	new_test_ext::<Test>().execute_with(|| {
+	build_and_execute::<Test>(|| {
 		let mut suspended = BTreeSet::<u32>::new();
 		let mut msgs_remaining = 0;
 

@@ -25,7 +25,7 @@ use sp_core::{
 };
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor, Zero},
+	traits::{Block as BlockT, HashingFor, Header as HeaderT, NumberFor, Zero},
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
@@ -516,7 +516,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 }
 
 impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block> {
-	type State = InMemoryBackend<HashFor<Block>>;
+	type State = InMemoryBackend<HashingFor<Block>>;
 
 	fn state(&self) -> sp_blockchain::Result<Option<&Self::State>> {
 		Ok(Some(&self.old_state))
@@ -605,7 +605,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 /// > **Warning**: Doesn't support all the features necessary for a proper database. Only use this
 /// > struct for testing purposes. Do **NOT** use in production.
 pub struct Backend<Block: BlockT> {
-	states: RwLock<HashMap<Block::Hash, InMemoryBackend<HashFor<Block>>>>,
+	states: RwLock<HashMap<Block::Hash, InMemoryBackend<HashingFor<Block>>>>,
 	blockchain: Blockchain<Block>,
 	import_lock: RwLock<()>,
 	pinned_blocks: RwLock<HashMap<Block::Hash, i64>>,
@@ -660,7 +660,7 @@ impl<Block: BlockT> backend::AuxStore for Backend<Block> {
 impl<Block: BlockT> backend::Backend<Block> for Backend<Block> {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = Blockchain<Block>;
-	type State = InMemoryBackend<HashFor<Block>>;
+	type State = InMemoryBackend<HashingFor<Block>>;
 	type OffchainStorage = OffchainStorage;
 
 	fn begin_operation(&self) -> sp_blockchain::Result<Self::BlockImportOperation> {

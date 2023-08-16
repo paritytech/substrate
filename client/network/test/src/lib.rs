@@ -20,6 +20,8 @@
 #[cfg(test)]
 mod block_import;
 #[cfg(test)]
+mod fuzz;
+#[cfg(test)]
 mod service;
 #[cfg(test)]
 mod sync;
@@ -52,6 +54,7 @@ use sc_network::{
 		FullNetworkConfiguration, MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig,
 		NonReservedPeerMode, ProtocolId, Role, SyncMode, TransportConfig,
 	},
+	peer_store::PeerStore,
 	request_responses::ProtocolConfig as RequestResponseConfig,
 	types::ProtocolName,
 	Multiaddr, NetworkBlock, NetworkService, NetworkStateInfo, NetworkSyncForkRequest,
@@ -893,6 +896,12 @@ pub trait TestNetFactory: Default + Sized + Send {
 			});
 		}
 
+		let peer_store = PeerStore::new(
+			network_config.boot_nodes.iter().map(|bootnode| bootnode.peer_id).collect(),
+		);
+		let peer_store_handle = peer_store.handle();
+		self.spawn_task(peer_store.run().boxed());
+
 		let genesis_hash =
 			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
 		let network = NetworkWorker::new(sc_network::config::Params {
@@ -901,6 +910,7 @@ pub trait TestNetFactory: Default + Sized + Send {
 				tokio::spawn(f);
 			}),
 			network_config: full_net_config,
+			peer_store: peer_store_handle,
 			genesis_hash,
 			protocol_id,
 			fork_id,

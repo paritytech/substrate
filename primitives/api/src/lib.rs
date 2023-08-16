@@ -98,7 +98,7 @@ pub use sp_runtime::StateVersion;
 #[doc(hidden)]
 pub use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Hash as HashT, HashFor, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, Hash as HashT, HashingFor, Header as HeaderT, NumberFor},
 	transaction_validity::TransactionValidity,
 	RuntimeString, TransactionOutcome,
 };
@@ -454,7 +454,7 @@ pub use sp_api_proc_macro::mock_impl_runtime_apis;
 
 /// A type that records all accessed trie nodes and generates a proof out of it.
 #[cfg(feature = "std")]
-pub type ProofRecorder<B> = sp_trie::recorder::Recorder<HashFor<B>>;
+pub type ProofRecorder<B> = sp_trie::recorder::Recorder<HashingFor<B>>;
 
 #[cfg(feature = "std")]
 pub type StorageChanges<Block> = sp_state_machine::StorageChanges<HashFor<Block>>;
@@ -597,7 +597,7 @@ pub struct CallApiAtParams<'a, Block: BlockT> {
 #[cfg(feature = "std")]
 pub trait CallApiAt<Block: BlockT> {
 	/// The state backend that is used to store the block states.
-	type StateBackend: StateBackend<HashFor<Block>> + AsTrieBackend<HashFor<Block>>;
+	type StateBackend: StateBackend<HashingFor<Block>> + AsTrieBackend<HashingFor<Block>>;
 
 	/// Calls the given api function with the given encoded arguments at the given block and returns
 	/// the encoded result.

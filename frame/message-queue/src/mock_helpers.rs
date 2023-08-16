@@ -89,7 +89,7 @@ pub fn page<T: Config>(msg: &[u8]) -> PageOf<T> {
 }
 
 pub fn single_page_book<T: Config>() -> BookStateOf<T> {
-	BookState { begin: 0, end: 1, count: 1, ..Default::default() }
+	BookState { begin: 0, end: 1, count: 1, message_count: 1, size: 1, ..Default::default() }
 }
 
 pub fn empty_book<T: Config>() -> BookStateOf<T> {
@@ -139,10 +139,8 @@ pub fn setup_bump_service_head<T: Config>(
 	current: <<T as Config>::MessageProcessor as ProcessMessage>::Origin,
 	next: <<T as Config>::MessageProcessor as ProcessMessage>::Origin,
 ) {
-	let mut book = single_page_book::<T>();
-	book.ready_neighbours = Some(Neighbours::<MessageOriginOf<T>> { prev: next.clone(), next });
-	ServiceHead::<T>::put(&current);
-	BookStateFor::<T>::insert(&current, &book);
+	crate::Pallet::<T>::enqueue_message(msg("1"), current);
+	crate::Pallet::<T>::enqueue_message(msg("1"), next);
 }
 
 /// Knit a queue into the ready-ring and write it back to storage.
@@ -164,11 +162,8 @@ pub fn unknit<T: Config>(o: &<<T as Config>::MessageProcessor as ProcessMessage>
 pub fn build_ring<T: Config>(
 	queues: &[<<T as Config>::MessageProcessor as ProcessMessage>::Origin],
 ) {
-	for queue in queues {
-		BookStateFor::<T>::insert(queue, empty_book::<T>());
-	}
-	for queue in queues {
-		knit::<T>(queue);
+	for queue in queues.iter() {
+		crate::Pallet::<T>::enqueue_message(msg("1"), queue.clone());
 	}
 	assert_ring::<T>(queues);
 }

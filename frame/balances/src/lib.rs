@@ -213,7 +213,33 @@ pub mod pallet {
 
 	pub type CreditOf<T, I> = Credit<<T as frame_system::Config>::AccountId, Pallet<T, I>>;
 
-	#[pallet::config]
+	/// Default implementations of [`DefaultConfig`], which can be used to implement [`Config`].
+	pub mod config_preludes {
+		use super::*;
+		use frame_support::derive_impl;
+
+		pub struct TestDefaultConfig;
+
+		#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+		impl frame_system::DefaultConfig for TestDefaultConfig {}
+
+		#[frame_support::register_default_impl(TestDefaultConfig)]
+		impl DefaultConfig for TestDefaultConfig {
+			type Balance = u64;
+
+			type ReserveIdentifier = ();
+			type FreezeIdentifier = ();
+
+			type MaxLocks = ();
+			type MaxReserves = ();
+			type MaxFreezes = ();
+			type MaxHolds = ();
+
+			type WeightInfo = ();
+		}
+	}
+
+	#[pallet::config(with_default)]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self, I>>
@@ -236,6 +262,7 @@ pub mod pallet {
 			+ FixedPointOperand;
 
 		/// Handler for the unbalanced reduction when removing a dust account.
+		#[pallet::no_default]
 		type DustRemoval: OnUnbalanced<CreditOf<Self, I>>;
 
 		/// The minimum amount required to keep an account open. MUST BE GREATER THAN ZERO!
@@ -247,9 +274,11 @@ pub mod pallet {
 		///
 		/// Bottom line: Do yourself a favour and make it at least one!
 		#[pallet::constant]
+		#[pallet::no_default]
 		type ExistentialDeposit: Get<Self::Balance>;
 
 		/// The means of storing the balances of an account.
+		#[pallet::no_default]
 		type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 
 		/// The ID type for reserves.
@@ -258,6 +287,7 @@ pub mod pallet {
 		type ReserveIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
 
 		/// The overarching hold reason.
+		#[pallet::no_default]
 		type RuntimeHoldReason: Parameter + Member + MaxEncodedLen + Ord + Copy;
 
 		/// The ID type for freezes.
