@@ -176,7 +176,7 @@ impl<T: Config> ListScenario<T> {
 		let (origin_stash1, origin_controller1) = create_stash_controller_with_balance::<T>(
 			USER_SEED + 2,
 			origin_weight,
-			PayoutDestinationOpt::Stake,
+			PayoutDestination::Stake,
 		)?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(origin_controller1.clone()).into(),
@@ -187,7 +187,7 @@ impl<T: Config> ListScenario<T> {
 		let (_origin_stash2, origin_controller2) = create_stash_controller_with_balance::<T>(
 			USER_SEED + 3,
 			origin_weight,
-			PayoutDestinationOpt::Stake,
+			PayoutDestination::Stake,
 		)?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(origin_controller2).into(),
@@ -207,7 +207,7 @@ impl<T: Config> ListScenario<T> {
 		let (_dest_stash1, dest_controller1) = create_stash_controller_with_balance::<T>(
 			USER_SEED + 1,
 			dest_weight,
-			PayoutDestinationOpt::Stake,
+			PayoutDestination::Stake,
 		)?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(dest_controller1).into(),
@@ -431,7 +431,7 @@ benchmarks! {
 		let (stash, controller) = create_stash_controller_with_balance::<T>(
 			SEED + MaxNominationsOf::<T>::get() + 1, // make sure the account does not conflict with others
 			origin_weight,
-			PayoutDestinationOpt::Stake,
+			PayoutDestination::Stake,
 		).unwrap();
 
 		assert!(!Nominators::<T>::contains_key(&stash));
