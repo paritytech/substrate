@@ -390,9 +390,8 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 
 /// The payout destination for an account.
 ///
-/// NOTE: Being lazily migrated to. Logic pertaining to this enum will be introduced to `set_payee`
-/// and payout logic in a future update, and will replace `RewardDestination`, once all records have
-/// been lazily migrated to this enum.
+/// NOTE: Being lazily migrated to. Logic pertaining to this enum has been introduced to `set_payee`
+/// and payout logic, replacing `RewardDestination`.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum PayoutDestination<AccountId> {
 	/// Payout goes into the stash account and is added to bond.
