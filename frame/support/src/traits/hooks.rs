@@ -106,10 +106,16 @@ pub trait OnRuntimeUpgrade {
 		Weight::zero()
 	}
 
-	/// Executes `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` hooks for a migration.
+	/// The expected and default behavior of this method is to handle executing `pre_upgrade` ->
+	/// `on_runtime_upgrade` -> `post_upgrade` hooks for a migration.
 	///
-	/// This is required for testing a tuple of migrations where the tuple contains
-	/// order-dependent migrations.
+	/// Internally, the default implementation
+	/// - Handles passing data from `pre_upgrade` to `post_upgrade`
+	/// - Ensure storage is not modified in `pre_upgrade` and `post_upgrade` hooks.
+	///
+	/// Combining the `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` logic flow into a
+	/// single method call is helpful for scenarios like testing a tuple of migrations, where the
+	/// tuple contains order-dependent migrations.
 	#[cfg(feature = "try-runtime")]
 	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
 		let maybe_state = if checks {
@@ -154,6 +160,8 @@ impl OnRuntimeUpgrade for Tuple {
 		weight
 	}
 
+	/// Implements the default behavior of `try_on_runtime_upgrade` for tuples, logging any errors
+	/// that occur.
 	#[cfg(feature = "try-runtime")]
 	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
 		let mut weight = Weight::zero();
