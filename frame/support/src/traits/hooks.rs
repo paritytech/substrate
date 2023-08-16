@@ -189,7 +189,7 @@ impl OnRuntimeUpgrade for Tuple {
 		Ok(weight)
 	}
 
-	/// [`OnRuntimeUpgrade::pre_upgrade`] should not be used on [`Tuple`].
+	/// [`OnRuntimeUpgrade::pre_upgrade`] should not be used on a tuple.
 	///
 	/// Instead, implementors should use [`OnRuntimeUpgrade::try_on_runtime_upgrade`] which
 	/// internally calls `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` for each tuple
