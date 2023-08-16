@@ -71,7 +71,7 @@ fn kdf(shared_secret: &[u8]) -> [u8; AES_KEY_LEN] {
 /// Encrypt `plaintext` with the given public x25519 public key. Decryption can be performed with
 /// the matching secret key.
 pub fn encrypt_x25519(pk: &PublicKey, plaintext: &[u8]) -> Result<Vec<u8>, Error> {
-	let ephemeral_sk = x25519_dalek::StaticSecret::new(OsRng);
+	let ephemeral_sk = x25519_dalek::StaticSecret::random_from_rng(OsRng);
 	let ephemeral_pk = x25519_dalek::PublicKey::from(&ephemeral_sk);
 
 	let mut shared_secret = ephemeral_sk.diffie_hellman(pk).to_bytes().to_vec();
