@@ -157,7 +157,7 @@ struct DelayId(u64);
 /// State of a peer we're connected to.
 ///
 /// The variants correspond to the state of the peer w.r.t. the peerset.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum PeerState {
 	/// State is poisoned. This is a temporary state for a peer and we should always switch back
 	/// to it later. If it is found in the wild, that means there was either a panic or a bug in
@@ -258,7 +258,7 @@ impl PeerState {
 }
 
 /// State of the handler of a single connection visible from this state machine.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum ConnectionState {
 	/// Connection is in the `Closed` state, meaning that the remote hasn't requested anything.
 	Closed,
@@ -4706,7 +4706,7 @@ mod tests {
 								FromSwarm::DialFailure(event)
 							},
 						};
-						let entry_before = notif.peers.get(&(peer_id, 0.into()));
+						let entry_before = notif.peers.get(&(peer_id, 0.into())).cloned();
 						// precheck
 						match &event {
 							FromSwarm::ConnectionEstablished(_) => {
@@ -4718,7 +4718,7 @@ mod tests {
 								}
                             },
                             FromSwarm::DialFailure(_) => {
-                                if matches!(entry_before, Some(&PeerState::Poisoned)) {
+                                if matches!(entry_before, Some(PeerState::Poisoned)) {
 									continue
 								}
                             },
@@ -4727,17 +4727,20 @@ mod tests {
 							}
 						}
 						notif.on_swarm_event(event);
+						let entry_after = notif.peers.get(&(peer_id, 0.into())).cloned();
 						// todo postcheck
 					},
 					FuzzAction::FromHandler(AFromHandler(pid, id, event)) => {
 						let peer_id = pid.0;
 						let conn = ConnectionId::new_unchecked(id);
-						let Entry::Occupied(s) = notif.peers.entry((peer_id, 0.into())) else {
+						let entry_before = notif.peers.get(&(peer_id, 0.into())).cloned();
+						if matches!(entry_before, None) {
 							// FIXME proper check
 							continue
 						};
 						// todo precheck
 						notif.on_connection_handler_event(peer_id, conn, event);
+						let entry_after = notif.peers.get(&(peer_id, 0.into())).cloned();
 						// todo postcheck
 					},
 				}
