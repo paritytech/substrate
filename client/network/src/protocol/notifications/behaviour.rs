@@ -2104,7 +2104,8 @@ impl NetworkBehaviour for Notifications {
 mod tests {
 	use super::*;
 	use crate::{peerset::IncomingIndex, protocol::notifications::handler::tests::*};
-	use libp2p::swarm::AddressRecord;
+	use arbitrary::{Arbitrary, Result as AResult, Unstructured};
+	use libp2p::{multihash::Multihash, swarm::AddressRecord};
 	use std::{collections::HashSet, iter};
 
 	impl PartialEq for ConnectionState {
@@ -4558,5 +4559,192 @@ mod tests {
 			conn,
 			conn_yielder.open_substream(PeerId::random(), 0, connected, vec![1, 2, 3, 4]),
 		);
+	}
+
+	#[derive(Clone, Debug)]
+	struct Mh(Multihash);
+
+	impl<'a> Arbitrary<'a> for Mh {
+		fn arbitrary(u: &mut Unstructured<'a>) -> AResult<Self> {
+			let hash: [u8; 32] = u.arbitrary()?;
+			let r = Mh(Multihash::wrap(0x0, &hash).expect("The digest size is never too large"));
+			Ok(r)
+		}
+	}
+
+	#[derive(Clone, Debug)]
+	struct PId(PeerId);
+
+	impl<'a> Arbitrary<'a> for PId {
+		fn arbitrary(u: &mut Unstructured<'a>) -> AResult<Self> {
+			let mh = Mh::arbitrary(u)?;
+
+			let r =
+				PId(PeerId::from_multihash(mh.0)
+					.expect("identity multihash works if digest size < 64"));
+			Ok(r)
+		}
+	}
+
+	#[derive(Debug)]
+	enum FromSwarmE {
+		ConnectionEstablished,
+		ConnectionClosed,
+		DialFailure,
+	}
+
+	impl<'a> Arbitrary<'a> for FromSwarmE {
+		fn arbitrary(u: &mut Unstructured<'a>) -> AResult<Self> {
+			let t = u8::arbitrary(u)?;
+
+			match t % 3 {
+				0 => Ok(FromSwarmE::ConnectionEstablished),
+				1 => Ok(FromSwarmE::ConnectionClosed),
+				2 => Ok(FromSwarmE::DialFailure),
+				_ => unreachable!(),
+			}
+		}
+	}
+
+	#[derive(Debug)]
+	struct AFromSwarm(PId, FromSwarmE, usize);
+
+	impl<'a> Arbitrary<'a> for AFromSwarm {
+		fn arbitrary(u: &mut Unstructured<'a>) -> AResult<Self> {
+			let pid = PId::arbitrary(u)?;
+			let e = FromSwarmE::arbitrary(u)?;
+			let n = usize::arbitrary(u)?;
+
+			let r = AFromSwarm(pid, e, n);
+			Ok(r)
+		}
+	}
+
+	#[derive(Debug)]
+	struct AFromHandler(PId, usize, NotifsHandlerOut);
+
+	impl<'a> Arbitrary<'a> for AFromHandler {
+		fn arbitrary(u: &mut Unstructured<'a>) -> AResult<Self> {
+			let pid = PId::arbitrary(u)?;
+			let conn = usize::arbitrary(u)?;
+			let t = u8::arbitrary(u)? % 6;
+			let protocol_index = 0; // always 0 because we deal with only one protocol
+			let event = match t {
+				0 => NotifsHandlerOut::OpenDesiredByRemote { protocol_index },
+				1 => NotifsHandlerOut::CloseDesired { protocol_index },
+				2 => NotifsHandlerOut::CloseResult { protocol_index },
+				3 => NotifsHandlerOut::OpenDesiredByRemote { protocol_index }, // TODO OpenResultOk
+				4 => NotifsHandlerOut::OpenResultErr { protocol_index },
+				5 => {
+					let b = Vec::<u8>::arbitrary(u)?;
+					let message = b[..].into();
+					NotifsHandlerOut::Notification { protocol_index, message }
+				},
+				_ => {
+					unreachable!("no such event type is possible")
+				},
+			};
+			let r = AFromHandler(pid, conn, event);
+			Ok(r)
+		}
+	}
+
+	#[derive(Arbitrary, Debug)]
+	enum FuzzAction {
+		FromSwarm(AFromSwarm),
+		FromHandler(AFromHandler),
+	}
+
+	#[test]
+	fn fuzz_states() {
+		fn fuzz_states_impl(u: &mut Unstructured<'_>) -> AResult<()> {
+			let actions = u.arbitrary::<Vec<FuzzAction>>()?;
+			let connected = ConnectedPoint::Listener {
+				local_addr: Multiaddr::empty(),
+				send_back_addr: Multiaddr::empty(),
+			};
+			let (mut notif, _peerset) = development_notifs();
+			assert_eq!(1, notif.notif_protocols.len());
+
+			for action in actions {
+				match action {
+					FuzzAction::FromSwarm(AFromSwarm(pid, e, n)) => {
+						// build event
+						let peer_id = pid.0;
+						let conn = ConnectionId::new_unchecked(n);
+						let event = match e {
+							FromSwarmE::ConnectionEstablished => {
+								let event = ConnectionEstablished {
+									peer_id: peer_id.clone(),
+									connection_id: conn,
+									endpoint: &connected,
+									failed_addresses: &[],
+									other_established: 0usize,
+								};
+								FromSwarm::ConnectionEstablished(event)
+							},
+							FromSwarmE::ConnectionClosed => {
+								let event = ConnectionClosed {
+									peer_id: peer_id.clone(),
+									connection_id: conn,
+									endpoint: &connected,
+									handler: NotifsHandler::new(
+										peer_id.clone(),
+										connected.clone(),
+										vec![],
+									),
+									remaining_established: 0usize,
+								};
+								FromSwarm::ConnectionClosed(event)
+							},
+							FromSwarmE::DialFailure => {
+								let event = DialFailure {
+									peer_id: Some(peer_id.clone()),
+									error: &libp2p::swarm::DialError::Banned,
+									connection_id: conn,
+								};
+								FromSwarm::DialFailure(event)
+							},
+						};
+						let entry_before = notif.peers.get(&(peer_id, 0.into()));
+						// precheck
+						match &event {
+							FromSwarm::ConnectionEstablished(_) => {
+								// todo more checks
+                            },
+                            FromSwarm::ConnectionClosed(_) => {
+                                if matches!(entry_before, None) {
+									continue
+								}
+                            },
+                            FromSwarm::DialFailure(_) => {
+                                if matches!(entry_before, Some(&PeerState::Poisoned)) {
+									continue
+								}
+                            },
+							_ => {
+								todo!()
+							}
+						}
+						notif.on_swarm_event(event);
+						// todo postcheck
+					},
+					FuzzAction::FromHandler(AFromHandler(pid, id, event)) => {
+						let peer_id = pid.0;
+						let conn = ConnectionId::new_unchecked(id);
+						let Entry::Occupied(s) = notif.peers.entry((peer_id, 0.into())) else {
+							// FIXME proper check
+							continue
+						};
+						// todo precheck
+						notif.on_connection_handler_event(peer_id, conn, event);
+						// todo postcheck
+					},
+				}
+			}
+			Ok(())
+		}
+
+		arbtest::builder().budget_ms(10_000).run(|u| fuzz_states_impl(u));
 	}
 }
