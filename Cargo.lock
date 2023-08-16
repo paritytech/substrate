@@ -2618,6 +2618,7 @@ dependencies = [
  "sp-genesis-builder",
  "sp-inherents",
  "sp-io",
+ "sp-metadata-ir",
  "sp-runtime",
  "sp-staking",
  "sp-state-machine",
@@ -6826,9 +6827,9 @@ dependencies = [
  "frame-system",
  "parity-scale-codec",
  "scale-info",
- "sp-api",
  "sp-core",
  "sp-io",
+ "sp-metadata-ir",
  "sp-runtime",
  "sp-std",
 ]

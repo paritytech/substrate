@@ -17,7 +17,7 @@
 
 use frame_support::traits::ConstU32;
 use scale_info::{form::MetaForm, meta_type};
-use sp_api::metadata_ir::{
+use sp_metadata_ir::{
 	RuntimeApiMetadataIR, RuntimeApiMethodMetadataIR, RuntimeApiMethodParamMetadataIR,
 };
 use sp_runtime::traits::Block as BlockT;

@@ -27,8 +27,8 @@ use crate::{
 	StorageHasher, Twox128,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
-use sp_api::metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR};
 use sp_arithmetic::traits::SaturatedConversion;
+use sp_metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR};
 use sp_std::prelude::*;
 
 /// A type that allow to store values for `(key1, key2)` couple. Similar to `StorageMap` but allow
@@ -735,8 +735,8 @@ where
 mod test {
 	use super::*;
 	use crate::{hash::*, storage::types::ValueQuery};
-	use sp_api::metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
 	use sp_io::{hashing::twox_128, TestExternalities};
+	use sp_metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
 
 	struct Prefix;
 	impl StorageInstance for Prefix {

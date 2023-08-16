@@ -29,7 +29,7 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
-use sp_api::metadata_ir::StorageEntryMetadataIR;
+use sp_metadata_ir::StorageEntryMetadataIR;
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
@@ -638,7 +638,7 @@ mod test {
 		hash::{StorageHasher as _, *},
 		storage::types::{Key as NMapKey, ValueQuery},
 	};
-	use sp_api::metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
+	use sp_metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;

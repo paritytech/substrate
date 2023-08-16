@@ -27,8 +27,8 @@ use crate::{
 	StorageHasher, Twox128,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
-use sp_api::metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR};
 use sp_arithmetic::traits::SaturatedConversion;
+use sp_metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR};
 use sp_std::prelude::*;
 
 /// A type that allow to store value for given key. Allowing to insert/remove/iterate on values.
@@ -513,8 +513,8 @@ mod test {
 		hash::*,
 		storage::{types::ValueQuery, IterableStorageMap},
 	};
-	use sp_api::metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
 	use sp_io::{hashing::twox_128, TestExternalities};
+	use sp_metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
 
 	struct Prefix;
 	impl StorageInstance for Prefix {

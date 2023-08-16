@@ -23,11 +23,11 @@ use frame_support::{
 	traits::ConstU32,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
-use sp_api::metadata_ir::{
+use sp_core::sr25519;
+use sp_metadata_ir::{
 	PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR, StorageEntryTypeIR,
 	StorageHasherIR,
 };
-use sp_core::sr25519;
 use sp_runtime::{
 	generic,
 	traits::{BlakeTwo256, Verify},

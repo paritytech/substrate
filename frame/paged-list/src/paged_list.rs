@@ -412,8 +412,8 @@ pub(crate) mod mock {
 		storage::{types::ValueQuery, StorageList as _},
 		StorageNoopGuard,
 	};
-	pub use sp_api::metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
 	pub use sp_io::{hashing::twox_128, TestExternalities};
+	pub use sp_metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
 
 	parameter_types! {
 		pub const ValuesPerNewPage: u32 = 5;

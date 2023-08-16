@@ -30,8 +30,8 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
-use sp_api::metadata_ir::StorageEntryMetadataIR;
 use sp_io::MultiRemovalResults;
+use sp_metadata_ir::StorageEntryMetadataIR;
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
@@ -515,7 +515,7 @@ mod test {
 		storage::{bounded_vec::BoundedVec, types::ValueQuery},
 		traits::ConstU32,
 	};
-	use sp_api::metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
+	use sp_metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;

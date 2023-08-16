@@ -26,8 +26,8 @@ use crate::{
 	traits::{GetDefault, StorageInfo, StorageInstance},
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
-use sp_api::metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR};
 use sp_arithmetic::traits::SaturatedConversion;
+use sp_metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR};
 use sp_std::prelude::*;
 
 /// A type that allow to store a value.
@@ -279,8 +279,8 @@ where
 mod test {
 	use super::*;
 	use crate::storage::types::ValueQuery;
-	use sp_api::metadata_ir::StorageEntryModifierIR;
 	use sp_io::{hashing::twox_128, TestExternalities};
+	use sp_metadata_ir::StorageEntryModifierIR;
 
 	struct Prefix;
 	impl StorageInstance for Prefix {

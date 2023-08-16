@@ -19,7 +19,7 @@
 //! StorageMap and others.
 
 use codec::FullCodec;
-use sp_api::metadata_ir::{StorageEntryMetadataIR, StorageEntryModifierIR};
+use sp_metadata_ir::{StorageEntryMetadataIR, StorageEntryModifierIR};
 use sp_std::prelude::*;
 
 mod counted_map;

@@ -40,10 +40,10 @@ pub mod __private {
 	pub use paste;
 	pub use scale_info;
 	pub use serde;
-	pub use sp_api::metadata_ir;
 	pub use sp_core::{OpaqueMetadata, Void};
 	pub use sp_core_hashing_proc_macro;
 	pub use sp_io::{self, storage::root as storage_root};
+	pub use sp_metadata_ir as metadata_ir;
 	#[cfg(feature = "std")]
 	pub use sp_runtime::{bounded_btree_map, bounded_vec};
 	pub use sp_runtime::{RuntimeDebug, StateVersion};
@@ -814,11 +814,11 @@ pub use macro_magic;
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use sp_api::metadata_ir::{
+	use sp_io::{MultiRemovalResults, TestExternalities};
+	use sp_metadata_ir::{
 		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,
 		StorageEntryTypeIR, StorageHasherIR,
 	};
-	use sp_io::{MultiRemovalResults, TestExternalities};
 	use sp_runtime::{generic, traits::BlakeTwo256, BuildStorage};
 	use sp_std::result;
 
