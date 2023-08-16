@@ -1845,7 +1845,11 @@ pub mod pallet {
 
 			Payees::<T>::insert(
 				stash.clone(),
-				Payee::<T>::get(&stash).to_payout_destination(stash.clone(), controller),
+				PayoutDestination::from_reward_destination(
+					Payee::<T>::get(&stash),
+					stash.clone(),
+					controller,
+				),
 			);
 			Payee::<T>::remove(&stash);
 

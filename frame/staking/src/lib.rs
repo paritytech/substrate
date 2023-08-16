@@ -405,13 +405,22 @@ pub enum PayoutDestination<AccountId> {
 	Forgo,
 }
 
-impl<AccountId> Default for PayoutDestination<AccountId> {
-	fn default() -> Self {
-		PayoutDestination::Stake
-	}
-}
-
 impl<AccountId: Clone> PayoutDestination<AccountId> {
+	/// NOTE: This function can be removed once lazy migration to `PayoutDestination` is completed.
+	pub fn from_reward_destination(
+		v: RewardDestination<AccountId>,
+		stash: AccountId,
+		controller: AccountId,
+	) -> Self {
+		match v {
+			RewardDestination::Staked => Self::Stake,
+			RewardDestination::Stash => Self::Deposit(stash),
+			RewardDestination::Controller => Self::Deposit(controller),
+			RewardDestination::Account(a) => Self::Deposit(a.clone()),
+			RewardDestination::None => Self::Forgo,
+		}
+	}
+
 	pub fn from_opt(
 		v: PayoutDestinationOpt<AccountId>,
 		stash: &AccountId,
@@ -428,6 +437,12 @@ impl<AccountId: Clone> PayoutDestination<AccountId> {
 					PayoutDestination::Split((p.clone(), ctlr.clone()))
 				},
 		}
+	}
+}
+
+impl<AccountId> Default for PayoutDestination<AccountId> {
+	fn default() -> Self {
+		PayoutDestination::Stake
 	}
 }
 
@@ -451,22 +466,6 @@ pub enum RewardDestination<AccountId> {
 impl<AccountId: Clone> Default for RewardDestination<AccountId> {
 	fn default() -> Self {
 		RewardDestination::Staked
-	}
-}
-
-impl<AccountId: Clone> RewardDestination<AccountId> {
-	fn to_payout_destination(
-		&self,
-		stash: AccountId,
-		controller: AccountId,
-	) -> PayoutDestination<AccountId> {
-		match self {
-			RewardDestination::Staked => PayoutDestination::Stake,
-			RewardDestination::Stash => PayoutDestination::Deposit(stash),
-			RewardDestination::Controller => PayoutDestination::Deposit(controller),
-			RewardDestination::Account(a) => PayoutDestination::Deposit(a.clone()),
-			RewardDestination::None => PayoutDestination::Forgo,
-		}
 	}
 }
 

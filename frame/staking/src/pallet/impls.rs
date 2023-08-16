@@ -1055,7 +1055,11 @@ impl<T: Config> Pallet<T> {
 		controller: T::AccountId,
 	) -> PayoutDestination<T::AccountId> {
 		if !Payees::<T>::contains_key(stash) {
-			let current = Payee::<T>::get(stash).to_payout_destination(stash.clone(), controller);
+			let current = PayoutDestination::from_reward_destination(
+				Payee::<T>::get(stash),
+				stash.clone(),
+				controller,
+			);
 			Payees::<T>::insert(stash, current.clone());
 			Payee::<T>::remove(stash);
 			current
