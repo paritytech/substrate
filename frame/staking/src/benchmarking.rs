@@ -584,8 +584,8 @@ benchmarks! {
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			true,
 			true,
-			PayoutRoute::Split(
-				(Perbill::from_percent(50), PayoutSplitOpt::Alias(PayoutDestinationAlias::Controller))
+			PayoutRoute::Alias(
+				PayoutDestinationAlias::Split(Perbill::from_percent(50), PayoutSplitOpt::Controller)
 			),
 		)?;
 
