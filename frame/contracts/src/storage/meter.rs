@@ -346,7 +346,7 @@ where
 		self.total_deposit.available(&self.limit)
 	}
 
-	/// Returns the status of the currently executed contract.
+	/// Returns the state of the currently executed contract.
 	fn contract_state(&self) -> ContractState<T> {
 		match &self.own_contribution {
 			Contribution::Terminated { deposit: _, beneficiary } =>
