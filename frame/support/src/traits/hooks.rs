@@ -108,7 +108,7 @@ pub trait OnRuntimeUpgrade {
 
 	/// Executes `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` hooks for a migration.
 	///
-	/// This is required for testing a [`Tuple`] of migrations where the tuple contains
+	/// This is required for testing a tuple of migrations where the tuple contains
 	/// order-dependent migrations.
 	#[cfg(feature = "try-runtime")]
 	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
