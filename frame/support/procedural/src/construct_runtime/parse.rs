@@ -627,7 +627,7 @@ impl Pallet {
 /// | Implicit | -> | Explicit | -> | ExplicitExpanded |
 /// +----------+    +----------+    +------------------+
 /// ```
-pub enum PalletsConversion {
+enum PalletsConversion {
 	/// Pallets implicitely declare parts.
 	///
 	/// `System: frame_system`.
@@ -655,7 +655,7 @@ pub enum PalletsConversion {
 /// Check if all pallet have explicit declaration of their parts, if so then assign index to each
 /// pallet using same rules as rust for fieldless enum. I.e. implicit are assigned number
 /// incrementedly from last explicit or 0.
-pub fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConversion> {
+fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConversion> {
 	if pallets.iter().any(|pallet| pallet.pallet_parts.is_none()) {
 		return Ok(PalletsConversion::Implicit(pallets))
 	}

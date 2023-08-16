@@ -30,8 +30,6 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 		syn::Ident::new(&format!("__tt_extra_parts_{}", count), def.item.span());
 	let default_parts_unique_id_v2 =
 		syn::Ident::new(&format!("__tt_default_parts_v2_{}", count), def.item.span());
-	let extra_parts_unique_id_v2 =
-		syn::Ident::new(&format!("__tt_extra_parts_v2_{}", count), def.item.span());
 
 	let call_part = def.call.as_ref().map(|_| quote::quote!(Call,));
 
@@ -160,31 +158,5 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 
 		pub use #default_parts_unique_id_v2 as tt_default_parts_v2;
-
-
-		// This macro is similar to the `tt_default_parts!`. It expands the pallets thare are declared
-		// explicitly (`System: frame_system::{Pallet, Call}`) with extra parts.
-		//
-		// For example, after expansion an explicit pallet would look like:
-		// `System: expanded::{Error} ::{Pallet, Call}`.
-		//
-		// The `expanded` keyword is a marker of the final state of the `construct_runtime!`.
-		#[macro_export]
-		#[doc(hidden)]
-		macro_rules! #extra_parts_unique_id_v2 {
-			{
-				$caller:tt
-				frame_support = [{ $($frame_support:ident)::* }]
-			} => {
-				$($frame_support)*::tt_return! {
-					$caller
-					tokens = [{
-						
-					}]
-				}
-			};
-		}
-
-		pub use #extra_parts_unique_id_v2 as tt_extra_parts_v2;
 	)
 }

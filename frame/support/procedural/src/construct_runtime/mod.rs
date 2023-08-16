@@ -209,7 +209,7 @@
 //! expose.
 
 mod expand;
-pub mod parse;
+mod parse;
 
 use cfg_expr::Predicate;
 use frame_support_procedural_tools::{
@@ -230,7 +230,6 @@ const SYSTEM_PALLET_NAME: &str = "System";
 /// `construct_runtime` again, or expand to the final runtime definition.
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let input_copy = input.clone();
-	println!("input_main_old: {}", input_copy.clone());
 	let definition = syn::parse_macro_input!(input as RuntimeDeclaration);
 
 	let res = match definition {
@@ -272,7 +271,6 @@ fn construct_runtime_implicit_to_explicit(
 	input: TokenStream2,
 	definition: ImplicitRuntimeDeclaration,
 ) -> Result<TokenStream2> {
-	println!("construct_runtime_implicit_to_explicit_old");
 	let frame_support = generate_crate_access_2018("frame-support")?;
 	let mut expansion = quote::quote!(
 		#frame_support::construct_runtime! { #input }
@@ -309,7 +307,6 @@ fn construct_runtime_explicit_to_explicit_expanded(
 	input: TokenStream2,
 	definition: ExplicitRuntimeDeclaration,
 ) -> Result<TokenStream2> {
-	println!("construct_runtime_explicit_to_explicit_expanded_old");
 	let frame_support = generate_crate_access_2018("frame-support")?;
 	let mut expansion = quote::quote!(
 		#frame_support::construct_runtime! { #input }
@@ -337,7 +334,6 @@ fn construct_runtime_explicit_to_explicit_expanded(
 fn construct_runtime_final_expansion(
 	definition: ExplicitRuntimeDeclaration,
 ) -> Result<TokenStream2> {
-	println!("construct_runtime_final_old");
 	let ExplicitRuntimeDeclaration { name, pallets, pallets_token, where_section } = definition;
 
 	let system_pallet =
