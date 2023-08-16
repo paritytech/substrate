@@ -27,7 +27,7 @@ sp-trie = { version = "22.0.0", path = "../../../primitives/trie" }
 sp-statement-store = { version = "4.0.0-dev", path = "../../../primitives/statement-store" }
 
 [dev-dependencies]
-criterion = "0.4.0"
+criterion = "0.5.1"
 futures = "0.3.21"
 wat = "1.0"
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }

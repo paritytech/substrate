@@ -27,7 +27,7 @@ sp-version = { version = "22.0.0", default-features = false, path = "../../primi
 sp-weights = { version = "20.0.0", default-features = false, path = "../../primitives/weights", features = ["serde"] }
 
 [dev-dependencies]
-criterion = "0.4.0"
+criterion = "0.5.1"
 sp-externalities = { version = "0.19.0", path = "../../primitives/externalities" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 
