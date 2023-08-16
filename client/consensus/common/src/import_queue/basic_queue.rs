@@ -505,7 +505,7 @@ mod tests {
 		import_queue::Verifier,
 	};
 	use futures::{executor::block_on, Future};
-	use sp_test_primitives::{Block, BlockNumber, Extrinsic, Hash, Header};
+	use sp_test_primitives::{Block, BlockNumber, Hash, Header};
 
 	#[async_trait::async_trait]
 	impl Verifier<Block> for () {

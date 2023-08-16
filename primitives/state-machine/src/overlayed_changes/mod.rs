@@ -21,7 +21,7 @@ mod changeset;
 mod offchain;
 
 use self::changeset::OverlayedChangeSet;
-use crate::{backend::Backend, stats::StateMachineStats, DefaultError};
+use crate::{backend::Backend, stats::StateMachineStats, DefaultError, BackendTransaction};
 use codec::{Decode, Encode};
 use hash_db::Hasher;
 pub use offchain::OffchainOverlayedChanges;
@@ -34,7 +34,7 @@ use sp_externalities::{Extension, Extensions};
 #[cfg(not(feature = "std"))]
 use sp_std::collections::btree_map::BTreeMap as Map;
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
-use sp_trie::{empty_child_trie_root, LayoutV1, PrefixedMemoryDB};
+use sp_trie::{empty_child_trie_root, LayoutV1};
 #[cfg(feature = "std")]
 use std::collections::{hash_map::Entry as MapEntry, HashMap as Map};
 #[cfg(feature = "std")]
@@ -188,7 +188,7 @@ pub struct StorageChanges<H: Hasher> {
 	/// [`main_storage_changes`](StorageChanges::main_storage_changes) and from
 	/// [`child_storage_changes`](StorageChanges::child_storage_changes).
 	/// [`offchain_storage_changes`](StorageChanges::offchain_storage_changes).
-	pub transaction: PrefixedMemoryDB<H>,
+	pub transaction: BackendTransaction<H>,
 	/// The storage root after applying the transaction.
 	pub transaction_storage_root: H::Out,
 	/// Changes to the transaction index,
@@ -205,7 +205,7 @@ impl<H: Hasher> StorageChanges<H> {
 		StorageCollection,
 		ChildStorageCollection,
 		OffchainChangesCollection,
-		PrefixedMemoryDB<H>,
+		BackendTransaction<H>,
 		H::Out,
 		Vec<IndexOperation>,
 	) {
@@ -237,15 +237,15 @@ impl<H: Hasher> Default for StorageChanges<H> {
 /// Storage transactions are calculated as part of the `storage_root`.
 /// These transactions can be reused for importing the block into the
 /// storage. So, we cache them to not require a recomputation of those transactions.
-pub struct StorageTransactionCache<H: Hasher> {
+struct StorageTransactionCache<H: Hasher> {
 	/// Contains the changes for the main and the child storages as one transaction.
-	transaction: PrefixedMemoryDB<H>,
+	transaction: BackendTransaction<H>,
 	/// The storage root after applying the transaction.
 	transaction_storage_root: H::Out,
 }
 
 impl<H: Hasher> StorageTransactionCache<H> {
-	fn into_inner(self) -> (PrefixedMemoryDB<H>, H::Out) {
+	fn into_inner(self) -> (BackendTransaction<H>, H::Out) {
 		(self.transaction, self.transaction_storage_root)
 	}
 }
@@ -648,7 +648,7 @@ impl<H: Hasher> OverlayedChanges<H> {
 	/// Generate the child storage root using `backend` and all child changes
 	/// as seen by the current transaction.
 	///
-	/// Returns the storage root and if the storage root was cached.
+	/// Returns the child storage root and whether it was already cached.
 	pub fn child_storage_root<B: Backend<H>>(
 		&mut self,
 		child_info: &ChildInfo,
