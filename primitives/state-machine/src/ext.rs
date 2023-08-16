@@ -512,14 +512,14 @@ where
 	fn storage_root(&mut self, state_version: StateVersion) -> Vec<u8> {
 		let _guard = guard();
 
-		let (root, cached) = self.overlay.storage_root(self.backend, state_version);
+		let (root, _cached) = self.overlay.storage_root(self.backend, state_version);
 
 		trace!(
 			target: "state",
 			method = "StorageRoot",
 			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			storage_root = %HexDisplay::from(&root.as_ref()),
-			%cached,
+			cached = %_cached,
 		);
 
 		root.encode()
@@ -532,7 +532,7 @@ where
 	) -> Vec<u8> {
 		let _guard = guard();
 
-		let (root, cached) = self
+		let (root, _cached) = self
 			.overlay
 			.child_storage_root(child_info, self.backend, state_version)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
@@ -543,7 +543,7 @@ where
 			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			child_info = %HexDisplay::from(&child_info.storage_key()),
 			storage_root = %HexDisplay::from(&root.as_ref()),
-			%cached,
+			cached = %_cached,
 		);
 
 		root.encode()
