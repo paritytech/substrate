@@ -725,7 +725,7 @@ pub mod v5 {
 		}
 	}
 
-	/// This migration summarizes and initializes the [`TotalValueLocked`] for all Pools.
+	/// This migration accumulates and initializes the [`TotalValueLocked`] for all pools.
 	pub struct VersionUncheckedMigrateV5ToV6<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for VersionUncheckedMigrateV5ToV6<T> {
 		fn on_runtime_upgrade() -> Weight {
@@ -774,11 +774,10 @@ pub mod v5 {
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(data: Vec<u8>) -> Result<(), TryRuntimeError> {
-			// ensure all TotalValueLocked::<T> contains a value greater zero if any instances of
+			// ensure [`TotalValueLocked`] contains a value greater zero if any instances of
 			// BondedPools exist.
-			if BondedPools::<T>::count() > 0 {
-				let zero: BalanceOf<T> = Zero::zero();
-				ensure!(TotalValueLocked::<T>::get() > zero, "tvl written incorrectly");
+			if !BondedPools::<T>::count().is_zero() {
+				ensure!(!TotalValueLocked::<T>::get().is_zero(), "tvl written incorrectly");
 			}
 
 			ensure!(

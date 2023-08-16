@@ -973,7 +973,7 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	/// Issue points to [`Self`] for `new_funds`.
-	/// Increase the TVL by the amount of funds.
+	/// Increase the [`TotalValueLocked`] by `new_funds`.
 	fn issue(&mut self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
 		let points_to_issue = self.balance_to_point(new_funds);
 		self.points = self.points.saturating_add(points_to_issue);
@@ -1197,8 +1197,8 @@ impl<T: Config> BondedPool<T> {
 
 	/// Bond exactly `amount` from `who`'s funds into this pool.
 	///
-	/// If the bond type is `Create`, `Staking::bond` is called, and `who` is allowed to be killed.
-	/// Otherwise, `Staking::bond_extra` is called and `who` cannot be killed.
+	/// If the bond is [`BondType::Create`], [`Staking::bond`] is called, and `who` is allowed to be
+	/// killed. Otherwise, [`Staking::bond_extra`] is called and `who` cannot be killed.
 	///
 	/// Returns `Ok(points_issues)`, `Err` otherwise.
 	fn try_bond_funds(
@@ -1429,8 +1429,8 @@ impl<T: Config> UnbondPool<T> {
 		new_points
 	}
 
-	/// Dissolve some points from the unbonding pool, reducing the balance of the pool and the TVL
-	/// proportionally.
+	/// Dissolve some points from the unbonding pool, reducing the balance of the pool and the
+	/// [`TotalValueLocked`] proportionally.
 	///
 	/// This is the opposite of `issue`.
 	///
@@ -1594,7 +1594,7 @@ pub mod pallet {
 		type MaxUnbonding: Get<u32>;
 	}
 
-	/// Summary of all pools
+	/// TVL across all pools
 	#[pallet::storage]
 	pub type TotalValueLocked<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
