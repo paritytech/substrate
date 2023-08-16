@@ -199,7 +199,7 @@ impl OnRuntimeUpgrade for Tuple {
 		Err("Usage of `pre_upgrade` with Tuples is deprecated. Please use `try_on_runtime_upgrade` instead, which internally calls `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` for each tuple member.".into())
 	}
 
-	/// [`OnRuntimeUpgrade::post_upgrade`] should not be used on [`Tuple`].
+	/// [`OnRuntimeUpgrade::post_upgrade`] should not be used on a tuple.
 	///
 	/// Instead, implementors should use [`OnRuntimeUpgrade::try_on_runtime_upgrade`] which
 	/// internally calls `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` for each tuple
