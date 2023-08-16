@@ -312,9 +312,11 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Saturating, StaticLookup, Zero},
 	Perbill, Perquintill, Rounding, RuntimeDebug,
 };
+
+pub use sp_staking::StakerStatus;
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
-	EraIndex, OnStakingUpdate, PayoutDestinationOpt, PayoutSplitOpt, SessionIndex, StakerStatus,
+	EraIndex, OnStakingUpdate, PayoutDestinationOpt, PayoutSplitOpt, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
