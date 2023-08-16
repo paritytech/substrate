@@ -18,7 +18,7 @@ chrono = "0.4.10"
 clap = { version = "4.2.5", features = ["derive", "string"] }
 fdlimit = "0.2.1"
 futures = "0.3.21"
-libp2p-identity = { version = "0.2.0", features = ["peerid", "ed25519"]}
+libp2p-identity = { version = "0.1.2", features = ["peerid", "ed25519"]}
 log = "0.4.17"
 names = { version = "0.13.0", default-features = false }
 parity-scale-codec = "3.6.1"

@@ -18,14 +18,66 @@
 //! A migration that unreserves all deposit and unlocks all stake held in the context of this
 //! pallet.
 
-use crate::{BalanceOf, DEMOCRACY_ID};
+use crate::{PropIndex, Voting, DEMOCRACY_ID};
 use core::iter::Sum;
-use frame_support::traits::{LockableCurrency, OnRuntimeUpgrade, ReservableCurrency};
+use frame_support::{
+	pallet_prelude::ValueQuery,
+	storage_alias,
+	traits::{Currency, LockableCurrency, OnRuntimeUpgrade, ReservableCurrency},
+	weights::RuntimeDbWeight,
+	Parameter, Twox64Concat,
+};
 use sp_core::Get;
-use sp_runtime::{traits::Zero, Saturating};
+use sp_runtime::{traits::Zero, BoundedVec, Saturating};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 const LOG_TARGET: &str = "runtime::democracy::migrations::unlock_and_unreserve_all_funds";
+
+type BalanceOf<T> =
+	<<T as UnlockConfig>::Currency as Currency<<T as UnlockConfig>::AccountId>>::Balance;
+
+/// The configuration for [`UnlockAndUnreserveAllFunds`].
+pub trait UnlockConfig: 'static {
+	/// The account ID used in the runtime.
+	type AccountId: Parameter + Ord;
+	/// The currency type used in the runtime.
+	///
+	/// Should match the currency type previously used for the pallet, if applicable.
+	type Currency: LockableCurrency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
+	/// The name of the pallet as previously configured in
+	/// [`construct_runtime!`](frame_support::construct_runtime).
+	type PalletName: Get<&'static str>;
+	/// The maximum number of votes as configured previously in the runtime.
+	type MaxVotes: Get<u32>;
+	/// The maximum deposit as configured previously in the runtime.
+	type MaxDeposits: Get<u32>;
+	/// The DB weight as configured in the runtime to calculate the correct weight.
+	type DbWeight: Get<RuntimeDbWeight>;
+	/// The block number as configured in the runtime.
+	type BlockNumber: Parameter + Zero + Copy + Ord;
+}
+
+#[storage_alias(dynamic)]
+type DepositOf<T: UnlockConfig> = StorageMap<
+	<T as UnlockConfig>::PalletName,
+	Twox64Concat,
+	PropIndex,
+	(BoundedVec<<T as UnlockConfig>::AccountId, <T as UnlockConfig>::MaxDeposits>, BalanceOf<T>),
+>;
+
+#[storage_alias(dynamic)]
+type VotingOf<T: UnlockConfig> = StorageMap<
+	<T as UnlockConfig>::PalletName,
+	Twox64Concat,
+	<T as UnlockConfig>::AccountId,
+	Voting<
+		BalanceOf<T>,
+		<T as UnlockConfig>::AccountId,
+		<T as UnlockConfig>::BlockNumber,
+		<T as UnlockConfig>::MaxVotes,
+	>,
+	ValueQuery,
+>;
 
 /// A migration that unreserves all deposit and unlocks all stake held in the context of this
 /// pallet.
@@ -35,9 +87,9 @@ const LOG_TARGET: &str = "runtime::democracy::migrations::unlock_and_unreserve_a
 /// The pallet should be made inoperable before this migration is run.
 ///
 /// (See also [`RemovePallet`][frame_support::migrations::RemovePallet])
-pub struct UnlockAndUnreserveAllFunds<T: crate::Config>(sp_std::marker::PhantomData<T>);
+pub struct UnlockAndUnreserveAllFunds<T: UnlockConfig>(sp_std::marker::PhantomData<T>);
 
-impl<T: crate::Config> UnlockAndUnreserveAllFunds<T> {
+impl<T: UnlockConfig> UnlockAndUnreserveAllFunds<T> {
 	/// Calculates and returns the total amounts reserved by each account by this pallet, and all
 	/// accounts with locks in the context of this pallet.
 	///
@@ -63,7 +115,7 @@ impl<T: crate::Config> UnlockAndUnreserveAllFunds<T> {
 
 		// Get all deposits (reserved).
 		let mut total_voting_vec_entries: u64 = 0;
-		let account_deposits: BTreeMap<T::AccountId, BalanceOf<T>> = crate::DepositOf::<T>::iter()
+		let account_deposits: BTreeMap<T::AccountId, BalanceOf<T>> = DepositOf::<T>::iter()
 			.flat_map(|(_prop_index, (accounts, balance))| {
 				// Count the number of deposits
 				deposit_of_len.saturating_inc();
@@ -81,7 +133,7 @@ impl<T: crate::Config> UnlockAndUnreserveAllFunds<T> {
 			});
 
 		// Voter accounts have amounts locked.
-		let account_stakes: BTreeMap<T::AccountId, BalanceOf<T>> = crate::VotingOf::<T>::iter()
+		let account_stakes: BTreeMap<T::AccountId, BalanceOf<T>> = VotingOf::<T>::iter()
 			.map(|(account_id, voting)| (account_id, voting.locked_balance()))
 			.collect();
 		let voting_of_len = account_stakes.len() as u64;
@@ -100,7 +152,7 @@ impl<T: crate::Config> UnlockAndUnreserveAllFunds<T> {
 	}
 }
 
-impl<T: crate::Config> OnRuntimeUpgrade for UnlockAndUnreserveAllFunds<T>
+impl<T: UnlockConfig> OnRuntimeUpgrade for UnlockAndUnreserveAllFunds<T>
 where
 	BalanceOf<T>: Sum,
 {
@@ -241,14 +293,32 @@ where
 mod test {
 	use super::*;
 	use crate::{
-		tests::{new_test_ext, Test},
+		tests::{new_test_ext, Balances, Test},
 		DepositOf, Voting, VotingOf,
 	};
 	use frame_support::{
-		assert_ok,
+		assert_ok, parameter_types,
 		traits::{Currency, OnRuntimeUpgrade, ReservableCurrency, WithdrawReasons},
 		BoundedVec,
 	};
+	use frame_system::pallet_prelude::BlockNumberFor;
+	use sp_core::ConstU32;
+
+	parameter_types! {
+		const PalletName: &'static str = "Democracy";
+	}
+
+	struct UnlockConfigImpl;
+
+	impl super::UnlockConfig for UnlockConfigImpl {
+		type Currency = Balances;
+		type MaxVotes = ConstU32<100>;
+		type MaxDeposits = ConstU32<1000>;
+		type AccountId = u64;
+		type BlockNumber = BlockNumberFor<Test>;
+		type DbWeight = ();
+		type PalletName = PalletName;
+	}
 
 	#[test]
 	fn unreserve_works_for_depositer() {
@@ -288,10 +358,10 @@ mod test {
 			);
 
 			// Run the migration.
-			let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
+			let bytes = UnlockAndUnreserveAllFunds::<UnlockConfigImpl>::pre_upgrade()
 				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
-			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
-			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
+			UnlockAndUnreserveAllFunds::<UnlockConfigImpl>::on_runtime_upgrade();
+			assert_ok!(UnlockAndUnreserveAllFunds::<UnlockConfigImpl>::post_upgrade(bytes));
 
 			// Assert the reserved balance was reduced by the expected amount.
 			assert_eq!(
@@ -342,10 +412,10 @@ mod test {
 			);
 
 			// Run the migration.
-			let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
+			let bytes = UnlockAndUnreserveAllFunds::<UnlockConfigImpl>::pre_upgrade()
 				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
-			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
-			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
+			UnlockAndUnreserveAllFunds::<UnlockConfigImpl>::on_runtime_upgrade();
+			assert_ok!(UnlockAndUnreserveAllFunds::<UnlockConfigImpl>::post_upgrade(bytes));
 
 			// Assert the voter lock was removed
 			assert_eq!(
