@@ -1238,7 +1238,7 @@ name = "chain-spec-builder"
 version = "2.0.0"
 dependencies = [
  "ansi_term",
- "clap 4.3.2",
+ "clap 4.3.21",
  "node-cli",
  "rand 0.8.5",
  "sc-chain-spec",
@@ -1364,9 +1364,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.3.2"
+version = "4.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "401a4694d2bf92537b6867d94de48c4842089645fdcdf6c71865b175d836e9c2"
+checksum = "c27cdf28c0f604ba3f512b0c9a409f8de8513e4816705deb0498b627e7c3a3fd"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -1375,13 +1375,12 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.3.1"
+version = "4.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72394f3339a76daf211e57d4bcb374410f3965dcc606dd0e03738c7888766980"
+checksum = "08a9f1ab5e9f01a9b81f202e8562eb9a10de70abf9eaeac1be465c28b75aa4aa"
 dependencies = [
  "anstream",
  "anstyle",
- "bitflags",
  "clap_lex 0.5.0",
  "strsim",
 ]
@@ -1392,14 +1391,14 @@ version = "4.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f6b5c519bab3ea61843a7923d074b04245624bb84a64a8c150f5deb014e388b"
 dependencies = [
- "clap 4.3.2",
+ "clap 4.3.21",
 ]
 
 [[package]]
 name = "clap_derive"
-version = "4.3.2"
+version = "4.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8cd2b2a819ad6eec39e8f1d6b53001af1e5469f8c177579cdaeb313115b825f"
+checksum = "54a9bb5758fc5dfe728d1019941681eccaf0cf8a4189b692a0ee2f2ecf90a050"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -2765,7 +2764,7 @@ dependencies = [
  "Inflector",
  "array-bytes",
  "chrono",
- "clap 4.3.2",
+ "clap 4.3.21",
  "comfy-table",
  "frame-benchmarking",
  "frame-support",
@@ -2857,7 +2856,7 @@ dependencies = [
 name = "frame-election-solution-type-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 4.3.2",
+ "clap 4.3.21",
  "frame-election-provider-solution-type",
  "frame-election-provider-support",
  "frame-support",
@@ -5504,7 +5503,7 @@ name = "node-bench"
 version = "0.9.0-dev"
 dependencies = [
  "array-bytes",
- "clap 4.3.2",
+ "clap 4.3.21",
  "derive_more",
  "fs_extra",
  "futures",
@@ -5541,7 +5540,7 @@ version = "3.0.0-dev"
 dependencies = [
  "array-bytes",
  "assert_cmd",
- "clap 4.3.2",
+ "clap 4.3.21",
  "clap_complete",
  "criterion",
  "frame-benchmarking-cli",
@@ -5667,7 +5666,7 @@ dependencies = [
 name = "node-inspect"
 version = "0.9.0-dev"
 dependencies = [
- "clap 4.3.2",
+ "clap 4.3.21",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-api",
@@ -5721,7 +5720,7 @@ dependencies = [
 name = "node-runtime-generate-bags"
 version = "3.0.0"
 dependencies = [
- "clap 4.3.2",
+ "clap 4.3.21",
  "generate-bags",
  "kitchensink-runtime",
 ]
@@ -5730,7 +5729,7 @@ dependencies = [
 name = "node-template"
 version = "4.0.0-dev"
 dependencies = [
- "clap 4.3.2",
+ "clap 4.3.21",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "frame-system",
@@ -5773,7 +5772,7 @@ dependencies = [
 name = "node-template-release"
 version = "3.0.0"
 dependencies = [
- "clap 4.3.2",
+ "clap 4.3.21",
  "flate2",
  "fs_extra",
  "glob",
@@ -9255,7 +9254,7 @@ version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
  "chrono",
- "clap 4.3.2",
+ "clap 4.3.21",
  "fdlimit",
  "futures",
  "futures-timer",
@@ -10359,7 +10358,7 @@ dependencies = [
 name = "sc-storage-monitor"
 version = "0.1.0"
 dependencies = [
- "clap 4.3.2",
+ "clap 4.3.21",
  "fs4",
  "log",
  "sc-client-db",
@@ -11590,7 +11589,7 @@ dependencies = [
 name = "sp-npos-elections-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 4.3.2",
+ "clap 4.3.21",
  "honggfuzz",
  "rand 0.8.5",
  "sp-npos-elections",
@@ -12101,7 +12100,7 @@ dependencies = [
 name = "subkey"
 version = "3.0.0"
 dependencies = [
- "clap 4.3.2",
+ "clap 4.3.21",
  "sc-cli",
 ]
 
@@ -12163,7 +12162,7 @@ dependencies = [
 name = "substrate-frame-cli"
 version = "4.0.0-dev"
 dependencies = [
- "clap 4.3.2",
+ "clap 4.3.21",
  "frame-support",
  "frame-system",
  "sc-cli",
@@ -13079,7 +13078,7 @@ version = "0.10.0-dev"
 dependencies = [
  "assert_cmd",
  "async-trait",
- "clap 4.3.2",
+ "clap 4.3.21",
  "frame-remote-externalities",
  "frame-try-runtime",
  "hex",
