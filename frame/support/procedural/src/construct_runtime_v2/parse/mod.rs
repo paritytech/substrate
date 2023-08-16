@@ -71,23 +71,10 @@ impl Def {
 							check_pallet_number(input_copy.clone().into(), implicit_def.pallets.len()).and_then(
 								|_| construct_runtime_implicit_to_explicit(input_copy.into(), implicit_def),
 							),
-						AllPalletsDeclaration::Explicit(explicit_decl) => check_pallet_number(
-							input_copy.clone().into(),
-							explicit_decl.pallets.len(),
-						).and_then(
-							|_| Ok(input_copy)
-							// |_| {
-							// 	construct_runtime_explicit_to_explicit_expanded(input_copy.into(), explicit_decl)
-							// }
-						),
-						AllPalletsDeclaration::ExplicitExpanded(explicit_decl) =>
+						AllPalletsDeclaration::Explicit(explicit_decl) =>
 							check_pallet_number(input_copy.clone().into(), explicit_decl.pallets.len())
 								.and_then(|_| Ok(input_copy)),
 					}?;	
-					// println!("definition: {:?}", definition);
-					println!("res: {}", res);
-					// let p = syn::parse2::<pallets::AllPalletsDeclaration>(res)?;	
-					// let res = quote::quote!();		
 					pallets = Some((definition, res));
 				},
                 Some(attr) => {
@@ -153,7 +140,6 @@ fn construct_runtime_implicit_to_explicit(
 	input: TokenStream2,
 	definition: ImplicitAllPalletsDeclaration,
 ) -> Result<TokenStream2> {
-	println!("construct_runtime_implicit_to_explicit");
 	let frame_support = generate_crate_access_2018("frame-support")?;
 	let mut expansion = quote::quote!(
 		#[frame_support::construct_runtime_v2]
@@ -166,35 +152,6 @@ fn construct_runtime_implicit_to_explicit(
 		expansion = quote::quote!(
 			#frame_support::tt_call! {
 				macro = [{ #pallet_path::tt_default_parts_v2 }]
-				frame_support = [{ #frame_support }]
-				~~> #frame_support::match_and_insert! {
-					target = [{ #expansion }]
-					pattern = [{ #pallet_name: #pallet_path #pallet_instance }]
-				}
-			}
-		);
-	}
-
-	Ok(expansion)
-}
-
-fn construct_runtime_explicit_to_explicit_expanded(
-	input: TokenStream2,
-	definition: ExplicitAllPalletsDeclaration,
-) -> Result<TokenStream2> {
-	println!("construct_runtime_explicit_to_explicit_expanded");
-	let frame_support = generate_crate_access_2018("frame-support")?;
-	let mut expansion = quote::quote!(
-		#[frame_support::construct_runtime_v2]
-		#input
-	);
-	for pallet in definition.pallets.iter().filter(|pallet| !pallet.is_expanded) {
-		let pallet_path = &pallet.path;
-		let pallet_name = &pallet.name;
-		let pallet_instance = pallet.instance.as_ref().map(|instance| quote::quote!(::<#instance>));
-		expansion = quote::quote!(
-			#frame_support::tt_call! {
-				macro = [{ #pallet_path::tt_extra_parts_v2 }]
 				frame_support = [{ #frame_support }]
 				~~> #frame_support::match_and_insert! {
 					target = [{ #expansion }]

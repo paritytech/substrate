@@ -34,10 +34,5 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
                 #runtime_struct
             )
         }
-        (AllPalletsDeclaration::ExplicitExpanded(decl), _) => {
-            quote::quote!(
-                #runtime_struct
-            )
-        }
     }
 }

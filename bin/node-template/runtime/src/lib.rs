@@ -301,14 +301,14 @@ mod runtime {
 	#[frame::pallets]
 	pub struct AllPallets {
 		System: frame_system,
-		// Timestamp: pallet_timestamp,
-		// Aura: pallet_aura,
-		// Grandpa: pallet_grandpa,
-		// Balances: pallet_balances,
-		// TransactionPayment: pallet_transaction_payment,
-		// Sudo: pallet_sudo,
-		// // Include the custom logic from the pallet-template in the runtime.
-		// TemplateModule: pallet_template,
+		Timestamp: pallet_timestamp,
+		Aura: pallet_aura,
+		Grandpa: pallet_grandpa,
+		Balances: pallet_balances,
+		TransactionPayment: pallet_transaction_payment,
+		Sudo: pallet_sudo,
+		// Include the custom logic from the pallet-template in the runtime.
+		TemplateModule: pallet_template,
 	}
 }
 

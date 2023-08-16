@@ -26,12 +26,8 @@ use syn::{
 	spanned::Spanned,
 	token, Attribute, Error, Ident, Path, Result, Token,
 };
-use crate::construct_runtime::parse::{WhereDefinition, WhereKind};
 
 mod keyword {
-	syn::custom_keyword!(Block);
-	syn::custom_keyword!(NodeBlock);
-	syn::custom_keyword!(UncheckedExtrinsic);
 	syn::custom_keyword!(Pallet);
 	syn::custom_keyword!(Call);
 	syn::custom_keyword!(Storage);
@@ -47,14 +43,12 @@ mod keyword {
 	syn::custom_keyword!(SlashReason);
 	syn::custom_keyword!(exclude_parts);
 	syn::custom_keyword!(use_parts);
-	syn::custom_keyword!(expanded);
 }
 
 #[derive(Debug, Clone)]
 pub enum AllPalletsDeclaration {
 	Implicit(ImplicitAllPalletsDeclaration),
 	Explicit(ExplicitAllPalletsDeclaration),
-	ExplicitExpanded(ExplicitAllPalletsDeclaration),
 }
 
 /// Declaration of a runtime with some pallet with implicit declaration of parts.
@@ -96,12 +90,6 @@ impl Parse for AllPalletsDeclaration {
 				})),
 			PalletsConversion::Explicit(pallets) =>
 				Ok(AllPalletsDeclaration::Explicit(ExplicitAllPalletsDeclaration {
-					name,
-					pallets,
-					pallets_token,
-				})),
-			PalletsConversion::ExplicitExpanded(pallets) =>
-				Ok(AllPalletsDeclaration::ExplicitExpanded(ExplicitAllPalletsDeclaration {
 					name,
 					pallets,
 					pallets_token,
@@ -455,22 +443,6 @@ impl PalletPart {
 	}
 }
 
-fn remove_kind(
-	input: ParseStream,
-	kind: WhereKind,
-	definitions: &mut Vec<WhereDefinition>,
-) -> Result<WhereDefinition> {
-	if let Some(pos) = definitions.iter().position(|d| d.kind == kind) {
-		Ok(definitions.remove(pos))
-	} else {
-		let msg = format!(
-			"Missing associated type for `{:?}`. Add `{:?}` = ... to where section.",
-			kind, kind
-		);
-		Err(input.error(msg))
-	}
-}
-
 /// The declaration of a part without its generics
 #[derive(Debug, Clone)]
 pub struct PalletPartNoGeneric {
@@ -545,9 +517,9 @@ impl Pallet {
 /// # State Transitions
 ///
 /// ```ignore
-/// +----------+    +----------+    +------------------+
-/// | Implicit | -> | Explicit | -> | ExplicitExpanded |
-/// +----------+    +----------+    +------------------+
+/// +----------+    +----------+
+/// | Implicit | -> | Explicit |
+/// +----------+    +----------+
 /// ```
 pub enum PalletsConversion {
 	/// Pallets implicitely declare parts.
@@ -556,20 +528,11 @@ pub enum PalletsConversion {
 	Implicit(Vec<PalletDeclaration>),
 	/// Pallets explicitly declare parts.
 	///
-	/// `System: frame_system::{Pallet, Call}`
+	/// `System: frame_system + Pallet + Call`
 	///
 	/// However, for backwards compatibility with Polkadot/Kusama
 	/// we must propagate some other parts to the pallet by default.
 	Explicit(Vec<Pallet>),
-	/// Pallets explicitly declare parts that are fully expanded.
-	///
-	/// This is the end state that contains extra parts included by
-	/// default by Subtrate.
-	///
-	/// `System: frame_system expanded::{Error} ::{Pallet, Call}`
-	///
-	/// For this example, the `Pallet`, `Call` and `Error` parts are collected.
-	ExplicitExpanded(Vec<Pallet>),
 }
 
 /// Convert from the parsed pallet declaration to their final information.
@@ -694,9 +657,5 @@ pub fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsCo
 		})
 		.collect::<Result<Vec<_>>>()?;
 
-	if is_expanded {
-		Ok(PalletsConversion::ExplicitExpanded(pallets))
-	} else {
-		Ok(PalletsConversion::Explicit(pallets))
-	}
+	Ok(PalletsConversion::Explicit(pallets))
 }
