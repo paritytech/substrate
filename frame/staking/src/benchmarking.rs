@@ -32,7 +32,7 @@ use sp_runtime::{
 	traits::{Bounded, One, StaticLookup, TrailingZeroInput, Zero},
 	Perbill, Percent,
 };
-use sp_staking::{currency_to_vote::CurrencyToVote, PayoutDestinationOpt, SessionIndex};
+use sp_staking::{currency_to_vote::CurrencyToVote, PayoutRoute, SessionIndex};
 use sp_std::prelude::*;
 
 pub use frame_benchmarking::v1::{
@@ -73,7 +73,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	upper_bound: u32,
 	dead_controller: bool,
 	unique_controller: bool,
-	destination: PayoutDestinationOpt<T::AccountId>,
+	destination: PayoutRoute<T::AccountId>,
 ) -> Result<(T::AccountId, Vec<(T::AccountId, T::AccountId)>), &'static str> {
 	// Clean up any existing state.
 	clear_validators_and_nominators::<T>();
@@ -292,7 +292,7 @@ benchmarks! {
 		// Slashing Spans
 		let s in 0 .. MAX_SPANS;
 		let (stash, controller) = create_stash_controller::<T>(
-			0, 100, PayoutDestinationOpt::Direct(PayoutDestination::Stake)
+			0, 100, PayoutRoute::Direct(PayoutDestination::Stake)
 		)?;
 		add_slashing_spans::<T>(&stash, s);
 		let amount = T::Currency::minimum_balance() * 5u32.into(); // Half of total
@@ -342,7 +342,7 @@ benchmarks! {
 		let (stash, controller) = create_stash_controller::<T>(
 			MaxNominationsOf::<T>::get() - 1,
 			100,
-			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+			PayoutRoute::Direct(PayoutDestination::Stake),
 		)?;
 		// because it is chilled.
 		assert!(!T::VoterList::contains(&stash));
@@ -370,7 +370,7 @@ benchmarks! {
 		let (stash, controller) = create_stash_controller::<T>(
 			MaxNominationsOf::<T>::get() - 1,
 			100,
-			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+			PayoutRoute::Direct(PayoutDestination::Stake),
 		)?;
 		let stash_lookup = T::Lookup::unlookup(stash.clone());
 
@@ -385,7 +385,7 @@ benchmarks! {
 			let (n_stash, n_controller) = create_stash_controller::<T>(
 				MaxNominationsOf::<T>::get() + i,
 				100,
-				PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+				PayoutRoute::Direct(PayoutDestination::Stake),
 			)?;
 
 			// bake the nominations; we first clone them from the rest of the validators.
@@ -468,7 +468,7 @@ benchmarks! {
 
 	set_payee {
 		let (stash, controller) = create_stash_controller::<T>(
-			USER_SEED, 100, PayoutDestinationOpt::Direct(PayoutDestination::Stake)
+			USER_SEED, 100, PayoutRoute::Direct(PayoutDestination::Stake)
 		)?;
 		assert_eq!(Payees::<T>::get(&stash), PayoutDestination::Stake);
 
@@ -484,7 +484,7 @@ benchmarks! {
 
 	update_payee {
 		let (stash, controller) = create_stash_controller::<T>(
-			USER_SEED, 100, PayoutDestinationOpt::Direct(PayoutDestination::Stake)
+			USER_SEED, 100, PayoutRoute::Direct(PayoutDestination::Stake)
 		)?;
 		// Payee should exist to be migrated on `update_payee`.
 		Payee::<T>::insert(&stash,RewardDestination::Staked);
@@ -498,7 +498,7 @@ benchmarks! {
 
 	set_controller {
 		let (stash, ctlr) = create_unique_stash_controller::<T>(
-			9000, 100, PayoutDestinationOpt::Direct(PayoutDestination::Stake), false
+			9000, 100, PayoutRoute::Direct(PayoutDestination::Stake), false
 		)?;
 		// ensure `ctlr` is the currently stored controller.
 		assert!(!Ledger::<T>::contains_key(&stash));
@@ -584,7 +584,7 @@ benchmarks! {
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			true,
 			true,
-			PayoutDestinationOpt::Split(
+			PayoutRoute::Split(
 				(Perbill::from_percent(50), PayoutSplitOpt::Alias(PayoutDestinationAlias::Controller))
 			),
 		)?;
@@ -621,7 +621,7 @@ benchmarks! {
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			false,
 			true,
-			PayoutDestinationOpt::Alias(
+			PayoutRoute::Alias(
 				PayoutDestinationAlias(Split((Perbill::from_percent(50), PayoutSplitOpt::Stash)))
 			)
 		)?;
@@ -807,7 +807,7 @@ benchmarks! {
 	do_slash {
 		let l in 1 .. T::MaxUnlockingChunks::get() as u32;
 		let (stash, controller) = create_stash_controller::<T>(
-			0, 100, PayoutDestinationOpt::Direct(PayoutDestination::Stake)
+			0, 100, PayoutRoute::Direct(PayoutDestination::Stake)
 		)?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
@@ -942,7 +942,7 @@ benchmarks! {
 
 		// Create a validator with a commission of 50%
 		let (stash, controller) =
-			create_stash_controller::<T>(1, 1, PayoutDestinationOpt::Direct(PayoutDestination::Stake))?;
+			create_stash_controller::<T>(1, 1, PayoutRoute::Direct(PayoutDestination::Stake))?;
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;
@@ -1022,7 +1022,7 @@ mod tests {
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
 				false,
 				false,
-				PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+				PayoutRoute::Direct(PayoutDestination::Stake),
 			)
 			.unwrap();
 
@@ -1052,7 +1052,7 @@ mod tests {
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
 				false,
 				false,
-				PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+				PayoutRoute::Direct(PayoutDestination::Stake),
 			)
 			.unwrap();
 

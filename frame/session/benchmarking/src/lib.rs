@@ -25,7 +25,7 @@ mod mock;
 
 use sp_runtime::traits::{One, StaticLookup, TrailingZeroInput};
 use sp_std::{prelude::*, vec};
-use sp_staking::PayoutDestinationOpt;
+use sp_staking::PayoutRoute;
 
 use frame_benchmarking::v1::benchmarks;
 use frame_support::{
@@ -62,7 +62,7 @@ benchmarks! {
 			MaxNominationsOf::<T>::get(),
 			false,
 			true,
-			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+			PayoutRoute::Direct(PayoutDestination::Stake),
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
 
@@ -80,7 +80,7 @@ benchmarks! {
 			MaxNominationsOf::<T>::get(),
 			false,
 			true,
-			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+			PayoutRoute::Direct(PayoutDestination::Stake),
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::decode(&mut TrailingZeroInput::zeroes()).unwrap();

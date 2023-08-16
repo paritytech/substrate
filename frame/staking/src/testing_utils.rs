@@ -74,14 +74,14 @@ pub fn create_funded_user_with_balance<T: Config>(
 pub fn create_stash_controller<T: Config>(
 	n: u32,
 	balance_factor: u32,
-	destination: PayoutDestinationOpt<T::AccountId>,
+	destination: PayoutRoute<T::AccountId>,
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
 	let staker = create_funded_user::<T>("stash", n, balance_factor);
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
 	Staking::<T>::bond(
 		RawOrigin::Signed(staker.clone()).into(),
 		amount,
-		PayoutDestination::from_opt(destination, &staker, &staker),
+		PayoutDestination::from_route(destination, &staker, &staker),
 	)?;
 	Ok((staker.clone(), staker))
 }
@@ -90,7 +90,7 @@ pub fn create_stash_controller<T: Config>(
 pub fn create_unique_stash_controller<T: Config>(
 	n: u32,
 	balance_factor: u32,
-	destination: PayoutDestinationOpt<T::AccountId>,
+	destination: PayoutRoute<T::AccountId>,
 	dead_controller: bool,
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
 	let stash = create_funded_user::<T>("stash", n, balance_factor);
@@ -104,7 +104,7 @@ pub fn create_unique_stash_controller<T: Config>(
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
 		amount,
-		PayoutDestination::from_opt(destination, &stash, &controller),
+		PayoutDestination::from_route(destination, &stash, &controller),
 	)?;
 
 	// update ledger to be a *different* controller to stash
@@ -165,7 +165,7 @@ pub fn create_validators_with_seed<T: Config>(
 		let (stash, controller) = create_stash_controller::<T>(
 			i + seed,
 			balance_factor,
-			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+			PayoutRoute::Direct(PayoutDestination::Stake),
 		)?;
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
@@ -209,7 +209,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 		let (v_stash, v_controller) = create_stash_controller::<T>(
 			i,
 			balance_factor,
-			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+			PayoutRoute::Direct(PayoutDestination::Stake),
 		)?;
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
@@ -227,7 +227,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 		let (_n_stash, n_controller) = create_stash_controller::<T>(
 			u32::MAX - j,
 			balance_factor,
-			PayoutDestinationOpt::Direct(PayoutDestination::Stake),
+			PayoutRoute::Direct(PayoutDestination::Stake),
 		)?;
 
 		// Have them randomly validate

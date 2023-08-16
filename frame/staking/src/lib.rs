@@ -406,7 +406,7 @@ pub enum PayoutDestination<AccountId> {
 	Forgo,
 }
 
-pub enum PayoutDestinationOpt<AccountId> {
+pub enum PayoutRoute<AccountId> {
 	Direct(PayoutDestination<AccountId>),
 	Alias(PayoutDestinationAlias),
 }
@@ -427,14 +427,12 @@ impl<AccountId: Clone> PayoutDestination<AccountId> {
 		}
 	}
 
-	pub fn from_opt(
-		v: PayoutDestinationOpt<AccountId>,
-		stash: &AccountId,
-		ctlr: &AccountId,
-	) -> Self {
+	// NOTE: the `ctlr` parameter can be discontinued after the lazy migration to `PayoutDestination`
+	// is completed.
+	pub fn from_route(v: PayoutRoute<AccountId>, stash: &AccountId, ctlr: &AccountId) -> Self {
 		match v {
-			PayoutDestinationOpt::Direct(destination) => destination,
-			PayoutDestinationOpt::Alias(alias) => match alias {
+			PayoutRoute::Direct(destination) => destination,
+			PayoutRoute::Alias(alias) => match alias {
 				PayoutDestinationAlias::Controller => PayoutDestination::Deposit(ctlr.clone()),
 				PayoutDestinationAlias::Split((percent, dest)) =>
 					if dest == PayoutSplitOpt::Stash {
