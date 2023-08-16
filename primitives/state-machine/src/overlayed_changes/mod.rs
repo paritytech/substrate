@@ -129,7 +129,7 @@ impl<H: Hasher> Clone for OverlayedChanges<H> {
 			children: self.children.clone(),
 			offchain: self.offchain.clone(),
 			transaction_index_ops: self.transaction_index_ops.clone(),
-			collect_extrinsics: self.collect_extrinsics.clone(),
+			collect_extrinsics: self.collect_extrinsics,
 			stats: self.stats.clone(),
 			storage_transaction_cache: self.storage_transaction_cache.clone(),
 		}
@@ -254,7 +254,7 @@ impl<H: Hasher> Clone for StorageTransactionCache<H> {
 	fn clone(&self) -> Self {
 		Self {
 			transaction: self.transaction.clone(),
-			transaction_storage_root: self.transaction_storage_root.clone(),
+			transaction_storage_root: self.transaction_storage_root,
 		}
 	}
 }
