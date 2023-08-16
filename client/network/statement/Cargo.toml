@@ -17,7 +17,7 @@ array-bytes = "6.1"
 async-channel = "1.8.0"
 codec = { package = "parity-scale-codec", version = "3.6.1", features = ["derive"] }
 futures = "0.3.21"
-libp2p = "0.52.1"
+libp2p = "0.51.3"
 log = "0.4.17"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
 sc-network-common = { version = "0.10.0-dev", path = "../common" }
