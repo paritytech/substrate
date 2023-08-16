@@ -244,8 +244,8 @@
 
 mod behaviour;
 mod peer_store;
-pub mod peerset;
-pub mod protocol;
+mod peerset;
+mod protocol;
 mod protocol_controller;
 mod service;
 
