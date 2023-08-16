@@ -622,7 +622,7 @@ benchmarks! {
 			false,
 			true,
 			PayoutRoute::Alias(
-				PayoutDestinationAlias(Split((Perbill::from_percent(50), PayoutSplitOpt::Stash)))
+				PayoutDestinationAlias::Split((Perbill::from_percent(50), PayoutSplitOpt::Stash))
 			)
 		)?;
 
