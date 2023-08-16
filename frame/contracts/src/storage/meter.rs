@@ -294,7 +294,7 @@ where
 	/// usage for this sub call separately. This is necessary because we want to exchange balance
 	/// with the current contract we are interacting with.
 	pub fn nested(&self, limit: BalanceOf<T>) -> RawMeter<T, E, Nested> {
-		debug_assert!(matches!(self.own_contribution, Contribution::Alive(_)));
+		debug_assert!(matches!(self.contract_state(), ContractState::Alive));
 		// If a special limit is specified higher than it is available,
 		// we want to enforce the lesser limit to the nested meter, to fail in the sub-call.
 		let limit = self.available().min(limit);
@@ -440,7 +440,7 @@ where
 		contract_info: &mut ContractInfo<T>,
 		code_info: &CodeInfo<T>,
 	) -> Result<DepositOf<T>, DispatchError> {
-		debug_assert!(matches!(self.own_contribution, Contribution::Alive(_)));
+		debug_assert!(matches!(self.contract_state(), ContractState::Alive));
 		let ed = Pallet::<T>::min_balance();
 
 		let deposit = contract_info.update_base_deposit(&code_info);
@@ -481,7 +481,7 @@ where
 	/// `contract_info` will be refunded to the `origin` of the meter. And the free
 	/// (`reducible_balance`) will be sent to the `beneficiary`.
 	pub fn terminate(&mut self, info: &ContractInfo<T>, beneficiary: T::AccountId) {
-		debug_assert!(matches!(self.own_contribution, Contribution::Alive(_)));
+		debug_assert!(matches!(self.contract_state(), ContractState::Alive));
 		self.own_contribution = Contribution::Terminated {
 			deposit: Deposit::Refund(info.total_deposit()),
 			beneficiary,
@@ -504,7 +504,7 @@ where
 		let deposit = self.own_contribution.update_contract(info);
 		let total_deposit = self.total_deposit.saturating_add(&deposit);
 		// We don't want to override a `Terminated` with a `Checked`.
-		if matches!(self.own_contribution, Contribution::Alive(_)) {
+		if matches!(self.contract_state(), ContractState::Alive) {
 			self.own_contribution = Contribution::Checked(deposit);
 		}
 		if let Deposit::Charge(amount) = total_deposit {
