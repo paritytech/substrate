@@ -44,7 +44,8 @@ pub trait UnlockConfig: 'static {
 	///
 	/// Should match the currency type previously used for the pallet, if applicable.
 	type Currency: LockableCurrency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
-	/// The name of the pallet as previously configured in [`construct_runtime!`](frame_support::construct_runtime).
+	/// The name of the pallet as previously configured in
+	/// [`construct_runtime!`](frame_support::construct_runtime).
 	type PalletName: Get<&'static str>;
 	/// The maximum number of votes as configured previously in the runtime.
 	type MaxVotes: Get<u32>;
