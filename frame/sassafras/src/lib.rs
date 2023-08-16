@@ -47,6 +47,7 @@
 #![warn(unused_must_use, unsafe_code, unused_variables, unused_imports, missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use log::{debug, error, warn};
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
@@ -57,7 +58,7 @@ use frame_system::{
 };
 use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
-	AuthorityId, Epoch, EpochConfiguration, EquivocationProof, Randomness, RingContext, Slot,
+	vrf, AuthorityId, Epoch, EpochConfiguration, EquivocationProof, Randomness, RingContext, Slot,
 	SlotDuration, TicketBody, TicketEnvelope, TicketId, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID,
 };
 use sp_io::hashing;
@@ -255,10 +256,10 @@ pub mod pallet {
 			Pallet::<T>::initialize_genesis_authorities(&self.authorities);
 			EpochConfig::<T>::put(self.epoch_config.clone());
 
-			// TODO: davxy... remove for tests
-			log::warn!(target: LOG_TARGET, "Constructing testing ring context (in build)");
+			// TODO: davxy... remove for pallet tests
+			warn!(target: LOG_TARGET, "Constructing testing ring context (in build)");
 			let ring_ctx = RingContext::new_testing();
-			log::warn!(target: LOG_TARGET, "... done");
+			warn!(target: LOG_TARGET, "... done");
 			RingVrfContext::<T>::set(Some(ring_ctx.clone()));
 		}
 	}
@@ -293,7 +294,7 @@ pub mod pallet {
 			// On the first non-zero block (i.e. block #1) this is where the first epoch
 			// (epoch #0) actually starts. We need to adjust internal storage accordingly.
 			if *GenesisSlot::<T>::get() == 0 {
-				log::debug!(target: LOG_TARGET, ">>> GENESIS SLOT: {:?}", pre_digest.slot);
+				debug!(target: LOG_TARGET, ">>> GENESIS SLOT: {:?}", pre_digest.slot);
 				Self::initialize_genesis_epoch(pre_digest.slot)
 			}
 
@@ -316,18 +317,18 @@ pub mod pallet {
 			let pre_digest = Initialized::<T>::take()
 				.expect("Finalization is called after initialization; qed.");
 
-			let vrf_input = sp_consensus_sassafras::slot_claim_vrf_input(
+			let claim_input = vrf::slot_claim_input(
 				&Self::randomness(),
 				CurrentSlot::<T>::get(),
 				EpochIndex::<T>::get(),
 			);
-
-			let randomness = pre_digest
+			let claim_output = pre_digest
 				.vrf_signature
 				.outputs
 				.get(0)
-				.expect("vrf preout should have been already checked by the client; qed")
-				.make_bytes::<RANDOMNESS_LENGTH>(RANDOMNESS_VRF_CONTEXT, &vrf_input);
+				.expect("Presence should have been already checked by the client; qed");
+			let randomness =
+				claim_output.make_bytes::<RANDOMNESS_LENGTH>(RANDOMNESS_VRF_CONTEXT, &claim_input);
 
 			Self::deposit_randomness(&randomness);
 
@@ -364,20 +365,20 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_none(origin)?;
 
-			log::debug!(target: LOG_TARGET, "Received {} tickets", tickets.len());
+			debug!(target: LOG_TARGET, "Received {} tickets", tickets.len());
 
-			log::debug!(target: LOG_TARGET, "LOADING RING CTX");
+			debug!(target: LOG_TARGET, "LOADING RING CTX");
 			let Some(ring_ctx) = RingVrfContext::<T>::get() else {
 				return Err("Ring context not initialized".into())
 			};
-			log::debug!(target: LOG_TARGET, "... Loaded");
+			debug!(target: LOG_TARGET, "... Loaded");
 
 			// TODO @davxy this should be done once per epoch and with the NEXT EPOCH AUTHORITIES!!!
 			// For this we need the `ProofVerifier` to be serializable @svasilyev
 			let pks: Vec<_> = Self::authorities().iter().map(|auth| *auth.as_ref()).collect();
-			log::debug!(target: LOG_TARGET, "Building verifier. Ring size {}", pks.len());
+			debug!(target: LOG_TARGET, "Building verifier. Ring size {}", pks.len());
 			let verifier = ring_ctx.verifier(pks.as_slice()).unwrap();
-			log::debug!(target: LOG_TARGET, "... Built");
+			debug!(target: LOG_TARGET, "... Built");
 
 			// Check tickets score
 			let next_auth = NextAuthorities::<T>::get();
@@ -397,26 +398,21 @@ pub mod pallet {
 
 			let mut segment = BoundedVec::with_max_capacity();
 			for ticket in tickets {
-				log::debug!(target: LOG_TARGET, "Checking ring proof");
+				debug!(target: LOG_TARGET, "Checking ring proof");
 
-				let vrf_input = sp_consensus_sassafras::ticket_id_vrf_input(
-					&randomness,
-					ticket.body.attempt_idx,
-					epoch_idx,
-				);
-
-				let Some(vrf_preout) = ticket.signature.outputs.get(0) else {
-					log::debug!(target: LOG_TARGET, "Missing ticket pre-output from ring signature");
+				let ticket_id_input =
+					vrf::ticket_id_input(&randomness, ticket.body.attempt_idx, epoch_idx);
+				let Some(ticket_id_output) = ticket.signature.outputs.get(0) else {
+					debug!(target: LOG_TARGET, "Missing ticket vrf output from ring signature");
 					continue
 				};
-				let ticket_id = sp_consensus_sassafras::ticket_id(&vrf_input, &vrf_preout);
+				let ticket_id = vrf::make_ticket_id(&ticket_id_input, &ticket_id_output);
 				if ticket_id >= ticket_threshold {
-					log::debug!(target: LOG_TARGET, "Over threshold");
+					debug!(target: LOG_TARGET, "Over threshold");
 					continue
 				}
 
-				let mut sign_data = sp_consensus_sassafras::ticket_body_sign_data(&ticket.body);
-				sign_data.push_vrf_input(vrf_input).expect("Can't fail");
+				let sign_data = vrf::ticket_body_sign_data(&ticket.body, ticket_id_input);
 
 				if ticket.signature.verify(&sign_data, &verifier) {
 					TicketsData::<T>::set(ticket_id, Some(ticket.body));
@@ -424,13 +420,13 @@ pub mod pallet {
 						.try_push(ticket_id)
 						.expect("has same length as bounded input vector; qed");
 				} else {
-					log::debug!(target: LOG_TARGET, "Proof verification failure");
+					debug!(target: LOG_TARGET, "Proof verification failure");
 				}
 			}
 
 			if !segment.is_empty() {
-				log::debug!(target: LOG_TARGET, "Appending segment with {} tickets", segment.len());
-				segment.iter().for_each(|t| log::debug!(target: LOG_TARGET, "  + {t:16x}"));
+				debug!(target: LOG_TARGET, "Appending segment with {} tickets", segment.len());
+				segment.iter().for_each(|t| debug!(target: LOG_TARGET, "  + {t:16x}"));
 				let mut metadata = TicketsMeta::<T>::get();
 				NextTicketsSegments::<T>::insert(metadata.segments_count, segment);
 				metadata.segments_count += 1;
@@ -500,7 +496,7 @@ pub mod pallet {
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::submit_tickets { tickets } = call {
 				// Discard tickets not coming from the local node
-				log::debug!(
+				debug!(
 					target: LOG_TARGET,
 					"Validating unsigned from {} source",
 					match source {
@@ -520,7 +516,7 @@ pub mod pallet {
 					//  A) The current epoch validators
 					//  B) The next epoch validators
 					//  C) Doesn't matter as far as the tickets are good (i.e. RVRF verify is ok)
-					log::warn!(
+					warn!(
 						target: LOG_TARGET,
 						"Rejecting unsigned transaction from external sources.",
 					);
@@ -532,7 +528,7 @@ pub mod pallet {
 
 				let current_slot_idx = Self::current_slot_index();
 				if current_slot_idx >= epoch_duration / 2 {
-					log::warn!(target: LOG_TARGET, "Timeout to propose tickets, bailing out.",);
+					warn!(target: LOG_TARGET, "Timeout to propose tickets, bailing out.",);
 					return InvalidTransaction::Stale.into()
 				}
 
@@ -676,7 +672,7 @@ impl<T: Config> Pallet<T> {
 			Self::reset_tickets_data();
 			let skipped_epochs = u64::from(slot_idx) / T::EpochDuration::get();
 			epoch_idx += skipped_epochs;
-			log::warn!(target: LOG_TARGET, "Detected {} skipped epochs, resuming from epoch {}", skipped_epochs, epoch_idx);
+			warn!(target: LOG_TARGET, "Detected {} skipped epochs, resuming from epoch {}", skipped_epochs, epoch_idx);
 		}
 
 		let mut tickets_metadata = TicketsMeta::<T>::get();
@@ -872,7 +868,7 @@ impl<T: Config> Pallet<T> {
 			} else {
 				2 * (duration - (slot_idx + 1))
 			};
-			log::debug!(
+			debug!(
 				target: LOG_TARGET,
 				">>>>>>>> SLOT-IDX {} -> TICKET-IDX {}",
 				slot_idx,
@@ -986,7 +982,7 @@ impl<T: Config> Pallet<T> {
 		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
 			Ok(_) => true,
 			Err(e) => {
-				log::error!(target: LOG_TARGET, "Error submitting tickets {:?}", e);
+				error!(target: LOG_TARGET, "Error submitting tickets {:?}", e);
 				false
 			},
 		}
@@ -1007,7 +1003,7 @@ impl<T: Config> Pallet<T> {
 		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
 			Ok(()) => true,
 			Err(e) => {
-				log::error!(target: LOG_TARGET, "Error submitting equivocation report: {:?}", e);
+				error!(target: LOG_TARGET, "Error submitting equivocation report: {:?}", e);
 				false
 			},
 		}

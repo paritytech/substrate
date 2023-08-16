@@ -212,7 +212,7 @@ impl sp_std::fmt::Debug for Signature {
 
 /// The raw secret seed, which can be used to reconstruct the secret [`Pair`].
 #[cfg(feature = "full_crypto")]
-type Seed = [u8; SEED_SERIALIZED_LEN];
+pub type Seed = [u8; SEED_SERIALIZED_LEN];
 
 /// Bandersnatch secret key.
 #[cfg(feature = "full_crypto")]

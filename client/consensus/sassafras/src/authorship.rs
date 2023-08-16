@@ -22,8 +22,8 @@ use super::*;
 
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_sassafras::{
-	digests::PreDigest, slot_claim_sign_data, ticket_id, ticket_id_threshold, AuthorityId, Slot,
-	TicketBody, TicketClaim, TicketEnvelope, TicketId,
+	digests::PreDigest, ticket_id_threshold, AuthorityId, Slot, TicketBody, TicketClaim,
+	TicketEnvelope, TicketId,
 };
 use sp_core::{
 	bandersnatch::ring_vrf::RingContext, ed25519::Pair as EphemeralPair, twox_64, ByteArray,
@@ -48,21 +48,37 @@ pub(crate) fn claim_slot(
 		return None
 	}
 
-	let mut vrf_sign_data = slot_claim_sign_data(&epoch.randomness, slot, epoch.epoch_idx);
+	let mut vrf_sign_data = vrf::slot_claim_sign_data(&epoch.randomness, slot, epoch.epoch_idx);
 
 	let (authority_idx, ticket_claim) = match maybe_ticket {
-		Some((ticket_id, ticket_data)) => {
-			log::debug!(target: LOG_TARGET, "[TRY PRIMARY (slot {slot}, tkt = {ticket_id:016x})]");
+		Some((ticket_id, ticket_body)) => {
+			debug!(target: LOG_TARGET, "[TRY PRIMARY (slot {slot}, tkt = {ticket_id:016x})]");
+
+			// TODO @davxy... this is annoying.
+			// If we lose the secret cache then to know if we are the ticket owner then looks
+			// like we need to regenerate the ticket-id using all our keys and check if the
+			// output matches with the onchain one...
+			// Is there a better way???
 			let (authority_idx, ticket_secret) = epoch.tickets_aux.remove(&ticket_id)?;
-			log::debug!(
+			debug!(
 				target: LOG_TARGET,
 				"   got ticket: auth: {}, attempt: {}",
 				authority_idx,
-				ticket_data.attempt_idx
+				ticket_body.attempt_idx
 			);
 
-			vrf_sign_data.push_transcript_data(&ticket_data.encode());
+			vrf_sign_data.push_transcript_data(&ticket_body.encode());
 
+			let reveal_vrf_input = vrf::revealed_key_input(
+				&epoch.randomness,
+				ticket_body.attempt_idx,
+				epoch.epoch_idx,
+			);
+			vrf_sign_data
+				.push_vrf_input(reveal_vrf_input)
+				.expect("Sign data has enough space; qed");
+
+			// Sign some data using the erased key to enforce our ownership
 			let data = vrf_sign_data.challenge::<32>();
 			let erased_pair = EphemeralPair::from_seed(&ticket_secret.seed);
 			let erased_signature = erased_pair.sign(&data);
@@ -71,7 +87,7 @@ pub(crate) fn claim_slot(
 			(authority_idx, Some(claim))
 		},
 		None => {
-			log::debug!(target: LOG_TARGET, "[TRY SECONDARY (slot {slot})]");
+			debug!(target: LOG_TARGET, "[TRY SECONDARY (slot {slot})]");
 			(secondary_authority_index(slot, epoch), None)
 		},
 	};
@@ -82,6 +98,10 @@ pub(crate) fn claim_slot(
 		.bandersnatch_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &vrf_sign_data)
 		.ok()
 		.flatten()?;
+
+	if let Some(output) = vrf_signature.outputs.get(1) {
+		warn!(target: LOG_TARGET, "{:?}", output);
+	}
 
 	let pre_digest = PreDigest { authority_idx, slot, vrf_signature, ticket_claim };
 
@@ -106,13 +126,14 @@ fn generate_epoch_tickets(
 		epoch.authorities.len() as u32,
 	);
 	// TODO-SASS-P4 remove me
-	log::debug!(target: LOG_TARGET, "Generating tickets for epoch {} @ slot {}", epoch.epoch_idx, epoch.start_slot);
-	log::debug!(target: LOG_TARGET, "    threshold: {threshold:016x}");
+	debug!(target: LOG_TARGET, "Generating tickets for epoch {} @ slot {}", epoch.epoch_idx, epoch.start_slot);
+	debug!(target: LOG_TARGET, "    threshold: {threshold:016x}");
 
 	// We need a list of raw unwrapped keys
 	let pks: Vec<_> = epoch.authorities.iter().map(|a| *a.as_ref()).collect();
 
-	let mut tickets_aux = Vec::new();
+	let tickets_aux = &mut epoch.tickets_aux;
+	let epoch = &epoch.inner;
 
 	for (authority_idx, authority_id) in epoch.authorities.iter().enumerate() {
 		if !keystore.has_keys(&[(authority_id.to_raw_vec(), AuthorityId::ID)]) {
@@ -124,27 +145,39 @@ fn generate_epoch_tickets(
 		debug!(target: LOG_TARGET, ">>> ...done");
 
 		let make_ticket = |attempt_idx| {
-			let vrf_input = ticket_id_vrf_input(&epoch.randomness, attempt_idx, epoch.epoch_idx);
-
-			let vrf_preout = keystore
-				.bandersnatch_vrf_output(AuthorityId::ID, authority_id.as_ref(), &vrf_input)
+			// Ticket id and threshold check.
+			let ticket_id_input =
+				vrf::ticket_id_input(&epoch.randomness, attempt_idx, epoch.epoch_idx);
+			let ticket_id_output = keystore
+				.bandersnatch_vrf_output(AuthorityId::ID, authority_id.as_ref(), &ticket_id_input)
 				.ok()??;
-
-			let ticket_id = ticket_id(&vrf_input, &vrf_preout);
+			let ticket_id = vrf::make_ticket_id(&ticket_id_input, &ticket_id_output);
 			if ticket_id >= threshold {
 				return None
 			}
 
-			// @davxy TODO: why not generate from seed.
-			// Seed computed as f(pair.seed || ticket_id)
+			// Erased key.
+			// TODO: @davxy maybe we can we make this as:
+			// part1 = OsRand()  // stored in memory
+			// part2 = make_erased_seed(&seed_vrf_input, seed_vrf_output) // reproducible from auth
+			// erased_seed = hash(part1 ++ part2)
+			// In this way is not reproducible and not full secret is in memory
 			let (erased_pair, erased_seed) = EphemeralPair::generate();
-
 			let erased_public = erased_pair.public();
-			let body = TicketBody { attempt_idx, erased_public };
+
+			// Revealed key.
+			let revealed_input =
+				vrf::revealed_key_input(&epoch.randomness, attempt_idx, epoch.epoch_idx);
+			let revealed_output = keystore
+				.bandersnatch_vrf_output(AuthorityId::ID, authority_id.as_ref(), &revealed_input)
+				.ok()??;
+			let revealed_seed = vrf::make_revealed_key_seed(&revealed_input, &revealed_output);
+			let revealed_public = EphemeralPair::from_seed(&revealed_seed).public();
+
+			let body = TicketBody { attempt_idx, erased_public, revealed_public };
 
 			debug!(target: LOG_TARGET, ">>> Creating ring proof for attempt {}", attempt_idx);
-			let mut sign_data = ticket_body_sign_data(&body);
-			sign_data.push_vrf_input(vrf_input).expect("Can't fail");
+			let sign_data = vrf::ticket_body_sign_data(&body, ticket_id_input);
 
 			let signature = keystore
 				.bandersnatch_ring_vrf_sign(
@@ -156,25 +189,22 @@ fn generate_epoch_tickets(
 				.ok()??;
 			debug!(target: LOG_TARGET, ">>> ...done");
 
+			debug_assert_eq!(ticket_id_output, signature.outputs[0]);
+
 			let ticket_envelope = TicketEnvelope { body, signature };
-
 			let ticket_secret = TicketSecret { attempt_idx, seed: erased_seed };
-
 			Some((ticket_id, ticket_envelope, ticket_secret))
 		};
 
 		for attempt in 0..epoch.config.attempts_number {
 			if let Some((ticket_id, ticket_envelope, ticket_secret)) = make_ticket(attempt) {
-				log::debug!(target: LOG_TARGET, "    → {ticket_id:016x}");
+				debug!(target: LOG_TARGET, "    → {ticket_id:016x}");
 				tickets.push(ticket_envelope);
-				tickets_aux.push((ticket_id, authority_idx as u32, ticket_secret));
+				tickets_aux.insert(ticket_id, (authority_idx as u32, ticket_secret));
 			}
 		}
 	}
 
-	tickets_aux.into_iter().for_each(|(ticket_id, authority_idx, ticket_secret)| {
-		epoch.tickets_aux.insert(ticket_id, (authority_idx, ticket_secret));
-	});
 	tickets
 }
 

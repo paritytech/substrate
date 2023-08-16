@@ -164,13 +164,12 @@ fn make_ticket_with_prover(
 	let mut raw: [u8; 32] = [0; 32];
 	raw.copy_from_slice(&pair.public().as_slice()[0..32]);
 	let erased_public = EphemeralPublic::unchecked_from(raw);
+	let revealed_public = erased_public.clone();
 
-	let body = TicketBody { attempt_idx: attempt, erased_public };
+	let ticket_id_input = vrf::ticket_id_input(&randomness, attempt, epoch);
 
-	let mut sign_data = sp_consensus_sassafras::ticket_body_sign_data(&body);
-
-	let vrf_input = sp_consensus_sassafras::ticket_id_vrf_input(&randomness, attempt, epoch);
-	sign_data.push_vrf_input(vrf_input).unwrap();
+	let body = TicketBody { attempt_idx: attempt, erased_public, revealed_public };
+	let sign_data = vrf::ticket_body_sign_data(&body, ticket_id_input);
 
 	let signature = pair.as_ref().ring_vrf_sign(&sign_data, &prover);
 
@@ -219,10 +218,10 @@ pub fn make_ticket_body(attempt_idx: u32, pair: &AuthorityPair) -> (TicketId, Ti
 	let epoch = Sassafras::epoch_index() + 1;
 	let randomness = Sassafras::next_randomness();
 
-	let input = sp_consensus_sassafras::ticket_id_vrf_input(&randomness, attempt_idx, epoch);
-	let output = pair.as_inner_ref().vrf_output(&input);
+	let ticket_id_input = vrf::ticket_id_input(&randomness, attempt_idx, epoch);
+	let ticket_id_output = pair.as_inner_ref().vrf_output(&ticket_id_input);
 
-	let id = sp_consensus_sassafras::ticket_id(&input, &output);
+	let id = vrf::make_ticket_id(&ticket_id_input, &ticket_id_output);
 
 	// Make a dummy ephemeral public that hopefully is unique within one test instance.
 	// In the tests, the values within the erased public are just used to compare
@@ -231,8 +230,9 @@ pub fn make_ticket_body(attempt_idx: u32, pair: &AuthorityPair) -> (TicketId, Ti
 	raw[..16].copy_from_slice(&pair.public().as_slice()[0..16]);
 	raw[16..].copy_from_slice(&id.to_le_bytes());
 	let erased_public = EphemeralPublic::unchecked_from(raw);
+	let revealed_public = erased_public.clone();
 
-	let body = TicketBody { attempt_idx, erased_public };
+	let body = TicketBody { attempt_idx, erased_public, revealed_public };
 
 	(id, body)
 }
@@ -292,7 +292,7 @@ fn slot_claim_vrf_signature(slot: Slot, pair: &AuthorityPair) -> VrfSignature {
 		randomness = crate::NextRandomness::<Test>::get();
 	}
 
-	let data = sp_consensus_sassafras::slot_claim_sign_data(&randomness, slot, epoch);
+	let data = vrf::slot_claim_sign_data(&randomness, slot, epoch);
 	pair.as_ref().vrf_sign(&data)
 }
 

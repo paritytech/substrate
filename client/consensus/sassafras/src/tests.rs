@@ -303,10 +303,13 @@ impl TestContext {
 
 		// TODO DAVXY: here maybe we can use the epoch.randomness???
 		let epoch = self.epoch_data(&parent_hash, parent_number, slot);
-		let data =
-			slot_claim_sign_data(&self.link.genesis_config.randomness, slot, epoch.epoch_idx);
-		let vrf_signature =
-			self.keystore.bandersnatch_vrf_sign(SASSAFRAS, &public, &data).unwrap().unwrap();
+		let sign_data =
+			vrf::slot_claim_sign_data(&self.link.genesis_config.randomness, slot, epoch.epoch_idx);
+		let vrf_signature = self
+			.keystore
+			.bandersnatch_vrf_sign(SASSAFRAS, &public, &sign_data)
+			.unwrap()
+			.unwrap();
 
 		let pre_digest = PreDigest { slot, authority_idx: 0, vrf_signature, ticket_claim: None };
 		let digest = sp_runtime::generic::Digest {
@@ -363,6 +366,8 @@ impl TestContext {
 fn tests_assumptions_sanity_check() {
 	let env = TestContext::new();
 	assert_eq!(env.link.genesis_config, create_test_epoch());
+	// Protocol needs at least two VRF ios
+	assert!(sp_core::bandersnatch::vrf::MAX_VRF_IOS >= 2);
 }
 
 #[test]
@@ -415,7 +420,8 @@ fn claim_primary_slots_works() {
 
 	let ticket_id = 123;
 	let erased_public = EphemeralPublic::unchecked_from([0; 32]);
-	let ticket_body = TicketBody { attempt_idx: 0, erased_public };
+	let revealed_public = erased_public.clone();
+	let ticket_body = TicketBody { attempt_idx: 0, erased_public, revealed_public };
 	let ticket_secret = TicketSecret { attempt_idx: 0, seed: [0; 32] };
 
 	// Fail if we have authority key in our keystore but not ticket aux data

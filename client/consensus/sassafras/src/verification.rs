@@ -95,51 +95,66 @@ fn check_header<B: BlockT + Sized>(
 
 	// Optionally check ticket ownership
 
-	let mut vrf_sign_data =
-		slot_claim_sign_data(&epoch.randomness, pre_digest.slot, epoch.epoch_idx);
+	let mut sign_data =
+		vrf::slot_claim_sign_data(&epoch.randomness, pre_digest.slot, epoch.epoch_idx);
 
 	match (&maybe_ticket, &pre_digest.ticket_claim) {
-		(Some((_ticket_id, ticket_data)), Some(ticket_claim)) => {
-			log::debug!(target: LOG_TARGET, "checking primary");
+		(Some((_ticket_id, ticket_body)), ticket_claim) => {
+			debug!(target: LOG_TARGET, "checking primary");
 
-			vrf_sign_data.push_transcript_data(&ticket_data.encode());
-			let challenge = vrf_sign_data.challenge::<32>();
+			sign_data.push_transcript_data(&ticket_body.encode());
 
-			if !EphemeralPair::verify(
-				&ticket_claim.erased_signature,
-				&challenge,
-				&ticket_data.erased_public,
-			) {
-				return Err(sassafras_err(Error::BadSignature(pre_hash)))
+			// Revealed key check
+			let revealed_input = vrf::revealed_key_input(
+				&epoch.randomness,
+				ticket_body.attempt_idx,
+				epoch.epoch_idx,
+			);
+			let revealed_output = pre_digest
+				.vrf_signature
+				.outputs
+				.get(1)
+				.ok_or_else(|| sassafras_err(Error::MissingSignedVrfOutput))?;
+			let revealed_seed = vrf::make_revealed_key_seed(&revealed_input, &revealed_output);
+			let revealed_public = EphemeralPair::from_seed(&revealed_seed).public();
+			if revealed_public != ticket_body.revealed_public {
+				return Err(sassafras_err(Error::RevealPublicMismatch))
+			}
+			sign_data.push_vrf_input(revealed_input).expect("Can't fail; qed");
+
+			if let Some(ticket_claim) = ticket_claim {
+				// Optional check, increases some score...
+				let challenge = sign_data.challenge::<32>();
+				if !EphemeralPair::verify(
+					&ticket_claim.erased_signature,
+					&challenge,
+					&ticket_body.erased_public,
+				) {
+					return Err(sassafras_err(Error::BadSignature(pre_hash)))
+				}
 			}
 		},
 		(None, None) => {
-			log::debug!(target: LOG_TARGET, "checking secondary");
+			debug!(target: LOG_TARGET, "checking secondary");
 			let idx = authorship::secondary_authority_index(pre_digest.slot, epoch);
 			if idx != pre_digest.authority_idx {
-				log::error!(target: LOG_TARGET, "Bad secondary authority index");
+				error!(target: LOG_TARGET, "Bad secondary authority index");
 				return Err(Error::SlotAuthorNotFound)
 			}
 		},
-		(Some(_), None) => {
-			log::warn!(target: LOG_TARGET, "Unexpected secondary authoring mechanism");
-			return Err(Error::UnexpectedAuthoringMechanism)
-		},
 		(None, Some(_)) =>
 			if origin != BlockOrigin::NetworkInitialSync {
-				log::warn!(target: LOG_TARGET, "Unexpected primary authoring mechanism");
+				warn!(target: LOG_TARGET, "Unexpected primary authoring mechanism");
 				return Err(Error::UnexpectedAuthoringMechanism)
 			},
 	}
 
 	// Check per-slot vrf proof
-
-	if !authority_id
-		.as_inner_ref()
-		.vrf_verify(&vrf_sign_data, &pre_digest.vrf_signature)
-	{
+	if !authority_id.as_inner_ref().vrf_verify(&sign_data, &pre_digest.vrf_signature) {
+		warn!(target: LOG_TARGET, ">>> VERIFICATION FAILED (pri = {})!!!", maybe_ticket.is_some());
 		return Err(sassafras_err(Error::VrfVerificationFailed))
 	}
+	warn!(target: LOG_TARGET, ">>> VERIFICATION OK (pri = {})!!!", maybe_ticket.is_some());
 
 	let info = VerifiedHeaderInfo { authority_id: authority_id.clone(), seal };
 

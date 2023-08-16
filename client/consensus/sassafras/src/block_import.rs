@@ -170,7 +170,7 @@ where
 			epoch_data.epoch_idx += skipped_epochs;
 			epoch_data.start_slot =
 				Slot::from(*epoch_data.start_slot + skipped_epochs * epoch_data.epoch_duration);
-			log::warn!(
+			warn!(
 				target: LOG_TARGET,
 				"Epoch(s) skipped from {} to {}",
 				original_epoch_idx,

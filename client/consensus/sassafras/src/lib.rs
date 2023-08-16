@@ -76,8 +76,7 @@ use sp_runtime::{
 // Re-export some primitives.
 pub use sp_consensus_sassafras::{
 	digests::{CompatibleDigestItem, ConsensusLog, NextEpochDescriptor, PreDigest},
-	slot_claim_sign_data, slot_claim_vrf_input, ticket_body_sign_data, ticket_id_vrf_input,
-	AuthorityId, AuthorityIndex, AuthorityPair, AuthoritySignature, EpochConfiguration,
+	vrf, AuthorityId, AuthorityIndex, AuthorityPair, AuthoritySignature, EpochConfiguration,
 	SassafrasApi, TicketBody, TicketClaim, TicketEnvelope, TicketId, RANDOMNESS_LENGTH,
 	SASSAFRAS_ENGINE_ID,
 };
@@ -141,6 +140,12 @@ pub enum Error<B: BlockT> {
 	/// VRF verification failed
 	#[error("VRF verification failed")]
 	VrfVerificationFailed,
+	/// Missing VRF output entry in the signature
+	#[error("Missing signed VRF output")]
+	MissingSignedVrfOutput,
+	/// Mismatch during verification of reveal public
+	#[error("Reveal public mismatch")]
+	RevealPublicMismatch,
 	/// Unexpected authoring mechanism
 	#[error("Unexpected authoring mechanism")]
 	UnexpectedAuthoringMechanism,
@@ -293,10 +298,10 @@ pub struct SassafrasIntermediate<B: BlockT> {
 fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>> {
 	if header.number().is_zero() {
 		// Genesis block doesn't contain a pre digest so let's generate a
-		// dummy one to not break any invariants in the rest of the code
+		// dummy one to not break any invariant in the rest of the code.
 		use sp_core::crypto::VrfSecret;
 		let pair = sp_consensus_sassafras::AuthorityPair::from_seed(&[0u8; 32]);
-		let data = sp_consensus_sassafras::slot_claim_sign_data(&Default::default(), 0.into(), 0);
+		let data = vrf::slot_claim_sign_data(&Default::default(), 0.into(), 0);
 		let vrf_signature = pair.as_ref().vrf_sign(&data);
 		return Ok(PreDigest { authority_idx: 0, slot: 0.into(), ticket_claim: None, vrf_signature })
 	}
