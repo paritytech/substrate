@@ -1953,7 +1953,7 @@ construct_runtime!(
 		MessageQueue: pallet_message_queue,
 		Pov: frame_benchmarking_pallet_pov,
 		Statement: pallet_statement,
-		TasksExample: tasks_example,
+		TasksExample: tasks_example::{Pallet, Storage, Call, Event<T>, Task},
 	}
 );
 
