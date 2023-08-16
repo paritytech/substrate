@@ -270,8 +270,13 @@ pub trait Hooks<BlockNumber> {
 	/// Must return the non-negotiable weight of both itself and whatever [`Hooks::on_finalize`]
 	/// wishes to consume.
 	///
+	/// ## Warning
+	///
 	/// The weight returned by this is treated as `DispatchClass::Mandatory`, meaning that
 	/// it MUST BE EXECUTED. If this is not the case, consider using [`Hooks::on_idle`] instead.
+	///
+	/// Try to keep any arbitrary execution __deterministic__ and within __minimal__ time
+	/// complexity. For example, do not execute any unbounded iterations.
 	///
 	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied, including inherent
 	/// extrinsics. Hence for instance, if you runtime includes `pallet-timestamp`, the `timestamp`

@@ -51,10 +51,6 @@ pub struct RunCmd {
 	#[arg(long)]
 	pub no_grandpa: bool,
 
-	/// Disable BEEFY voter when running in validator mode, otherwise disable the BEEFY observer.
-	#[arg(long)]
-	pub no_beefy: bool,
-
 	/// Listen to all RPC interfaces.
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
 	/// proxy server to filter out dangerous methods. More details:
@@ -315,10 +311,6 @@ impl CliConfiguration for RunCmd {
 
 	fn disable_grandpa(&self) -> Result<bool> {
 		Ok(self.no_grandpa)
-	}
-
-	fn disable_beefy(&self) -> Result<bool> {
-		Ok(self.no_beefy)
 	}
 
 	fn rpc_max_connections(&self) -> Result<u32> {
