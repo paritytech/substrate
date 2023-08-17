@@ -380,7 +380,7 @@ where
 	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_api::Metadata<TBl>
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl>
 		+ sp_session::SessionKeys<TBl>
-		+ sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
+		+ sp_api::ApiExt<TBl>,
 	TBl: BlockT,
 	TBl::Hash: Unpin,
 	TBl::Header: Unpin,

@@ -28,7 +28,6 @@ use crate::block_building_info::BlockBuildingInfoProvider;
 use parity_scale_codec::Decode;
 use remote_externalities::{
 	Builder, Mode, OfflineConfig, OnlineConfig, RemoteExternalities, SnapshotConfig,
-	TestExternalities,
 };
 use sc_cli::{
 	execution_method_from_cli, CliConfiguration, RuntimeVersion, WasmExecutionMethod,
@@ -38,7 +37,6 @@ use sc_cli::{
 use sc_executor::{
 	sp_wasm_interface::HostFunctions, HeapAllocStrategy, WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY,
 };
-use sp_api::HashT;
 use sp_core::{
 	hexdisplay::HexDisplay,
 	offchain::{
@@ -53,10 +51,12 @@ use sp_externalities::Extensions;
 use sp_inherents::InherentData;
 use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
-	traits::{BlakeTwo256, Block as BlockT, NumberFor},
+	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, HashingFor, NumberFor},
 	DeserializeOwned, Digest,
 };
-use sp_state_machine::{CompactProof, OverlayedChanges, StateMachine, TrieBackendBuilder};
+use sp_state_machine::{
+	CompactProof, OverlayedChanges, StateMachine, TestExternalities, TrieBackendBuilder,
+};
 use sp_version::StateVersion;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
@@ -514,7 +514,7 @@ pub(crate) fn build_executor<H: HostFunctions>(shared: &SharedParams) -> WasmExe
 /// Ensure that the given `ext` is compiled with `try-runtime`
 fn ensure_try_runtime<Block: BlockT, HostFns: HostFunctions>(
 	executor: &WasmExecutor<HostFns>,
-	ext: &mut TestExternalities,
+	ext: &mut TestExternalities<HashingFor<Block>>,
 ) -> bool {
 	use sp_api::RuntimeApiInfo;
 	let final_code = ext
@@ -532,12 +532,12 @@ fn ensure_try_runtime<Block: BlockT, HostFns: HostFunctions>(
 /// Execute the given `method` and `data` on top of `ext`, returning the results (encoded) and the
 /// state `changes`.
 pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
-	ext: &TestExternalities,
+	ext: &TestExternalities<HashingFor<Block>>,
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
 	mut extensions: Extensions,
-) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
+) -> sc_cli::Result<(OverlayedChanges<HashingFor<Block>>, Vec<u8>)> {
 	let mut changes = Default::default();
 	let encoded_results = StateMachine::new(
 		&ext.backend,
@@ -561,13 +561,13 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 ///
 /// Make sure [`LOG_TARGET`] is enabled in logging.
 pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunctions>(
-	ext: &TestExternalities,
+	ext: &TestExternalities<HashingFor<Block>>,
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
 	mut extensions: Extensions,
 	maybe_export_proof: Option<PathBuf>,
-) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
+) -> sc_cli::Result<(OverlayedChanges<HashingFor<Block>>, Vec<u8>)> {
 	use parity_scale_codec::Encode;
 
 	let mut changes = Default::default();
@@ -624,7 +624,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	let proof_size = proof.encoded_size();
 	let compact_proof = proof
 		.clone()
-		.into_compact_proof::<sp_runtime::traits::BlakeTwo256>(pre_root)
+		.into_compact_proof::<HashingFor<Block>>(pre_root)
 		.map_err(|e| {
 			log::error!(target: LOG_TARGET, "failed to generate compact proof {}: {:?}", method, e);
 			e

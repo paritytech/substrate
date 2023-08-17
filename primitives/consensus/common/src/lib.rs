@@ -91,13 +91,13 @@ pub trait Environment<B: BlockT> {
 }
 
 /// A proposal that is created by a [`Proposer`].
-pub struct Proposal<Block: BlockT, Transaction, Proof> {
+pub struct Proposal<Block: BlockT, Proof> {
 	/// The block that was build.
 	pub block: Block,
 	/// Proof that was recorded while building the block.
 	pub proof: Proof,
 	/// The storage changes while building this block.
-	pub storage_changes: sp_state_machine::StorageChanges<Transaction, HashingFor<Block>>,
+	pub storage_changes: sp_state_machine::StorageChanges<HashingFor<Block>>,
 }
 
 /// Error that is returned when [`ProofRecording`] requested to record a proof,
@@ -177,10 +177,8 @@ mod private {
 pub trait Proposer<B: BlockT> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + std::error::Error + 'static;
-	/// The transaction type used by the backend.
-	type Transaction: Default + Send + 'static;
 	/// Future that resolves to a committed proposal with an optional proof.
-	type Proposal: Future<Output = Result<Proposal<B, Self::Transaction, Self::Proof>, Self::Error>>
+	type Proposal: Future<Output = Result<Proposal<B, Self::Proof>, Self::Error>>
 		+ Send
 		+ Unpin
 		+ 'static;
