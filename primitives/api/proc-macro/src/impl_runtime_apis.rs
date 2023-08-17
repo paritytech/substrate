@@ -493,11 +493,9 @@ fn extend_with_api_version(mut trait_: Path, version: Option<u64>) -> Path {
 	trait_
 }
 
-// Adds a `#[cfg( feature = ...)]` attribute to attributes. Parameters:
-// feature_name - name of the feature
-// t - positive or negative feature guard.
-//		true => `#[cfg(feature = ...)]`
-//		false => `#[cfg(not(feature = ...))]`
+/// Adds a feature guard to `attributes`.
+///
+/// Depending on `enable`, the feature guard either enables ('feature = "something"`) or disables (`not(feature = "something")`). 
 fn add_feature_guard(attrs: &mut Vec<Attribute>, feature_name: &str, t: bool) {
 	let attr = match t {
 		true => parse_quote!(#[cfg(feature = #feature_name)]),
@@ -552,7 +550,7 @@ impl<'a> Fold for ApiImplItem<'a> {
 		if v.custom.is_some() {
 			self.errors.push(Error::new(
 				i.span(),
-				"`api_version` attribute is not allowed `decl_runtime_api` method implementations",
+				"`api_version` attribute is not allowed on method implementations",
 			));
 			return fold::fold_impl_item_fn(self, i)
 		}
@@ -968,10 +966,6 @@ fn extract_cfg_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<
 				parenthesized!(content in m.input);
 				let ver: LitInt = content.parse()?;
 				api_version = Some(ver.base10_parse::<u64>()?);
-			} else {
-				// we don't want to enforce any restrictions on the `cfg` attributes so just do
-				// nothing here. Otherwise return an error
-				// return Err(Error::new(span, format!("Unsupported cfg attribute")))
 			}
 			Ok(())
 		})?;
@@ -993,13 +987,12 @@ fn extract_cfg_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<
 	}
 }
 
-// Represents an API version.
-// `custom` corresponds to `#[api_version(X)]` attribute.
-// `feature_gated` corresponds to `#[cfg_attr(feature = "enable-staging-api", api_version(99))]`
-// attribute. `String` is the feature name, `u64` the staging api version.
-// Both fields may or may not exist for an item so they are both `Option`.
+/// Represents an API version.
 struct ApiVersion {
+	/// Corresponds to `#[api_version(X)]` attribute.
 	pub custom: Option<u64>,
+	/// Corresponds to `#[cfg_attr(feature = "enable-staging-api", api_version(99))]`
+	/// attribute. `String` is the feature name, `u64` the staging api version.
 	pub feature_gated: Option<(String, u64)>,
 }
 

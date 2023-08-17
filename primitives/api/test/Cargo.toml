@@ -37,5 +37,4 @@ name = "bench"
 harness = false
 
 [features]
-# used only in tests
 "enable-staging-api" = []
