@@ -87,10 +87,9 @@ where
 
 /// This implementation is required, because of the weird api requirements around `BlockImport`.
 #[async_trait::async_trait]
-impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::Arc<T>
+impl<Block: BlockT, T> ClientBlockImportExt<Block> for std::sync::Arc<T>
 where
-	for<'r> &'r T: BlockImport<Block, Error = ConsensusError, Transaction = Transaction>,
-	Transaction: Send + 'static,
+	for<'r> &'r T: BlockImport<Block, Error = ConsensusError>,
 	T: Send + Sync,
 {
 	async fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
@@ -153,7 +152,6 @@ where
 	RA: Send,
 	B: Send + Sync,
 	E: Send,
-	<Self as BlockImport<Block>>::Transaction: Send,
 {
 	async fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
