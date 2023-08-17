@@ -773,7 +773,7 @@ pub mod v5 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(data: Vec<u8>) -> Result<(), TryRuntimeError> {
+		fn post_upgrade(_data: Vec<u8>) -> Result<(), TryRuntimeError> {
 			// ensure [`TotalValueLocked`] contains a value greater zero if any instances of
 			// BondedPools exist.
 			if !BondedPools::<T>::count().is_zero() {

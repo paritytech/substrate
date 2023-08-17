@@ -535,11 +535,34 @@ impl<T: Config> PoolMember<T> {
 		}
 	}
 
-	/// Total balance of the member.
+	/// Total balance of the member, both active and unbonding.
+	/// Doesn't mutate state.
 	#[cfg(any(feature = "try-runtime", test))]
-	fn total_balance(&self) -> BalanceOf<T> {
+	fn total_balance(&mut self) -> BalanceOf<T> {
 		if let Some(pool) = BondedPool::<T>::get(self.pool_id).defensive() {
-			pool.points_to_balance(self.total_points())
+			let active_balance = pool.points_to_balance(self.active_points());
+
+			// get all unbonding balance, both already unlocked and yet to be unlocked.
+			match SubPoolsStorage::<T>::get(self.pool_id) {
+				Some(mut sub_pools) => {
+					let unbonding_balance = &self.unbonding_eras.iter().fold(
+						BalanceOf::<T>::zero(),
+						|accumulator, (era, unlocked_points)| {
+							if let Some(era_pool) = sub_pools.with_era.get_mut(era) {
+								accumulator.saturating_add(
+									era_pool.point_to_balance(unlocked_points.clone()),
+								)
+							} else {
+								accumulator.saturating_add(
+									sub_pools.no_era.point_to_balance(unlocked_points.clone()),
+								)
+							}
+						},
+					);
+					active_balance.saturating_add(unbonding_balance.clone())
+				},
+				None => active_balance,
+			}
 		} else {
 			Zero::zero()
 		}
@@ -1594,7 +1617,11 @@ pub mod pallet {
 		type MaxUnbonding: Get<u32>;
 	}
 
-	/// TVL across all pools
+	/// The sum of funds across all pools.
+	///
+	/// This might be higher but never lower than the actual sum of the currently unlocking and
+	/// bonded funds as this is only decreased if a user withdraws unlocked funds or a slash
+	/// happened.
 	#[pallet::storage]
 	pub type TotalValueLocked<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
@@ -2095,7 +2122,7 @@ pub mod pallet {
 
 		/// Call `withdraw_unbonded` for the pools account. This call can be made by any account.
 		///
-		/// This is useful if their are too many unlocking chunks to call `unbond`, and some
+		/// This is useful if there are too many unlocking chunks to call `unbond`, and some
 		/// can be cleared by withdrawing. In the case there are too many unlocking chunks, the user
 		/// would probably see an error like `NoMoreChunks` emitted from the staking system when
 		/// they attempt to unbond.
@@ -3098,7 +3125,7 @@ impl<T: Config> Pallet<T> {
 			bonded_pools == reward_pools,
 			"`BondedPools` and `RewardPools` must all have the EXACT SAME key-set."
 		);
-		let mut expected_tvl = Zero::zero();
+		// let mut expected_tvl = Zero::zero();
 
 		ensure!(
 			SubPoolsStorage::<T>::iter_keys().all(|k| bonded_pools.contains(&k)),
@@ -3191,8 +3218,8 @@ impl<T: Config> Pallet<T> {
 				"depositor must always have MinCreateBond stake in the pool, except for when the \
 				pool is being destroyed and the depositor is the last member",
 			);
-			expected_tvl += T::Staking::total_stake(&bonded_pool.bonded_account())
-				.expect("all pools must have total stake");
+			//expected_tvl += T::Staking::total_stake(&bonded_pool.bonded_account())
+			//.expect("all pools must have total stake");
 
 			Ok(())
 		})?;
@@ -3201,7 +3228,6 @@ impl<T: Config> Pallet<T> {
 			MaxPoolMembers::<T>::get().map_or(true, |max| all_members <= max),
 			Error::<T>::MaxPoolMembers
 		);
-		assert_eq!(TotalValueLocked::<T>::get(), expected_tvl);
 
 		if level <= 1 {
 			return Ok(())
