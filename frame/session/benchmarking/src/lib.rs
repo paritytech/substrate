@@ -34,7 +34,7 @@ use pallet_staking::{
 	benchmarking::create_validator_with_nominators, testing_utils::create_validators,
 	MaxNominationsOf, RewardDestination,
 };
-use sp_runtime::codec::Decode;
+use codec::Decode;
 
 const MAX_VALIDATORS: u32 = 1000;
 
