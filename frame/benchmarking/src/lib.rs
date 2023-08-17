@@ -29,26 +29,25 @@ mod utils;
 
 pub mod baseline;
 
-#[cfg(feature = "std")]
-pub use analysis::{Analysis, AnalysisChoice, BenchmarkSelector};
+/// Private exports that are being used by macros.
+///
+/// The exports are not stable and should not be relied on.
 #[doc(hidden)]
-pub use frame_support;
-#[doc(hidden)]
-pub use log;
-#[doc(hidden)]
-pub use paste;
-#[doc(hidden)]
-pub use sp_core::defer;
-#[doc(hidden)]
-pub use sp_io::storage::root as storage_root;
-#[doc(hidden)]
-pub use sp_runtime::traits::Zero;
-#[doc(hidden)]
-pub use sp_runtime::StateVersion;
-#[doc(hidden)]
-pub use sp_std::{self, boxed::Box, prelude::Vec, str, vec};
-pub use sp_storage::{well_known_keys, TrackedStorageKey};
-pub use utils::*;
+pub mod __private {
+	#[cfg(feature = "std")]
+	pub use analysis::{Analysis, AnalysisChoice, BenchmarkSelector};
+	pub use codec::{ Decode, Encode };
+	pub use frame_support;
+	pub use log;
+	pub use paste;
+	pub use sp_core::defer;
+	pub use sp_io::storage::root as storage_root;
+	pub use sp_runtime::traits::Zero;
+	pub use sp_runtime::StateVersion ;
+	pub use sp_std::{self, boxed::Box, prelude::Vec, str, vec};
+	pub use sp_storage::{well_known_keys, TrackedStorageKey};
+	pub use utils::*;
+}
 
 pub mod v1;
 pub use v1::*;
