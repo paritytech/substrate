@@ -83,7 +83,7 @@ type BeefyBlockImport = crate::BeefyBlockImport<
 	Block,
 	substrate_test_runtime_client::Backend,
 	TestApi,
-	BlockImportAdapter<PeersClient, sp_api::TransactionFor<TestApi, Block>>,
+	BlockImportAdapter<PeersClient>,
 >;
 
 pub(crate) type BeefyValidatorSet = ValidatorSet<AuthorityId>;

@@ -16,8 +16,8 @@ jsonrpsee = { version = "0.16.2", features = ["http-client"] }
 codec = { package = "parity-scale-codec", version = "3.6.1" }
 log = "0.4.17"
 serde = "1.0.163"
-frame-support = { version = "4.0.0-dev", optional = true, path = "../../../frame/support" }
 sp-core = { version = "21.0.0", path = "../../../primitives/core" }
+sp-state-machine = { version = "0.28.0", path = "../../../primitives/state-machine" }
 sp-io = { version = "23.0.0", path = "../../../primitives/io" }
 sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }
 tokio = { version = "1.22.0", features = ["macros", "rt-multi-thread"] }
@@ -29,9 +29,7 @@ spinners = "4.1.0"
 tokio-retry = "0.3.0"
 
 [dev-dependencies]
-frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
-pallet-elections-phragmen = { version = "5.0.0-dev", path = "../../../frame/elections-phragmen" }
-tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+sp-tracing = { version = "10.0.0", path = "../../../primitives/tracing" }
 
 [features]
-remote-test = ["frame-support"]
+remote-test = []
