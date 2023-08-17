@@ -771,17 +771,6 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(
-						pallet_contracts::Event::StorageDepositTransferredAndHeld {
-							from: ALICE,
-							to: addr.clone(),
-							amount: test_utils::contract_info_storage_deposit(&addr),
-						}
-					),
-					topics: vec![hash(&ALICE), hash(&addr)],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
@@ -803,6 +792,17 @@ fn instantiate_and_call_and_deposit_event() {
 						deployer: ALICE,
 						contract: addr.clone()
 					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: ALICE,
+							to: addr.clone(),
+							amount: test_utils::contract_info_storage_deposit(&addr),
+						}
+					),
 					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 			]
@@ -1237,17 +1237,6 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(
-						pallet_contracts::Event::StorageDepositTransferredAndHeld {
-							from: ALICE,
-							to: callee_addr.clone(),
-							amount: test_utils::contract_info_storage_deposit(&callee_addr),
-						}
-					),
-					topics: vec![hash(&ALICE), hash(&callee_addr)],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: caller_addr.clone(),
 						to: callee_addr.clone(),
@@ -1290,6 +1279,17 @@ fn deploy_and_call_other_contract() {
 						contract: caller_addr.clone(),
 					}),
 					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&caller_addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: ALICE,
+							to: callee_addr.clone(),
+							amount: test_utils::contract_info_storage_deposit(&callee_addr),
+						}
+					),
+					topics: vec![hash(&ALICE), hash(&callee_addr)],
 				},
 			]
 		);
@@ -3801,6 +3801,14 @@ fn instantiate_with_zero_balance_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
+					event: RuntimeEvent::Contracts(crate::Event::Instantiated {
+						deployer: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(
 						pallet_contracts::Event::StorageDepositTransferredAndHeld {
 							from: ALICE,
@@ -3808,14 +3816,6 @@ fn instantiate_with_zero_balance_works() {
 							amount: test_utils::contract_info_storage_deposit(&addr),
 						}
 					),
-					topics: vec![hash(&ALICE), hash(&addr)],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::Instantiated {
-						deployer: ALICE,
-						contract: addr.clone(),
-					}),
 					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 			]
@@ -3897,17 +3897,6 @@ fn instantiate_with_below_existential_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(
-						pallet_contracts::Event::StorageDepositTransferredAndHeld {
-							from: ALICE,
-							to: addr.clone(),
-							amount: test_utils::contract_info_storage_deposit(&addr),
-						}
-					),
-					topics: vec![hash(&ALICE), hash(&addr)],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
@@ -3921,6 +3910,17 @@ fn instantiate_with_below_existential_deposit_works() {
 						deployer: ALICE,
 						contract: addr.clone(),
 					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: ALICE,
+							to: addr.clone(),
+							amount: test_utils::contract_info_storage_deposit(&addr),
+						}
+					),
 					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 			]

@@ -2547,11 +2547,6 @@ mod tests {
 				assert_eq!(
 					&events(),
 					&[
-						Event::StorageDepositTransferredAndHeld {
-							from: ALICE,
-							to: instantiated_contract_address.clone(),
-							amount: contract_info_storage_deposit(&instantiated_contract_address)
-						},
 						Event::Instantiated {
 							deployer: ALICE,
 							contract: instantiated_contract_address
@@ -2677,11 +2672,6 @@ mod tests {
 				assert_eq!(
 					&events(),
 					&[
-						Event::StorageDepositTransferredAndHeld {
-							from: ALICE,
-							to: instantiated_contract_address.clone(),
-							amount: contract_info_storage_deposit(&instantiated_contract_address)
-						},
 						Event::Instantiated {
 							deployer: BOB,
 							contract: instantiated_contract_address

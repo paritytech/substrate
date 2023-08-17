@@ -430,7 +430,7 @@ where
 		self.charges.push(Charge { contract, amount, state: ContractState::Alive });
 	}
 
-	/// Charge from `origin` a storage deposit plus the ed for contract instantiation.
+	/// Charges from `origin` a storage deposit for contract instantiation.
 	///
 	/// This immediately transfers the balance in order to create the account.
 	pub fn charge_instantiate(
@@ -452,7 +452,7 @@ where
 
 		// We do not increase `own_contribution` because this will be charged later when the
 		// contract execution does conclude and hence would lead to a double charge.
-		self.total_deposit = deposit.clone();
+		self.total_deposit = Deposit::Charge(ed);
 
 		// We need to make sure that the contract's account exists.
 		T::Currency::transfer(origin, contract, ed, Preservation::Preserve)?;
@@ -462,15 +462,7 @@ where
 		// With the consumer, a correct runtime cannot remove the account.
 		System::<T>::inc_consumers(contract)?;
 
-		// Normally, deposit charges are deferred to be able to coalesce them with refunds.
-		// However, we need to charge immediately so that the account is created before
-		// charges possibly below the ed are collected and fail.
-		E::charge(
-			origin,
-			contract,
-			&deposit.saturating_sub(&Deposit::Charge(ed)),
-			&ContractState::Alive,
-		)?;
+		self.charge_deposit(contract.clone(), deposit.saturating_sub(&Deposit::Charge(ed)));
 
 		Ok(deposit)
 	}
