@@ -33,7 +33,7 @@ use frame_support::{
 	storage::{with_transaction, TransactionOutcome},
 	traits::{
 		fungible::{Inspect, Mutate},
-		tokens::{Fortitude::Polite, Preservation},
+		tokens::Preservation,
 		Contains, OriginTrait, Randomness, Time,
 	},
 	weights::Weight,
@@ -1283,13 +1283,8 @@ where
 		}
 		let frame = self.top_frame_mut();
 		let info = frame.terminate();
-		frame.nested_storage.terminate(&info);
-		Self::transfer(
-			Preservation::Expendable,
-			&frame.account_id,
-			beneficiary,
-			T::Currency::reducible_balance(&frame.account_id, Preservation::Expendable, Polite),
-		)?;
+		frame.nested_storage.terminate(&info, beneficiary.clone());
+
 		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::decrement_refcount(info.code_hash);
