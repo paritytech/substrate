@@ -85,20 +85,18 @@ impl From<bool> for RecordProof {
 /// backend to get the state of the block. Furthermore an optional `proof` is included which
 /// can be used to proof that the build block contains the expected data. The `proof` will
 /// only be set when proof recording was activated.
-pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HashingFor<Block>>> {
+pub struct BuiltBlock<Block: BlockT> {
 	/// The actual block that was build.
 	pub block: Block,
 	/// The changes that need to be applied to the backend to get the state of the build block.
-	pub storage_changes: StorageChanges<StateBackend, Block>,
+	pub storage_changes: StorageChanges<Block>,
 	/// An optional proof that was recorded while building the block.
 	pub proof: Option<StorageProof>,
 }
 
-impl<Block: BlockT, StateBackend: backend::StateBackend<HashingFor<Block>>>
-	BuiltBlock<Block, StateBackend>
-{
+impl<Block: BlockT> BuiltBlock<Block> {
 	/// Convert into the inner values.
-	pub fn into_inner(self) -> (Block, StorageChanges<StateBackend, Block>, Option<StorageProof>) {
+	pub fn into_inner(self) -> (Block, StorageChanges<Block>, Option<StorageProof>) {
 		(self.block, self.storage_changes, self.proof)
 	}
 }
@@ -145,8 +143,7 @@ impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
 where
 	Block: BlockT,
 	A: ProvideRuntimeApi<Block> + 'a,
-	A::Api:
-		BlockBuilderApi<Block> + ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
+	A::Api: BlockBuilderApi<Block> + ApiExt<Block>,
 	B: backend::Backend<Block>,
 {
 	/// Create a new instance of builder based on the given `parent_hash` and `parent_number`.
@@ -231,7 +228,7 @@ where
 	/// Returns the build `Block`, the changes to the storage and an optional `StorageProof`
 	/// supplied by `self.api`, combined as [`BuiltBlock`].
 	/// The storage proof will be `Some(_)` when proof recording was enabled.
-	pub fn build(mut self) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
+	pub fn build(mut self) -> Result<BuiltBlock<Block>, Error> {
 		let header = self.api.finalize_block(self.parent_hash)?;
 
 		debug_assert_eq!(
