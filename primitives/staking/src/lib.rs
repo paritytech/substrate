@@ -49,8 +49,8 @@ pub enum StakerStatus<AccountId> {
 	Nominator(Vec<AccountId>),
 }
 
-// A enum to aid in configuring a payout destination without knowing the stash and controller
-// accounts beforehand.
+// A enum contaning payout destination aliases. Used for configuring a payout destination without
+// knowing the stash and controller accounts.
 #[derive(PartialEq, Copy, Clone)]
 pub enum PayoutDestinationAlias {
 	/// Alias for the controller account.
@@ -59,8 +59,11 @@ pub enum PayoutDestinationAlias {
 	Split((Perbill, PayoutSplitOpt)),
 }
 
-// Options for splitting payouts. These are used to alias the stash and controller accounts, which
-// are assumed not to be known at the time at usage.
+// Options for aliased payouts. Used to alias stash and controller accounts, which are assumed not
+// to be known at the time at usage.
+//
+// NOTE: This enum can be discontinued after the `PayoutDestination` lazy migration, as the only
+// valid split alias would be to the stash account.
 #[derive(PartialEq, Copy, Clone)]
 pub enum PayoutSplitOpt {
 	Stash,
