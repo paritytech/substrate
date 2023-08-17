@@ -28,28 +28,27 @@ mod tests_instance;
 mod utils;
 
 pub mod baseline;
+pub mod v1;
 
 /// Private exports that are being used by macros.
 ///
 /// The exports are not stable and should not be relied on.
 #[doc(hidden)]
 pub mod __private {
-	#[cfg(feature = "std")]
-	pub use analysis::{Analysis, AnalysisChoice, BenchmarkSelector};
-	pub use codec::{ Decode, Encode };
-	pub use frame_support;
+	pub use codec::{Decode, Encode};
+	pub use frame_support::{storage, traits};
 	pub use log;
 	pub use paste;
 	pub use sp_core::defer;
 	pub use sp_io::storage::root as storage_root;
-	pub use sp_runtime::traits::Zero;
-	pub use sp_runtime::StateVersion ;
+	pub use sp_runtime::{traits::Zero, StateVersion};
 	pub use sp_std::{self, boxed::Box, prelude::Vec, str, vec};
 	pub use sp_storage::{well_known_keys, TrackedStorageKey};
-	pub use utils::*;
 }
 
-pub mod v1;
+#[cfg(feature = "std")]
+pub use analysis::{Analysis, AnalysisChoice, BenchmarkSelector};
+pub use utils::*;
 pub use v1::*;
 
 /// Contains macros, structs, and traits associated with v2 of the pallet benchmarking syntax.

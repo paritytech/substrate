@@ -20,7 +20,6 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use super::*;
 use crate::benchmarks;
 use frame_system::Pallet as System;
 use sp_runtime::{
