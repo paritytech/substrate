@@ -28,7 +28,7 @@ use sc_consensus::{
 };
 use sc_telemetry::TelemetryHandle;
 use sc_utils::mpsc::TracingUnboundedSender;
-use sp_api::{Core, RuntimeApiInfo, TransactionFor};
+use sp_api::{Core, RuntimeApiInfo};
 use sp_blockchain::BlockStatus;
 use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
 use sp_consensus_grandpa::{ConsensusLog, GrandpaApi, ScheduledChange, SetId, GRANDPA_ENGINE_ID};
@@ -41,7 +41,7 @@ use sp_runtime::{
 
 use crate::{
 	authorities::{AuthoritySet, DelayKind, PendingChange, SharedAuthoritySet},
-	environment::finalize_block,
+	environment,
 	justification::GrandpaJustification,
 	notification::GrandpaJustificationSender,
 	AuthoritySetChanges, ClientForGrandpa, CommandOrError, Error, NewAuthoritySet, VoterCommand,
@@ -59,6 +59,7 @@ use crate::{
 /// object.
 pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	inner: Arc<Client>,
+	justification_import_period: u32,
 	select_chain: SC,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
@@ -74,6 +75,7 @@ impl<Backend, Block: BlockT, Client, SC: Clone> Clone
 	fn clone(&self) -> Self {
 		GrandpaBlockImport {
 			inner: self.inner.clone(),
+			justification_import_period: self.justification_import_period,
 			select_chain: self.select_chain.clone(),
 			authority_set: self.authority_set.clone(),
 			send_voter_commands: self.send_voter_commands.clone(),
@@ -232,9 +234,7 @@ where
 	BE: Backend<Block>,
 	Client: ClientForGrandpa<Block, BE>,
 	Client::Api: GrandpaApi<Block>,
-	for<'a> &'a Client:
-		BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
-	TransactionFor<Client, Block>: 'static,
+	for<'a> &'a Client: BlockImport<Block, Error = ConsensusError>,
 {
 	// check for a new authority set change.
 	fn check_new_change(
@@ -271,7 +271,7 @@ where
 
 	fn make_authorities_changes(
 		&self,
-		block: &mut BlockImportParams<Block, TransactionFor<Client, Block>>,
+		block: &mut BlockImportParams<Block>,
 		hash: Block::Hash,
 		initial_sync: bool,
 	) -> Result<PendingSetChanges<Block>, ConsensusError> {
@@ -462,7 +462,7 @@ where
 	/// Import whole new state and reset authority set.
 	async fn import_state(
 		&mut self,
-		mut block: BlockImportParams<Block, TransactionFor<Client, Block>>,
+		mut block: BlockImportParams<Block>,
 	) -> Result<ImportResult, ConsensusError> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
@@ -517,17 +517,14 @@ where
 	BE: Backend<Block>,
 	Client: ClientForGrandpa<Block, BE>,
 	Client::Api: GrandpaApi<Block>,
-	for<'a> &'a Client:
-		BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
-	TransactionFor<Client, Block>: 'static,
+	for<'a> &'a Client: BlockImport<Block, Error = ConsensusError>,
 	SC: Send,
 {
 	type Error = ConsensusError;
-	type Transaction = TransactionFor<Client, Block>;
 
 	async fn import_block(
 		&mut self,
-		mut block: BlockImportParams<Block, Self::Transaction>,
+		mut block: BlockImportParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
@@ -651,26 +648,39 @@ where
 
 		match grandpa_justification {
 			Some(justification) => {
-				let import_res = self.import_justification(
-					hash,
+				if environment::should_process_justification(
+					&*self.inner,
+					self.justification_import_period,
 					number,
-					(GRANDPA_ENGINE_ID, justification),
 					needs_justification,
-					initial_sync,
-				);
+				) {
+					let import_res = self.import_justification(
+						hash,
+						number,
+						(GRANDPA_ENGINE_ID, justification),
+						needs_justification,
+						initial_sync,
+					);
 
-				import_res.unwrap_or_else(|err| {
-					if needs_justification {
-						debug!(
-							target: LOG_TARGET,
-							"Requesting justification from peers due to imported block #{} that enacts authority set change with invalid justification: {}",
-							number,
-							err
-						);
-						imported_aux.bad_justification = true;
-						imported_aux.needs_justification = true;
-					}
-				});
+					import_res.unwrap_or_else(|err| {
+						if needs_justification {
+							debug!(
+								target: LOG_TARGET,
+								"Requesting justification from peers due to imported block #{} that enacts authority set change with invalid justification: {}",
+								number,
+								err
+							);
+							imported_aux.bad_justification = true;
+							imported_aux.needs_justification = true;
+						}
+					});
+				} else {
+					debug!(
+						target: LOG_TARGET,
+						"Ignoring unnecessary justification for block #{}",
+						number,
+					);
+				}
 			},
 			None =>
 				if needs_justification {
@@ -698,6 +708,7 @@ where
 impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Client, SC> {
 	pub(crate) fn new(
 		inner: Arc<Client>,
+		justification_import_period: u32,
 		select_chain: SC,
 		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 		send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
@@ -736,6 +747,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 
 		GrandpaBlockImport {
 			inner,
+			justification_import_period,
 			select_chain,
 			authority_set,
 			send_voter_commands,
@@ -786,7 +798,7 @@ where
 			Ok(justification) => justification,
 		};
 
-		let result = finalize_block(
+		let result = environment::finalize_block(
 			self.inner.clone(),
 			&self.authority_set,
 			None,

@@ -56,16 +56,11 @@ pub struct MiningMetadata<H, D> {
 }
 
 /// A build of mining, containing the metadata and the block proposal.
-pub struct MiningBuild<
-	Block: BlockT,
-	Algorithm: PowAlgorithm<Block>,
-	C: sp_api::ProvideRuntimeApi<Block>,
-	Proof,
-> {
+pub struct MiningBuild<Block: BlockT, Algorithm: PowAlgorithm<Block>, Proof> {
 	/// Mining metadata.
 	pub metadata: MiningMetadata<Block::Hash, Algorithm::Difficulty>,
 	/// Mining proposal.
-	pub proposal: Proposal<Block, sp_api::TransactionFor<C, Block>, Proof>,
+	pub proposal: Proposal<Block, Proof>,
 }
 
 /// Version of the mining worker.
@@ -76,25 +71,22 @@ pub struct Version(usize);
 pub struct MiningHandle<
 	Block: BlockT,
 	Algorithm: PowAlgorithm<Block>,
-	C: sp_api::ProvideRuntimeApi<Block>,
 	L: sc_consensus::JustificationSyncLink<Block>,
 	Proof,
 > {
 	version: Arc<AtomicUsize>,
 	algorithm: Arc<Algorithm>,
 	justification_sync_link: Arc<L>,
-	build: Arc<Mutex<Option<MiningBuild<Block, Algorithm, C, Proof>>>>,
-	block_import: Arc<Mutex<BoxBlockImport<Block, sp_api::TransactionFor<C, Block>>>>,
+	build: Arc<Mutex<Option<MiningBuild<Block, Algorithm, Proof>>>>,
+	block_import: Arc<Mutex<BoxBlockImport<Block>>>,
 }
 
-impl<Block, Algorithm, C, L, Proof> MiningHandle<Block, Algorithm, C, L, Proof>
+impl<Block, Algorithm, L, Proof> MiningHandle<Block, Algorithm, L, Proof>
 where
 	Block: BlockT,
-	C: sp_api::ProvideRuntimeApi<Block>,
 	Algorithm: PowAlgorithm<Block>,
 	Algorithm::Difficulty: 'static + Send,
 	L: sc_consensus::JustificationSyncLink<Block>,
-	sp_api::TransactionFor<C, Block>: Send + 'static,
 {
 	fn increment_version(&self) {
 		self.version.fetch_add(1, Ordering::SeqCst);
@@ -102,7 +94,7 @@ where
 
 	pub(crate) fn new(
 		algorithm: Algorithm,
-		block_import: BoxBlockImport<Block, sp_api::TransactionFor<C, Block>>,
+		block_import: BoxBlockImport<Block>,
 		justification_sync_link: L,
 	) -> Self {
 		Self {
@@ -120,7 +112,7 @@ where
 		self.increment_version();
 	}
 
-	pub(crate) fn on_build(&self, value: MiningBuild<Block, Algorithm, C, Proof>) {
+	pub(crate) fn on_build(&self, value: MiningBuild<Block, Algorithm, Proof>) {
 		let mut build = self.build.lock();
 		*build = Some(value);
 		self.increment_version();
@@ -224,11 +216,10 @@ where
 	}
 }
 
-impl<Block, Algorithm, C, L, Proof> Clone for MiningHandle<Block, Algorithm, C, L, Proof>
+impl<Block, Algorithm, L, Proof> Clone for MiningHandle<Block, Algorithm, L, Proof>
 where
 	Block: BlockT,
 	Algorithm: PowAlgorithm<Block>,
-	C: sp_api::ProvideRuntimeApi<Block>,
 	L: sc_consensus::JustificationSyncLink<Block>,
 {
 	fn clone(&self) -> Self {

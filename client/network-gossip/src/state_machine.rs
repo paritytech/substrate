@@ -25,7 +25,7 @@ use schnellru::{ByLength, LruMap};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network::types::ProtocolName;
 use sc_network_common::role::ObservedRole;
-use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
+use sp_runtime::traits::{Block as BlockT, Hash, HashingFor};
 use std::{collections::HashMap, iter, sync::Arc, time, time::Instant};
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
@@ -228,7 +228,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// message is already expired it should be dropped on the next garbage
 	/// collection.
 	pub fn register_message(&mut self, topic: B::Hash, message: Vec<u8>) {
-		let message_hash = HashFor::<B>::hash(&message[..]);
+		let message_hash = HashingFor::<B>::hash(&message[..]);
 		self.register_message_hashed(message_hash, topic, message, None);
 	}
 
@@ -343,7 +343,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		}
 
 		for message in messages {
-			let message_hash = HashFor::<B>::hash(&message[..]);
+			let message_hash = HashingFor::<B>::hash(&message[..]);
 
 			if self.known_messages.get(&message_hash).is_some() {
 				tracing::trace!(
@@ -456,7 +456,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		message: Vec<u8>,
 		force: bool,
 	) {
-		let message_hash = HashFor::<B>::hash(&message);
+		let message_hash = HashingFor::<B>::hash(&message);
 		self.register_message_hashed(message_hash, topic, message.clone(), None);
 		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
 		propagate(
@@ -477,7 +477,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			Some(peer) => peer,
 		};
 
-		let message_hash = HashFor::<B>::hash(&message);
+		let message_hash = HashingFor::<B>::hash(&message);
 
 		tracing::trace!(
 			target: "gossip",
@@ -640,7 +640,13 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {}
+		fn remove_peers_from_reserved_set(
+			&self,
+			_protocol: ProtocolName,
+			_peers: Vec<PeerId>,
+		) -> Result<(), String> {
+			unimplemented!();
+		}
 
 		fn sync_num_connected(&self) -> usize {
 			unimplemented!();
@@ -740,7 +746,7 @@ mod tests {
 
 		// Register message.
 		let message = vec![4, 5, 6];
-		let topic = HashFor::<Block>::hash(&[1, 2, 3]);
+		let topic = HashingFor::<Block>::hash(&[1, 2, 3]);
 		consensus.register_message(topic, message.clone());
 
 		assert_eq!(

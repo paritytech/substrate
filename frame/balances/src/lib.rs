@@ -120,7 +120,7 @@
 //! use frame_support::traits::{WithdrawReasons, LockableCurrency};
 //! use sp_runtime::traits::Bounded;
 //! pub trait Config: frame_system::Config {
-//! 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+//! 	type Currency: LockableCurrency<Self::AccountId, Moment=frame_system::pallet_prelude::BlockNumberFor<Self>>;
 //! }
 //! # struct StakingLedger<T: Config> {
 //! # 	stash: <T as frame_system::Config>::AccountId,
@@ -166,8 +166,6 @@ mod types;
 pub mod weights;
 
 use codec::{Codec, MaxEncodedLen};
-#[cfg(feature = "std")]
-use frame_support::traits::GenesisBuild;
 use frame_support::{
 	ensure,
 	pallet_prelude::DispatchResult,
@@ -215,7 +213,33 @@ pub mod pallet {
 
 	pub type CreditOf<T, I> = Credit<<T as frame_system::Config>::AccountId, Pallet<T, I>>;
 
-	#[pallet::config]
+	/// Default implementations of [`DefaultConfig`], which can be used to implement [`Config`].
+	pub mod config_preludes {
+		use super::*;
+		use frame_support::derive_impl;
+
+		pub struct TestDefaultConfig;
+
+		#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+		impl frame_system::DefaultConfig for TestDefaultConfig {}
+
+		#[frame_support::register_default_impl(TestDefaultConfig)]
+		impl DefaultConfig for TestDefaultConfig {
+			type Balance = u64;
+
+			type ReserveIdentifier = ();
+			type FreezeIdentifier = ();
+
+			type MaxLocks = ();
+			type MaxReserves = ();
+			type MaxFreezes = ();
+			type MaxHolds = ();
+
+			type WeightInfo = ();
+		}
+	}
+
+	#[pallet::config(with_default)]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self, I>>
@@ -238,6 +262,7 @@ pub mod pallet {
 			+ FixedPointOperand;
 
 		/// Handler for the unbalanced reduction when removing a dust account.
+		#[pallet::no_default]
 		type DustRemoval: OnUnbalanced<CreditOf<Self, I>>;
 
 		/// The minimum amount required to keep an account open. MUST BE GREATER THAN ZERO!
@@ -249,9 +274,11 @@ pub mod pallet {
 		///
 		/// Bottom line: Do yourself a favour and make it at least one!
 		#[pallet::constant]
+		#[pallet::no_default]
 		type ExistentialDeposit: Get<Self::Balance>;
 
 		/// The means of storing the balances of an account.
+		#[pallet::no_default]
 		type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 
 		/// The ID type for reserves.
@@ -260,6 +287,7 @@ pub mod pallet {
 		type ReserveIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
 
 		/// The overarching hold reason.
+		#[pallet::no_default]
 		type RuntimeHoldReason: Parameter + Member + MaxEncodedLen + Ord + Copy;
 
 		/// The ID type for freezes.
@@ -465,7 +493,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			let total = self.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n);
 
@@ -499,25 +527,8 @@ pub mod pallet {
 		}
 	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config<I>, I: 'static> GenesisConfig<T, I> {
-		/// Direct implementation of `GenesisBuild::build_storage`.
-		///
-		/// Kept in order not to break dependency.
-		pub fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
-			<Self as GenesisBuild<T, I>>::build_storage(self)
-		}
-
-		/// Direct implementation of `GenesisBuild::assimilate_storage`.
-		///
-		/// Kept in order not to break dependency.
-		pub fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
-			<Self as GenesisBuild<T, I>>::assimilate_storage(self, storage)
-		}
-	}
-
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		#[cfg(not(feature = "insecure_zero_ed"))]
 		fn integrity_test() {
 			assert!(
@@ -541,11 +552,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Expendable)?;
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Set the regular balance of a given account; it also takes a reserved balance but this
@@ -564,7 +575,7 @@ pub mod pallet {
 			who: AccountIdLookupOf<T>,
 			#[pallet::compact] new_free: T::Balance,
 			#[pallet::compact] old_reserved: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let existential_deposit = Self::ed();
@@ -592,7 +603,7 @@ pub mod pallet {
 			}
 
 			Self::deposit_event(Event::BalanceSet { who, free: new_free });
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Exactly as `transfer_allow_death`, except the origin must be root and the source account
@@ -603,12 +614,12 @@ pub mod pallet {
 			source: AccountIdLookupOf<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Expendable)?;
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Same as the [`transfer_allow_death`] call, but with a check that the transfer will not
@@ -622,11 +633,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Preserve)?;
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Transfer the entire transferable balance from the caller account.
@@ -724,11 +735,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Expendable)?;
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Set the regular balance of a given account.
@@ -743,7 +754,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			who: AccountIdLookupOf<T>,
 			#[pallet::compact] new_free: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let existential_deposit = Self::ed();
@@ -767,7 +778,7 @@ pub mod pallet {
 			}
 
 			Self::deposit_event(Event::BalanceSet { who, free: new_free });
-			Ok(().into())
+			Ok(())
 		}
 	}
 

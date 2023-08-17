@@ -108,7 +108,7 @@ impl<B: BlockT> Stream for NeighborPacketWorker<B> {
 		//
 		// Note: In case poll_unpin is called after the resetted delay fires again, this
 		// will drop one tick. Deemed as very unlikely and also not critical.
-		while let Poll::Ready(()) = this.delay.poll_unpin(cx) {}
+		while this.delay.poll_unpin(cx).is_ready() {}
 
 		if let Some((ref to, ref packet)) = this.last {
 			return Poll::Ready(Some((to.clone(), GossipMessage::<B>::from(packet.clone()))))

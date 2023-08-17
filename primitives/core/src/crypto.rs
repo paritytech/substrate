@@ -15,9 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// tag::description[]
 //! Cryptographic utilities.
-// end::description[]
 
 use crate::{ed25519, sr25519};
 #[cfg(feature = "std")]
@@ -486,7 +484,7 @@ pub trait ByteArray: AsRef<[u8]> + AsMut<[u8]> + for<'a> TryFrom<&'a [u8], Error
 }
 
 /// Trait suitable for typical cryptographic key public type.
-pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {}
+pub trait Public: CryptoType + ByteArray + Derive + PartialEq + Eq + Clone + Send + Sync {}
 
 /// An opaque 32-byte cryptographic identifier.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -834,7 +832,7 @@ impl sp_std::str::FromStr for SecretUri {
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
 #[cfg(feature = "full_crypto")]
-pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
+pub trait Pair: CryptoType + Sized {
 	/// The type which is used to encode a public key.
 	type Public: Public + Hash;
 
@@ -872,7 +870,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 		(pair, phrase.to_owned(), seed)
 	}
 
-	/// Returns the KeyPair from the English BIP39 seed `phrase`, or `None` if it's invalid.
+	/// Returns the KeyPair from the English BIP39 seed `phrase`, or an error if it's invalid.
 	#[cfg(feature = "std")]
 	fn from_phrase(
 		phrase: &str,
@@ -907,7 +905,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	}
 
 	/// Make a new key pair from secret seed material. The slice must be the correct size or
-	/// it will return `None`.
+	/// an error will be returned.
 	///
 	/// @WARNING: THIS WILL ONLY BE SECURE IF THE `seed` IS SECURE. If it can be guessed
 	/// by an attacker then they can also derive your key.
@@ -949,8 +947,6 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// Notably, integer junction indices may be legally prefixed with arbitrary number of zeros.
 	/// Similarly an empty password (ending the SURI with `///`) is perfectly valid and will
 	/// generally be equivalent to no password at all.
-	///
-	/// `None` is returned if no matches are found.
 	#[cfg(feature = "std")]
 	fn from_string_with_seed(
 		s: &str,
@@ -1146,6 +1142,8 @@ pub mod key_types {
 	pub const ACCOUNT: KeyTypeId = KeyTypeId(*b"acco");
 	/// Key type for Aura module, built-in. Identified as `aura`.
 	pub const AURA: KeyTypeId = KeyTypeId(*b"aura");
+	/// Key type for BEEFY module.
+	pub const BEEFY: KeyTypeId = KeyTypeId(*b"beef");
 	/// Key type for ImOnline module, built-in. Identified as `imon`.
 	pub const IM_ONLINE: KeyTypeId = KeyTypeId(*b"imon");
 	/// Key type for AuthorityDiscovery module, built-in. Identified as `audi`.

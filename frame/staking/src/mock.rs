@@ -18,12 +18,15 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{onchain, SequentialPhragmen, VoteWeight};
+use frame_election_provider_support::{
+	bounds::{ElectionBounds, ElectionBoundsBuilder},
+	onchain, SequentialPhragmen, VoteWeight,
+};
 use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
 	traits::{
-		ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor, GenesisBuild, Get, Hooks,
-		Imbalance, OnUnbalanced, OneSessionHandler,
+		ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor, Get, Hooks, Imbalance,
+		OnUnbalanced, OneSessionHandler,
 	},
 	weights::constants::RocksDbWeight,
 };
@@ -32,8 +35,9 @@ use sp_core::H256;
 use sp_io;
 use sp_runtime::{
 	curve::PiecewiseLinear,
-	testing::{Header, UintAuthorityId},
+	testing::UintAuthorityId,
 	traits::{IdentityLookup, Zero},
+	BuildStorage,
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
 
@@ -42,7 +46,7 @@ pub const BLOCK_TIME: u64 = 1000;
 
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
-pub(crate) type AccountIndex = u64;
+pub(crate) type Nonce = u64;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u128;
 
@@ -82,14 +86,10 @@ pub fn is_disabled(controller: AccountId) -> bool {
 	Session::disabled_validators().contains(&validator_index)
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		Authorship: pallet_authorship,
@@ -127,14 +127,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = AccountIndex;
-	type BlockNumber = BlockNumber;
+	type Nonce = Nonce;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type Version = ();
@@ -232,11 +231,12 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
-	pub static MaxNominations: u32 = 16;
 	pub static HistoryDepth: u32 = 80;
 	pub static MaxUnlockingChunks: u32 = 32;
 	pub static RewardOnUnbalanceWasCalled: bool = false;
 	pub static MaxWinners: u32 = 100;
+	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::default().build();
+	pub static AbsoluteMaxNominations: u32 = 16;
 }
 
 type VoterBagsListInstance = pallet_bags_list::Instance1;
@@ -256,8 +256,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = MaxWinners;
-	type VotersBound = ConstU32<{ u32::MAX }>;
-	type TargetsBound = ConstU32<{ u32::MAX }>;
+	type Bounds = ElectionsBounds;
 }
 
 pub struct MockReward {}
@@ -285,7 +284,6 @@ impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
 }
 
 impl crate::pallet::pallet::Config for Test {
-	type MaxNominations = MaxNominations;
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type UnixTime = Timestamp;
@@ -308,11 +306,31 @@ impl crate::pallet::pallet::Config for Test {
 	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
 	type VoterList = VoterBagsList;
 	type TargetList = UseValidatorsMap<Self>;
+	type NominationsQuota = WeightedNominationsQuota<16>;
 	type MaxUnlockingChunks = MaxUnlockingChunks;
 	type HistoryDepth = HistoryDepth;
 	type EventListeners = EventListenerMock;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
+}
+
+pub struct WeightedNominationsQuota<const MAX: u32>;
+impl<Balance, const MAX: u32> NominationsQuota<Balance> for WeightedNominationsQuota<MAX>
+where
+	u128: From<Balance>,
+{
+	type MaxNominations = AbsoluteMaxNominations;
+
+	fn curve(balance: Balance) -> u32 {
+		match balance.into() {
+			// random curve for testing.
+			0..=110 => MAX,
+			111 => 0,
+			222 => 2,
+			333 => MAX + 10,
+			_ => MAX,
+		}
+	}
 }
 
 pub(crate) type StakingCall = crate::Call<Test>;
@@ -429,7 +447,7 @@ impl ExtBuilder {
 	}
 	fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
-		let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut storage = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
 		let _ = pallet_balances::GenesisConfig::<Test> {
 			balances: vec![

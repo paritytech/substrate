@@ -44,6 +44,9 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"pallet-balances/std",
+	"pallet-scheduler/std",
+	"sp-core/std"
 ]
 runtime-benchmarks = [
 	"frame-support/runtime-benchmarks",
@@ -51,5 +54,13 @@ runtime-benchmarks = [
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
+	"pallet-scheduler/runtime-benchmarks"
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-scheduler/try-runtime",
+	"sp-runtime/try-runtime"
+]

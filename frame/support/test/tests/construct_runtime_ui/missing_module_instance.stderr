@@ -1,5 +1,5 @@
 error: expected identifier
- --> $DIR/missing_module_instance.rs:9:20
+ --> tests/construct_runtime_ui/missing_module_instance.rs:6:20
   |
-9 |         system: System::<>,
+6 |         system: System::<>,
   |                          ^

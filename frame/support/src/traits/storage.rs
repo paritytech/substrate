@@ -132,24 +132,37 @@ macro_rules! impl_incrementable {
 	($($type:ty),+) => {
 		$(
 			impl Incrementable for $type {
-				fn increment(&self) -> Self {
+				fn increment(&self) -> Option<Self> {
 					let mut val = self.clone();
 					val.saturating_inc();
-					val
+					Some(val)
 				}
 
-				fn initial_value() -> Self {
-					0
+				fn initial_value() -> Option<Self> {
+					Some(0)
 				}
 			}
 		)+
 	};
 }
 
-/// For example: allows new identifiers to be created in a linear fashion.
-pub trait Incrementable {
-	fn increment(&self) -> Self;
-	fn initial_value() -> Self;
+/// A trait representing an incrementable type.
+///
+/// The `increment` and `initial_value` functions are fallible.
+/// They should either both return `Some` with a valid value, or `None`.
+pub trait Incrementable
+where
+	Self: Sized,
+{
+	/// Increments the value.
+	///
+	/// Returns `Some` with the incremented value if it is possible, or `None` if it is not.
+	fn increment(&self) -> Option<Self>;
+
+	/// Returns the initial value.
+	///
+	/// Returns `Some` with the initial value if it is available, or `None` if it is not.
+	fn initial_value() -> Option<Self>;
 }
 
 impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);

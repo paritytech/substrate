@@ -511,7 +511,7 @@ The code block annotations in the `# Example` section may be used as https://doc
 
 === Contributing Guidelines
 
-include::CONTRIBUTING.adoc[]
+include::CONTRIBUTING.md[]
 
 === Contributor Code of Conduct
 

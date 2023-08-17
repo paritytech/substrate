@@ -578,7 +578,12 @@ pub mod pallet {
 			}
 		}
 
-		/// Check all assumptions about [`crate::Config`].
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_: BlockNumberFor<T>) -> Result<(), sp_runtime::TryRuntimeError> {
+			Self::do_try_state()
+		}
+
+		/// Check all compile-time assumptions about [`crate::Config`].
 		fn integrity_test() {
 			assert!(!MaxMessageLenOf::<T>::get().is_zero(), "HeapSize too low");
 		}
@@ -737,7 +742,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns the current head if it got be bumped and `None` otherwise.
 	fn bump_service_head(weight: &mut WeightMeter) -> Option<MessageOriginOf<T>> {
-		if !weight.check_accrue(T::WeightInfo::bump_service_head()) {
+		if weight.try_consume(T::WeightInfo::bump_service_head()).is_err() {
 			return None
 		}
 
@@ -865,7 +870,7 @@ impl<T: Config> Pallet<T> {
 					book_state.message_count,
 					book_state.size,
 				);
-				Ok(weight_counter.consumed.saturating_add(page_weight))
+				Ok(weight_counter.consumed().saturating_add(page_weight))
 			},
 		}
 	}
@@ -948,9 +953,13 @@ impl<T: Config> Pallet<T> {
 		overweight_limit: Weight,
 	) -> (bool, Option<MessageOriginOf<T>>) {
 		use PageExecutionStatus::*;
-		if !weight.check_accrue(
-			T::WeightInfo::service_queue_base().saturating_add(T::WeightInfo::ready_ring_unknit()),
-		) {
+		if weight
+			.try_consume(
+				T::WeightInfo::service_queue_base()
+					.saturating_add(T::WeightInfo::ready_ring_unknit()),
+			)
+			.is_err()
+		{
 			return (false, None)
 		}
 
@@ -1003,10 +1012,13 @@ impl<T: Config> Pallet<T> {
 		overweight_limit: Weight,
 	) -> (u32, PageExecutionStatus) {
 		use PageExecutionStatus::*;
-		if !weight.check_accrue(
-			T::WeightInfo::service_page_base_completion()
-				.max(T::WeightInfo::service_page_base_no_completion()),
-		) {
+		if weight
+			.try_consume(
+				T::WeightInfo::service_page_base_completion()
+					.max(T::WeightInfo::service_page_base_no_completion()),
+			)
+			.is_err()
+		{
 			return (0, Bailed)
 		}
 
@@ -1066,7 +1078,7 @@ impl<T: Config> Pallet<T> {
 		if page.is_complete() {
 			return ItemExecutionStatus::NoItem
 		}
-		if !weight.check_accrue(T::WeightInfo::service_page_item()) {
+		if weight.try_consume(T::WeightInfo::service_page_item()).is_err() {
 			return ItemExecutionStatus::Bailed
 		}
 
@@ -1096,6 +1108,106 @@ impl<T: Config> Pallet<T> {
 		}
 		page.skip_first(is_processed);
 		ItemExecutionStatus::Executed(is_processed)
+	}
+
+	/// Ensure the correctness of state of this pallet.
+	///
+	/// # Assumptions-
+	///
+	/// If `serviceHead` points to a ready Queue, then BookState of that Queue has:
+	///
+	/// * `message_count` > 0
+	/// * `size` > 0
+	/// * `end` > `begin`
+	/// * Some(ready_neighbours)
+	/// * If `ready_neighbours.next` == self.origin, then `ready_neighbours.prev` == self.origin
+	///   (only queue in ring)
+	///
+	/// For Pages(begin to end-1) in BookState:
+	///
+	/// * `remaining` > 0
+	/// * `remaining_size` > 0
+	/// * `first` <= `last`
+	/// * Every page can be decoded into peek_* functions
+	#[cfg(any(test, feature = "try-runtime"))]
+	pub fn do_try_state() -> Result<(), sp_runtime::TryRuntimeError> {
+		// Checking memory corruption for BookStateFor
+		ensure!(
+			BookStateFor::<T>::iter_keys().count() == BookStateFor::<T>::iter_values().count(),
+			"Memory Corruption in BookStateFor"
+		);
+		// Checking memory corruption for Pages
+		ensure!(
+			Pages::<T>::iter_keys().count() == Pages::<T>::iter_values().count(),
+			"Memory Corruption in Pages"
+		);
+
+		// No state to check
+		if ServiceHead::<T>::get().is_none() {
+			return Ok(())
+		}
+
+		//loop around this origin
+		let starting_origin = ServiceHead::<T>::get().unwrap();
+
+		while let Some(head) = Self::bump_service_head(&mut WeightMeter::max_limit()) {
+			ensure!(
+				BookStateFor::<T>::contains_key(&head),
+				"Service head must point to an existing book"
+			);
+
+			let head_book_state = BookStateFor::<T>::get(&head);
+			ensure!(
+				head_book_state.message_count > 0,
+				"There must be some messages if in ReadyRing"
+			);
+			ensure!(head_book_state.size > 0, "There must be some message size if in ReadyRing");
+			ensure!(
+				head_book_state.end > head_book_state.begin,
+				"End > Begin if unprocessed messages exists"
+			);
+			ensure!(
+				head_book_state.ready_neighbours.is_some(),
+				"There must be neighbours if in ReadyRing"
+			);
+
+			if head_book_state.ready_neighbours.as_ref().unwrap().next == head {
+				ensure!(
+					head_book_state.ready_neighbours.as_ref().unwrap().prev == head,
+					"Can only happen if only queue in ReadyRing"
+				);
+			}
+
+			for page_index in head_book_state.begin..head_book_state.end {
+				let page = Pages::<T>::get(&head, page_index).unwrap();
+				let remaining_messages = page.remaining;
+				let mut counted_remaining_messages = 0;
+				ensure!(
+					remaining_messages > 0.into(),
+					"These must be some messages that have not been processed yet!"
+				);
+
+				for i in 0..u32::MAX {
+					if let Some((_, processed, _)) = page.peek_index(i as usize) {
+						if !processed {
+							counted_remaining_messages += 1;
+						}
+					} else {
+						break
+					}
+				}
+
+				ensure!(
+					remaining_messages == counted_remaining_messages.into(),
+					"Memory Corruption"
+				);
+			}
+
+			if head_book_state.ready_neighbours.as_ref().unwrap().next == starting_origin {
+				break
+			}
+		}
+		Ok(())
 	}
 
 	/// Print the pages in each queue and the messages in each page.
@@ -1163,7 +1275,7 @@ impl<T: Config> Pallet<T> {
 	) -> MessageExecutionStatus {
 		let hash = sp_io::hashing::blake2_256(message);
 		use ProcessMessageError::*;
-		let prev_consumed = meter.consumed;
+		let prev_consumed = meter.consumed();
 		let mut id = hash;
 
 		match T::MessageProcessor::process_message(message, origin.clone(), meter, &mut id) {
@@ -1193,7 +1305,7 @@ impl<T: Config> Pallet<T> {
 			},
 			Ok(success) => {
 				// Success
-				let weight_used = meter.consumed.saturating_sub(prev_consumed);
+				let weight_used = meter.consumed().saturating_sub(prev_consumed);
 				Self::deposit_event(Event::<T>::Processed { id, origin, weight_used, success });
 				MessageExecutionStatus::Processed
 			},
@@ -1254,7 +1366,7 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 
 		let mut next = match Self::bump_service_head(&mut weight) {
 			Some(h) => h,
-			None => return weight.consumed,
+			None => return weight.consumed(),
 		};
 		// The last queue that did not make any progress.
 		// The loop aborts as soon as it arrives at this queue again without making any progress
@@ -1280,7 +1392,7 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 				None => break,
 			}
 		}
-		weight.consumed
+		weight.consumed()
 	}
 
 	/// Execute a single overweight message.
@@ -1291,10 +1403,13 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		(message_origin, page, index): Self::OverweightMessageAddress,
 	) -> Result<Weight, ExecuteOverweightError> {
 		let mut weight = WeightMeter::from_limit(weight_limit);
-		if !weight.check_accrue(
-			T::WeightInfo::execute_overweight_page_removed()
-				.max(T::WeightInfo::execute_overweight_page_updated()),
-		) {
+		if weight
+			.try_consume(
+				T::WeightInfo::execute_overweight_page_removed()
+					.max(T::WeightInfo::execute_overweight_page_updated()),
+			)
+			.is_err()
+		{
 			return Err(ExecuteOverweightError::InsufficientWeight)
 		}
 

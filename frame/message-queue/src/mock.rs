@@ -29,21 +29,17 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 use sp_std::collections::btree_map::BTreeMap;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		MessageQueue: pallet_message_queue::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -53,14 +49,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -193,7 +188,7 @@ impl ProcessMessage for RecordingMessageProcessor {
 		};
 		let required = Weight::from_parts(weight, weight);
 
-		if meter.check_accrue(required) {
+		if meter.try_consume(required).is_ok() {
 			let mut m = MessagesProcessed::get();
 			m.push((message.to_vec(), origin));
 			MessagesProcessed::set(m);
@@ -250,7 +245,7 @@ impl ProcessMessage for CountingMessageProcessor {
 		}
 		let required = Weight::from_parts(1, 1);
 
-		if meter.check_accrue(required) {
+		if meter.try_consume(required).is_ok() {
 			NumMessagesProcessed::set(NumMessagesProcessed::get() + 1);
 			Ok(true)
 		} else {
@@ -288,22 +283,27 @@ impl QueuePausedQuery<MessageOrigin> for MockedQueuePauser {
 /// Is generic since it is used by the unit test, integration tests and benchmarks.
 pub fn new_test_ext<T: Config>() -> sp_io::TestExternalities
 where
-	<T as frame_system::Config>::BlockNumber: From<u32>,
+	frame_system::pallet_prelude::BlockNumberFor<T>: From<u32>,
 {
 	sp_tracing::try_init_simple();
 	WeightForCall::take();
 	QueueChanges::take();
 	NumMessagesErrored::take();
-	let t = frame_system::GenesisConfig::default().build_storage::<T>().unwrap();
+	let t = frame_system::GenesisConfig::<T>::default().build_storage().unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| frame_system::Pallet::<T>::set_block_number(1.into()));
 	ext
 }
 
-/// Run this closure in test externalities.
-pub fn test_closure<R>(f: impl FnOnce() -> R) -> R {
-	let mut ext = new_test_ext::<Test>();
-	ext.execute_with(f)
+/// Run the function pointer inside externalities and asserts the try_state hook at the end.
+pub fn build_and_execute<T: Config>(test: impl FnOnce() -> ())
+where
+	BlockNumberFor<T>: From<u32>,
+{
+	new_test_ext::<T>().execute_with(|| {
+		test();
+		MessageQueue::do_try_state().expect("All invariants must hold after a test");
+	});
 }
 
 /// Set the weight of a specific weight function.

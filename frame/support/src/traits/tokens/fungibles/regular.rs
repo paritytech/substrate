@@ -62,7 +62,8 @@ pub trait Inspect<AccountId>: Sized {
 	/// The minimum balance any single account may have.
 	fn minimum_balance(asset: Self::AssetId) -> Self::Balance;
 
-	/// Get the total amount of funds whose ultimate bneficial ownership can be determined as `who`.
+	/// Get the total amount of funds whose ultimate beneficial ownership can be determined as
+	/// `who`.
 	///
 	/// This may include funds which are wholly inaccessible to `who`, either temporarily or even
 	/// indefinitely.
@@ -135,7 +136,7 @@ impl<A, T: Balanced<A>> Dust<A, T> {
 /// **WARNING**
 /// Do not use this directly unless you want trouble, since it allows you to alter account balances
 /// without keeping the issuance up to date. It has no safeguards against accidentally creating
-/// token imbalances in your system leading to accidental imflation or deflation. It's really just
+/// token imbalances in your system leading to accidental inflation or deflation. It's really just
 /// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
 /// use.
 pub trait Unbalanced<AccountId>: Inspect<AccountId> {
@@ -582,41 +583,4 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	fn done_issue(_asset: Self::AssetId, _amount: Self::Balance) {}
 	fn done_deposit(_asset: Self::AssetId, _who: &AccountId, _amount: Self::Balance) {}
 	fn done_withdraw(_asset: Self::AssetId, _who: &AccountId, _amount: Self::Balance) {}
-}
-
-/// Trait for providing methods to swap between the chain's native token and other asset classes.
-pub trait SwapNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
-	/// Take an `asset_id` and swap some amount for `amount_out` of the chain's native asset. If an
-	/// `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
-	/// too costly.
-	///
-	/// Withdraws `asset_id` from `sender`, deposits native asset to `send_to`, respecting
-	/// `keep_alive`.
-	///
-	/// If successful returns the amount of the `asset_id` taken to provide `amount_out`.
-	fn swap_tokens_for_exact_native(
-		sender: AccountId,
-		asset_id: AssetId,
-		amount_out: Balance,
-		amount_in_max: Option<AssetBalance>,
-		send_to: AccountId,
-		keep_alive: bool,
-	) -> Result<AssetBalance, DispatchError>;
-
-	/// Take an `asset_id` and swap `amount_in` of the chain's native asset for it. If an
-	/// `amount_out_min` is specified, it will return an error if it is unable to acquire the amount
-	/// desired.
-	///
-	/// Withdraws native asset from `sender`, deposits `asset_id` to `send_to`, respecting
-	/// `keep_alive`.
-	///
-	/// If successful, returns the amount of `asset_id` acquired for the `amount_in`.
-	fn swap_exact_native_for_tokens(
-		sender: AccountId,
-		asset_id: AssetId,
-		amount_in: Balance,
-		amount_out_min: Option<AssetBalance>,
-		send_to: AccountId,
-		keep_alive: bool,
-	) -> Result<AssetBalance, DispatchError>;
 }

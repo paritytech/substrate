@@ -65,7 +65,6 @@ use sc_client_api::{
 	backend::{AuxStore, Backend},
 	utils::is_descendent_of,
 	BlockchainEvents, CallExecutor, ExecutorProvider, Finalizer, LockImportRun, StorageProvider,
-	TransactionFor,
 };
 use sc_consensus::BlockImport;
 use sc_network::types::ProtocolName;
@@ -215,10 +214,10 @@ impl Clone for SharedVoterState {
 pub struct Config {
 	/// The expected duration for a message to be gossiped across the network.
 	pub gossip_duration: Duration,
-	/// Justification generation period (in blocks). GRANDPA will try to generate justifications
-	/// at least every justification_period blocks. There are some other events which might cause
-	/// justification generation.
-	pub justification_period: u32,
+	/// Justification generation period (in blocks). GRANDPA will try to generate
+	/// justifications at least every justification_generation_period blocks. There
+	/// are some other events which might cause justification generation.
+	pub justification_generation_period: u32,
 	/// Whether the GRANDPA observer protocol is live on the network and thereby
 	/// a full-node not running as a validator is running the GRANDPA observer
 	/// protocol (we will only issue catch-up requests to authorities when the
@@ -309,7 +308,7 @@ pub trait ClientForGrandpa<Block, BE>:
 	+ BlockchainEvents<Block>
 	+ ProvideRuntimeApi<Block>
 	+ ExecutorProvider<Block>
-	+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>
+	+ BlockImport<Block, Error = sp_consensus::Error>
 	+ StorageProvider<Block, BE>
 where
 	BE: Backend<Block>,
@@ -329,7 +328,7 @@ where
 		+ BlockchainEvents<Block>
 		+ ProvideRuntimeApi<Block>
 		+ ExecutorProvider<Block>
-		+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>
+		+ BlockImport<Block, Error = sp_consensus::Error>
 		+ StorageProvider<Block, BE>,
 {
 }
@@ -495,8 +494,16 @@ where
 
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
+///
+/// The `justification_import_period` sets the minimum period on which
+/// justifications will be imported.  When importing a block, if it includes a
+/// justification it will only be processed if it fits within this period,
+/// otherwise it will be ignored (and won't be validated). This is to avoid
+/// slowing down sync by a peer serving us unnecessary justifications which
+/// aren't trivial to validate.
 pub fn block_import<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
+	justification_import_period: u32,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
 	telemetry: Option<TelemetryHandle>,
@@ -508,6 +515,7 @@ where
 {
 	block_import_with_authority_set_hard_forks(
 		client,
+		justification_import_period,
 		genesis_authorities_provider,
 		select_chain,
 		Default::default(),
@@ -540,6 +548,7 @@ pub struct AuthoritySetHardFork<Block: BlockT> {
 /// given static authorities.
 pub fn block_import_with_authority_set_hard_forks<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
+	justification_import_period: u32,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
 	authority_set_hard_forks: Vec<AuthoritySetHardFork<Block>>,
@@ -599,6 +608,7 @@ where
 	Ok((
 		GrandpaBlockImport::new(
 			client.clone(),
+			justification_import_period,
 			select_chain.clone(),
 			persistent_data.authority_set.clone(),
 			voter_commands_tx,

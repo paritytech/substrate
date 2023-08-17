@@ -27,7 +27,6 @@ use node_primitives::{Hash, Header};
 use regex::Regex;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use std::{
-	env,
 	io::{BufRead, BufReader, Read},
 	ops::{Deref, DerefMut},
 	path::{Path, PathBuf},
@@ -35,6 +34,38 @@ use std::{
 	time::Duration,
 };
 use tokio::io::{AsyncBufReadExt, AsyncRead};
+
+/// Similar to [`crate::start_node`] spawns a node, but works in environments where the substrate
+/// binary is not accessible with `cargo_bin("substrate-node")`, and allows customising the args
+/// passed in.
+///
+/// Helpful if you need a Substrate dev node running in the background of a project external to
+/// `substrate`.
+///
+/// The downside compared to using [`crate::start_node`] is that this method is blocking rather than
+/// returning a [`Child`]. Therefore, you may want to call this method inside a new thread.
+///
+/// # Example
+/// ```ignore
+/// // Spawn a dev node.
+/// let _ = std::thread::spawn(move || {
+///     match common::start_node_inline(vec!["--dev", "--rpc-port=12345"]) {
+///         Ok(_) => {}
+///         Err(e) => {
+///             panic!("Node exited with error: {}", e);
+///         }
+///     }
+/// });
+/// ```
+pub fn start_node_inline(args: Vec<&str>) -> Result<(), sc_service::error::Error> {
+	use sc_cli::SubstrateCli;
+
+	// Prepend the args with some dummy value because the first arg is skipped.
+	let cli_call = std::iter::once("node-template").chain(args);
+	let cli = node_cli::Cli::from_iter(cli_call);
+	let runner = cli.create_runner(&cli.run).unwrap();
+	runner.run_node_until_exit(|config| async move { node_cli::service::new_full(config, cli) })
+}
 
 /// Starts a new Substrate node in development mode with a temporary chain.
 ///
@@ -62,7 +93,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead};
 ///
 /// [`Child`]: std::process::Child
 pub fn start_node() -> Child {
-	Command::new(cargo_bin("substrate"))
+	Command::new(cargo_bin("substrate-node"))
 		.stdout(process::Stdio::piped())
 		.stderr(process::Stdio::piped())
 		.args(&["--dev", "--tmp", "--rpc-port=45789", "--no-hardware-benchmarks"])
@@ -99,15 +130,19 @@ pub fn start_node() -> Child {
 /// build_substrate(&["--features=try-runtime"]);
 /// ```
 pub fn build_substrate(args: &[&str]) {
+	let is_release_build = !cfg!(build_type = "debug");
+
 	// Get the root workspace directory from the CARGO_MANIFEST_DIR environment variable
-	let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
-	let root_dir = std::path::Path::new(&manifest_dir)
-		.parent()
-		.expect("Failed to find root workspace directory");
-	let output = Command::new("cargo")
-		.arg("build")
+	let mut cmd = Command::new("cargo");
+
+	cmd.arg("build").arg("-p=node-cli");
+
+	if is_release_build {
+		cmd.arg("--release");
+	}
+
+	let output = cmd
 		.args(args)
-		.current_dir(root_dir)
 		.output()
 		.expect(format!("Failed to execute 'cargo b' with args {:?}'", args).as_str());
 
@@ -196,7 +231,7 @@ pub async fn wait_n_finalized_blocks(n: usize, url: &str) {
 /// Run the node for a while (3 blocks)
 pub async fn run_node_for_a_while(base_path: &Path, args: &[&str]) {
 	run_with_timeout(Duration::from_secs(60 * 10), async move {
-		let mut cmd = Command::new(cargo_bin("substrate"))
+		let mut cmd = Command::new(cargo_bin("substrate-node"))
 			.stdout(process::Stdio::piped())
 			.stderr(process::Stdio::piped())
 			.args(args)
