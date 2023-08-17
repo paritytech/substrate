@@ -194,8 +194,8 @@ pub mod v2 {
 
 	/// Migrate the pool reward scheme to the new version, as per
 	/// <https://github.com/paritytech/substrate/pull/11669.>.
-	pub struct MigrateToV2<T>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> MigrateToV2<T> {
+	pub struct VersionUncheckedMigrateV1ToV2<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> VersionUncheckedMigrateV1ToV2<T> {
 		fn run(current: StorageVersion) -> Weight {
 			let mut reward_pools_translated = 0u64;
 			let mut members_translated = 0u64;
@@ -337,24 +337,10 @@ pub mod v2 {
 		}
 	}
 
-	impl<T: Config> OnRuntimeUpgrade for MigrateToV2<T> {
+	impl<T: Config> OnRuntimeUpgrade for VersionUncheckedMigrateV1ToV2<T> {
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();
-			let onchain = Pallet::<T>::on_chain_storage_version();
-
-			log!(
-				info,
-				"Running migration with current storage version {:?} / onchain {:?}",
-				current,
-				onchain
-			);
-
-			if current == 2 && onchain == 1 {
-				Self::run(current)
-			} else {
-				log!(info, "MigrateToV2 did not executed. This probably should be removed");
-				T::DbWeight::get().reads(1)
-			}
+			Self::run(current)
 		}
 
 		#[cfg(feature = "try-runtime")]
@@ -400,7 +386,7 @@ pub mod v2 {
 				Ok(())
 			})?;
 
-			log!(info, "post upgrade hook for MigrateToV2 executed.");
+			log!(info, "post upgrade hook for VersionUncheckedMigrateV1ToV2 executed.");
 			Ok(())
 		}
 	}

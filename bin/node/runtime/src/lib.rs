@@ -22,6 +22,8 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limits.
 #![recursion_limit = "1024"]
 
+#![cfg(all(feature = "experimental", feature = "try-runtime"))]
+
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
 	bounds::{ElectionBounds, ElectionBoundsBuilder},
@@ -1995,12 +1997,19 @@ pub type Executive = frame_executive::Executive<
 	Migrations,
 >;
 
+pub type VersionCheckedMigrateV1ToV2<T, I> =
+	VersionedRuntimeUpgrade<
+		1,
+		2,
+		pallet_nomination_pools::migration::v2::VersionUncheckedMigrateV1ToV2<T, I>,
+		pallet_nomination_pools::Pallet<T>,
+		<T as frame_system::Config>::DbWeight
+	>;
+
 // All migrations executed on runtime upgrade as a nested tuple of types implementing
 // `OnRuntimeUpgrade`.
 type Migrations = (
-	pallet_nomination_pools::migration::v2::MigrateToV2<Runtime>,
-	pallet_alliance::migration::Migration<Runtime>,
-	pallet_contracts::Migration<Runtime>,
+	pallet_nomination_pools::migration::v2::VersionCheckedMigrateV1ToV2<T, ()>,
 );
 
 type EventRecord = frame_system::EventRecord<
