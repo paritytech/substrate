@@ -32,6 +32,9 @@
 /// Export ourself as `frame_support` to make tests happy.
 extern crate self as frame_support;
 
+/// Private exports that are being used by macros.
+///
+/// The exports are not stable and should not be relied on.
 #[doc(hidden)]
 pub mod __private {
 	pub use codec;
