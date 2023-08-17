@@ -2553,12 +2553,10 @@ mod tests {
 				);
 				assert_eq!(
 					&events(),
-					&[
-						Event::Instantiated {
-							deployer: ALICE,
-							contract: instantiated_contract_address
-						}
-					]
+					&[Event::Instantiated {
+						deployer: ALICE,
+						contract: instantiated_contract_address
+					}]
 				);
 			});
 	}
