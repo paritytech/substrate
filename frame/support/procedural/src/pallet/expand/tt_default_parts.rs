@@ -81,56 +81,6 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 		.any(|c| matches!(c.composite_keyword, CompositeKeyword::SlashReason(_)))
 		.then_some(quote::quote!(SlashReason,));
 
-let call_part = def.call.as_ref().map(|_| quote::quote!(Call,));
-
-	let storage_part = (!def.storages.is_empty()).then(|| quote::quote!(Storage,));
-
-	let event_part = def.event.as_ref().map(|event| {
-		let gen = event.gen_kind.is_generic().then(|| quote::quote!( <T> ));
-		quote::quote!( Event #gen , )
-	});
-
-	let error_part = def.error.as_ref().map(|_| quote::quote!(Error<T>,));
-
-	let origin_part = def.origin.as_ref().map(|origin| {
-		let gen = origin.is_generic.then(|| quote::quote!( <T> ));
-		quote::quote!( Origin #gen , )
-	});
-
-	let config_part = def.genesis_config.as_ref().map(|genesis_config| {
-		let gen = genesis_config.gen_kind.is_generic().then(|| quote::quote!( <T> ));
-		quote::quote!( Config #gen , )
-	});
-
-	let inherent_part = def.inherent.as_ref().map(|_| quote::quote!(Inherent,));
-
-	let validate_unsigned_part =
-		def.validate_unsigned.as_ref().map(|_| quote::quote!(ValidateUnsigned,));
-
-	let freeze_reason_part = def
-		.composites
-		.iter()
-		.any(|c| matches!(c.composite_keyword, CompositeKeyword::FreezeReason(_)))
-		.then_some(quote::quote!(FreezeReason,));
-
-	let hold_reason_part = def
-		.composites
-		.iter()
-		.any(|c| matches!(c.composite_keyword, CompositeKeyword::HoldReason(_)))
-		.then_some(quote::quote!(HoldReason,));
-
-	let lock_id_part = def
-		.composites
-		.iter()
-		.any(|c| matches!(c.composite_keyword, CompositeKeyword::LockId(_)))
-		.then_some(quote::quote!(LockId,));
-
-	let slash_reason_part = def
-		.composites
-		.iter()
-		.any(|c| matches!(c.composite_keyword, CompositeKeyword::SlashReason(_)))
-		.then_some(quote::quote!(SlashReason,));
-
 	let call_part_v2 = def.call.as_ref().map(|_| quote::quote!(+ Call));
 
 	let storage_part_v2 = (!def.storages.is_empty()).then(|| quote::quote!(+ Storage));

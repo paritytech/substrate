@@ -146,28 +146,26 @@ impl Parse for PalletDeclaration {
 		let path = input.parse()?;
 		// println!("path: {:?}", path);
 
-		// // Parse for instance.
-		// let instance = if input.peek(Token![::]) && input.peek3(Token![<]) {
-		// 	let _: Token![::] = input.parse()?;
-		// 	let _: Token![<] = input.parse()?;
-		// 	let res = Some(input.parse()?);
-		// 	let _: Token![>] = input.parse()?;
-		// 	res
-		// } else if !(input.peek(Token![+])) &&
-		// 	!input.peek(keyword::expanded) &&
-		// 	!input.peek(keyword::exclude_parts) &&
-		// 	!input.peek(keyword::use_parts) &&
-		// 	!input.peek(Token![=]) &&
-		// 	!input.peek(Token![,]) &&
-		// 	!input.is_empty()
-		// {
-		// 	return Err(input.error(
-		// 		"Unexpected tokens, expected one of `::$ident` `::{`, `exclude_parts`, `use_parts`, `=`, `,`",
-		// 	));
-		// } else {
-		// 	None
-		// };
-		let instance = None;
+		// Parse for instance.
+		let instance = if input.peek(Token![::]) && input.peek3(Token![<]) {
+			let _: Token![::] = input.parse()?;
+			let _: Token![<] = input.parse()?;
+			let res = Some(input.parse()?);
+			let _: Token![>] = input.parse()?;
+			res
+		} else if !(input.peek(Token![+])) &&
+			!input.peek(keyword::exclude_parts) &&
+			!input.peek(keyword::use_parts) &&
+			!input.peek(Token![=]) &&
+			!input.peek(Token![,]) &&
+			!input.is_empty()
+		{
+			return Err(input.error(
+				"Unexpected tokens, expected one of `::$ident` `+`, `exclude_parts`, `use_parts`, `=`, `,`",
+			));
+		} else {
+			None
+		};
 
 		// // Check if the pallet is fully expanded.
 		// let (is_expanded, extra_parts) = if input.peek(keyword::expanded) {
@@ -193,7 +191,7 @@ impl Parse for PalletDeclaration {
 			!input.is_empty()
 		{
 			return Err(input.error(
-				"Unexpected tokens, expected one of `::{`, `exclude_parts`, `use_parts`, `=`, `,`",
+				"Unexpected tokens, expected one of `+`, `exclude_parts`, `use_parts`, `=`, `,`",
 			))
 		} else {
 			is_expanded.then_some(extra_parts)

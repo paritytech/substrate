@@ -1876,9 +1876,13 @@ impl pallet_statement::Config for Runtime {
 	type MaxAllowedBytes = MaxAllowedBytes;
 }
 
-construct_runtime!(
-	pub struct Runtime
-	{
+#[frame_support::construct_runtime_v2]
+mod runtime {
+	#[frame::runtime]
+	pub struct Runtime;
+
+	#[frame::pallets]
+	pub struct Pallets {
 		System: frame_system,
 		Utility: pallet_utility,
 		Babe: pallet_babe,
@@ -1907,7 +1911,7 @@ construct_runtime!(
 		ImOnline: pallet_im_online,
 		AuthorityDiscovery: pallet_authority_discovery,
 		Offences: pallet_offences,
-		Historical: pallet_session_historical::{Pallet},
+		Historical: pallet_session_historical + Pallet,
 		RandomnessCollectiveFlip: pallet_insecure_randomness_collective_flip,
 		Identity: pallet_identity,
 		Society: pallet_society,
@@ -1950,7 +1954,7 @@ construct_runtime!(
 		Pov: frame_benchmarking_pallet_pov,
 		Statement: pallet_statement,
 	}
-);
+}
 
 /// The address format for describing accounts.
 pub type Address = sp_runtime::MultiAddress<AccountId, AccountIndex>;
