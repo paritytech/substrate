@@ -2299,10 +2299,26 @@ pub trait BlockNumberProvider {
 mod tests {
 	use super::*;
 	use crate::codec::{Decode, Encode, Input};
+	#[cfg(feature = "bls-experimental")]
+	use sp_core::{bls377, bls381};
 	use sp_core::{
 		crypto::{Pair, UncheckedFrom},
-		ecdsa,
+		ecdsa, ed25519, sr25519,
 	};
+
+	macro_rules! signature_verify_test {
+		($algorithm:ident) => {
+			let msg = &b"test-message"[..];
+			let wrong_msg = &b"test-msg"[..];
+			let (pair, _) = $algorithm::Pair::generate();
+
+			let signature = pair.sign(&msg);
+			assert!($algorithm::Pair::verify(&signature, msg, &pair.public()));
+
+			assert!(signature.verify(msg, &pair.public()));
+			assert!(!signature.verify(wrong_msg, &pair.public()));
+		};
+	}
 
 	mod t {
 		use sp_application_crypto::{app_crypto, sr25519};
@@ -2414,14 +2430,27 @@ mod tests {
 	}
 
 	#[test]
+	fn ed25519_verify_works() {
+		signature_verify_test!(ed25519);
+	}
+
+	#[test]
+	fn sr25519_verify_works() {
+		signature_verify_test!(sr25519);
+	}
+
+	#[test]
 	fn ecdsa_verify_works() {
-		let msg = &b"test-message"[..];
-		let (pair, _) = ecdsa::Pair::generate();
+		signature_verify_test!(ecdsa);
+	}
 
-		let signature = pair.sign(&msg);
-		assert!(ecdsa::Pair::verify(&signature, msg, &pair.public()));
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_verify_works() {
+		signature_verify_test!(bls377)
+	}
 
-		assert!(signature.verify(msg, &pair.public()));
-		assert!(signature.verify(msg, &pair.public()));
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_verify_works() {
+		signature_verify_test!(bls381)
 	}
 }
