@@ -206,7 +206,6 @@ pub mod pallet {
 		pub identities: Vec<(T::AccountId, Vec<u8>)>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			GenesisConfig { identities: Default::default() }
