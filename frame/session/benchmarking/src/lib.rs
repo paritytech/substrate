@@ -26,6 +26,7 @@ mod mock;
 use sp_runtime::traits::{One, StaticLookup, TrailingZeroInput};
 use sp_std::{prelude::*, vec};
 
+use codec::Decode;
 use frame_benchmarking::v1::benchmarks;
 use frame_support::traits::{Get, KeyOwnerProofSystem, OnInitialize};
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
@@ -34,7 +35,6 @@ use pallet_staking::{
 	benchmarking::create_validator_with_nominators, testing_utils::create_validators,
 	MaxNominationsOf, RewardDestination,
 };
-use codec::Decode;
 
 const MAX_VALIDATORS: u32 = 1000;
 
