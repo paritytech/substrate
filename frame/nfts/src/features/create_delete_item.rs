@@ -15,6 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! This module contains helper methods to perform functionality associated with minting and burning
+//! items for the NFTs pallet.
+
 use crate::*;
 use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
 
@@ -105,6 +108,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Mints a new item using a pre-signed message.
+	///
+	/// This function allows minting a new item using a pre-signed message. The minting process is
+	/// similar to the regular minting process, but it is performed by a pre-authorized account. The
+	/// `mint_to` account receives the newly minted item. The minting process is configurable
+	/// through the provided `mint_data`. The attributes, metadata, and price of the item are set
+	/// according to the provided `mint_data`. The `with_details_and_config` closure is called to
+	/// validate the provided `collection_details` and `collection_config` before minting the item.
+	///
+	/// - `mint_to`: The account that receives the newly minted item.
+	/// - `mint_data`: The pre-signed minting data containing the `collection`, `item`,
+	///   `attributes`, `metadata`, `deadline`, `only_account`, and `mint_price`.
+	/// - `signer`: The account that is authorized to mint the item using the pre-signed message.
 	pub(crate) fn do_mint_pre_signed(
 		mint_to: T::AccountId,
 		mint_data: PreSignedMintOf<T, I>,
