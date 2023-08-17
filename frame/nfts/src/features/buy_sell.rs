@@ -15,6 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! This module contains helper functions to perform the buy and sell functionalities of the NFTs
+//! pallet.
+//! The bitflag [`PalletFeature::Trading`] needs to be set in the [`Config::Features`] for NFTs
+//! to have the functionality defined in this module.
+
 use crate::*;
 use frame_support::{
 	pallet_prelude::*,
@@ -22,6 +27,16 @@ use frame_support::{
 };
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Pays the specified tips to the corresponding receivers.
+	///
+	/// This function is used to pay tips from the `sender` account to multiple receivers. The tips
+	/// are specified as a `BoundedVec` of `ItemTipOf` with a maximum length of `T::MaxTips`. For
+	/// each tip, the function transfers the `amount` to the `receiver` account. The sender is
+	/// responsible for ensuring the validity of the provided tips.
+	///
+	/// - `sender`: The account that pays the tips.
+	/// - `tips`: A `BoundedVec` containing the tips to be paid, where each tip contains the
+	///   `collection`, `item`, `receiver`, and `amount`.
 	pub(crate) fn do_pay_tips(
 		sender: T::AccountId,
 		tips: BoundedVec<ItemTipOf<T, I>, T::MaxTips>,
@@ -40,6 +55,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Sets the price and whitelists a buyer for an item in the specified collection.
+	///
+	/// This function is used to set the price and whitelist a buyer for an item in the
+	/// specified `collection`. The `sender` account must be the owner of the item. The item's price
+	/// and the whitelisted buyer can be set to allow trading the item. If `price` is `None`, the
+	/// item will be marked as not for sale.
+	///
+	/// - `collection`: The identifier of the collection containing the item.
+	/// - `item`: The identifier of the item for which the price and whitelist information will be
+	///   set.
+	/// - `sender`: The account that sets the price and whitelist information for the item.
+	/// - `price`: The optional price for the item.
+	/// - `whitelisted_buyer`: The optional account that is whitelisted to buy the item at the set
+	///   price.
 	pub(crate) fn do_set_price(
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -83,6 +112,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Buys the specified item from the collection.
+	///
+	/// This function is used to buy an item from the specified `collection`. The `buyer` account
+	/// will attempt to buy the item with the provided `bid_price`. The item's current owner will
+	/// receive the bid price if it is equal to or higher than the item's set price. If
+	/// `whitelisted_buyer` is specified in the item's price information, only that account is
+	/// allowed to buy the item. If the item is not for sale, or the bid price is too low, the
+	/// function will return an error.
+	///
+	/// - `collection`: The identifier of the collection containing the item to be bought.
+	/// - `item`: The identifier of the item to be bought.
+	/// - `buyer`: The account that attempts to buy the item.
+	/// - `bid_price`: The bid price offered by the buyer for the item.
 	pub(crate) fn do_buy_item(
 		collection: T::CollectionId,
 		item: T::ItemId,

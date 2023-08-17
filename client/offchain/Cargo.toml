@@ -21,7 +21,7 @@ futures = "0.3.21"
 futures-timer = "3.0.2"
 hyper = { version = "0.14.16", features = ["stream", "http2"] }
 hyper-rustls = { version = "0.24.0", features = ["http2"] }
-libp2p = "0.52.1"
+libp2p = "0.51.3"
 num_cpus = "1.13"
 once_cell = "1.8"
 parking_lot = "0.12.1"

@@ -77,7 +77,7 @@ where
 		+ UsageProvider<Block>
 		+ BlockBackend<Block>
 		+ HeaderBackend<Block>,
-	C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
+	C::Api: ApiExt<Block> + BlockBuilderApi<Block>,
 {
 	/// Returns a new [`Self`] from the arguments.
 	pub fn new(client: Arc<C>, params: BenchmarkParams) -> Self {

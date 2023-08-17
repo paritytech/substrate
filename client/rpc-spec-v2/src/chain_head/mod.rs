@@ -37,7 +37,7 @@ mod chain_head_storage;
 mod subscription;
 
 pub use api::ChainHeadApiServer;
-pub use chain_head::ChainHead;
+pub use chain_head::{ChainHead, ChainHeadConfig};
 pub use event::{
 	BestBlockChanged, ErrorEvent, Finalized, FollowEvent, Initialized, NewBlock, RuntimeEvent,
 	RuntimeVersionEvent,
