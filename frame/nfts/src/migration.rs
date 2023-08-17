@@ -36,6 +36,7 @@ pub mod v1 {
 	}
 
 	impl<AccountId, DepositBalance> OldCollectionDetails<AccountId, DepositBalance> {
+		/// Migrates the old collection details to the new v1 format.
 		fn migrate_to_v1(self, item_configs: u32) -> CollectionDetails<AccountId, DepositBalance> {
 			CollectionDetails {
 				owner: self.owner,
@@ -48,6 +49,7 @@ pub mod v1 {
 		}
 	}
 
+	/// A migration utility to update the storage version from v0 to v1 for the pallet.
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
 		fn on_runtime_upgrade() -> Weight {

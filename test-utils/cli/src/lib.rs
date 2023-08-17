@@ -35,6 +35,38 @@ use std::{
 };
 use tokio::io::{AsyncBufReadExt, AsyncRead};
 
+/// Similar to [`crate::start_node`] spawns a node, but works in environments where the substrate
+/// binary is not accessible with `cargo_bin("substrate-node")`, and allows customising the args
+/// passed in.
+///
+/// Helpful if you need a Substrate dev node running in the background of a project external to
+/// `substrate`.
+///
+/// The downside compared to using [`crate::start_node`] is that this method is blocking rather than
+/// returning a [`Child`]. Therefore, you may want to call this method inside a new thread.
+///
+/// # Example
+/// ```ignore
+/// // Spawn a dev node.
+/// let _ = std::thread::spawn(move || {
+///     match common::start_node_inline(vec!["--dev", "--rpc-port=12345"]) {
+///         Ok(_) => {}
+///         Err(e) => {
+///             panic!("Node exited with error: {}", e);
+///         }
+///     }
+/// });
+/// ```
+pub fn start_node_inline(args: Vec<&str>) -> Result<(), sc_service::error::Error> {
+	use sc_cli::SubstrateCli;
+
+	// Prepend the args with some dummy value because the first arg is skipped.
+	let cli_call = std::iter::once("node-template").chain(args);
+	let cli = node_cli::Cli::from_iter(cli_call);
+	let runner = cli.create_runner(&cli.run).unwrap();
+	runner.run_node_until_exit(|config| async move { node_cli::service::new_full(config, cli) })
+}
+
 /// Starts a new Substrate node in development mode with a temporary chain.
 ///
 /// This function creates a new Substrate node using the `substrate` binary.

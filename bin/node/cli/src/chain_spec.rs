@@ -199,14 +199,14 @@ pub fn staging_testnet_config() -> ChainSpec {
 	)
 }
 
-/// Helper function to generate a crypto pair from seed
+/// Helper function to generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
 	TPublic::Pair::from_string(&format!("//{}", seed), None)
 		.expect("static values are valid; qed")
 		.public()
 }
 
-/// Helper function to generate an account ID from seed
+/// Helper function to generate an account ID from seed.
 pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
 where
 	AccountPublic: From<<TPublic::Pair as Pair>::Public>,
@@ -214,7 +214,7 @@ where
 	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
 }
 
-/// Helper function to generate stash, controller and session key from seed
+/// Helper function to generate stash, controller and session key from seed.
 pub fn authority_keys_from_seed(
 	seed: &str,
 ) -> (AccountId, AccountId, GrandpaId, BabeId, ImOnlineId, AuthorityDiscoveryId) {
@@ -228,7 +228,7 @@ pub fn authority_keys_from_seed(
 	)
 }
 
-/// Helper function to create RuntimeGenesisConfig for testing
+/// Helper function to create RuntimeGenesisConfig for testing.
 pub fn testnet_genesis(
 	initial_authorities: Vec<(
 		AccountId,
@@ -377,7 +377,7 @@ fn development_config_genesis() -> RuntimeGenesisConfig {
 	)
 }
 
-/// Development config (single validator Alice)
+/// Development config (single validator Alice).
 pub fn development_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Development",
@@ -402,7 +402,7 @@ fn local_testnet_genesis() -> RuntimeGenesisConfig {
 	)
 }
 
-/// Local testnet config (multivalidator Alice + Bob)
+/// Local testnet config (multivalidator Alice + Bob).
 pub fn local_testnet_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Local Testnet",
@@ -434,7 +434,7 @@ pub(crate) mod tests {
 		)
 	}
 
-	/// Local testnet config (single validator - Alice)
+	/// Local testnet config (single validator - Alice).
 	pub fn integration_test_config_with_single_authority() -> ChainSpec {
 		ChainSpec::from_genesis(
 			"Integration Test",
@@ -450,7 +450,7 @@ pub(crate) mod tests {
 		)
 	}
 
-	/// Local testnet config (multivalidator Alice + Bob)
+	/// Local testnet config (multivalidator Alice + Bob).
 	pub fn integration_test_config_with_two_authorities() -> ChainSpec {
 		ChainSpec::from_genesis(
 			"Integration Test",

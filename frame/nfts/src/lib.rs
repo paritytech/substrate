@@ -37,6 +37,10 @@ pub mod mock;
 mod tests;
 
 mod common_functions;
+/// A library providing the feature set of this pallet. It contains modules with helper methods that
+/// perform storage updates and checks required by this pallet's dispatchables. To use pallet level
+/// features, make sure to set appropriate bitflags for [`Config::Features`] in your runtime
+/// configuration trait.
 mod features;
 mod impl_nonfungibles;
 mod types;
@@ -63,6 +67,7 @@ pub use weights::WeightInfo;
 /// The log target of this pallet.
 pub const LOG_TARGET: &'static str = "runtime::nfts";
 
+/// A type alias for the account ID type used in the dispatchable functions of this pallet.
 type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
