@@ -51,6 +51,7 @@ pub struct Def {
 	pub hooks: Option<hooks::HooksDef>,
 	pub call: Option<call::CallDef>,
 	pub tasks: Option<tasks::TasksDef>,
+	pub task_enum: Option<syn::ItemEnum>,
 	pub storages: Vec<storage::StorageDef>,
 	pub error: Option<error::ErrorDef>,
 	pub event: Option<event::EventDef>,
@@ -87,6 +88,7 @@ impl Def {
 		let mut hooks = None;
 		let mut call = None;
 		let mut tasks = None;
+		let mut task_enum = None;
 		let mut error = None;
 		let mut event = None;
 		let mut origin = None;
@@ -100,6 +102,14 @@ impl Def {
 		let mut composites: Vec<CompositeDef> = vec![];
 
 		for (index, item) in items.iter_mut().enumerate() {
+			// find manually specified `Task` enum, if present
+			if let syn::Item::Enum(item_enum) = item {
+				if item_enum.ident == "Task" {
+					println!("found task enum while parsing Def!");
+					task_enum = Some(item_enum.clone());
+				}
+			}
+
 			let pallet_attr: Option<PalletAttr> = helper::take_first_item_pallet_attr(item)?;
 
 			match pallet_attr {
@@ -204,6 +214,7 @@ impl Def {
 			hooks,
 			call,
 			tasks,
+			task_enum,
 			extra_constants,
 			genesis_config,
 			genesis_build,
