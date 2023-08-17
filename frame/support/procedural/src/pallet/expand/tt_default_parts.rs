@@ -31,6 +31,19 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let call_part = def.call.as_ref().map(|_| quote::quote!(Call,));
 
+	// TODO: maybe allow `task_enum: Option<ItemEnum>` to sit on `Def` itself?
+	let task_part = def.item.content.as_ref().and_then(|(_, items)| {
+		items.iter().find_map(|item| {
+			if let syn::Item::Enum(item_enum) = item {
+				if item_enum.ident == "Task" {
+					println!("found task enum!");
+					return Some(item_enum)
+				}
+			}
+			None
+		})
+	});
+
 	let storage_part = (!def.storages.is_empty()).then(|| quote::quote!(Storage,));
 
 	let event_part = def.event.as_ref().map(|event| {
@@ -66,12 +79,6 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 		.iter()
 		.any(|c| matches!(c.composite_keyword, CompositeKeyword::HoldReason(_)))
 		.then_some(quote::quote!(HoldReason,));
-
-	let task_part = def
-		.composites
-		.iter()
-		.any(|c| matches!(c.composite_keyword, CompositeKeyword::Task(_)))
-		.then_some(quote::quote!(Task,));
 
 	let lock_id_part = def
 		.composites

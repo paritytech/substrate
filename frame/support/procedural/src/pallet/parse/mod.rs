@@ -50,6 +50,7 @@ pub struct Def {
 	pub pallet_struct: pallet_struct::PalletStructDef,
 	pub hooks: Option<hooks::HooksDef>,
 	pub call: Option<call::CallDef>,
+	pub tasks: Option<tasks::TasksDef>,
 	pub storages: Vec<storage::StorageDef>,
 	pub error: Option<error::ErrorDef>,
 	pub event: Option<event::EventDef>,
@@ -85,6 +86,7 @@ impl Def {
 		let mut pallet_struct = None;
 		let mut hooks = None;
 		let mut call = None;
+		let mut tasks = None;
 		let mut error = None;
 		let mut event = None;
 		let mut origin = None;
@@ -119,6 +121,8 @@ impl Def {
 				},
 				Some(PalletAttr::RuntimeCall(cw, span)) if call.is_none() =>
 					call = Some(call::CallDef::try_from(span, index, item, dev_mode, cw)?),
+				Some(PalletAttr::Tasks(span)) if tasks.is_none() =>
+					tasks = Some(tasks::TasksDef::try_from(span, index, item)?),
 				Some(PalletAttr::Error(span)) if error.is_none() =>
 					error = Some(error::ErrorDef::try_from(span, index, item)?),
 				Some(PalletAttr::RuntimeEvent(span)) if event.is_none() =>
@@ -199,6 +203,7 @@ impl Def {
 				.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::pallet]`"))?,
 			hooks,
 			call,
+			tasks,
 			extra_constants,
 			genesis_config,
 			genesis_build,
@@ -409,6 +414,7 @@ impl GenericKind {
 mod keyword {
 	syn::custom_keyword!(origin);
 	syn::custom_keyword!(call);
+	syn::custom_keyword!(tasks);
 	syn::custom_keyword!(weight);
 	syn::custom_keyword!(event);
 	syn::custom_keyword!(config);
@@ -472,6 +478,7 @@ enum PalletAttr {
 	/// to zero. Now when there is a `weight` attribute on the `#[pallet::call]`, then that is used
 	/// instead of the zero weight. So to say: it works together with `dev_mode`.
 	RuntimeCall(Option<InheritedCallWeightAttr>, proc_macro2::Span),
+	Tasks(proc_macro2::Span),
 	Error(proc_macro2::Span),
 	RuntimeEvent(proc_macro2::Span),
 	RuntimeOrigin(proc_macro2::Span),
@@ -492,6 +499,7 @@ impl PalletAttr {
 			Self::Pallet(span) => *span,
 			Self::Hooks(span) => *span,
 			Self::RuntimeCall(_, span) => *span,
+			Self::Tasks(span) => *span,
 			Self::Error(span) => *span,
 			Self::RuntimeEvent(span) => *span,
 			Self::RuntimeOrigin(span) => *span,
@@ -536,6 +544,8 @@ impl syn::parse::Parse for PalletAttr {
 				false => Some(InheritedCallWeightAttr::parse(&content)?),
 			};
 			Ok(PalletAttr::RuntimeCall(attr, span))
+		} else if lookahead.peek(keyword::tasks) {
+			Ok(PalletAttr::Tasks(content.parse::<keyword::tasks>()?.span()))
 		} else if lookahead.peek(keyword::error) {
 			Ok(PalletAttr::Error(content.parse::<keyword::error>()?.span()))
 		} else if lookahead.peek(keyword::event) {

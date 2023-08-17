@@ -16,9 +16,10 @@
 // limitations under the License.
 
 use derive_syn_parse::Parse;
+use proc_macro2::Span;
 use syn::{
 	token::{Bracket, Paren},
-	Expr, Ident, LitInt, Token,
+	Expr, Ident, Item, LitInt, Result, Token,
 };
 
 pub mod keywords {
@@ -29,6 +30,15 @@ pub mod keywords {
 	custom_keyword!(condition);
 	custom_keyword!(task_index);
 	custom_keyword!(pallet);
+}
+
+pub struct TasksDef;
+
+impl TasksDef {
+	pub fn try_from(_span: Span, _index: usize, _item: &mut Item) -> Result<Self> {
+		// TODO: fill in
+		Ok(TasksDef {})
+	}
 }
 
 #[derive(Parse)]
