@@ -496,7 +496,7 @@ fn extend_with_api_version(mut trait_: Path, version: Option<u64>) -> Path {
 /// Adds a feature guard to `attributes`.
 ///
 /// Depending on `enable`, the feature guard either enables ('feature = "something"`) or disables (`not(feature = "something")`). 
-fn add_feature_guard(attrs: &mut Vec<Attribute>, feature_name: &str, t: bool) {
+fn add_feature_guard(attrs: &mut Vec<Attribute>, feature_name: &str, enable: bool) {
 	let attr = match t {
 		true => parse_quote!(#[cfg(feature = #feature_name)]),
 		false => parse_quote!(#[cfg(not(feature = #feature_name))]),
@@ -980,11 +980,7 @@ fn extract_cfg_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<
 		return Err(Error::new(span, format!("Found multiple feature gated api versions (cfg attribute with nested {} attribute). This is not supported.", API_VERSION_ATTRIBUTE)))
 	}
 
-	match cfg_api_version_attr.len() {
-		0 => Ok(None),
-		_ => Ok(Some(cfg_api_version_attr.pop())
-			.expect("match expression guarantees that the vec is not empty. qed.")),
-	}
+	Ok(cfg_api_version_attr.drain().next())
 }
 
 /// Represents an API version.
