@@ -19,7 +19,7 @@
 use crate::unsafe_debug::ExecutionObserver;
 use crate::{
 	gas::GasMeter,
-	storage::{self, DepositAccount, WriteOutcome},
+	storage::{self, meter::Diff, DepositAccount, WriteOutcome},
 	BalanceOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo, ContractInfoOf,
 	DebugBufferVec, Determinism, Error, Event, Nonce, Origin, Pallet as Contracts, Schedule,
 	System, WasmBlob, LOG_TARGET,
@@ -273,6 +273,9 @@ pub trait Ext: sealing::Sealed {
 
 	/// Get a mutable reference to the nested gas meter.
 	fn gas_meter_mut(&mut self) -> &mut GasMeter<Self::T>;
+
+	/// Charges `diff` from the meter.
+	fn charge_storage(&mut self, diff: &Diff);
 
 	/// Append a string to the debug buffer.
 	///
@@ -1449,6 +1452,10 @@ where
 
 	fn gas_meter_mut(&mut self) -> &mut GasMeter<Self::T> {
 		&mut self.top_frame_mut().nested_gas
+	}
+
+	fn charge_storage(&mut self, diff: &Diff) {
+		self.top_frame_mut().nested_storage.charge(diff)
 	}
 
 	fn append_debug_buffer(&mut self, msg: &str) -> bool {
