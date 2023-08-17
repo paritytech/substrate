@@ -40,7 +40,6 @@ pub struct Def {
 impl Def {
 	pub fn try_from(mut item: syn::ItemMod) -> syn::Result<Self> {
 		let input_main: TokenStream2 = item.to_token_stream().into();
-		println!("input_main: {}", input_main);
         let item_span = item.span();
 		let items = &mut item
 			.content
