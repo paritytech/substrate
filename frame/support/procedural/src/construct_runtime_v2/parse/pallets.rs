@@ -26,6 +26,11 @@ use syn::{
 	spanned::Spanned,
 	token, Attribute, Error, Ident, Path, Result, Token,
 };
+use crate::construct_runtime::parse::PalletPartKeyword;
+use crate::construct_runtime::parse::PalletPath;
+use crate::construct_runtime::parse::PalletPart;
+use crate::construct_runtime::parse::PalletPartNoGeneric;
+use crate::construct_runtime::parse::Pallet;
 
 mod keyword {
 	syn::custom_keyword!(Pallet);
@@ -227,59 +232,6 @@ impl Parse for PalletDeclaration {
 	}
 }
 
-/// A struct representing a path to a pallet. `PalletPath` is almost identical to the standard
-/// Rust path with a few restrictions:
-/// - No leading colons allowed
-/// - Path segments can only consist of identifers separated by colons
-#[derive(Debug, Clone)]
-pub struct PalletPath {
-	pub inner: Path,
-}
-
-impl PalletPath {
-	pub fn module_name(&self) -> String {
-		self.inner.segments.iter().fold(String::new(), |mut acc, segment| {
-			if !acc.is_empty() {
-				acc.push_str("::");
-			}
-			acc.push_str(&segment.ident.to_string());
-			acc
-		})
-	}
-}
-
-impl Parse for PalletPath {
-	fn parse(input: ParseStream) -> Result<Self> {
-		let mut res =
-			PalletPath { inner: Path { leading_colon: None, segments: Punctuated::new() } };
-
-		let lookahead = input.lookahead1();
-		if lookahead.peek(Token![crate]) ||
-			lookahead.peek(Token![self]) ||
-			lookahead.peek(Token![super]) ||
-			lookahead.peek(Ident)
-		{
-			let ident = input.call(Ident::parse_any)?;
-			res.inner.segments.push(ident.into());
-		} else {
-			return Err(lookahead.error())
-		}
-
-		while input.peek(Token![::]) && input.peek3(Ident) {
-			input.parse::<Token![::]>()?;
-			let ident = input.parse::<Ident>()?;
-			res.inner.segments.push(ident.into());
-		}
-		Ok(res)
-	}
-}
-
-impl quote::ToTokens for PalletPath {
-	fn to_tokens(&self, tokens: &mut TokenStream) {
-		self.inner.to_tokens(tokens);
-	}
-}
-
 /// Parse [`PalletPart`]'s from a braces enclosed list that is split by commas, e.g.
 ///
 /// `{ Call, Event }`
@@ -301,160 +253,6 @@ fn parse_pallet_parts(input: ParseStream) -> Result<Vec<PalletPart>> {
 	Ok(pallet_parts.into_iter().collect())
 }
 
-#[derive(Debug, Clone)]
-pub enum PalletPartKeyword {
-	Pallet(keyword::Pallet),
-	Call(keyword::Call),
-	Storage(keyword::Storage),
-	Event(keyword::Event),
-	Error(keyword::Error),
-	Config(keyword::Config),
-	Origin(keyword::Origin),
-	Inherent(keyword::Inherent),
-	ValidateUnsigned(keyword::ValidateUnsigned),
-	FreezeReason(keyword::FreezeReason),
-	HoldReason(keyword::HoldReason),
-	LockId(keyword::LockId),
-	SlashReason(keyword::SlashReason),
-}
-
-impl Parse for PalletPartKeyword {
-	fn parse(input: ParseStream) -> Result<Self> {
-		let lookahead = input.lookahead1();
-
-		if lookahead.peek(keyword::Pallet) {
-			Ok(Self::Pallet(input.parse()?))
-		} else if lookahead.peek(keyword::Call) {
-			Ok(Self::Call(input.parse()?))
-		} else if lookahead.peek(keyword::Storage) {
-			Ok(Self::Storage(input.parse()?))
-		} else if lookahead.peek(keyword::Event) {
-			Ok(Self::Event(input.parse()?))
-		} else if lookahead.peek(keyword::Error) {
-			Ok(Self::Error(input.parse()?))
-		} else if lookahead.peek(keyword::Config) {
-			Ok(Self::Config(input.parse()?))
-		} else if lookahead.peek(keyword::Origin) {
-			Ok(Self::Origin(input.parse()?))
-		} else if lookahead.peek(keyword::Inherent) {
-			Ok(Self::Inherent(input.parse()?))
-		} else if lookahead.peek(keyword::ValidateUnsigned) {
-			Ok(Self::ValidateUnsigned(input.parse()?))
-		} else if lookahead.peek(keyword::FreezeReason) {
-			Ok(Self::FreezeReason(input.parse()?))
-		} else if lookahead.peek(keyword::HoldReason) {
-			Ok(Self::HoldReason(input.parse()?))
-		} else if lookahead.peek(keyword::LockId) {
-			Ok(Self::LockId(input.parse()?))
-		} else if lookahead.peek(keyword::SlashReason) {
-			Ok(Self::SlashReason(input.parse()?))
-		} else {
-			Err(lookahead.error())
-		}
-	}
-}
-
-impl PalletPartKeyword {
-	/// Returns the name of `Self`.
-	fn name(&self) -> &'static str {
-		match self {
-			Self::Pallet(_) => "Pallet",
-			Self::Call(_) => "Call",
-			Self::Storage(_) => "Storage",
-			Self::Event(_) => "Event",
-			Self::Error(_) => "Error",
-			Self::Config(_) => "Config",
-			Self::Origin(_) => "Origin",
-			Self::Inherent(_) => "Inherent",
-			Self::ValidateUnsigned(_) => "ValidateUnsigned",
-			Self::FreezeReason(_) => "FreezeReason",
-			Self::HoldReason(_) => "HoldReason",
-			Self::LockId(_) => "LockId",
-			Self::SlashReason(_) => "SlashReason",
-		}
-	}
-
-	/// Returns `true` if this pallet part is allowed to have generic arguments.
-	fn allows_generic(&self) -> bool {
-		Self::all_generic_arg().iter().any(|n| *n == self.name())
-	}
-
-	/// Returns the names of all pallet parts that allow to have a generic argument.
-	fn all_generic_arg() -> &'static [&'static str] {
-		&["Event", "Error", "Origin", "Config"]
-	}
-}
-
-impl ToTokens for PalletPartKeyword {
-	fn to_tokens(&self, tokens: &mut TokenStream) {
-		match self {
-			Self::Pallet(inner) => inner.to_tokens(tokens),
-			Self::Call(inner) => inner.to_tokens(tokens),
-			Self::Storage(inner) => inner.to_tokens(tokens),
-			Self::Event(inner) => inner.to_tokens(tokens),
-			Self::Error(inner) => inner.to_tokens(tokens),
-			Self::Config(inner) => inner.to_tokens(tokens),
-			Self::Origin(inner) => inner.to_tokens(tokens),
-			Self::Inherent(inner) => inner.to_tokens(tokens),
-			Self::ValidateUnsigned(inner) => inner.to_tokens(tokens),
-			Self::FreezeReason(inner) => inner.to_tokens(tokens),
-			Self::HoldReason(inner) => inner.to_tokens(tokens),
-			Self::LockId(inner) => inner.to_tokens(tokens),
-			Self::SlashReason(inner) => inner.to_tokens(tokens),
-		}
-	}
-}
-
-#[derive(Debug, Clone)]
-pub struct PalletPart {
-	pub keyword: PalletPartKeyword,
-	pub generics: syn::Generics,
-}
-
-impl Parse for PalletPart {
-	fn parse(input: ParseStream) -> Result<Self> {
-		let keyword: PalletPartKeyword = input.parse()?;
-
-		let generics: syn::Generics = input.parse()?;
-		if !generics.params.is_empty() && !keyword.allows_generic() {
-			let valid_generics = PalletPart::format_names(PalletPartKeyword::all_generic_arg());
-			let msg = format!(
-				"`{}` is not allowed to have generics. \
-				 Only the following pallets are allowed to have generics: {}.",
-				keyword.name(),
-				valid_generics,
-			);
-			return Err(syn::Error::new(keyword.span(), msg))
-		}
-
-		Ok(Self { keyword, generics })
-	}
-}
-
-impl PalletPart {
-	pub fn format_names(names: &[&'static str]) -> String {
-		let res: Vec<_> = names.iter().map(|s| format!("`{}`", s)).collect();
-		res.join(", ")
-	}
-
-	/// The name of this pallet part.
-	pub fn name(&self) -> &'static str {
-		self.keyword.name()
-	}
-}
-
-/// The declaration of a part without its generics
-#[derive(Debug, Clone)]
-pub struct PalletPartNoGeneric {
-	keyword: PalletPartKeyword,
-}
-
-impl Parse for PalletPartNoGeneric {
-	fn parse(input: ParseStream) -> Result<Self> {
-		Ok(Self { keyword: input.parse()? })
-	}
-}
-
 /// Parse [`PalletPartNoGeneric`]'s from a braces enclosed list that is split by commas, e.g.
 ///
 /// `{ Call, Event }`
@@ -474,42 +272,6 @@ fn parse_pallet_parts_no_generic(input: ParseStream) -> Result<Vec<PalletPartNoG
 	}
 
 	Ok(pallet_parts.content.inner.into_iter().collect())
-}
-
-/// The final definition of a pallet with the resulting fixed index and explicit parts.
-#[derive(Debug, Clone)]
-pub struct Pallet {
-	/// Is this pallet fully expanded?
-	pub is_expanded: bool,
-	/// The name of the pallet, e.g.`System` in `System: frame_system`.
-	pub name: Ident,
-	/// Either automatically infered, or defined (e.g. `MyPallet ...  = 3,`).
-	pub index: u8,
-	/// The path of the pallet, e.g. `frame_system` in `System: frame_system`.
-	pub path: PalletPath,
-	/// The instance of the pallet, e.g. `Instance1` in `Council: pallet_collective::<Instance1>`.
-	pub instance: Option<Ident>,
-	/// The pallet parts to use for the pallet.
-	pub pallet_parts: Vec<PalletPart>,
-	/// Expressions specified inside of a #[cfg] attribute.
-	pub cfg_pattern: Vec<cfg_expr::Expression>,
-}
-
-impl Pallet {
-	/// Get resolved pallet parts
-	pub fn pallet_parts(&self) -> &[PalletPart] {
-		&self.pallet_parts
-	}
-
-	/// Find matching parts
-	pub fn find_part(&self, name: &str) -> Option<&PalletPart> {
-		self.pallet_parts.iter().find(|part| part.name() == name)
-	}
-
-	/// Return whether pallet contains part
-	pub fn exists_part(&self, name: &str) -> bool {
-		self.find_part(name).is_some()
-	}
 }
 
 /// Result of a conversion of a declaration of pallets.

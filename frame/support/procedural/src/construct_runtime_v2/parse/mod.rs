@@ -30,6 +30,7 @@ use frame_support_procedural_tools::{
 	generate_crate_access, generate_crate_access_2018, generate_hidden_includes,
 };
 use proc_macro2::TokenStream as TokenStream2;
+use crate::construct_runtime::parse::Pallet;
 
 pub struct Def {
     pub item: syn::ItemMod,

@@ -15,21 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod call;
-mod config;
-mod freeze_reason;
-mod hold_reason;
-mod inherent;
-mod lock_id;
-mod metadata;
-mod origin;
-mod outer_enums;
-mod slash_reason;
-mod unsigned;
-
 use crate::construct_runtime_v2::Def;
 use crate::construct_runtime_v2::parse::pallets::{AllPalletsDeclaration, ExplicitAllPalletsDeclaration};
-use crate::construct_runtime_v2::parse::pallets::Pallet;
 use syn::{Ident, Result};
 use quote::quote;
 use proc_macro2::TokenStream as TokenStream2;
@@ -40,6 +27,9 @@ use frame_support_procedural_tools::generate_crate_access_2018;
 use std::str::FromStr;
 use itertools::Itertools;
 use cfg_expr::Predicate;
+
+use crate::construct_runtime::expand;
+use crate::construct_runtime::parse::Pallet;
 
 /// The fixed name of the system pallet.
 const SYSTEM_PALLET_NAME: &str = "System";
@@ -111,30 +101,30 @@ fn construct_runtime_final_expansion(
 	let unchecked_extrinsic = quote!(<#block as #scrate::sp_runtime::traits::Block>::Extrinsic);
 
 	let outer_event =
-		outer_enums::expand_outer_enum(&name, &pallets, &scrate, outer_enums::OuterEnumType::Event)?;
+	expand::expand_outer_enum(&name, &pallets, &scrate, expand::OuterEnumType::Event)?;
 	let outer_error =
-    outer_enums::expand_outer_enum(&name, &pallets, &scrate, outer_enums::OuterEnumType::Error)?;
+    expand::expand_outer_enum(&name, &pallets, &scrate, expand::OuterEnumType::Error)?;
 
-	let outer_origin = origin::expand_outer_origin(&name, system_pallet, &pallets, &scrate)?;
+	let outer_origin = expand::expand_outer_origin(&name, system_pallet, &pallets, &scrate)?;
 	let all_pallets = decl_all_pallets(&name, pallets.iter(), &features);
 	let pallet_to_index = decl_pallet_runtime_setup(&name, &pallets, &scrate);
 
-	let dispatch = call::expand_outer_dispatch(&name, system_pallet, &pallets, &scrate);
-	let metadata = metadata::expand_runtime_metadata(
+	let dispatch = expand::expand_outer_dispatch(&name, system_pallet, &pallets, &scrate);
+	let metadata = expand::expand_runtime_metadata(
 		&name,
 		&pallets,
 		&scrate,
 		&unchecked_extrinsic,
 		&system_pallet.path,
 	);
-	let outer_config = config::expand_outer_config(&name, &pallets, &scrate);
+	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate);
 	let inherent =
-		inherent::expand_outer_inherent(&name, &block, &unchecked_extrinsic, &pallets, &scrate);
-	let validate_unsigned = unsigned::expand_outer_validate_unsigned(&name, &pallets, &scrate);
-	let freeze_reason = freeze_reason::expand_outer_freeze_reason(&pallets, &scrate);
-	let hold_reason = hold_reason::expand_outer_hold_reason(&pallets, &scrate);
-	let lock_id = lock_id::expand_outer_lock_id(&pallets, &scrate);
-	let slash_reason = slash_reason::expand_outer_slash_reason(&pallets, &scrate);
+	expand::expand_outer_inherent(&name, &block, &unchecked_extrinsic, &pallets, &scrate);
+	let validate_unsigned = expand::expand_outer_validate_unsigned(&name, &pallets, &scrate);
+	let freeze_reason = expand::expand_outer_freeze_reason(&pallets, &scrate);
+	let hold_reason = expand::expand_outer_hold_reason(&pallets, &scrate);
+	let lock_id = expand::expand_outer_lock_id(&pallets, &scrate);
+	let slash_reason = expand::expand_outer_slash_reason(&pallets, &scrate);
 	let integrity_test = decl_integrity_test(&scrate);
 	let static_assertions = decl_static_assertions(&name, &pallets, &scrate);
 

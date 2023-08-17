@@ -208,8 +208,8 @@
 //! This macro returns the ` :: expanded { Error }` list of additional parts we would like to
 //! expose.
 
-mod expand;
-mod parse;
+pub mod expand;
+pub mod parse;
 
 use cfg_expr::Predicate;
 use frame_support_procedural_tools::{
