@@ -212,7 +212,7 @@ pub enum CustomMessageOutcome {
 
 impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
-	type ToSwarm = CustomMessageOutcome;
+	type OutEvent = CustomMessageOutcome;
 
 	fn handle_established_inbound_connection(
 		&mut self,
@@ -273,7 +273,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		&mut self,
 		cx: &mut std::task::Context,
 		params: &mut impl PollParameters,
-	) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
+	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
 		while let Poll::Ready(Some(validation_result)) =
 			self.sync_substream_validations.poll_next_unpin(cx)
 		{
@@ -297,18 +297,10 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 			Poll::Ready(ToSwarm::Dial { opts }) => return Poll::Ready(ToSwarm::Dial { opts }),
 			Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }) =>
 				return Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }),
+			Poll::Ready(ToSwarm::ReportObservedAddr { address, score }) =>
+				return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
 			Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }) =>
 				return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
-			Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)) =>
-				return Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)),
-			Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr)) =>
-				return Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr)),
-			Poll::Ready(ToSwarm::ExternalAddrExpired(addr)) =>
-				return Poll::Ready(ToSwarm::ExternalAddrExpired(addr)),
-			Poll::Ready(ToSwarm::ListenOn { opts }) =>
-				return Poll::Ready(ToSwarm::ListenOn { opts }),
-			Poll::Ready(ToSwarm::RemoveListener { id }) =>
-				return Poll::Ready(ToSwarm::RemoveListener { id }),
 		};
 
 		let outcome = match event {
