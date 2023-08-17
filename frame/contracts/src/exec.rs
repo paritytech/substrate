@@ -1588,9 +1588,7 @@ mod tests {
 		exec::ExportedFunction::*,
 		gas::GasMeter,
 		tests::{
-			test_utils::{
-				contract_info_storage_deposit, get_balance, hash, place_contract, set_balance,
-			},
+			test_utils::{get_balance, hash, place_contract, set_balance},
 			ExtBuilder, RuntimeCall, RuntimeEvent as MetaEvent, Test, TestFilter, ALICE, BOB,
 			CHARLIE, GAS_LIMIT,
 		},
