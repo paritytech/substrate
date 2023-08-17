@@ -347,7 +347,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 ///
 /// # Conditional version implementation
 ///
-/// `decl_runtime_apis!` supports `cfg_attr` attribute for conditional compilation. For example
+/// `impl_runtime_apis!` supports `cfg_attr` attribute for conditional compilation. For example
 /// let's say you want to implement a staging version of the runtime api and put it behind a
 /// feature flag. You can do it this way:
 /// ```ignore
