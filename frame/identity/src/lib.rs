@@ -203,7 +203,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub identities: Vec<(T::AccountId, Vec<u8>)>,
+		pub identities: Vec<(T::AccountId, BoundedVec<u8, ConstU32<32>>)>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
@@ -220,7 +220,7 @@ pub mod pallet {
 					account,
 					Registration {
 						info: IdentityInfo {
-							display: Data::Raw(BoundedVec::try_from(name.clone()).unwrap()),
+							display: Data::Raw(name.clone()),
 							twitter: Data::None,
 							riot: Data::None,
 							email: Data::None,

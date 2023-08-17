@@ -625,9 +625,9 @@ fn test_genesis_config_should_register_identities() {
 	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	pallet_identity::GenesisConfig::<Test> {
 		identities: vec![
-			(1, "One".to_string().as_bytes().to_vec()),
-			(2, "Two".to_string().as_bytes().to_vec()),
-			(3, "Three".to_string().as_bytes().to_vec()),
+			(1, BoundedVec::try_from("One".to_string().as_bytes().to_vec()).unwrap()),
+			(2, BoundedVec::try_from("Two".to_string().as_bytes().to_vec()).unwrap()),
+			(3, BoundedVec::try_from("Three".to_string().as_bytes().to_vec()).unwrap()),
 		],
 	}
 	.assimilate_storage(&mut t)
