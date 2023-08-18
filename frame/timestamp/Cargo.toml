@@ -42,6 +42,7 @@ std = [
 	"log/std",
 	"scale-info/std",
 	"sp-inherents/std",
+	"sp-storage/std",
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-timestamp/std",
