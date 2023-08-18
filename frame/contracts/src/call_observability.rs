@@ -6,7 +6,10 @@ use pallet_contracts_primitives::ExecReturnValue;
 ///
 /// The intended use is the environment, where the observer holds directly the whole runtime
 /// (externalities) and thus can react to the execution breakpoints synchronously.
-pub trait CallSpan<T: Config> where Self: Sized {
+pub trait CallSpan<T: Config>
+where
+	Self: Sized,
+{
 	/// Called just before the execution of a contract.
 	///
 	/// # Arguments
@@ -30,13 +33,8 @@ pub trait CallSpan<T: Config> where Self: Sized {
 	}
 }
 
-
 impl<T: Config> CallSpan<T> for () {
-	fn before_call(
-		code_hash: &CodeHash<T>,
-		entry_point: ExportedFunction,
-		input_data: &[u8],
-	) {
+	fn before_call(code_hash: &CodeHash<T>, entry_point: ExportedFunction, input_data: &[u8]) {
 		log::trace!(target: LOG_TARGET, "call {entry_point:?} hash: {code_hash:?}, input_data: {input_data:?}")
 	}
 
