@@ -75,7 +75,7 @@ fn construct_runtime_implicit_to_explicit(
 	for pallet in definition.pallet_decls.iter() {
 		let pallet_path = &pallet.path;
 		let pallet_name = &pallet.name;
-		let pallet_instance = pallet.instance.as_ref().map(|instance| quote::quote!(::<#instance>));
+		let pallet_instance = pallet.instance.as_ref().map(|instance| quote::quote!(<#instance>));
 		expansion = quote::quote!(
 			#frame_support::tt_call! {
 				macro = [{ #pallet_path::tt_default_parts_v2 }]
