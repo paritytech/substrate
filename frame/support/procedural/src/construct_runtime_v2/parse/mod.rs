@@ -16,8 +16,8 @@
 // limitations under the License.
 
 pub mod helper;
-pub mod pallet_decl;
 pub mod pallet;
+pub mod pallet_decl;
 pub mod pallets;
 pub mod runtime_struct;
 

@@ -15,9 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use syn::{Attribute, Ident, Error};
 use quote::ToTokens;
-use syn::spanned::Spanned;
+use syn::{spanned::Spanned, Attribute, Error, Ident};
 
 /// The declaration of a pallet.
 #[derive(Debug, Clone)]

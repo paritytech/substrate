@@ -15,12 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::construct_runtime::parse::Pallet;
-use crate::construct_runtime_v2::parse::pallet_decl::PalletDeclaration;
-use std::collections::{HashMap, HashSet};
-use syn::{
-	spanned::Spanned, Ident,
+use crate::{
+	construct_runtime::parse::Pallet, construct_runtime_v2::parse::pallet_decl::PalletDeclaration,
 };
+use std::collections::{HashMap, HashSet};
+use syn::{spanned::Spanned, Ident};
 
 #[derive(Debug, Clone)]
 pub enum AllPalletsDeclaration {

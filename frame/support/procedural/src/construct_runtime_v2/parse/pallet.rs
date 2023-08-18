@@ -15,12 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::construct_runtime::parse::Pallet;
-use crate::construct_runtime::parse::PalletPart;
-use crate::construct_runtime::parse::PalletPath;
-use syn::{punctuated::Punctuated, Error, token};
+use crate::construct_runtime::parse::{Pallet, PalletPart, PalletPath};
 use quote::ToTokens;
-use syn::spanned::Spanned;
+use syn::{punctuated::Punctuated, spanned::Spanned, token, Error};
 
 impl Pallet {
 	pub fn try_from(
