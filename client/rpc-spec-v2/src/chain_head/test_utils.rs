@@ -203,10 +203,7 @@ impl<
 impl<Block: BlockT, Client: CallApiAt<Block>> CallApiAt<Block> for ChainHeadMockClient<Client> {
 	type StateBackend = <Client as CallApiAt<Block>>::StateBackend;
 
-	fn call_api_at(
-		&self,
-		params: CallApiAtParams<Block, <Client as CallApiAt<Block>>::StateBackend>,
-	) -> Result<Vec<u8>, sp_api::ApiError> {
+	fn call_api_at(&self, params: CallApiAtParams<Block>) -> Result<Vec<u8>, sp_api::ApiError> {
 		self.client.call_api_at(params)
 	}
 

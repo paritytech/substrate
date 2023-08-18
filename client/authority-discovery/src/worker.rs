@@ -34,8 +34,8 @@ use futures::{channel::mpsc, future, stream::Fuse, FutureExt, Stream, StreamExt}
 use addr_cache::AddrCache;
 use codec::{Decode, Encode};
 use ip_network::IpNetwork;
-use libp2p::{core::multiaddr, identity::PublicKey, Multiaddr};
-use multihash_codetable::{Code, MultihashDigest};
+use libp2p::{core::multiaddr, identity::PublicKey, multihash::Multihash, Multiaddr, PeerId};
+use multihash::{Code, MultihashDigest};
 
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
@@ -304,7 +304,7 @@ where
 	}
 
 	fn addresses_to_publish(&self) -> impl Iterator<Item = Multiaddr> {
-		let peer_id = self.network.local_peer_id();
+		let peer_id: Multihash = self.network.local_peer_id().into();
 		let publish_non_global_ips = self.publish_non_global_ips;
 		self.network
 			.external_addresses()
@@ -529,7 +529,7 @@ where
 					.map_err(Error::ParsingMultiaddress)?;
 
 				let get_peer_id = |a: &Multiaddr| match a.iter().last() {
-					Some(multiaddr::Protocol::P2p(peer_id)) => Some(peer_id),
+					Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key).ok(),
 					_ => None,
 				};
 

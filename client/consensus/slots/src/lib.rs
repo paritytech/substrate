@@ -41,7 +41,7 @@ use sp_arithmetic::traits::BaseArithmetic;
 use sp_consensus::{Proposal, Proposer, SelectChain, SyncOracle};
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::CreateInherentDataProviders;
-use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT};
+use sp_runtime::traits::{Block as BlockT, HashingFor, Header as HeaderT};
 use std::{
 	fmt::Debug,
 	ops::Deref,
@@ -53,8 +53,7 @@ const LOG_TARGET: &str = "slots";
 /// The changes that need to applied to the storage to create the state for a block.
 ///
 /// See [`sp_state_machine::StorageChanges`] for more information.
-pub type StorageChanges<Transaction, Block> =
-	sp_state_machine::StorageChanges<Transaction, HashFor<Block>>;
+pub type StorageChanges<Block> = sp_state_machine::StorageChanges<HashingFor<Block>>;
 
 /// The result of [`SlotWorker::on_slot`].
 #[derive(Debug, Clone)]
@@ -84,9 +83,7 @@ pub trait SlotWorker<B: BlockT, Proof> {
 #[async_trait::async_trait]
 pub trait SimpleSlotWorker<B: BlockT> {
 	/// A handle to a `BlockImport`.
-	type BlockImport: BlockImport<B, Transaction = <Self::Proposer as Proposer<B>>::Transaction>
-		+ Send
-		+ 'static;
+	type BlockImport: BlockImport<B> + Send + 'static;
 
 	/// A handle to a `SyncOracle`.
 	type SyncOracle: SyncOracle;
@@ -148,13 +145,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		header: B::Header,
 		header_hash: &B::Hash,
 		body: Vec<B::Extrinsic>,
-		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
+		storage_changes: StorageChanges<B>,
 		public: Self::Claim,
 		aux_data: Self::AuxData,
-	) -> Result<
-		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
-		sp_consensus::Error,
-	>;
+	) -> Result<sc_consensus::BlockImportParams<B>, sp_consensus::Error>;
 
 	/// Whether to force authoring if offline.
 	fn force_authoring(&self) -> bool;
@@ -191,13 +185,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		claim: &Self::Claim,
 		slot_info: SlotInfo<B>,
 		end_proposing_at: Instant,
-	) -> Option<
-		Proposal<
-			B,
-			<Self::Proposer as Proposer<B>>::Transaction,
-			<Self::Proposer as Proposer<B>>::Proof,
-		>,
-	> {
+	) -> Option<Proposal<B, <Self::Proposer as Proposer<B>>::Proof>> {
 		let slot = slot_info.slot;
 		let telemetry = self.telemetry();
 		let log_target = self.logging_target();

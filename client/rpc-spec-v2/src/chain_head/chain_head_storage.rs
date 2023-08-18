@@ -20,18 +20,34 @@
 
 use std::{marker::PhantomData, sync::Arc};
 
-use jsonrpsee::SubscriptionSink;
 use sc_client_api::{Backend, ChildInfo, StorageKey, StorageProvider};
+use sc_utils::mpsc::TracingUnboundedSender;
 use sp_api::BlockT;
 use sp_core::storage::well_known_keys;
 
+use crate::chain_head::event::OperationStorageItems;
+
 use super::{
 	event::{
-		ChainHeadStorageEvent, ItemsEvent, StorageQuery, StorageQueryType, StorageResult,
+		OperationError, OperationId, StorageQuery, StorageQueryType, StorageResult,
 		StorageResultType,
 	},
-	hex_string, ErrorEvent,
+	hex_string,
+	subscription::BlockGuard,
+	FollowEvent,
 };
+
+/// The maximum number of items the `chainHead_storage` can return
+/// before paginations is required.
+const MAX_ITER_ITEMS: usize = 10;
+
+/// The query type of an interation.
+enum IterQueryType {
+	/// Iterating over (key, value) pairs.
+	Value,
+	/// Iterating over (key, hash) pairs.
+	Hash,
+}
 
 /// Generates the events of the `chainHead_storage` method.
 pub struct ChainHeadStorage<Client, Block, BE> {
@@ -58,7 +74,10 @@ fn is_key_queryable(key: &[u8]) -> bool {
 }
 
 /// The result of making a query call.
-type QueryResult = Result<StorageResult<String>, ChainHeadStorageEvent<String>>;
+type QueryResult = Result<Option<StorageResult>, String>;
+
+/// The result of iterating over keys.
+type QueryIterResult = Result<Vec<StorageResult>, String>;
 
 impl<Client, Block, BE> ChainHeadStorage<Client, Block, BE>
 where
@@ -72,7 +91,7 @@ where
 		hash: Block::Hash,
 		key: &StorageKey,
 		child_key: Option<&ChildInfo>,
-	) -> Option<QueryResult> {
+	) -> QueryResult {
 		let result = if let Some(child_key) = child_key {
 			self.client.child_storage(hash, child_key, key)
 		} else {
@@ -81,18 +100,12 @@ where
 
 		result
 			.map(|opt| {
-				opt.map(|storage_data| {
-					QueryResult::Ok(StorageResult::<String> {
-						key: hex_string(&key.0),
-						result: StorageResultType::Value(hex_string(&storage_data.0)),
-					})
-				})
+				QueryResult::Ok(opt.map(|storage_data| StorageResult {
+					key: hex_string(&key.0),
+					result: StorageResultType::Value(hex_string(&storage_data.0)),
+				}))
 			})
-			.unwrap_or_else(|err| {
-				Some(QueryResult::Err(ChainHeadStorageEvent::<String>::Error(ErrorEvent {
-					error: err.to_string(),
-				})))
-			})
+			.unwrap_or_else(|error| QueryResult::Err(error.to_string()))
 	}
 
 	/// Fetch the hash of a value from storage.
@@ -101,7 +114,7 @@ where
 		hash: Block::Hash,
 		key: &StorageKey,
 		child_key: Option<&ChildInfo>,
-	) -> Option<QueryResult> {
+	) -> QueryResult {
 		let result = if let Some(child_key) = child_key {
 			self.client.child_storage_hash(hash, child_key, key)
 		} else {
@@ -110,75 +123,143 @@ where
 
 		result
 			.map(|opt| {
-				opt.map(|storage_data| {
-					QueryResult::Ok(StorageResult::<String> {
-						key: hex_string(&key.0),
-						result: StorageResultType::Hash(hex_string(&storage_data.as_ref())),
-					})
-				})
+				QueryResult::Ok(opt.map(|storage_data| StorageResult {
+					key: hex_string(&key.0),
+					result: StorageResultType::Hash(hex_string(&storage_data.as_ref())),
+				}))
 			})
-			.unwrap_or_else(|err| {
-				Some(QueryResult::Err(ChainHeadStorageEvent::<String>::Error(ErrorEvent {
-					error: err.to_string(),
-				})))
-			})
+			.unwrap_or_else(|error| QueryResult::Err(error.to_string()))
 	}
 
-	/// Make the storage query.
-	fn query_storage(
+	/// Handle iterating over (key, value) or (key, hash) pairs.
+	fn query_storage_iter(
 		&self,
 		hash: Block::Hash,
-		query: &StorageQuery<StorageKey>,
+		key: &StorageKey,
 		child_key: Option<&ChildInfo>,
-	) -> Option<QueryResult> {
-		if !is_key_queryable(&query.key.0) {
-			return None
+		ty: IterQueryType,
+	) -> QueryIterResult {
+		let keys_iter = if let Some(child_key) = child_key {
+			self.client.child_storage_keys(hash, child_key.to_owned(), Some(key), None)
+		} else {
+			self.client.storage_keys(hash, Some(key), None)
+		}
+		.map_err(|error| error.to_string())?;
+
+		let mut ret = Vec::with_capacity(MAX_ITER_ITEMS);
+		let mut keys_iter = keys_iter.take(MAX_ITER_ITEMS);
+		while let Some(key) = keys_iter.next() {
+			let result = match ty {
+				IterQueryType::Value => self.query_storage_value(hash, &key, child_key),
+				IterQueryType::Hash => self.query_storage_hash(hash, &key, child_key),
+			}?;
+
+			if let Some(result) = result {
+				ret.push(result);
+			}
 		}
 
-		match query.queue_type {
-			StorageQueryType::Value => self.query_storage_value(hash, &query.key, child_key),
-			StorageQueryType::Hash => self.query_storage_hash(hash, &query.key, child_key),
-			_ => None,
-		}
+		QueryIterResult::Ok(ret)
 	}
 
 	/// Generate the block events for the `chainHead_storage` method.
 	pub fn generate_events(
 		&self,
-		mut sink: SubscriptionSink,
+		block_guard: BlockGuard<Block, BE>,
 		hash: Block::Hash,
 		items: Vec<StorageQuery<StorageKey>>,
 		child_key: Option<ChildInfo>,
 	) {
+		/// Build and send the opaque error back to the `chainHead_follow` method.
+		fn send_error<Block: BlockT>(
+			sender: &TracingUnboundedSender<FollowEvent<Block::Hash>>,
+			operation_id: String,
+			error: String,
+		) {
+			let _ =
+				sender.unbounded_send(FollowEvent::<Block::Hash>::OperationError(OperationError {
+					operation_id,
+					error,
+				}));
+		}
+
+		let sender = block_guard.response_sender();
+
 		if let Some(child_key) = child_key.as_ref() {
 			if !is_key_queryable(child_key.storage_key()) {
-				let _ = sink.send(&ChainHeadStorageEvent::<String>::Done);
+				let _ = sender.unbounded_send(FollowEvent::<Block::Hash>::OperationStorageDone(
+					OperationId { operation_id: block_guard.operation_id() },
+				));
 				return
 			}
 		}
 
 		let mut storage_results = Vec::with_capacity(items.len());
 		for item in items {
-			let Some(result) = self.query_storage(hash, &item, child_key.as_ref()) else {
-                continue
-            };
-
-			match result {
-				QueryResult::Ok(storage_result) => storage_results.push(storage_result),
-				QueryResult::Err(event) => {
-					let _ = sink.send(&event);
-					// If an error is encountered for any of the query items
-					// do not produce any other events.
-					return
-				},
+			if !is_key_queryable(&item.key.0) {
+				continue
 			}
+
+			match item.query_type {
+				StorageQueryType::Value => {
+					match self.query_storage_value(hash, &item.key, child_key.as_ref()) {
+						Ok(Some(value)) => storage_results.push(value),
+						Ok(None) => continue,
+						Err(error) => {
+							send_error::<Block>(&sender, block_guard.operation_id(), error);
+							return
+						},
+					}
+				},
+				StorageQueryType::Hash =>
+					match self.query_storage_hash(hash, &item.key, child_key.as_ref()) {
+						Ok(Some(value)) => storage_results.push(value),
+						Ok(None) => continue,
+						Err(error) => {
+							send_error::<Block>(&sender, block_guard.operation_id(), error);
+							return
+						},
+					},
+				StorageQueryType::DescendantsValues => match self.query_storage_iter(
+					hash,
+					&item.key,
+					child_key.as_ref(),
+					IterQueryType::Value,
+				) {
+					Ok(values) => storage_results.extend(values),
+					Err(error) => {
+						send_error::<Block>(&sender, block_guard.operation_id(), error);
+						return
+					},
+				},
+				StorageQueryType::DescendantsHashes => match self.query_storage_iter(
+					hash,
+					&item.key,
+					child_key.as_ref(),
+					IterQueryType::Hash,
+				) {
+					Ok(values) => storage_results.extend(values),
+					Err(error) => {
+						send_error::<Block>(&sender, block_guard.operation_id(), error);
+						return
+					},
+				},
+				_ => continue,
+			};
 		}
 
 		if !storage_results.is_empty() {
-			let event = ChainHeadStorageEvent::Items(ItemsEvent { items: storage_results });
-			let _ = sink.send(&event);
+			let _ = sender.unbounded_send(FollowEvent::<Block::Hash>::OperationStorageItems(
+				OperationStorageItems {
+					operation_id: block_guard.operation_id(),
+					items: storage_results,
+				},
+			));
 		}
 
-		let _ = sink.send(&ChainHeadStorageEvent::<String>::Done);
+		let _ =
+			sender.unbounded_send(FollowEvent::<Block::Hash>::OperationStorageDone(OperationId {
+				operation_id: block_guard.operation_id(),
+			}));
 	}
 }

@@ -28,7 +28,7 @@ use sc_consensus::{
 };
 use sc_telemetry::TelemetryHandle;
 use sc_utils::mpsc::TracingUnboundedSender;
-use sp_api::{Core, RuntimeApiInfo, TransactionFor};
+use sp_api::{Core, RuntimeApiInfo};
 use sp_blockchain::BlockStatus;
 use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
 use sp_consensus_grandpa::{ConsensusLog, GrandpaApi, ScheduledChange, SetId, GRANDPA_ENGINE_ID};
@@ -234,9 +234,7 @@ where
 	BE: Backend<Block>,
 	Client: ClientForGrandpa<Block, BE>,
 	Client::Api: GrandpaApi<Block>,
-	for<'a> &'a Client:
-		BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
-	TransactionFor<Client, Block>: 'static,
+	for<'a> &'a Client: BlockImport<Block, Error = ConsensusError>,
 {
 	// check for a new authority set change.
 	fn check_new_change(
@@ -273,7 +271,7 @@ where
 
 	fn make_authorities_changes(
 		&self,
-		block: &mut BlockImportParams<Block, TransactionFor<Client, Block>>,
+		block: &mut BlockImportParams<Block>,
 		hash: Block::Hash,
 		initial_sync: bool,
 	) -> Result<PendingSetChanges<Block>, ConsensusError> {
@@ -461,7 +459,7 @@ where
 	/// Import whole new state and reset authority set.
 	async fn import_state(
 		&mut self,
-		mut block: BlockImportParams<Block, TransactionFor<Client, Block>>,
+		mut block: BlockImportParams<Block>,
 	) -> Result<ImportResult, ConsensusError> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
@@ -516,17 +514,14 @@ where
 	BE: Backend<Block>,
 	Client: ClientForGrandpa<Block, BE>,
 	Client::Api: GrandpaApi<Block>,
-	for<'a> &'a Client:
-		BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
-	TransactionFor<Client, Block>: 'static,
+	for<'a> &'a Client: BlockImport<Block, Error = ConsensusError>,
 	SC: Send,
 {
 	type Error = ConsensusError;
-	type Transaction = TransactionFor<Client, Block>;
 
 	async fn import_block(
 		&mut self,
-		mut block: BlockImportParams<Block, Self::Transaction>,
+		mut block: BlockImportParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();

@@ -225,23 +225,32 @@ impl Config for Test {
 	type Tracks = TestTracksInfo;
 	type Preimages = Preimage;
 }
+pub struct ExtBuilder {}
 
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
-	let balances = vec![(1, 100), (2, 100), (3, 100), (4, 100), (5, 100), (6, 100)];
-	pallet_balances::GenesisConfig::<Test> { balances }
-		.assimilate_storage(&mut t)
-		.unwrap();
-	let mut ext = sp_io::TestExternalities::new(t);
-	ext.execute_with(|| System::set_block_number(1));
-	ext
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self {}
+	}
 }
 
-/// Execute the function two times, with `true` and with `false`.
-#[allow(dead_code)]
-pub fn new_test_ext_execute_with_cond(execute: impl FnOnce(bool) -> () + Clone) {
-	new_test_ext().execute_with(|| (execute.clone())(false));
-	new_test_ext().execute_with(|| execute(true));
+impl ExtBuilder {
+	pub fn build(self) -> sp_io::TestExternalities {
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		let balances = vec![(1, 100), (2, 100), (3, 100), (4, 100), (5, 100), (6, 100)];
+		pallet_balances::GenesisConfig::<Test> { balances }
+			.assimilate_storage(&mut t)
+			.unwrap();
+		let mut ext = sp_io::TestExternalities::new(t);
+		ext.execute_with(|| System::set_block_number(1));
+		ext
+	}
+
+	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		self.build().execute_with(|| {
+			test();
+			Referenda::do_try_state().unwrap();
+		})
+	}
 }
 
 #[derive(Encode, Debug, Decode, TypeInfo, Eq, PartialEq, Clone, MaxEncodedLen)]
