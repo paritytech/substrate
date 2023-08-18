@@ -22,24 +22,6 @@ use syn::{
 	punctuated::Punctuated, spanned::Spanned, token, Attribute, Error, GenericArgument, Ident,
 };
 
-mod keyword {
-	syn::custom_keyword!(Pallet);
-	syn::custom_keyword!(Call);
-	syn::custom_keyword!(Storage);
-	syn::custom_keyword!(Event);
-	syn::custom_keyword!(Error);
-	syn::custom_keyword!(Config);
-	syn::custom_keyword!(Origin);
-	syn::custom_keyword!(Inherent);
-	syn::custom_keyword!(ValidateUnsigned);
-	syn::custom_keyword!(FreezeReason);
-	syn::custom_keyword!(HoldReason);
-	syn::custom_keyword!(LockId);
-	syn::custom_keyword!(SlashReason);
-	syn::custom_keyword!(exclude_parts);
-	syn::custom_keyword!(use_parts);
-}
-
 #[derive(Debug, Clone)]
 pub enum AllPalletsDeclaration {
 	Implicit(ImplicitAllPalletsDeclaration),
