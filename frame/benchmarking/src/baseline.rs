@@ -26,6 +26,7 @@ use sp_runtime::{
 	traits::{AppVerify, Hash},
 	RuntimeAppPublic,
 };
+use sp_std::{vec, vec::Vec};
 
 mod crypto {
 	use sp_application_crypto::{app_crypto, sr25519, KeyTypeId};
