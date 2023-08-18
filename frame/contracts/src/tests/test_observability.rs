@@ -32,21 +32,21 @@ impl CallSpan<Test> for TestCallSpan {
 	) -> TestCallSpan {
 		DEBUG_EXECUTION_TRACE.with(|d| {
 			d.borrow_mut().push(DebugFrame {
-				code_hash: code_hash.clone(),
+				code_hash: *code_hash,
 				call: entry_point,
 				input: input_data.to_vec(),
 				result: None,
 			})
 		});
-		TestCallSpan { code_hash: code_hash.clone(), call: entry_point, input: input_data.to_vec() }
+		TestCallSpan { code_hash: *code_hash, call: entry_point, input: input_data.to_vec() }
 	}
 
 	fn after_call(self, output: &ExecReturnValue) {
 		DEBUG_EXECUTION_TRACE.with(|d| {
 			d.borrow_mut().push(DebugFrame {
-				code_hash: self.code_hash.clone(),
+				code_hash: self.code_hash,
 				call: self.call,
-				input: self.input.clone(),
+				input: self.input,
 				result: Some(output.data.clone()),
 			})
 		});
