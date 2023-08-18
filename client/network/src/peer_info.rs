@@ -31,23 +31,25 @@ use libp2p::{
 		Info as IdentifyInfo,
 	},
 	identity::PublicKey,
-	ping::{Behaviour as Ping, Config as PingConfig, Event as PingEvent},
+	ping::{Behaviour as Ping, Config as PingConfig, Event as PingEvent, Success as PingSuccess},
 	swarm::{
 		behaviour::{
 			AddressChange, ConnectionClosed, ConnectionEstablished, DialFailure, FromSwarm,
 			ListenFailure,
 		},
-		ConnectionDenied, ConnectionHandler, ConnectionHandlerSelect, ConnectionId,
+		ConnectionDenied, ConnectionHandler, ConnectionId, IntoConnectionHandlerSelect,
 		NetworkBehaviour, PollParameters, THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
 	},
 	Multiaddr, PeerId,
 };
 use log::{debug, error, trace};
+use parking_lot::Mutex;
 use smallvec::SmallVec;
 
 use std::{
-	collections::hash_map::Entry,
+	collections::{hash_map::Entry, HashSet},
 	pin::Pin,
+	sync::Arc,
 	task::{Context, Poll},
 	time::{Duration, Instant},
 };
@@ -67,6 +69,8 @@ pub struct PeerInfoBehaviour {
 	nodes_info: FnvHashMap<PeerId, NodeInfo>,
 	/// Interval at which we perform garbage collection in `nodes_info`.
 	garbage_collect: Pin<Box<dyn Stream<Item = ()> + Send>>,
+	/// Record keeping of external addresses. Data is queried by the `NetworkService`.
+	external_addresses: ExternalAddresses,
 }
 
 /// Information about a node we're connected to.
@@ -91,9 +95,31 @@ impl NodeInfo {
 	}
 }
 
+/// Utility struct for tracking external addresses. The data is shared with the `NetworkService`.
+#[derive(Debug, Clone, Default)]
+pub struct ExternalAddresses {
+	addresses: Arc<Mutex<HashSet<Multiaddr>>>,
+}
+
+impl ExternalAddresses {
+	/// Add an external address.
+	pub fn add(&mut self, addr: Multiaddr) {
+		self.addresses.lock().insert(addr);
+	}
+
+	/// Remove an external address.
+	pub fn remove(&mut self, addr: &Multiaddr) {
+		self.addresses.lock().remove(addr);
+	}
+}
+
 impl PeerInfoBehaviour {
 	/// Builds a new `PeerInfoBehaviour`.
-	pub fn new(user_agent: String, local_public_key: PublicKey) -> Self {
+	pub fn new(
+		user_agent: String,
+		local_public_key: PublicKey,
+		external_addresses: Arc<Mutex<HashSet<Multiaddr>>>,
+	) -> Self {
 		let identify = {
 			let cfg = IdentifyConfig::new("/substrate/1.0".to_string(), local_public_key)
 				.with_agent_version(user_agent)
@@ -107,6 +133,7 @@ impl PeerInfoBehaviour {
 			identify,
 			nodes_info: FnvHashMap::default(),
 			garbage_collect: Box::pin(interval(GARBAGE_COLLECT_INTERVAL)),
+			external_addresses: ExternalAddresses { addresses: external_addresses },
 		}
 	}
 
@@ -121,18 +148,13 @@ impl PeerInfoBehaviour {
 
 	/// Inserts a ping time in the cache. Has no effect if we don't have any entry for that node,
 	/// which shouldn't happen.
-	fn handle_ping_report(
-		&mut self,
-		peer_id: &PeerId,
-		ping_time: Duration,
-		connection: ConnectionId,
-	) {
-		trace!(target: "sub-libp2p", "Ping time with {:?} via {:?}: {:?}", peer_id, connection, ping_time);
+	fn handle_ping_report(&mut self, peer_id: &PeerId, ping_time: Duration) {
+		trace!(target: "sub-libp2p", "Ping time with {:?}: {:?}", peer_id, ping_time);
 		if let Some(entry) = self.nodes_info.get_mut(peer_id) {
 			entry.latest_ping = Some(ping_time);
 		} else {
 			error!(target: "sub-libp2p",
-				"Received ping from node we're not connected to {:?} via {:?}", peer_id, connection);
+				"Received ping from node we're not connected to {:?}", peer_id);
 		}
 	}
 
@@ -186,11 +208,11 @@ pub enum PeerInfoEvent {
 }
 
 impl NetworkBehaviour for PeerInfoBehaviour {
-	type ConnectionHandler = ConnectionHandlerSelect<
+	type ConnectionHandler = IntoConnectionHandlerSelect<
 		<Ping as NetworkBehaviour>::ConnectionHandler,
 		<Identify as NetworkBehaviour>::ConnectionHandler,
 	>;
-	type ToSwarm = PeerInfoEvent;
+	type OutEvent = PeerInfoEvent;
 
 	fn handle_pending_inbound_connection(
 		&mut self,
@@ -356,9 +378,9 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 				self.ping.on_swarm_event(FromSwarm::ListenerError(e));
 				self.identify.on_swarm_event(FromSwarm::ListenerError(e));
 			},
-			FromSwarm::ExternalAddrExpired(e) => {
-				self.ping.on_swarm_event(FromSwarm::ExternalAddrExpired(e));
-				self.identify.on_swarm_event(FromSwarm::ExternalAddrExpired(e));
+			FromSwarm::ExpiredExternalAddr(e) => {
+				self.ping.on_swarm_event(FromSwarm::ExpiredExternalAddr(e));
+				self.identify.on_swarm_event(FromSwarm::ExpiredExternalAddr(e));
 			},
 			FromSwarm::NewListener(e) => {
 				self.ping.on_swarm_event(FromSwarm::NewListener(e));
@@ -367,14 +389,12 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 			FromSwarm::ExpiredListenAddr(e) => {
 				self.ping.on_swarm_event(FromSwarm::ExpiredListenAddr(e));
 				self.identify.on_swarm_event(FromSwarm::ExpiredListenAddr(e));
+				self.external_addresses.remove(e.addr);
 			},
-			FromSwarm::NewExternalAddrCandidate(e) => {
-				self.ping.on_swarm_event(FromSwarm::NewExternalAddrCandidate(e));
-				self.identify.on_swarm_event(FromSwarm::NewExternalAddrCandidate(e));
-			},
-			FromSwarm::ExternalAddrConfirmed(e) => {
-				self.ping.on_swarm_event(FromSwarm::ExternalAddrConfirmed(e));
-				self.identify.on_swarm_event(FromSwarm::ExternalAddrConfirmed(e));
+			FromSwarm::NewExternalAddr(e) => {
+				self.ping.on_swarm_event(FromSwarm::NewExternalAddr(e));
+				self.identify.on_swarm_event(FromSwarm::NewExternalAddr(e));
+				self.external_addresses.add(e.addr.clone());
 			},
 			FromSwarm::AddressChange(e @ AddressChange { peer_id, old, new, .. }) => {
 				self.ping.on_swarm_event(FromSwarm::AddressChange(e));
@@ -417,13 +437,13 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
+	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
 		loop {
 			match self.ping.poll(cx, params) {
 				Poll::Pending => break,
 				Poll::Ready(ToSwarm::GenerateEvent(ev)) => {
-					if let PingEvent { peer, result: Ok(rtt), connection } = ev {
-						self.handle_ping_report(&peer, rtt, connection)
+					if let PingEvent { peer, result: Ok(PingSuccess::Ping { rtt }) } = ev {
+						self.handle_ping_report(&peer, rtt)
 					}
 				},
 				Poll::Ready(ToSwarm::Dial { opts }) => return Poll::Ready(ToSwarm::Dial { opts }),
@@ -433,18 +453,10 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						handler,
 						event: Either::Left(event),
 					}),
+				Poll::Ready(ToSwarm::ReportObservedAddr { address, score }) =>
+					return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
 				Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }) =>
 					return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
-				Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)) =>
-					return Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)),
-				Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr)) =>
-					return Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr)),
-				Poll::Ready(ToSwarm::ExternalAddrExpired(addr)) =>
-					return Poll::Ready(ToSwarm::ExternalAddrExpired(addr)),
-				Poll::Ready(ToSwarm::ListenOn { opts }) =>
-					return Poll::Ready(ToSwarm::ListenOn { opts }),
-				Poll::Ready(ToSwarm::RemoveListener { id }) =>
-					return Poll::Ready(ToSwarm::RemoveListener { id }),
 			}
 		}
 
@@ -470,18 +482,10 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						handler,
 						event: Either::Right(event),
 					}),
+				Poll::Ready(ToSwarm::ReportObservedAddr { address, score }) =>
+					return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
 				Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }) =>
 					return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
-				Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)) =>
-					return Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)),
-				Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr)) =>
-					return Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr)),
-				Poll::Ready(ToSwarm::ExternalAddrExpired(addr)) =>
-					return Poll::Ready(ToSwarm::ExternalAddrExpired(addr)),
-				Poll::Ready(ToSwarm::ListenOn { opts }) =>
-					return Poll::Ready(ToSwarm::ListenOn { opts }),
-				Poll::Ready(ToSwarm::RemoveListener { id }) =>
-					return Poll::Ready(ToSwarm::RemoveListener { id }),
 			}
 		}
 

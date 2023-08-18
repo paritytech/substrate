@@ -16,6 +16,7 @@
 // limitations under the License.
 
 mod pallet_dummy;
+mod unsafe_debug;
 
 use self::test_utils::{ensure_stored, expected_deposit, hash};
 use crate::{
@@ -31,8 +32,8 @@ use crate::{
 	wasm::{Determinism, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeHash, CodeInfoOf, CollectEvents, Config, ContractInfo, ContractInfoOf,
-	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress, Origin,
-	Pallet, PristineCode, Schedule,
+	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, HoldReason,
+	MigrationInProgress, Origin, Pallet, PristineCode, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -42,8 +43,9 @@ use frame_support::{
 	parameter_types,
 	storage::child,
 	traits::{
-		ConstU32, ConstU64, Contains, Currency, ExistenceRequirement, LockableCurrency, OnIdle,
-		OnInitialize, StorageVersion, WithdrawReasons,
+		fungible::{BalancedHold, Inspect, InspectHold, Mutate, MutateHold},
+		tokens::Preservation,
+		ConstU32, ConstU64, Contains, OnIdle, OnInitialize, StorageVersion,
 	},
 	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
@@ -70,7 +72,7 @@ frame_support::construct_runtime!(
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Randomness: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
 		Utility: pallet_utility::{Pallet, Call, Storage, Event},
-		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>},
+		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>, HoldReason},
 		Proxy: pallet_proxy::{Pallet, Call, Storage, Event<T>},
 		Dummy: pallet_dummy
 	}
@@ -90,13 +92,14 @@ macro_rules! assert_refcount {
 }
 
 pub mod test_utils {
-	use super::{Balances, DepositPerByte, DepositPerItem, Hash, SysConfig, Test};
+
+	use super::{DepositPerByte, DepositPerItem, Hash, SysConfig, Test};
 	use crate::{
 		exec::AccountIdOf, BalanceOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo,
 		ContractInfoOf, Nonce, PristineCode,
 	};
 	use codec::{Encode, MaxEncodedLen};
-	use frame_support::traits::Currency;
+	use frame_support::traits::{fungible::Mutate, Currency};
 
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
 		let nonce = <Nonce<Test>>::mutate(|counter| {
@@ -109,11 +112,10 @@ pub mod test_utils {
 		<ContractInfoOf<Test>>::insert(address, contract);
 	}
 	pub fn set_balance(who: &AccountIdOf<Test>, amount: u64) {
-		let imbalance = Balances::deposit_creating(who, amount);
-		drop(imbalance);
+		let _ = <Test as Config>::Currency::set_balance(who, amount);
 	}
 	pub fn get_balance(who: &AccountIdOf<Test>) -> u64 {
-		Balances::free_balance(who)
+		<Test as Config>::Currency::free_balance(who)
 	}
 	pub fn get_contract(addr: &AccountIdOf<Test>) -> ContractInfo<Test> {
 		get_contract_checked(addr).unwrap()
@@ -350,8 +352,8 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type RuntimeHoldReason = ();
-	type MaxHolds = ();
+	type RuntimeHoldReason = RuntimeHoldReason;
+	type MaxHolds = ConstU32<1>;
 }
 
 impl pallet_timestamp::Config for Test {
@@ -459,9 +461,12 @@ impl Config for Test {
 	type MaxStorageKeyLen = ConstU32<128>;
 	type UnsafeUnstableInterface = UnstableInterface;
 	type MaxDebugBufferLen = ConstU32<{ 2 * 1024 * 1024 }>;
+	type RuntimeHoldReason = RuntimeHoldReason;
 	type Migrations = crate::migration::codegen::BenchMigrations;
 	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
 	type MaxDelegateDependencies = MaxDelegateDependencies;
+	#[cfg(feature = "unsafe-debug")]
+	type Debug = unsafe_debug::TestDebugger;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -592,7 +597,7 @@ impl Default for Origin<Test> {
 #[test]
 fn calling_plain_account_fails() {
 	ExtBuilder::default().build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 100_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 100_000_000);
 		let base_cost = <<Test as Config>::WeightInfo as WeightInfo>::call();
 
 		assert_eq!(
@@ -634,7 +639,7 @@ fn migration_in_progress_works() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 
 	ExtBuilder::default().existential_deposit(1).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		MigrationInProgress::<Test>::set(Some(Default::default()));
 
 		assert_err!(
@@ -690,7 +695,7 @@ fn instantiate_and_call_and_deposit_event() {
 	let (wasm, code_hash) = compile_module::<Test>("event_and_return_on_deploy").unwrap();
 
 	ExtBuilder::default().existential_deposit(1).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 		let value = 100;
 
@@ -813,7 +818,7 @@ fn deposit_event_max_value_limit() {
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let addr = Contracts::bare_instantiate(
 			ALICE,
 			30_000,
@@ -860,7 +865,7 @@ fn run_out_of_fuel_engine() {
 	let (wasm, _code_hash) = compile_module::<Test>("run_out_of_gas").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		let addr = Contracts::bare_instantiate(
 			ALICE,
@@ -899,7 +904,7 @@ fn run_out_of_fuel_host() {
 	let (code, _hash) = compile_module::<Test>("chain_extension").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 
 		let addr = Contracts::bare_instantiate(
 			ALICE,
@@ -941,7 +946,7 @@ fn gas_syncs_work() {
 	let (wasm1, _code_hash) = compile_module::<Test>("seal_input_once").unwrap();
 	let (wasm2, _code_hash) = compile_module::<Test>("seal_input_twice").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		// Instantiate noop contract.
 		let addr0 = Contracts::bare_instantiate(
 			ALICE,
@@ -1049,7 +1054,7 @@ fn instantiate_unique_trie_id() {
 	let (wasm, code_hash) = compile_module::<Test>("self_destruct").unwrap();
 
 	ExtBuilder::default().existential_deposit(500).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		Contracts::upload_code(RuntimeOrigin::signed(ALICE), wasm, None, Determinism::Enforced)
 			.unwrap();
 
@@ -1116,7 +1121,7 @@ fn storage_max_value_limit() {
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let addr = Contracts::bare_instantiate(
 			ALICE,
 			30_000,
@@ -1167,7 +1172,7 @@ fn deploy_and_call_other_contract() {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 
 		// Create
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let caller_addr = Contracts::bare_instantiate(
 			ALICE,
 			100_000,
@@ -1315,7 +1320,7 @@ fn delegate_call() {
 	let (callee_wasm, callee_code_hash) = compile_module::<Test>("delegate_call_lib").unwrap();
 
 	ExtBuilder::default().existential_deposit(500).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Instantiate the 'caller'
 		let caller_addr = Contracts::bare_instantiate(
@@ -1355,7 +1360,7 @@ fn delegate_call() {
 fn transfer_allow_death_cannot_kill_account() {
 	let (wasm, _code_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -1379,11 +1384,11 @@ fn transfer_allow_death_cannot_kill_account() {
 		let total_balance = <Test as Config>::Currency::total_balance(&addr);
 
 		assert_err!(
-			<<Test as Config>::Currency as Currency<AccountId32>>::transfer(
+			<<Test as Config>::Currency as Mutate<AccountId32>>::transfer(
 				&addr,
 				&ALICE,
 				total_balance,
-				ExistenceRequirement::AllowDeath,
+				Preservation::Expendable,
 			),
 			TokenError::Frozen,
 		);
@@ -1396,7 +1401,7 @@ fn transfer_allow_death_cannot_kill_account() {
 fn cannot_self_destruct_through_draning() {
 	let (wasm, _code_hash) = compile_module::<Test>("drain").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -1440,7 +1445,7 @@ fn cannot_self_destruct_through_draning() {
 fn cannot_self_destruct_through_storage_refund_after_price_change() {
 	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 
 		// Instantiate the BOB contract.
@@ -1500,7 +1505,7 @@ fn cannot_self_destruct_through_storage_refund_after_price_change() {
 fn cannot_self_destruct_while_live() {
 	let (wasm, _code_hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -1544,8 +1549,8 @@ fn cannot_self_destruct_while_live() {
 fn self_destruct_works() {
 	let (wasm, code_hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(1_000).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-		let _ = Balances::deposit_creating(&DJANGO, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&DJANGO, 1_000_000);
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -1580,11 +1585,11 @@ fn self_destruct_works() {
 
 		// Check that account is gone
 		assert!(get_contract_checked(&addr).is_none());
-		assert_eq!(Balances::total_balance(&addr), 0);
+		assert_eq!(<Test as Config>::Currency::total_balance(&addr), 0);
 
 		// check that the beneficiary (django) got remaining balance
 		let ed = <Test as Config>::Currency::minimum_balance();
-		assert_eq!(Balances::free_balance(DJANGO), 1_000_000 + 100_000 + ed);
+		assert_eq!(<Test as Config>::Currency::free_balance(DJANGO), 1_000_000 + 100_000 + ed);
 
 		pretty_assertions::assert_eq!(
 			System::events(),
@@ -1651,7 +1656,7 @@ fn destroy_contract_and_transfer_funds() {
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create code hash for bob to instantiate
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		Contracts::bare_upload_code(ALICE, callee_wasm, None, Determinism::Enforced).unwrap();
 
 		// This deploys the BOB contract, which in turn deploys the CHARLIE contract during
@@ -1695,7 +1700,7 @@ fn destroy_contract_and_transfer_funds() {
 fn cannot_self_destruct_in_constructor() {
 	let (wasm, _) = compile_module::<Test>("self_destructing_constructor").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Fail to instantiate the BOB because the contructor calls seal_terminate.
 		assert_err_ignore_postinfo!(
@@ -1718,7 +1723,7 @@ fn crypto_hashes() {
 	let (wasm, _code_hash) = compile_module::<Test>("crypto_hashes").unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Instantiate the CRYPTO_HASHES contract.
 		let addr = Contracts::bare_instantiate(
@@ -1781,7 +1786,7 @@ fn transfer_return_code() {
 	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 
 		let addr = Contracts::bare_instantiate(
 			ALICE,
@@ -1799,7 +1804,7 @@ fn transfer_return_code() {
 		.account_id;
 
 		// Contract has only the minimal balance so any transfer will fail.
-		Balances::make_free_balance_be(&addr, min_balance);
+		<Test as Config>::Currency::set_balance(&addr, min_balance);
 		let result = Contracts::bare_call(
 			ALICE,
 			addr.clone(),
@@ -1823,8 +1828,8 @@ fn call_return_code() {
 	let (callee_code, _callee_hash) = compile_module::<Test>("ok_trap_revert").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
-		let _ = Balances::deposit_creating(&CHARLIE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&CHARLIE, 1000 * min_balance);
 
 		let addr_bob = Contracts::bare_instantiate(
 			ALICE,
@@ -1840,7 +1845,7 @@ fn call_return_code() {
 		.result
 		.unwrap()
 		.account_id;
-		Balances::make_free_balance_be(&addr_bob, min_balance);
+		<Test as Config>::Currency::set_balance(&addr_bob, min_balance);
 
 		// Contract calls into Django which is no valid contract
 		let result = Contracts::bare_call(
@@ -1872,7 +1877,7 @@ fn call_return_code() {
 		.result
 		.unwrap()
 		.account_id;
-		Balances::make_free_balance_be(&addr_django, min_balance);
+		<Test as Config>::Currency::set_balance(&addr_django, min_balance);
 
 		// Contract has only the minimal balance so any transfer will fail.
 		let result = Contracts::bare_call(
@@ -1895,7 +1900,7 @@ fn call_return_code() {
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
 		// Contract has enough balance but callee reverts because "1" is passed.
-		Balances::make_free_balance_be(&addr_bob, min_balance + 1000);
+		<Test as Config>::Currency::set_balance(&addr_bob, min_balance + 1000);
 		let result = Contracts::bare_call(
 			ALICE,
 			addr_bob.clone(),
@@ -1943,8 +1948,8 @@ fn instantiate_return_code() {
 	let (callee_code, callee_hash) = compile_module::<Test>("ok_trap_revert").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
-		let _ = Balances::deposit_creating(&CHARLIE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&CHARLIE, 1000 * min_balance);
 		let callee_hash = callee_hash.as_ref().to_vec();
 
 		assert_ok!(Contracts::instantiate_with_code(
@@ -1973,7 +1978,7 @@ fn instantiate_return_code() {
 		.account_id;
 
 		// Contract has only the minimal balance so any transfer will fail.
-		Balances::make_free_balance_be(&addr, min_balance);
+		<Test as Config>::Currency::set_balance(&addr, min_balance);
 		let result = Contracts::bare_call(
 			ALICE,
 			addr.clone(),
@@ -1990,7 +1995,7 @@ fn instantiate_return_code() {
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
 		// Contract has enough balance but the passed code hash is invalid
-		Balances::make_free_balance_be(&addr, min_balance + 10_000);
+		<Test as Config>::Currency::set_balance(&addr, min_balance + 10_000);
 		let result = Contracts::bare_call(
 			ALICE,
 			addr.clone(),
@@ -2045,7 +2050,7 @@ fn disabled_chain_extension_wont_deploy() {
 	let (code, _hash) = compile_module::<Test>("chain_extension").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 		TestExtension::disable();
 		assert_err_ignore_postinfo!(
 			Contracts::instantiate_with_code(
@@ -2067,7 +2072,7 @@ fn disabled_chain_extension_errors_on_call() {
 	let (code, _hash) = compile_module::<Test>("chain_extension").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 		let addr = Contracts::bare_instantiate(
 			ALICE,
 			min_balance * 100,
@@ -2095,7 +2100,7 @@ fn chain_extension_works() {
 	let (code, _hash) = compile_module::<Test>("chain_extension").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 		let addr = Contracts::bare_instantiate(
 			ALICE,
 			min_balance * 100,
@@ -2242,7 +2247,7 @@ fn chain_extension_temp_storage_works() {
 	let (code, _hash) = compile_module::<Test>("chain_extension_temp_storage").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 		let addr = Contracts::bare_instantiate(
 			ALICE,
 			min_balance * 100,
@@ -2289,7 +2294,7 @@ fn lazy_removal_works() {
 	let (code, _hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 
 		let addr = Contracts::bare_instantiate(
 			ALICE,
@@ -2341,7 +2346,7 @@ fn lazy_batch_removal_works() {
 	let (code, _hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 		let mut tries: Vec<child::ChildInfo> = vec![];
 
 		for i in 0..3u8 {
@@ -2409,7 +2414,7 @@ fn lazy_removal_partial_remove_works() {
 
 	let trie = ext.execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 
 		let addr = Contracts::bare_instantiate(
 			ALICE,
@@ -2491,7 +2496,7 @@ fn lazy_removal_does_no_run_on_low_remaining_weight() {
 	let (code, _hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 
 		let addr = Contracts::bare_instantiate(
 			ALICE,
@@ -2563,7 +2568,7 @@ fn lazy_removal_does_not_use_all_weight() {
 
 	let (trie, vals, weight_per_key) = ext.execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 
 		let addr = Contracts::bare_instantiate(
 			ALICE,
@@ -2651,7 +2656,7 @@ fn deletion_queue_ring_buffer_overflow() {
 
 	ext.execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 		let mut tries: Vec<child::ChildInfo> = vec![];
 
 		// add 3 contracts to the deletion queue
@@ -2710,7 +2715,7 @@ fn deletion_queue_ring_buffer_overflow() {
 fn refcounter() {
 	let (wasm, code_hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 
 		// Create two contracts with the same code and check that they do in fact share it.
@@ -2807,7 +2812,7 @@ fn debug_message_works() {
 	let (wasm, _code_hash) = compile_module::<Test>("debug_message_works").unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let addr = Contracts::bare_instantiate(
 			ALICE,
 			30_000,
@@ -2844,7 +2849,7 @@ fn debug_message_logging_disabled() {
 	let (wasm, _code_hash) = compile_module::<Test>("debug_message_logging_disabled").unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let addr = Contracts::bare_instantiate(
 			ALICE,
 			30_000,
@@ -2883,7 +2888,7 @@ fn debug_message_invalid_utf8() {
 	let (wasm, _code_hash) = compile_module::<Test>("debug_message_invalid_utf8").unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let addr = Contracts::bare_instantiate(
 			ALICE,
 			30_000,
@@ -2920,7 +2925,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 	let (callee_code, _callee_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 
 		let addr_caller = Contracts::bare_instantiate(
 			ALICE,
@@ -3016,8 +3021,8 @@ fn gas_estimation_call_runtime() {
 	let (callee_code, _callee_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
-		let _ = Balances::deposit_creating(&CHARLIE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&CHARLIE, 1000 * min_balance);
 
 		let addr_caller = Contracts::bare_instantiate(
 			ALICE,
@@ -3094,8 +3099,8 @@ fn call_runtime_reentrancy_guarded() {
 	let (callee_code, _callee_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
-		let _ = Balances::deposit_creating(&CHARLIE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&CHARLIE, 1000 * min_balance);
 
 		let addr_caller = Contracts::bare_instantiate(
 			ALICE,
@@ -3161,7 +3166,7 @@ fn ecdsa_recover() {
 	let (wasm, _code_hash) = compile_module::<Test>("ecdsa_recover").unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Instantiate the ecdsa_recover contract.
 		let addr = Contracts::bare_instantiate(
@@ -3225,7 +3230,7 @@ fn bare_instantiate_returns_events() {
 	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 
 		let result = Contracts::bare_instantiate(
 			ALICE,
@@ -3250,7 +3255,7 @@ fn bare_instantiate_does_not_return_events() {
 	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 
 		let result = Contracts::bare_instantiate(
 			ALICE,
@@ -3275,7 +3280,7 @@ fn bare_call_returns_events() {
 	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 
 		let addr = Contracts::bare_instantiate(
 			ALICE,
@@ -3316,7 +3321,7 @@ fn bare_call_does_not_return_events() {
 	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1000 * min_balance);
 
 		let addr = Contracts::bare_instantiate(
 			ALICE,
@@ -3357,7 +3362,7 @@ fn sr25519_verify() {
 	let (wasm, _code_hash) = compile_module::<Test>("sr25519_verify").unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Instantiate the sr25519_verify contract.
 		let addr = Contracts::bare_instantiate(
@@ -3428,7 +3433,7 @@ fn failed_deposit_charge_should_roll_back_call() {
 
 	let execute = || {
 		ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
-			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+			let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 			// Instantiate both contracts.
 			let addr_caller = Contracts::bare_instantiate(
@@ -3507,7 +3512,7 @@ fn upload_code_works() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Drop previous events
 		initialize_block(2);
@@ -3525,21 +3530,15 @@ fn upload_code_works() {
 
 		assert_eq!(
 			System::events(),
-			vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
-						who: ALICE,
-						amount: deposit_expected,
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![code_hash],
-				},
-			]
+			vec![EventRecord {
+				phase: Phase::Initialization,
+				event: RuntimeEvent::Contracts(crate::Event::CodeStored {
+					code_hash,
+					deposit_held: deposit_expected,
+					uploader: ALICE
+				}),
+				topics: vec![code_hash],
+			},]
 		);
 	});
 }
@@ -3551,7 +3550,7 @@ fn upload_code_limit_too_low() {
 	let deposit_insufficient = deposit_expected.saturating_sub(1);
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Drop previous events
 		initialize_block(2);
@@ -3577,7 +3576,7 @@ fn upload_code_not_enough_balance() {
 	let deposit_insufficient = deposit_expected.saturating_sub(1);
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, deposit_insufficient);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, deposit_insufficient);
 
 		// Drop previous events
 		initialize_block(2);
@@ -3601,7 +3600,7 @@ fn remove_code_works() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Drop previous events
 		initialize_block(2);
@@ -3621,28 +3620,20 @@ fn remove_code_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
-						who: ALICE,
-						amount: deposit_expected,
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored {
+						code_hash,
+						deposit_held: deposit_expected,
+						uploader: ALICE
 					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
 					topics: vec![code_hash],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Unreserved {
-						who: ALICE,
-						amount: deposit_expected,
+					event: RuntimeEvent::Contracts(crate::Event::CodeRemoved {
+						code_hash,
+						deposit_released: deposit_expected,
+						remover: ALICE
 					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeRemoved { code_hash }),
 					topics: vec![code_hash],
 				},
 			]
@@ -3655,7 +3646,7 @@ fn remove_code_wrong_origin() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Drop previous events
 		initialize_block(2);
@@ -3676,21 +3667,15 @@ fn remove_code_wrong_origin() {
 
 		assert_eq!(
 			System::events(),
-			vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
-						who: ALICE,
-						amount: deposit_expected,
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![code_hash],
-				},
-			]
+			vec![EventRecord {
+				phase: Phase::Initialization,
+				event: RuntimeEvent::Contracts(crate::Event::CodeStored {
+					code_hash,
+					deposit_held: deposit_expected,
+					uploader: ALICE
+				}),
+				topics: vec![code_hash],
+			},]
 		);
 	});
 }
@@ -3700,7 +3685,7 @@ fn remove_code_in_use() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		assert_ok!(Contracts::instantiate_with_code(
 			RuntimeOrigin::signed(ALICE),
@@ -3729,7 +3714,7 @@ fn remove_code_not_found() {
 	let (_wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Drop previous events
 		initialize_block(2);
@@ -3747,7 +3732,7 @@ fn remove_code_not_found() {
 fn instantiate_with_zero_balance_works() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 
 		// Drop previous events
@@ -3784,15 +3769,11 @@ fn instantiate_with_zero_balance_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
-						who: ALICE,
-						amount: deposit_expected,
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored {
+						code_hash,
+						deposit_held: deposit_expected,
+						uploader: ALICE
 					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
 					topics: vec![code_hash],
 				},
 				EventRecord {
@@ -3860,7 +3841,7 @@ fn instantiate_with_zero_balance_works() {
 fn instantiate_with_below_existential_deposit_works() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 
 		// Drop previous events
@@ -3896,15 +3877,11 @@ fn instantiate_with_below_existential_deposit_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
-						who: ALICE,
-						amount: deposit_expected,
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored {
+						code_hash,
+						deposit_held: deposit_expected,
+						uploader: ALICE
 					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
 					topics: vec![code_hash],
 				},
 				EventRecord {
@@ -3981,7 +3958,7 @@ fn instantiate_with_below_existential_deposit_works() {
 fn storage_deposit_works() {
 	let (wasm, _code_hash) = compile_module::<Test>("multi_store").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let mut deposit = <Test as Config>::Currency::minimum_balance();
 
 		let addr = Contracts::bare_instantiate(
@@ -4120,7 +4097,7 @@ fn storage_deposit_callee_works() {
 	let (wasm_callee, _code_hash_callee) = compile_module::<Test>("store_call").unwrap();
 	const ED: u64 = 200;
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Create both contracts: Constructors do nothing.
 		let addr_caller = Contracts::bare_instantiate(
@@ -4177,7 +4154,7 @@ fn set_code_extrinsic() {
 	assert_ne!(code_hash, new_code_hash);
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		let addr = Contracts::bare_instantiate(
 			ALICE,
@@ -4261,12 +4238,15 @@ fn set_code_extrinsic() {
 #[test]
 fn slash_cannot_kill_account() {
 	let (wasm, _code_hash) = compile_module::<Test>("dummy").unwrap();
-	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+	const ED: u64 = 200;
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		let value = 700;
+		let balance_held = 500;
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		let addr = Contracts::bare_instantiate(
 			ALICE,
-			700,
+			value,
 			GAS_LIMIT,
 			None,
 			Code::Upload(wasm),
@@ -4282,25 +4262,28 @@ fn slash_cannot_kill_account() {
 		// Drop previous events
 		initialize_block(2);
 
-		// Try to destroy the account of the contract by slashing.
+		// We need to hold some balances in order to have something to slash. As slashing can only
+		// affect balances held under certain HoldReason.
+		<Test as Config>::Currency::hold(
+			&HoldReason::CodeUploadDepositReserve.into(),
+			&addr,
+			balance_held,
+		)
+		.unwrap();
+
+		assert_eq!(<Test as Config>::Currency::total_balance_on_hold(&addr), balance_held);
+
+		// Try to destroy the account of the contract by slashing the total balance.
 		// The account does not get destroyed because of the consumer reference.
 		// Slashing can for example happen if the contract takes part in staking.
 		let _ = <Test as Config>::Currency::slash(
+			&HoldReason::CodeUploadDepositReserve.into(),
 			&addr,
 			<Test as Config>::Currency::total_balance(&addr),
 		);
 
-		assert_eq!(
-			System::events(),
-			vec![EventRecord {
-				phase: Phase::Initialization,
-				event: RuntimeEvent::Balances(pallet_balances::Event::Slashed {
-					who: addr.clone(),
-					amount: 700, // slash didn't remove the minimum balance
-				}),
-				topics: vec![],
-			},]
-		);
+		// Slashing only removed the balance held.
+		assert_eq!(<Test as Config>::Currency::total_balance(&addr), value + ED - balance_held,);
 	});
 }
 
@@ -4309,7 +4292,7 @@ fn contract_reverted() {
 	let (wasm, code_hash) = compile_module::<Test>("return_with_data").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let flags = ReturnFlags::REVERT;
 		let buffer = [4u8, 8, 15, 16, 23, 42];
 		let input = (flags.bits(), buffer).encode();
@@ -4422,7 +4405,7 @@ fn contract_reverted() {
 #[test]
 fn code_rejected_error_works() {
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		let (wasm, _) = compile_module::<Test>("invalid_module").unwrap();
 		assert_noop!(
@@ -4515,7 +4498,7 @@ fn set_code_hash() {
 	let (new_wasm, new_code_hash) = compile_module::<Test>("new_set_code_hash_contract").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Instantiate the 'caller'
 		let contract_addr = Contracts::bare_instantiate(
@@ -4619,7 +4602,7 @@ fn storage_deposit_limit_is_enforced() {
 	let ed = 200;
 	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
 	ExtBuilder::default().existential_deposit(ed).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 
 		// Setting insufficient storage_deposit should fail.
@@ -4712,7 +4695,7 @@ fn deposit_limit_in_nested_calls() {
 		compile_module::<Test>("create_storage_and_call").unwrap();
 	let (wasm_callee, _code_hash_callee) = compile_module::<Test>("store_call").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Create both contracts: Constructors do nothing.
 		let addr_caller = Contracts::bare_instantiate(
@@ -4821,7 +4804,7 @@ fn deposit_limit_in_nested_calls() {
 			<Error<Test>>::StorageDepositLimitExhausted,
 		);
 
-		let _ = Balances::make_free_balance_be(&ALICE, 1_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000);
 
 		// Require more than the sender's balance.
 		// We don't set a special limit for the nested call.
@@ -4858,8 +4841,8 @@ fn deposit_limit_in_nested_instantiate() {
 	let (wasm_callee, code_hash_callee) = compile_module::<Test>("store_deploy").unwrap();
 	const ED: u64 = 5;
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-		let _ = Balances::deposit_creating(&BOB, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&BOB, 1_000_000);
 		// Create caller contract
 		let addr_caller = Contracts::bare_instantiate(
 			ALICE,
@@ -5008,9 +4991,11 @@ fn deposit_limit_in_nested_instantiate() {
 #[test]
 fn deposit_limit_honors_liquidity_restrictions() {
 	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
-	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-		let _ = Balances::deposit_creating(&BOB, 1_000);
+	const ED: u64 = 200;
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		let bobs_balance = 1_000;
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&BOB, bobs_balance);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 
 		// Instantiate the BOB contract.
@@ -5033,8 +5018,13 @@ fn deposit_limit_honors_liquidity_restrictions() {
 		assert_eq!(get_contract(&addr).total_deposit(), min_balance);
 		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance);
 
-		// check that the lock ins honored
-		Balances::set_lock([0; 8], &BOB, 1_000, WithdrawReasons::TRANSFER);
+		// check that the hold is honored
+		<Test as Config>::Currency::hold(
+			&HoldReason::CodeUploadDepositReserve.into(),
+			&BOB,
+			bobs_balance - ED,
+		)
+		.unwrap();
 		assert_err_ignore_postinfo!(
 			Contracts::call(
 				RuntimeOrigin::signed(BOB),
@@ -5046,7 +5036,7 @@ fn deposit_limit_honors_liquidity_restrictions() {
 			),
 			<Error<Test>>::StorageDepositNotEnoughFunds,
 		);
-		assert_eq!(Balances::free_balance(&BOB), 1_000);
+		assert_eq!(<Test as Config>::Currency::free_balance(&BOB), ED);
 	});
 }
 
@@ -5054,8 +5044,8 @@ fn deposit_limit_honors_liquidity_restrictions() {
 fn deposit_limit_honors_existential_deposit() {
 	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-		let _ = Balances::deposit_creating(&BOB, 1_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&BOB, 1_000);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 
 		// Instantiate the BOB contract.
@@ -5090,7 +5080,7 @@ fn deposit_limit_honors_existential_deposit() {
 			),
 			<Error<Test>>::StorageDepositNotEnoughFunds,
 		);
-		assert_eq!(Balances::free_balance(&BOB), 1_000);
+		assert_eq!(<Test as Config>::Currency::free_balance(&BOB), 1_000);
 	});
 }
 
@@ -5098,8 +5088,8 @@ fn deposit_limit_honors_existential_deposit() {
 fn deposit_limit_honors_min_leftover() {
 	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-		let _ = Balances::deposit_creating(&BOB, 1_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&BOB, 1_000);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 
 		// Instantiate the BOB contract.
@@ -5134,7 +5124,7 @@ fn deposit_limit_honors_min_leftover() {
 			),
 			<Error<Test>>::StorageDepositNotEnoughFunds,
 		);
-		assert_eq!(Balances::free_balance(&BOB), 1_000);
+		assert_eq!(<Test as Config>::Currency::free_balance(&BOB), 1_000);
 	});
 }
 
@@ -5143,7 +5133,7 @@ fn cannot_instantiate_indeterministic_code() {
 	let (wasm, code_hash) = compile_module::<Test>("float_instruction").unwrap();
 	let (caller_wasm, _) = compile_module::<Test>("instantiate_return_code").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Try to instantiate directly from code
 		assert_err_ignore_postinfo!(
@@ -5278,7 +5268,7 @@ fn cannot_set_code_indeterministic_code() {
 	let (wasm, code_hash) = compile_module::<Test>("float_instruction").unwrap();
 	let (caller_wasm, _) = compile_module::<Test>("set_code_hash").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Put the non deterministic contract on-chain
 		assert_ok!(Contracts::upload_code(
@@ -5328,7 +5318,7 @@ fn delegate_call_indeterministic_code() {
 	let (wasm, code_hash) = compile_module::<Test>("float_instruction").unwrap();
 	let (caller_wasm, _) = compile_module::<Test>("delegate_call_simple").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		// Put the non deterministic contract on-chain
 		assert_ok!(Contracts::upload_code(
@@ -5439,7 +5429,7 @@ fn add_remove_delegate_dependency_works() {
 
 	const ED: u64 = 2000;
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = Balances::set_balance(&ALICE, 1_000_000);
 
 		// Instantiate with add_delegate_dependency should fail since the code is not yet on chain.
 		assert_err!(
@@ -5544,7 +5534,7 @@ fn native_dependency_deposit_works() {
 	// Test with both existing and uploaded code
 	for code in [Code::Upload(wasm.clone()), Code::Existing(code_hash)] {
 		ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
-			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+			let _ = Balances::set_balance(&ALICE, 1_000_000);
 			let lockup_deposit_percent = CodeHashLockupDepositPercent::get();
 			let per_byte = DepositPerByte::get();
 			let per_item = DepositPerItem::get();
@@ -5629,7 +5619,7 @@ fn reentrance_count_works_with_call() {
 	let (wasm, _code_hash) = compile_module::<Test>("reentrance_count_call").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		let contract_addr = Contracts::bare_instantiate(
 			ALICE,
@@ -5670,7 +5660,7 @@ fn reentrance_count_works_with_delegated_call() {
 	let (wasm, code_hash) = compile_module::<Test>("reentrance_count_delegated_call").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		let contract_addr = Contracts::bare_instantiate(
 			ALICE,
@@ -5713,7 +5703,7 @@ fn account_reentrance_count_works() {
 		compile_module::<Test>("reentrance_count_call").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		let contract_addr = Contracts::bare_instantiate(
 			ALICE,
@@ -5829,7 +5819,7 @@ fn root_can_call() {
 	let (wasm, _) = compile_module::<Test>("dummy").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 
 		let addr = Contracts::bare_instantiate(
 			ALICE,

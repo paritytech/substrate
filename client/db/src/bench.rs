@@ -32,8 +32,8 @@ use sp_runtime::{
 	StateVersion, Storage,
 };
 use sp_state_machine::{
-	backend::Backend as StateBackend, ChildStorageCollection, DBValue, IterArgs, StorageCollection,
-	StorageIterator, StorageKey, StorageValue,
+	backend::Backend as StateBackend, BackendTransaction, ChildStorageCollection, DBValue,
+	IterArgs, StorageCollection, StorageIterator, StorageKey, StorageValue,
 };
 use sp_trie::{
 	cache::{CacheSize, SharedTrieCache},
@@ -343,7 +343,6 @@ fn state_err() -> String {
 
 impl<B: BlockT> StateBackend<HashingFor<B>> for BenchmarkingState<B> {
 	type Error = <DbState<B> as StateBackend<HashingFor<B>>>::Error;
-	type Transaction = <DbState<B> as StateBackend<HashingFor<B>>>::Transaction;
 	type TrieBackendStorage = <DbState<B> as StateBackend<HashingFor<B>>>::TrieBackendStorage;
 	type RawIter = RawIter<B>;
 
@@ -423,7 +422,7 @@ impl<B: BlockT> StateBackend<HashingFor<B>> for BenchmarkingState<B> {
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, Self::Transaction) {
+	) -> (B::Hash, BackendTransaction<HashingFor<B>>) {
 		self.state
 			.borrow()
 			.as_ref()
@@ -435,7 +434,7 @@ impl<B: BlockT> StateBackend<HashingFor<B>> for BenchmarkingState<B> {
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, Self::Transaction) {
+	) -> (B::Hash, bool, BackendTransaction<HashingFor<B>>) {
 		self.state
 			.borrow()
 			.as_ref()
@@ -460,7 +459,7 @@ impl<B: BlockT> StateBackend<HashingFor<B>> for BenchmarkingState<B> {
 	fn commit(
 		&self,
 		storage_root: <HashingFor<B> as Hasher>::Out,
-		mut transaction: Self::Transaction,
+		mut transaction: BackendTransaction<HashingFor<B>>,
 		main_storage_changes: StorageCollection,
 		child_storage_changes: ChildStorageCollection,
 	) -> Result<(), Self::Error> {

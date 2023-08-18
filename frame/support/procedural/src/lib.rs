@@ -238,8 +238,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// * Weights no longer need to be specified on every `#[pallet::call]` declaration. By default, dev
 ///   mode pallets will assume a weight of zero (`0`) if a weight is not specified. This is
 ///   equivalent to specifying `#[weight(0)]` on all calls that do not specify a weight.
-/// * Call index no longer needs to be specified on every `#[pallet::call]` declaration. By default,
-///   dev mode pallets will assume a call index based on the order of the call.
+/// * Call indices no longer need to be specified on every `#[pallet::call]` declaration. By
+///   default, dev mode pallets will assume a call index based on the order of the call.
 /// * All storages are marked as unbounded, meaning you do not need to implement `MaxEncodedLen` on
 ///   storage types. This is equivalent to specifying `#[pallet::unbounded]` on all storage type
 ///   definitions.
@@ -547,8 +547,8 @@ pub fn __create_tt_macro(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
-	storage_alias::storage_alias(input.into())
+pub fn storage_alias(attributes: TokenStream, input: TokenStream) -> TokenStream {
+	storage_alias::storage_alias(attributes.into(), input.into())
 		.unwrap_or_else(|r| r.into_compile_error())
 		.into()
 }

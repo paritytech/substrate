@@ -42,6 +42,7 @@ k256 = { version = "0.13.1", default-features = false, features = ["ecdsa"] }
 environmental = { version = "1.1.4", default-features = false }
 sp-genesis-builder = { version = "0.1.0", default-features=false, path = "../../primitives/genesis-builder" }
 serde_json = { version = "1.0.85", default-features = false, features = ["alloc"] }
+docify = "0.2.1"
 
 aquamarine = { version = "0.3.2" }
 
@@ -73,7 +74,9 @@ std = [
 	"frame-support-procedural/std",
 	"log/std",
 	"environmental/std",
-	"sp-genesis-builder/std"
+	"sp-genesis-builder/std",
+	"frame-system/std",
+	"sp-debug-derive/std"
 ]
 runtime-benchmarks = [
 	"frame-system/runtime-benchmarks",
@@ -81,7 +84,9 @@ runtime-benchmarks = [
 	"sp-staking/runtime-benchmarks"
 ]
 try-runtime = [
-	"sp-debug-derive/force-debug"
+	"sp-debug-derive/force-debug",
+	"frame-system/try-runtime",
+	"sp-runtime/try-runtime"
 ]
 experimental = []
 # By default some types have documentation, `no-metadata-docs` allows to reduce the documentation

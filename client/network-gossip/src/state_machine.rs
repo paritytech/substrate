@@ -19,7 +19,7 @@
 use crate::{MessageIntent, Network, ValidationResult, Validator, ValidatorContext};
 
 use ahash::AHashSet;
-use libp2p_identity::PeerId;
+use libp2p::PeerId;
 use schnellru::{ByLength, LruMap};
 
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
@@ -521,8 +521,8 @@ impl Metrics {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::multiaddr::Multiaddr;
 	use futures::prelude::*;
-	use multiaddr::Multiaddr;
 	use sc_network::{
 		config::MultiaddrWithPeerId, event::Event, NetworkBlock, NetworkEventStream,
 		NetworkNotification, NetworkPeers, NotificationSenderError,
@@ -640,7 +640,13 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {}
+		fn remove_peers_from_reserved_set(
+			&self,
+			_protocol: ProtocolName,
+			_peers: Vec<PeerId>,
+		) -> Result<(), String> {
+			unimplemented!();
+		}
 
 		fn sync_num_connected(&self) -> usize {
 			unimplemented!();

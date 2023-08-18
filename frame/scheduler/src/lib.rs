@@ -15,37 +15,63 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Scheduler
-//! A Pallet for scheduling dispatches.
+//! > Made with *Substrate*, for *Polkadot*.
 //!
-//! - [`Config`]
-//! - [`Call`]
-//! - [`Pallet`]
+//! [![github]](https://github.com/paritytech/substrate/frame/fast-unstake) -
+//! [![polkadot]](https://polkadot.network)
+//!
+//! [polkadot]: https://img.shields.io/badge/polkadot-E6007A?style=for-the-badge&logo=polkadot&logoColor=white
+//! [github]: https://img.shields.io/badge/github-8da0cb?style=for-the-badge&labelColor=555555&logo=github
+//!
+//! # Scheduler Pallet
+//!
+//! A Pallet for scheduling runtime calls.
 //!
 //! ## Overview
 //!
-//! This Pallet exposes capabilities for scheduling dispatches to occur at a
-//! specified block number or at a specified period. These scheduled dispatches
-//! may be named or anonymous and may be canceled.
+//! This Pallet exposes capabilities for scheduling runtime calls to occur at a specified block
+//! number or at a specified period. These scheduled runtime calls may be named or anonymous and may
+//! be canceled.
 //!
-//! **NOTE:** The scheduled calls will be dispatched with the default filter
-//! for the origin: namely `frame_system::Config::BaseCallFilter` for all origin
-//! except root which will get no filter. And not the filter contained in origin
-//! use to call `fn schedule`.
+//! __NOTE:__ Instead of using the filter contained in the origin to call `fn schedule`, scheduled
+//! runtime calls will be dispatched with the default filter for the origin: namely
+//! `frame_system::Config::BaseCallFilter` for all origin types (except root which will get no
+//! filter).
 //!
-//! If a call is scheduled using proxy or whatever mecanism which adds filter,
-//! then those filter will not be used when dispatching the schedule call.
+//! If a call is scheduled using proxy or whatever mechanism which adds filter, then those filter
+//! will not be used when dispatching the schedule runtime call.
 //!
-//! ## Interface
+//! ### Examples
 //!
-//! ### Dispatchable Functions
+//! 1. Scheduling a runtime call at a specific block.
+#![doc = docify::embed!("src/tests.rs", basic_scheduling_works)]
 //!
-//! * `schedule` - schedule a dispatch, which may be periodic, to occur at a specified block and
-//!   with a specified priority.
-//! * `cancel` - cancel a scheduled dispatch, specified by block number and index.
-//! * `schedule_named` - augments the `schedule` interface with an additional `Vec<u8>` parameter
-//!   that can be used for identification.
-//! * `cancel_named` - the named complement to the cancel function.
+//! 2. Scheduling a preimage hash of a runtime call at a specifc block
+#![doc = docify::embed!("src/tests.rs", scheduling_with_preimages_works)]
+
+//!
+//! ## Pallet API
+//!
+//! See the [`pallet`] module for more information about the interfaces this pallet exposes,
+//! including its configuration trait, dispatchables, storage items, events and errors.
+//!
+//! ## Warning
+//!
+//! This Pallet executes all scheduled runtime calls in the [`on_initialize`] hook. Do not execute
+//! any runtime calls which should not be considered mandatory.
+//!
+//! Please be aware that any scheduled runtime calls executed in a future block may __fail__ or may
+//! result in __undefined behavior__ since the runtime could have upgraded between the time of
+//! scheduling and execution. For example, the runtime upgrade could have:
+//!
+//! * Modified the implementation of the runtime call (runtime specification upgrade).
+//!     * Could lead to undefined behavior.
+//! * Removed or changed the ordering/index of the runtime call.
+//!     * Could fail due to the runtime call index not being part of the `Call`.
+//!     * Could lead to undefined behavior, such as executing another runtime call with the same
+//!       index.
+//!
+//! [`on_initialize`]: frame_support::traits::Hooks::on_initialize
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]

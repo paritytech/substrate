@@ -28,7 +28,7 @@ use futures::{
 	channel::mpsc::{channel, Receiver, Sender},
 	prelude::*,
 };
-use libp2p_identity::PeerId;
+use libp2p::PeerId;
 use log::trace;
 use prometheus_endpoint::Registry;
 use sp_runtime::traits::Block as BlockT;
@@ -238,10 +238,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 							SyncEvent::PeerConnected(remote) =>
 								this.network.add_set_reserved(remote, this.protocol.clone()),
 							SyncEvent::PeerDisconnected(remote) =>
-								this.network.remove_peers_from_reserved_set(
-									this.protocol.clone(),
-									vec![remote],
-								),
+								this.network.remove_set_reserved(remote, this.protocol.clone()),
 						},
 						// The sync event stream closed. Do the same for [`GossipValidator`].
 						Poll::Ready(None) => {
@@ -330,13 +327,12 @@ impl<B: BlockT> futures::future::FusedFuture for GossipEngine<B> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{ValidationResult, ValidatorContext};
+	use crate::{multiaddr::Multiaddr, ValidationResult, ValidatorContext};
 	use futures::{
 		channel::mpsc::{unbounded, UnboundedSender},
 		executor::{block_on, block_on_stream},
 		future::poll_fn,
 	};
-	use multiaddr::Multiaddr;
 	use quickcheck::{Arbitrary, Gen, QuickCheck};
 	use sc_network::{
 		config::MultiaddrWithPeerId, NetworkBlock, NetworkEventStream, NetworkNotification,
@@ -414,7 +410,13 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {}
+		fn remove_peers_from_reserved_set(
+			&self,
+			_protocol: ProtocolName,
+			_peers: Vec<PeerId>,
+		) -> Result<(), String> {
+			unimplemented!();
+		}
 
 		fn sync_num_connected(&self) -> usize {
 			unimplemented!();

@@ -68,8 +68,10 @@ cargo-clippy:
     - .docker-env
     - .test-refs
   script:
+    - echo $RUSTFLAGS
+    - cargo version && cargo clippy --version
     - rusty-cachier snapshot create
-    - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo clippy --locked --all-targets
+    - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo clippy --locked --all-targets --workspace
     - rusty-cachier cache upload
 
 cargo-check-benches:
@@ -221,7 +223,7 @@ test-linux-stable:
       --locked
       --release
       --verbose
-      --features runtime-benchmarks,try-runtime,experimental
+      --features runtime-benchmarks,try-runtime,experimental,unsafe-debug
       --manifest-path ./bin/node/cli/Cargo.toml
       --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
     # run runtime-api tests with `enable-staging-api` feature

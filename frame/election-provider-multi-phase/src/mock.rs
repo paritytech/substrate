@@ -18,9 +18,8 @@
 use super::*;
 use crate::{self as multi_phase, unsigned::MinerConfig};
 use frame_election_provider_support::{
-	data_provider,
-	onchain::{self},
-	ElectionDataProvider, NposSolution, SequentialPhragmen,
+	bounds::{DataProviderBounds, ElectionBounds},
+	data_provider, onchain, ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
@@ -300,7 +299,9 @@ parameter_types! {
 
 	#[derive(Debug)]
 	pub static MaxWinners: u32 = 200;
-
+	// `ElectionBounds` and `OnChainElectionsBounds` are defined separately to set them independently in the tests.
+	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::default().build();
+	pub static OnChainElectionsBounds: ElectionBounds = ElectionBoundsBuilder::default().build();
 	pub static EpochLength: u64 = 30;
 	pub static OnChainFallback: bool = true;
 }
@@ -312,8 +313,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = StakingMock;
 	type WeightInfo = ();
 	type MaxWinners = MaxWinners;
-	type VotersBound = ConstU32<{ u32::MAX }>;
-	type TargetsBound = ConstU32<{ u32::MAX }>;
+	type Bounds = OnChainElectionsBounds;
 }
 
 pub struct MockFallback;
@@ -327,12 +327,15 @@ impl ElectionProviderBase for MockFallback {
 
 impl InstantElectionProvider for MockFallback {
 	fn instant_elect(
-		max_voters: Option<u32>,
-		max_targets: Option<u32>,
+		voters_bounds: DataProviderBounds,
+		targets_bounds: DataProviderBounds,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		if OnChainFallback::get() {
-			onchain::OnChainExecution::<OnChainSeqPhragmen>::instant_elect(max_voters, max_targets)
-				.map_err(|_| "onchain::OnChainExecution failed.")
+			onchain::OnChainExecution::<OnChainSeqPhragmen>::instant_elect(
+				voters_bounds,
+				targets_bounds,
+			)
+			.map_err(|_| "onchain::OnChainExecution failed.")
 		} else {
 			Err("NoFallback.")
 		}
@@ -404,11 +407,10 @@ impl crate::Config for Runtime {
 	type GovernanceFallback =
 		frame_election_provider_support::onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-	type MaxElectingVoters = MaxElectingVoters;
-	type MaxElectableTargets = MaxElectableTargets;
 	type MaxWinners = MaxWinners;
 	type MinerConfig = Self;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
+	type ElectionBounds = ElectionsBounds;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
@@ -436,11 +438,11 @@ impl ElectionDataProvider for StakingMock {
 	type AccountId = AccountId;
 	type MaxVotesPerVoter = MaxNominations;
 
-	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+	fn electable_targets(bounds: DataProviderBounds) -> data_provider::Result<Vec<AccountId>> {
 		let targets = Targets::get();
 
 		if !DataProviderAllowBadData::get() &&
-			maybe_max_len.map_or(false, |max_len| targets.len() > max_len)
+			bounds.count.map_or(false, |max_len| targets.len() > max_len.0 as usize)
 		{
 			return Err("Targets too big")
 		}
@@ -448,13 +450,12 @@ impl ElectionDataProvider for StakingMock {
 		Ok(targets)
 	}
 
-	fn electing_voters(
-		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<VoterOf<Runtime>>> {
+	fn electing_voters(bounds: DataProviderBounds) -> data_provider::Result<Vec<VoterOf<Runtime>>> {
 		let mut voters = Voters::get();
+
 		if !DataProviderAllowBadData::get() {
-			if let Some(max_len) = maybe_max_len {
-				voters.truncate(max_len)
+			if let Some(max_len) = bounds.count {
+				voters.truncate(max_len.0 as usize)
 			}
 		}
 
