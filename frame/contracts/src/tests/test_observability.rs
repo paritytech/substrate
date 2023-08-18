@@ -1,4 +1,4 @@
-use crate::call_observability::{CallObserver, CallSpan, ExportedFunction};
+use crate::call_observability::{CallSpan, ExportedFunction};
 
 use super::*;
 use frame_support::traits::Currency;
@@ -18,19 +18,18 @@ thread_local! {
 	static DEBUG_EXECUTION_TRACE: RefCell<Vec<DebugFrame>> = RefCell::new(Vec::new());
 }
 
-pub struct TestDebugger;
-pub struct TestCallSpan {
+pub struct TestDebugger {
 	code_hash: CodeHash<Test>,
 	call: ExportedFunction,
 	input: Vec<u8>,
 }
 
-impl CallObserver<Test, TestCallSpan> for TestDebugger {
+impl CallSpan<Test> for TestDebugger {
 	fn before_call(
 		code_hash: &CodeHash<Test>,
 		entry_point: ExportedFunction,
 		input_data: &[u8],
-	) -> TestCallSpan {
+	) -> TestDebugger {
 		DEBUG_EXECUTION_TRACE.with(|d| {
 			d.borrow_mut().push(DebugFrame {
 				code_hash: code_hash.clone(),
@@ -39,11 +38,9 @@ impl CallObserver<Test, TestCallSpan> for TestDebugger {
 				result: None,
 			})
 		});
-		TestCallSpan { code_hash: code_hash.clone(), call: entry_point, input: input_data.to_vec() }
+		TestDebugger { code_hash: code_hash.clone(), call: entry_point, input: input_data.to_vec() }
 	}
-}
 
-impl CallSpan for TestCallSpan {
 	fn after_call(self, output: &ExecReturnValue) {
 		DEBUG_EXECUTION_TRACE.with(|d| {
 			d.borrow_mut().push(DebugFrame {

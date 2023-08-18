@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	call_observability::{CallObserver, CallSpan},
+	call_observability::CallSpan,
 	gas::GasMeter,
 	storage::{self, meter::Diff, WriteOutcome},
 	BalanceOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo, ContractInfoOf,
