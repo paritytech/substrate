@@ -15,11 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::construct_runtime::parse::{Pallet, PalletPart, PalletPath};
+use crate::construct_runtime::parse::Pallet;
 use quote::ToTokens;
 use std::collections::{HashMap, HashSet};
 use syn::{
-	punctuated::Punctuated, spanned::Spanned, token, Attribute, Error, GenericArgument, Ident,
+	spanned::Spanned, Attribute, Error, GenericArgument, Ident,
 };
 
 #[derive(Debug, Clone)]
@@ -134,74 +134,5 @@ impl PalletDeclaration {
 		let index = Some(index as u8);
 
 		Ok(Self { name, path, instance, index, attrs: item.attrs.clone() })
-	}
-}
-
-impl Pallet {
-	pub fn try_from(
-		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &syn::Field,
-		bounds: &Punctuated<syn::TypeParamBound, token::Plus>,
-	) -> syn::Result<Self> {
-		let name = item
-			.ident
-			.clone()
-			.ok_or(Error::new(attr_span, "Invalid pallet declaration, expected a named field"))?;
-
-		let mut pallet_path = None;
-		let mut pallet_parts = vec![];
-
-		for (index, bound) in bounds.into_iter().enumerate() {
-			if let syn::TypeParamBound::Trait(syn::TraitBound { path, .. }) = bound {
-				if index == 0 {
-					pallet_path = Some(PalletPath { inner: path.clone() });
-				} else {
-					let pallet_part = syn::parse2::<PalletPart>(bound.into_token_stream())?;
-					pallet_parts.push(pallet_part);
-				}
-			} else {
-				return Err(Error::new(
-					attr_span,
-					"Invalid pallet declaration, expected a path or a trait object",
-				))
-			};
-		}
-
-		let mut path = pallet_path.ok_or(Error::new(
-			attr_span,
-			"Invalid pallet declaration, expected a path or a trait object",
-		))?;
-
-		let mut instance = None;
-		// Todo: revisit this
-		if let Some(segment) = path.inner.segments.iter_mut().find(|seg| !seg.arguments.is_empty())
-		{
-			if let syn::PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments {
-				args,
-				..
-			}) = segment.arguments.clone()
-			{
-				if let Some(GenericArgument::Type(syn::Type::Path(arg_path))) = args.first() {
-					instance = Some(syn::Ident::new(
-						&arg_path.to_token_stream().to_string(),
-						arg_path.span(),
-					));
-					segment.arguments = syn::PathArguments::None;
-				}
-			}
-		}
-
-		let cfg_pattern = vec![];
-
-		Ok(Pallet {
-			is_expanded: true,
-			name,
-			index: index as u8,
-			path,
-			instance,
-			cfg_pattern,
-			pallet_parts,
-		})
 	}
 }
