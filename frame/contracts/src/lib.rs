@@ -354,8 +354,9 @@ pub mod pallet {
 		/// ```
 		type Migrations: MigrateSequence;
 
-		/// Type that provides debug handling for the contract execution process.
-		type Debug: CallSpan<Self>;
+		/// TraceableCallSpan defines methods to capture and trace contract calls
+		/// for improved observability.
+		type TraceableCallSpan: CallSpan<Self>;
 	}
 
 	#[pallet::hooks]

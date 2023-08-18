@@ -18,18 +18,18 @@ thread_local! {
 	static DEBUG_EXECUTION_TRACE: RefCell<Vec<DebugFrame>> = RefCell::new(Vec::new());
 }
 
-pub struct TestDebugger {
+pub struct TestCallSpan {
 	code_hash: CodeHash<Test>,
 	call: ExportedFunction,
 	input: Vec<u8>,
 }
 
-impl CallSpan<Test> for TestDebugger {
-	fn before_call(
+impl CallSpan<Test> for TestCallSpan {
+	fn new(
 		code_hash: &CodeHash<Test>,
 		entry_point: ExportedFunction,
 		input_data: &[u8],
-	) -> TestDebugger {
+	) -> TestCallSpan {
 		DEBUG_EXECUTION_TRACE.with(|d| {
 			d.borrow_mut().push(DebugFrame {
 				code_hash: code_hash.clone(),
@@ -38,7 +38,7 @@ impl CallSpan<Test> for TestDebugger {
 				result: None,
 			})
 		});
-		TestDebugger { code_hash: code_hash.clone(), call: entry_point, input: input_data.to_vec() }
+		TestCallSpan { code_hash: code_hash.clone(), call: entry_point, input: input_data.to_vec() }
 	}
 
 	fn after_call(self, output: &ExecReturnValue) {

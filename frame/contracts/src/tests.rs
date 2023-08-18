@@ -19,7 +19,7 @@ mod pallet_dummy;
 mod test_observability;
 
 use self::{
-	test_observability::TestDebugger,
+	test_observability::TestCallSpan,
 	test_utils::{ensure_stored, expected_deposit, hash},
 };
 use crate::{
@@ -482,7 +482,7 @@ impl Config for Test {
 	type Migrations = crate::migration::codegen::BenchMigrations;
 	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
 	type MaxDelegateDependencies = MaxDelegateDependencies;
-	type Debug = TestDebugger;
+	type TraceableCallSpan = TestCallSpan;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);

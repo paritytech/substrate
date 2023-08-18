@@ -908,7 +908,7 @@ where
 			self.initial_transfer()?;
 
 			let code_hash = *executable.code_hash();
-			let call_span = T::Debug::before_call(&code_hash, entry_point, &input_data);
+			let call_span = T::TraceableCallSpan::new(&code_hash, entry_point, &input_data);
 
 			// Call into the Wasm blob.
 			let output = executable
