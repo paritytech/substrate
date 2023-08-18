@@ -295,6 +295,7 @@ mod runtime {
 		Sudo: pallet_sudo,
 		// Include the custom logic from the pallet-template in the runtime.
 		#[frame::pallet_index(8)]
+		#[frame::disable_call]
 		TemplateModule: pallet_template,
 	}
 }

@@ -19,7 +19,7 @@ use crate::{
 	construct_runtime::parse::Pallet, construct_runtime_v2::parse::pallet_decl::PalletDeclaration,
 };
 use std::collections::{HashMap, HashSet};
-use syn::{spanned::Spanned, Ident, Error};
+use syn::{spanned::Spanned, Ident};
 
 #[derive(Debug, Clone)]
 pub enum AllPalletsDeclaration {
@@ -52,7 +52,7 @@ impl AllPalletsDeclaration {
 		};
 
 		let name = item.ident.clone();
-		
+
 		let mut indices = HashMap::new();
 		let mut names = HashMap::new();
 
@@ -68,8 +68,14 @@ impl AllPalletsDeclaration {
 					pallet_decls.push(pallet_decl);
 				},
 				syn::Type::TraitObject(syn::TypeTraitObject { bounds, .. }) => {
-					let index_u8: u8 = index.try_into().map_err(|_| Error::new(attr_span, "Invalid pallet index, cannot fit in u8"))?;
-					let pallet = Pallet::try_from(attr_span, last_index.unwrap_or(index_u8), item, &bounds)?;
+					let current_index = match last_index {
+						Some(index) => index.checked_add(1).ok_or_else(|| {
+							let msg = "Pallet index doesn't fit into u8, index is 256";
+							syn::Error::new(name.span(), msg)
+						}),
+						None => Ok(0),
+					}?;
+					let pallet = Pallet::try_from(attr_span, current_index, item, &bounds)?;
 
 					if let Some(used_pallet) = indices.insert(pallet.index, pallet.name.clone()) {
 						let msg = format!(
@@ -81,9 +87,10 @@ impl AllPalletsDeclaration {
 						return Err(err)
 					}
 
-					if let Some(used_pallet) = names.insert(pallet.name.clone(), pallet.name.span()) {
+					if let Some(used_pallet) = names.insert(pallet.name.clone(), pallet.name.span())
+					{
 						let msg = "Two pallets with the same name!";
-		
+
 						let mut err = syn::Error::new(used_pallet, &msg);
 						err.combine(syn::Error::new(pallet.name.span(), &msg));
 						return Err(err)

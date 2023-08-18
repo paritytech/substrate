@@ -15,23 +15,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::construct_runtime::parse::{Pallet, PalletPart, PalletPath};
+use crate::construct_runtime::parse::{Pallet, PalletPart, PalletPartKeyword, PalletPath};
 use quote::ToTokens;
 use syn::{punctuated::Punctuated, spanned::Spanned, token, Error};
 
 mod keyword {
 	syn::custom_keyword!(frame);
 	syn::custom_keyword!(pallet_index);
+	syn::custom_keyword!(disable_call);
 }
 
 enum PalletAttr {
 	PalletIndex(proc_macro2::Span, u8),
+	DisableCall(proc_macro2::Span),
 }
 
 impl PalletAttr {
 	fn span(&self) -> proc_macro2::Span {
 		match self {
 			Self::PalletIndex(span, _) => *span,
+			Self::DisableCall(span) => *span,
 		}
 	}
 }
@@ -55,15 +58,15 @@ impl syn::parse::Parse for PalletAttr {
 				return Err(syn::Error::new(pallet_index.span(), msg))
 			}
 			Ok(PalletAttr::PalletIndex(pallet_index.span(), pallet_index.base10_parse()?))
+		} else if lookahead.peek(keyword::disable_call) {
+			Ok(PalletAttr::DisableCall(content.parse::<keyword::disable_call>()?.span()))
 		} else {
 			Err(lookahead.error())
 		}
 	}
 }
 
-fn take_first_item_pallet_attr<Attr>(
-	item: &mut syn::Field,
-) -> syn::Result<Option<Attr>>
+fn take_first_item_pallet_attr<Attr>(item: &mut syn::Field) -> syn::Result<Option<Attr>>
 where
 	Attr: syn::parse::Parse,
 {
@@ -92,10 +95,12 @@ impl Pallet {
 			.ok_or(Error::new(attr_span, "Invalid pallet declaration, expected a named field"))?;
 
 		let mut pallet_index = index;
+		let mut disable_call = false;
 
 		while let Some(pallet_attr) = take_first_item_pallet_attr::<PalletAttr>(item)? {
 			match pallet_attr {
 				PalletAttr::PalletIndex(_, index) => pallet_index = index,
+				PalletAttr::DisableCall(_) => disable_call = true,
 			}
 		}
 
@@ -140,6 +145,20 @@ impl Pallet {
 					segment.arguments = syn::PathArguments::None;
 				}
 			}
+		}
+
+		if disable_call {
+			pallet_parts =
+				pallet_parts
+					.into_iter()
+					.filter(|part| {
+						if let PalletPartKeyword::Call(_) = part.keyword {
+							false
+						} else {
+							true
+						}
+					})
+					.collect();
 		}
 
 		let cfg_pattern = vec![];
