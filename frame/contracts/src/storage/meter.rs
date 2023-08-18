@@ -82,8 +82,6 @@ pub trait Ext<T: Config> {
 	/// around depending on whether `amount` constitutes a `Charge` or a `Refund`.
 	/// It should be used in combination with `check_limit` to check that no more balance than this
 	/// limit is ever charged.
-	///
-	/// `reason` indicates the [`ChargeReason`] that originated the charge.
 	fn charge(
 		origin: &T::AccountId,
 		contract: &T::AccountId,
