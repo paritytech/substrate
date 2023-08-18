@@ -2010,7 +2010,7 @@ pub type VersionCheckedMigrateV1ToV2<T, I> =
 // All migrations executed on runtime upgrade as a nested tuple of types implementing
 // `OnRuntimeUpgrade`.
 type Migrations = (
-	pallet_nomination_pools::migration::v2::VersionCheckedMigrateV1ToV2<T, ()>,
+	VersionCheckedMigrateV1ToV2<T, ()>,
 );
 
 type EventRecord = frame_system::EventRecord<
