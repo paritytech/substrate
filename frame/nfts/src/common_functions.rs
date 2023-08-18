@@ -31,7 +31,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Collection::<T, I>::get(collection).map(|i| i.owner)
 	}
 
-	/// Validate the `data` was signed by `signer` and the `signature` is correct.
+	/// Validates the signature of the given data with the provided signer's account ID.
+	///
+	/// # Errors
+	///
+	/// This function returns a [`WrongSignature`](crate::Error::WrongSignature) error if the
+	/// signature is invalid or the verification process fails.
 	pub fn validate_signature(
 		data: &Vec<u8>,
 		signature: &T::OffchainSignature,

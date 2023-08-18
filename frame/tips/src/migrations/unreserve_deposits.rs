@@ -19,13 +19,64 @@
 //! pallet.
 
 use core::iter::Sum;
-use frame_support::traits::{OnRuntimeUpgrade, ReservableCurrency};
-use pallet_treasury::BalanceOf;
+use frame_support::{
+	pallet_prelude::OptionQuery,
+	storage_alias,
+	traits::{Currency, LockableCurrency, OnRuntimeUpgrade, ReservableCurrency},
+	weights::RuntimeDbWeight,
+	Parameter, Twox64Concat,
+};
 use sp_runtime::{traits::Zero, Saturating};
 use sp_std::collections::btree_map::BTreeMap;
 
 #[cfg(feature = "try-runtime")]
-use sp_std::vec::Vec;
+const LOG_TARGET: &str = "runtime::tips::migrations::unreserve_deposits";
+
+type BalanceOf<T, I> =
+	<<T as UnlockConfig<I>>::Currency as Currency<<T as UnlockConfig<I>>::AccountId>>::Balance;
+
+/// The configuration for [`UnreserveDeposits`].
+pub trait UnlockConfig<I>: 'static {
+	/// The hash used in the runtime.
+	type Hash: Parameter;
+	/// The account ID used in the runtime.
+	type AccountId: Parameter + Ord;
+	/// The currency type used in the runtime.
+	///
+	/// Should match the currency type previously used for the pallet, if applicable.
+	type Currency: LockableCurrency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
+	/// Base deposit to report a tip.
+	///
+	/// Should match the currency type previously used for the pallet, if applicable.
+	type TipReportDepositBase: sp_core::Get<BalanceOf<Self, I>>;
+	/// Deposit per byte to report a tip.
+	///
+	/// Should match the currency type previously used for the pallet, if applicable.
+	type DataDepositPerByte: sp_core::Get<BalanceOf<Self, I>>;
+	/// The name of the pallet as previously configured in
+	/// [`construct_runtime!`](frame_support::construct_runtime).
+	type PalletName: sp_core::Get<&'static str>;
+	/// The DB weight as configured in the runtime to calculate the correct weight.
+	type DbWeight: sp_core::Get<RuntimeDbWeight>;
+	/// The block number as configured in the runtime.
+	type BlockNumber: Parameter + Zero + Copy + Ord;
+}
+
+/// An open tipping "motion". Retains all details of a tip including information on the finder
+/// and the members who have voted.
+#[storage_alias(dynamic)]
+type Tips<T: UnlockConfig<I>, I: 'static> = StorageMap<
+	<T as UnlockConfig<I>>::PalletName,
+	Twox64Concat,
+	<T as UnlockConfig<I>>::Hash,
+	crate::OpenTip<
+		<T as UnlockConfig<I>>::AccountId,
+		BalanceOf<T, I>,
+		<T as UnlockConfig<I>>::BlockNumber,
+		<T as UnlockConfig<I>>::Hash,
+	>,
+	OptionQuery,
+>;
 
 /// A migration that unreserves all tip deposits.
 ///
@@ -34,9 +85,9 @@ use sp_std::vec::Vec;
 /// The pallet should be made inoperable before or immediately after this migration is run.
 ///
 /// (See also the `RemovePallet` migration in `frame/support/src/migrations.rs`)
-pub struct UnreserveDeposits<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
+pub struct UnreserveDeposits<T: UnlockConfig<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
 
-impl<T: crate::Config<I>, I: 'static> UnreserveDeposits<T, I> {
+impl<T: UnlockConfig<I>, I: 'static> UnreserveDeposits<T, I> {
 	/// Calculates and returns the total amount reserved by each account by this pallet from open
 	/// tips.
 	///
@@ -46,14 +97,14 @@ impl<T: crate::Config<I>, I: 'static> UnreserveDeposits<T, I> {
 	///   reserved balance by this pallet
 	/// * `frame_support::weights::Weight`: The weight of this operation.
 	fn get_deposits() -> (BTreeMap<T::AccountId, BalanceOf<T, I>>, frame_support::weights::Weight) {
-		use frame_support::traits::Get;
+		use sp_core::Get;
 
 		let mut tips_len = 0;
-		let account_deposits: BTreeMap<T::AccountId, BalanceOf<T, I>> = crate::Tips::<T, I>::iter()
+		let account_deposits: BTreeMap<T::AccountId, BalanceOf<T, I>> = Tips::<T, I>::iter()
 			.map(|(_hash, open_tip)| open_tip)
 			.fold(BTreeMap::new(), |mut acc, tip| {
 				// Count the total number of tips
-				tips_len.saturating_accrue(1);
+				tips_len.saturating_inc();
 
 				// Add the balance to the account's existing deposit in the accumulator
 				acc.entry(tip.finder).or_insert(Zero::zero()).saturating_accrue(tip.deposit);
@@ -64,7 +115,7 @@ impl<T: crate::Config<I>, I: 'static> UnreserveDeposits<T, I> {
 	}
 }
 
-impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for UnreserveDeposits<T, I>
+impl<T: UnlockConfig<I>, I: 'static> OnRuntimeUpgrade for UnreserveDeposits<T, I>
 where
 	BalanceOf<T, I>: Sum,
 {
@@ -82,7 +133,7 @@ where
 	/// Fails with a `TryRuntimeError` if somehow the amount reserved by this pallet is greater than
 	/// the actual total reserved amount for any accounts.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+	fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, sp_runtime::TryRuntimeError> {
 		use codec::Encode;
 		use frame_support::ensure;
 
@@ -107,8 +158,8 @@ where
 		// Print some summary stats
 		let total_deposits_to_unreserve =
 			account_deposits.clone().into_values().sum::<BalanceOf<T, I>>();
-		log::info!("Total accounts: {}", account_deposits.keys().count());
-		log::info!("Total amount to unreserve: {:?}", total_deposits_to_unreserve);
+		log::info!(target: LOG_TARGET, "Total accounts: {}", account_deposits.keys().count());
+		log::info!(target: LOG_TARGET, "Total amount to unreserve: {:?}", total_deposits_to_unreserve);
 
 		// Return the actual amount reserved before the upgrade to verify integrity of the upgrade
 		// in the post_upgrade hook.
@@ -138,7 +189,7 @@ where
 	/// Verifies that the account reserved balances were reduced by the actual expected amounts.
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(
-		account_reserved_before_bytes: Vec<u8>,
+		account_reserved_before_bytes: sp_std::vec::Vec<u8>,
 	) -> Result<(), sp_runtime::TryRuntimeError> {
 		use codec::Decode;
 
@@ -161,6 +212,7 @@ where
 
 			if actual_reserved_after != expected_reserved_after {
 				log::error!(
+					target: LOG_TARGET,
 					"Reserved balance for {:?} is incorrect. actual before: {:?}, actual after, {:?}, expected deducted: {:?}",
 					account,
 					actual_reserved_before,
@@ -180,9 +232,27 @@ mod test {
 	use super::*;
 	use crate::{
 		migrations::unreserve_deposits::UnreserveDeposits,
-		tests::{new_test_ext, RuntimeOrigin, Test, Tips},
+		tests::{new_test_ext, Balances, RuntimeOrigin, Test, Tips},
 	};
-	use frame_support::{assert_ok, traits::TypedGet};
+	use frame_support::{assert_ok, parameter_types, traits::TypedGet};
+	use frame_system::pallet_prelude::BlockNumberFor;
+	use sp_core::ConstU64;
+
+	parameter_types! {
+		const PalletName: &'static str = "Tips";
+	}
+
+	struct UnlockConfigImpl;
+	impl super::UnlockConfig<()> for UnlockConfigImpl {
+		type Currency = Balances;
+		type TipReportDepositBase = ConstU64<1>;
+		type DataDepositPerByte = ConstU64<1>;
+		type Hash = sp_core::H256;
+		type AccountId = u128;
+		type BlockNumber = BlockNumberFor<Test>;
+		type DbWeight = ();
+		type PalletName = PalletName;
+	}
 
 	#[test]
 	fn unreserve_all_funds_works() {
@@ -233,12 +303,12 @@ mod test {
 			);
 
 			// Execute the migration
-			let bytes = match UnreserveDeposits::<Test, ()>::pre_upgrade() {
+			let bytes = match UnreserveDeposits::<UnlockConfigImpl, ()>::pre_upgrade() {
 				Ok(bytes) => bytes,
 				Err(e) => panic!("pre_upgrade failed: {:?}", e),
 			};
-			UnreserveDeposits::<Test, ()>::on_runtime_upgrade();
-			assert_ok!(UnreserveDeposits::<Test, ()>::post_upgrade(bytes));
+			UnreserveDeposits::<UnlockConfigImpl, ()>::on_runtime_upgrade();
+			assert_ok!(UnreserveDeposits::<UnlockConfigImpl, ()>::post_upgrade(bytes));
 
 			// Check the deposits were were unreserved
 			assert_eq!(
