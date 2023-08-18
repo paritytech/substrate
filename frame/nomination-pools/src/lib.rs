@@ -539,33 +539,27 @@ impl<T: Config> PoolMember<T> {
 	/// Doesn't mutate state.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn total_balance(&mut self) -> BalanceOf<T> {
-		if let Some(pool) = BondedPool::<T>::get(self.pool_id).defensive() {
-			let active_balance = pool.points_to_balance(self.active_points());
+		let pool = match BondedPool::<T>::get(self.pool_id).defensive() {
+			Some(pool) => pool,
+			None => return Zero::zero(),
+		};
 
-			// get all unbonding balance, both already unlocked and yet to be unlocked.
-			match SubPoolsStorage::<T>::get(self.pool_id) {
-				Some(mut sub_pools) => {
-					let unbonding_balance = &self.unbonding_eras.iter().fold(
-						BalanceOf::<T>::zero(),
-						|accumulator, (era, unlocked_points)| {
-							if let Some(era_pool) = sub_pools.with_era.get_mut(era) {
-								accumulator.saturating_add(
-									era_pool.point_to_balance(unlocked_points.clone()),
-								)
-							} else {
-								accumulator.saturating_add(
-									sub_pools.no_era.point_to_balance(unlocked_points.clone()),
-								)
-							}
-						},
-					);
-					active_balance.saturating_add(unbonding_balance.clone())
-				},
-				None => active_balance,
-			}
-		} else {
-			Zero::zero()
-		}
+		let active_balance = pool.points_to_balance(self.active_points());
+
+		let sub_pools = match SubPoolsStorage::<T>::get(self.pool_id) {
+			Some(sub_pools) => sub_pools,
+			None => return active_balance,
+		};
+
+		let unbonding_balance = self.unbonding_eras.iter().fold(
+			BalanceOf::<T>::zero(),
+			|accumulator, (era, unlocked_points)| {
+				let era_pool = sub_pools.with_era.get(era).unwrap_or(&sub_pools.no_era);
+				accumulator.saturating_add(era_pool.point_to_balance(unlocked_points.clone()))
+			},
+		);
+
+		active_balance.saturating_add(unbonding_balance)
 	}
 
 	/// Total points of this member, both active and unbonding.
