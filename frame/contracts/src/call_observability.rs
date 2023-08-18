@@ -8,7 +8,10 @@ pub trait CallSpan<T: Config>
 where
 	Self: Sized,
 {
-	/// A new call span is created just before the execution of a contract, to capture the call.
+	/// Creates a new call span to encompass the upcoming contract execution.
+	///
+	/// This method is invoked just before the execution of a contract and
+	/// marks the beginning of a traceable span of execution.
 	///
 	/// # Arguments
 	///
