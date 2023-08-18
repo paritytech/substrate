@@ -1164,7 +1164,7 @@ pub mod pallet {
 		#[pallet::weight((T::DbWeight::get().writes(1), DispatchClass::Operational))]
 		pub fn force_start_phase(
 			origin: OriginFor<T>,
-			phase: Phase<T::BlockNumber>,
+			phase: Phase<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -1389,7 +1389,7 @@ pub mod pallet {
 
 	/// Stores the phase we want to force during `on_initialize`.
 	#[pallet::storage]
-	pub type ForcePhase<T: Config> = StorageValue<_, Phase<T::BlockNumber>, OptionQuery>;
+	pub type ForcePhase<T: Config> = StorageValue<_, Phase<BlockNumberFor<T>>, OptionQuery>;
 
 	/// The current storage version.
 	///
