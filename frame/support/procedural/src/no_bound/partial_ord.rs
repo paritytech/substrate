@@ -36,10 +36,15 @@ pub fn derive_partial_ord_no_bound(input: proc_macro::TokenStream) -> proc_macro
 							|i| quote::quote_spanned!(i.span() => self.#i.partial_cmp(&other.#i)),
 						);
 
-					quote::quote!( Some(core::cmp::Ordering::Equal) #( .and_then(|order| {
-					let next_order = #fields?;
-					Some(order.then(next_order))
-				}) )* )
+					quote::quote!(
+						Some(core::cmp::Ordering::Equal)
+							#(
+								.and_then(|order| {
+									let next_order = #fields?;
+									Some(order.then(next_order))
+								})
+							)*
+					)
 				},
 				syn::Fields::Unnamed(unnamed) => {
 					let fields =
@@ -47,10 +52,15 @@ pub fn derive_partial_ord_no_bound(input: proc_macro::TokenStream) -> proc_macro
 							|i| quote::quote_spanned!(i.span() => self.#i.partial_cmp(&other.#i)),
 						);
 
-					quote::quote!( Some(core::cmp::Ordering::Equal) #( .and_then(|order| {
-					let next_order = #fields?;
-					Some(order.then(next_order))
-				}) )* )
+					quote::quote!(
+						Some(core::cmp::Ordering::Equal)
+							#(
+								.and_then(|order| {
+									let next_order = #fields?;
+									Some(order.then(next_order))
+								})
+							)*
+					)
 				},
 				syn::Fields::Unit => {
 					quote::quote!(Some(core::cmp::Ordering::Equal))
