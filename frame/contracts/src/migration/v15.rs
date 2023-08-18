@@ -19,7 +19,7 @@
 //! account instead. Since [`Currency`](frame_support::traits::Currency) has been
 //! [deprecated](https://github.com/paritytech/substrate/pull/12951), we need the deposits to be
 //! handled by the [`frame_support::traits::fungible`] traits instead. For this transfer the
-//! balance in the deposit account to the contract's account and hold it in there.
+//! balance from the deposit account to the contract's account and hold it in there.
 //! Then the deposit account is not needed anymore and we can get rid of it.
 
 use crate::{
