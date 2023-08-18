@@ -15,11 +15,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! This module contains helper methods to configure account roles for existing collections.
+
 use crate::*;
 use frame_support::pallet_prelude::*;
 use sp_std::collections::btree_map::BTreeMap;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Set the team roles for a specific collection.
+	///
+	/// - `maybe_check_owner`: An optional account ID used to check ownership permission. If `None`,
+	///   it is considered as the root.
+	/// - `collection`: The ID of the collection for which to set the team roles.
+	/// - `issuer`: An optional account ID representing the issuer role.
+	/// - `admin`: An optional account ID representing the admin role.
+	/// - `freezer`: An optional account ID representing the freezer role.
+	///
+	/// This function allows the owner or the root (when `maybe_check_owner` is `None`) to set the
+	/// team roles for a specific collection. The root can change the role from `None` to
+	/// `Some(account)`, but other roles can only be updated by the root or an account with an
+	/// existing role in the collection.
 	pub(crate) fn do_set_team(
 		maybe_check_owner: Option<T::AccountId>,
 		collection: T::CollectionId,
@@ -59,10 +74,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			let account_to_role = Self::group_roles_by_account(roles);
 
-			// delete the previous records
+			// Delete the previous records.
 			Self::clear_roles(&collection)?;
 
-			// insert new records
+			// Insert new records.
 			for (account, roles) in account_to_role {
 				CollectionRoleOf::<T, I>::insert(&collection, &account, roles);
 			}
@@ -76,8 +91,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// - `collection_id`: A collection to clear the roles in.
 	///
-	/// Throws an error if some of the roles were left in storage.
-	/// This means the `CollectionRoles::max_roles()` needs to be adjusted.
+	/// This function clears all the roles associated with the given `collection_id`. It throws an
+	/// error if some of the roles were left in storage, indicating that the maximum number of roles
+	/// may need to be adjusted.
 	pub(crate) fn clear_roles(collection_id: &T::CollectionId) -> Result<(), DispatchError> {
 		let res = CollectionRoleOf::<T, I>::clear_prefix(
 			&collection_id,
@@ -94,7 +110,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - `account_id`: An account to check the role for.
 	/// - `role`: A role to validate.
 	///
-	/// Returns boolean.
+	/// Returns `true` if the account has the specified role, `false` otherwise.
 	pub(crate) fn has_role(
 		collection_id: &T::CollectionId,
 		account_id: &T::AccountId,
@@ -123,7 +139,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// - `input`: A vector of (Account, Role) tuples.
 	///
-	/// Returns a grouped vector.
+	/// Returns a grouped vector of `(Account, Roles)` tuples.
 	pub fn group_roles_by_account(
 		input: Vec<(T::AccountId, CollectionRole)>,
 	) -> Vec<(T::AccountId, CollectionRoles)> {

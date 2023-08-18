@@ -21,10 +21,10 @@ use sp_blockchain::Error;
 /// Subscription management error.
 #[derive(Debug, thiserror::Error)]
 pub enum SubscriptionManagementError {
-	/// The block cannot be pinned into memory because
-	/// the subscription has exceeded the maximum number
-	/// of blocks pinned.
-	#[error("Exceeded pinning limits")]
+	/// The subscription has exceeded the internal limits
+	/// regarding the number of pinned blocks in memory or
+	/// the number of ongoing operations.
+	#[error("Exceeded pinning or operation limits")]
 	ExceededLimits,
 	/// Error originated from the blockchain (client or backend).
 	#[error("Blockchain error {0}")]

@@ -35,6 +35,7 @@ use pallet_nomination_pools::{
 	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
 	PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
+use pallet_staking::MaxNominationsOf;
 use sp_runtime::{
 	traits::{Bounded, StaticLookup, Zero},
 	Perbill,
@@ -564,7 +565,7 @@ frame_benchmarking::benchmarks! {
 	}
 
 	nominate {
-		let n in 1 .. T::MaxNominations::get();
+		let n in 1 .. MaxNominationsOf::<T>::get();
 
 		// Create a pool
 		let min_create_bond = Pools::<T>::depositor_min_bond() * 2u32.into();
@@ -679,7 +680,7 @@ frame_benchmarking::benchmarks! {
 		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into(), None);
 
 		// Nominate with the pool.
-		 let validators: Vec<_> = (0..T::MaxNominations::get())
+		 let validators: Vec<_> = (0..MaxNominationsOf::<T>::get())
 			.map(|i| account("stash", USER_SEED, i))
 			.collect();
 

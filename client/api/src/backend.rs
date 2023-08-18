@@ -36,16 +36,10 @@ use sp_storage::{ChildInfo, StorageData, StorageKey};
 
 use crate::{blockchain::Backend as BlockchainBackend, UsageInfo};
 
-pub use sp_state_machine::{Backend as StateBackend, KeyValueStates};
+pub use sp_state_machine::{Backend as StateBackend, BackendTransaction, KeyValueStates};
 
 /// Extracts the state backend type for the given backend.
 pub type StateBackendFor<B, Block> = <B as Backend<Block>>::State;
-
-/// Extracts the transaction for the given state backend.
-pub type TransactionForSB<B, Block> = <B as StateBackend<HashingFor<Block>>>::Transaction;
-
-/// Extracts the transaction for the given backend.
-pub type TransactionFor<B, Block> = TransactionForSB<StateBackendFor<B, Block>, Block>;
 
 /// Describes which block import notification stream should be notified.
 #[derive(Debug, Clone, Copy)]
@@ -181,7 +175,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// Inject storage data into the database.
 	fn update_db_storage(
 		&mut self,
-		update: TransactionForSB<Self::State, Block>,
+		update: BackendTransaction<HashingFor<Block>>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Set genesis state. If `commit` is `false` the state is saved in memory, but is not written

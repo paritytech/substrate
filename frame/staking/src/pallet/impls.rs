@@ -18,8 +18,9 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ScoreProvider,
-	SortedListProvider, VoteWeight, VoterOf,
+	bounds::{CountBound, SizeBound},
+	data_provider, BoundedSupportsOf, DataProviderBounds, ElectionDataProvider, ElectionProvider,
+	ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	defensive,
@@ -45,8 +46,9 @@ use sp_staking::{
 use sp_std::prelude::*;
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
-	Forcing, IndividualExposure, MaxWinnersOf, Nominations, PositiveImbalanceOf, RewardDestination,
+	election_size_tracker::StaticTracker, log, slashing, weights::WeightInfo, ActiveEraInfo,
+	BalanceOf, EraPayout, Exposure, ExposureOf, Forcing, IndividualExposure, MaxNominationsOf,
+	MaxWinnersOf, Nominations, NominationsQuota, PositiveImbalanceOf, RewardDestination,
 	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
@@ -761,13 +763,15 @@ impl<T: Config> Pallet<T> {
 	/// nominators.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
-		let max_allowed_len = {
-			let all_voter_count = T::VoterList::count() as usize;
-			maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count)
+	pub fn get_npos_voters(bounds: DataProviderBounds) -> Vec<VoterOf<Self>> {
+		let mut voters_size_tracker: StaticTracker<Self> = StaticTracker::default();
+
+		let final_predicted_len = {
+			let all_voter_count = T::VoterList::count();
+			bounds.count.unwrap_or(all_voter_count.into()).min(all_voter_count.into()).0
 		};
 
-		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len);
+		let mut all_voters = Vec::<_>::with_capacity(final_predicted_len as usize);
 
 		// cache a few things.
 		let weight_of = Self::weight_of_fn();
@@ -778,8 +782,8 @@ impl<T: Config> Pallet<T> {
 		let mut min_active_stake = u64::MAX;
 
 		let mut sorted_voters = T::VoterList::iter();
-		while all_voters.len() < max_allowed_len &&
-			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
+		while all_voters.len() < final_predicted_len as usize &&
+			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * final_predicted_len as u32)
 		{
 			let voter = match sorted_voters.next() {
 				Some(voter) => {
@@ -798,10 +802,23 @@ impl<T: Config> Pallet<T> {
 
 			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
 				if !targets.is_empty() {
-					all_voters.push((voter.clone(), voter_weight, targets));
+					// Note on lazy nomination quota: we do not check the nomination quota of the
+					// voter at this point and accept all the current nominations. The nomination
+					// quota is only enforced at `nominate` time.
+
+					let voter = (voter, voter_weight, targets);
+					if voters_size_tracker.try_register_voter(&voter, &bounds).is_err() {
+						// no more space left for the election result, stop iterating.
+						Self::deposit_event(Event::<T>::SnapshotVotersSizeExceeded {
+							size: voters_size_tracker.size as u32,
+						});
+						break
+					}
+
+					all_voters.push(voter);
 					nominators_taken.saturating_inc();
 				} else {
-					// Technically should never happen, but not much we can do about it.
+					// technically should never happen, but not much we can do about it.
 				}
 				min_active_stake =
 					if voter_weight < min_active_stake { voter_weight } else { min_active_stake };
@@ -814,24 +831,31 @@ impl<T: Config> Pallet<T> {
 						.try_into()
 						.expect("`MaxVotesPerVoter` must be greater than or equal to 1"),
 				);
+
+				if voters_size_tracker.try_register_voter(&self_vote, &bounds).is_err() {
+					// no more space left for the election snapshot, stop iterating.
+					Self::deposit_event(Event::<T>::SnapshotVotersSizeExceeded {
+						size: voters_size_tracker.size as u32,
+					});
+					break
+				}
 				all_voters.push(self_vote);
 				validators_taken.saturating_inc();
 			} else {
 				// this can only happen if: 1. there a bug in the bags-list (or whatever is the
 				// sorted list) logic and the state of the two pallets is no longer compatible, or
 				// because the nominators is not decodable since they have more nomination than
-				// `T::MaxNominations`. The latter can rarely happen, and is not really an emergency
-				// or bug if it does.
-				log!(
-					warn,
-					"DEFENSIVE: invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
-					voter
-				);
+				// `T::NominationsQuota::get_quota`. The latter can rarely happen, and is not
+				// really an emergency or bug if it does.
+				defensive!(
+				    "DEFENSIVE: invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
+                    voter,
+                );
 			}
 		}
 
 		// all_voters should have not re-allocated.
-		debug_assert!(all_voters.capacity() == max_allowed_len);
+		debug_assert!(all_voters.capacity() == final_predicted_len as usize);
 
 		Self::register_weight(T::WeightInfo::get_npos_voters(validators_taken, nominators_taken));
 
@@ -854,14 +878,20 @@ impl<T: Config> Pallet<T> {
 	/// Get the targets for an upcoming npos election.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_targets(maybe_max_len: Option<usize>) -> Vec<T::AccountId> {
-		let max_allowed_len = maybe_max_len.unwrap_or_else(|| T::TargetList::count() as usize);
-		let mut all_targets = Vec::<T::AccountId>::with_capacity(max_allowed_len);
+	pub fn get_npos_targets(bounds: DataProviderBounds) -> Vec<T::AccountId> {
+		let mut targets_size_tracker: StaticTracker<Self> = StaticTracker::default();
+
+		let final_predicted_len = {
+			let all_target_count = T::TargetList::count();
+			bounds.count.unwrap_or(all_target_count.into()).min(all_target_count.into()).0
+		};
+
+		let mut all_targets = Vec::<T::AccountId>::with_capacity(final_predicted_len as usize);
 		let mut targets_seen = 0;
 
 		let mut targets_iter = T::TargetList::iter();
-		while all_targets.len() < max_allowed_len &&
-			targets_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
+		while all_targets.len() < final_predicted_len as usize &&
+			targets_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * final_predicted_len as u32)
 		{
 			let target = match targets_iter.next() {
 				Some(target) => {
@@ -870,6 +900,14 @@ impl<T: Config> Pallet<T> {
 				},
 				None => break,
 			};
+
+			if targets_size_tracker.try_register_target(target.clone(), &bounds).is_err() {
+				// no more space left for the election snapshot, stop iterating.
+				Self::deposit_event(Event::<T>::SnapshotTargetsSizeExceeded {
+					size: targets_size_tracker.size as u32,
+				});
+				break
+			}
 
 			if Validators::<T>::contains_key(&target) {
 				all_targets.push(target);
@@ -989,43 +1027,48 @@ impl<T: Config> Pallet<T> {
 	/// Returns the current nominations quota for nominators.
 	///
 	/// Used by the runtime API.
-	/// Note: for now, this api runtime will always return value of `T::MaxNominations` and thus it
-	/// is redundant. However, with the upcoming changes in
-	/// <https://github.com/paritytech/substrate/pull/12970>, the nominations quota will change
-	/// depending on the nominators balance. We're introducing this runtime API now to prepare the
-	/// community to use it before rolling out PR#12970.
-	pub fn api_nominations_quota(_balance: BalanceOf<T>) -> u32 {
-		T::MaxNominations::get()
+	pub fn api_nominations_quota(balance: BalanceOf<T>) -> u32 {
+		T::NominationsQuota::get_quota(balance)
 	}
 }
 
 impl<T: Config> ElectionDataProvider for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
-	type MaxVotesPerVoter = T::MaxNominations;
+	type MaxVotesPerVoter = MaxNominationsOf<T>;
 
 	fn desired_targets() -> data_provider::Result<u32> {
 		Self::register_weight(T::DbWeight::get().reads(1));
 		Ok(Self::validator_count())
 	}
 
-	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+	fn electing_voters(bounds: DataProviderBounds) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
-		let voters = Self::get_npos_voters(maybe_max_len);
-		debug_assert!(maybe_max_len.map_or(true, |max| voters.len() <= max));
+		let voters = Self::get_npos_voters(bounds);
+
+		debug_assert!(!bounds.exhausted(
+			SizeBound(voters.encoded_size() as u32).into(),
+			CountBound(voters.len() as u32).into()
+		));
 
 		Ok(voters)
 	}
 
-	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
-		let target_count = T::TargetList::count();
+	fn electable_targets(bounds: DataProviderBounds) -> data_provider::Result<Vec<T::AccountId>> {
+		let targets = Self::get_npos_targets(bounds);
 
-		// We can't handle this case yet -- return an error.
-		if maybe_max_len.map_or(false, |max_len| target_count > max_len as u32) {
+		// We can't handle this case yet -- return an error. WIP to improve handling this case in
+		// <https://github.com/paritytech/substrate/pull/13195>.
+		if bounds.exhausted(None, CountBound(T::TargetList::count() as u32).into()) {
 			return Err("Target snapshot too big")
 		}
 
-		Ok(Self::get_npos_targets(None))
+		debug_assert!(!bounds.exhausted(
+			SizeBound(targets.encoded_size() as u32).into(),
+			CountBound(targets.len() as u32).into()
+		));
+
+		Ok(targets)
 	}
 
 	fn next_election_prediction(now: BlockNumberFor<T>) -> BlockNumberFor<T> {

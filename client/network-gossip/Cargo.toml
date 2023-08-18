@@ -17,8 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 ahash = "0.8.2"
 futures = "0.3.21"
 futures-timer = "3.0.1"
-libp2p-identity = { version = "0.2.0", features = ["peerid", "ed25519"]}
-multiaddr = "0.18.0"
+libp2p = "0.51.3"
 log = "0.4.17"
 schnellru = "0.2.1"
 tracing = "0.1.29"

@@ -86,7 +86,6 @@ std = [
 	"log/std",
 	"sp-offchain/std",
 	"sp-core/std",
-	"sp-core/std",
 	"sp-std/std",
 	"sp-io/std",
 	"frame-support/std",

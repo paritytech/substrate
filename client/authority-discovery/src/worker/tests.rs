@@ -415,7 +415,7 @@ fn dont_stop_polling_dht_event_stream_after_bogus_event() {
 		let peer_id = PeerId::random();
 		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
 
-		address.with(multiaddr::Protocol::P2p(peer_id))
+		address.with(multiaddr::Protocol::P2p(peer_id.into()))
 	};
 	let remote_key_store = MemoryKeystore::new();
 	let remote_public_key: AuthorityId = remote_key_store
@@ -526,7 +526,7 @@ impl DhtValueFoundTester {
 		let address: Multiaddr =
 			format!("/ip6/2001:db8:0:0:0:0:0:{:x}/tcp/30333", idx).parse().unwrap();
 
-		address.with(multiaddr::Protocol::P2p(peer_id))
+		address.with(multiaddr::Protocol::P2p(peer_id.into()))
 	}
 
 	fn process_value_found(
@@ -749,7 +749,7 @@ fn lookup_throttling() {
 		let peer_id = PeerId::random();
 		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
 
-		address.with(multiaddr::Protocol::P2p(peer_id))
+		address.with(multiaddr::Protocol::P2p(peer_id.into()))
 	};
 	let remote_key_store = MemoryKeystore::new();
 	let remote_public_keys: Vec<AuthorityId> = (0..20)
