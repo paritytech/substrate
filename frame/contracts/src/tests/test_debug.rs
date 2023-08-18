@@ -1,7 +1,6 @@
-#![cfg(feature = "unsafe-debug")]
+use crate::debug::{CallObserver, CallSpan, ExportedFunction};
 
 use super::*;
-use crate::unsafe_debug::{ExecutionObserver, ExportedFunction};
 use frame_support::traits::Currency;
 use pallet_contracts_primitives::ExecReturnValue;
 use pretty_assertions::assert_eq;
@@ -20,9 +19,18 @@ thread_local! {
 }
 
 pub struct TestDebugger;
+pub struct TestCallSpan {
+	code_hash: CodeHash<Test>,
+	call: ExportedFunction,
+	input: Vec<u8>,
+}
 
-impl ExecutionObserver<CodeHash<Test>> for TestDebugger {
-	fn before_call(code_hash: &CodeHash<Test>, entry_point: ExportedFunction, input_data: &[u8]) {
+impl CallObserver<Test, TestCallSpan> for TestDebugger {
+	fn before_call(
+		code_hash: &CodeHash<Test>,
+		entry_point: ExportedFunction,
+		input_data: &[u8],
+	) -> TestCallSpan {
 		DEBUG_EXECUTION_TRACE.with(|d| {
 			d.borrow_mut().push(DebugFrame {
 				code_hash: code_hash.clone(),
@@ -31,19 +39,17 @@ impl ExecutionObserver<CodeHash<Test>> for TestDebugger {
 				result: None,
 			})
 		});
+		TestCallSpan { code_hash: code_hash.clone(), call: entry_point, input: input_data.to_vec() }
 	}
+}
 
-	fn after_call(
-		code_hash: &CodeHash<Test>,
-		entry_point: ExportedFunction,
-		input_data: Vec<u8>,
-		output: &ExecReturnValue,
-	) {
+impl CallSpan for TestCallSpan {
+	fn after_call(self, output: &ExecReturnValue) {
 		DEBUG_EXECUTION_TRACE.with(|d| {
 			d.borrow_mut().push(DebugFrame {
-				code_hash: code_hash.clone(),
-				call: entry_point,
-				input: input_data,
+				code_hash: self.code_hash.clone(),
+				call: self.call,
+				input: self.input.clone(),
 				result: Some(output.data.clone()),
 			})
 		});

@@ -96,8 +96,8 @@ mod storage;
 mod wasm;
 
 pub mod chain_extension;
+pub mod debug;
 pub mod migration;
-pub mod unsafe_debug;
 pub mod weights;
 
 #[cfg(test)]
@@ -354,12 +354,8 @@ pub mod pallet {
 		type Migrations: MigrateSequence;
 
 		/// Type that provides debug handling for the contract execution process.
-		///
-		/// # Warning
-		///
-		/// Do **not** use it in a production environment or for benchmarking purposes.
-		#[cfg(feature = "unsafe-debug")]
-		type Debug: unsafe_debug::UnsafeDebug<Self>;
+		type DebugSpan: debug::CallSpan;
+		type Debug: debug::CallObserver<Self, Self::DebugSpan>;
 	}
 
 	#[pallet::hooks]
