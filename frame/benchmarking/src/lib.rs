@@ -42,7 +42,7 @@ pub mod __private {
 	pub use sp_core::defer;
 	pub use sp_io::storage::root as storage_root;
 	pub use sp_runtime::{traits::Zero, StateVersion};
-	pub use sp_std::{self, boxed::Box, prelude::Vec, str, vec};
+	pub use sp_std::{self, boxed::Box, str, vec, vec::Vec};
 	pub use sp_storage::{well_known_keys, TrackedStorageKey};
 }
 

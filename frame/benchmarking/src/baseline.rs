@@ -109,7 +109,6 @@ benchmarks! {
 
 #[cfg(test)]
 pub mod mock {
-	use super::*;
 	use sp_runtime::{testing::H256, BuildStorage};
 
 	type AccountId = u64;

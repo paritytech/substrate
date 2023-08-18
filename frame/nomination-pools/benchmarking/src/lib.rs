@@ -23,11 +23,12 @@
 #[cfg(test)]
 mod mock;
 
-use frame_benchmarking::v1::{
-	account, frame_support::traits::Currency, vec, whitelist_account, Vec,
-};
+use frame_benchmarking::v1::{account, whitelist_account};
 use frame_election_provider_support::SortedListProvider;
-use frame_support::{assert_ok, ensure, traits::Get};
+use frame_support::{
+	assert_ok, ensure,
+	traits::{Currency, Get},
+};
 use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
 	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ClaimPermission, ClaimPermissions,
@@ -41,6 +42,7 @@ use sp_runtime::{
 	Perbill,
 };
 use sp_staking::{EraIndex, StakingInterface};
+use sp_std::{vec, vec::Vec};
 // `frame_benchmarking::benchmarks!` macro needs this
 use pallet_nomination_pools::Call;
 
