@@ -20,9 +20,8 @@
 
 use crate::{
 	migration::{IsFinished, MigrationStep},
-	storage::DepositAccount,
 	weights::WeightInfo,
-	BalanceOf, CodeHash, Config, Pallet, TrieId, Weight, LOG_TARGET,
+	AccountIdOf, BalanceOf, CodeHash, Config, Pallet, TrieId, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode};
 use frame_support::{codec, pallet_prelude::*, storage_alias, DefaultNoBound};
@@ -30,15 +29,13 @@ use sp_runtime::BoundedBTreeMap;
 use sp_std::prelude::*;
 
 mod old {
-	use crate::storage::DepositAccount;
-
 	use super::*;
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	#[scale_info(skip_type_params(T))]
 	pub struct ContractInfo<T: Config> {
 		pub trie_id: TrieId,
-		pub deposit_account: DepositAccount<T>,
+		pub deposit_account: AccountIdOf<T>,
 		pub code_hash: CodeHash<T>,
 		pub storage_bytes: u32,
 		pub storage_items: u32,
@@ -58,9 +55,13 @@ mod old {
 
 #[cfg(feature = "runtime-benchmarks")]
 pub fn store_old_contract_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>) {
+	use sp_runtime::traits::{Hash, TrailingZeroInput};
+	let entropy = (b"contract_depo_v1", account.clone()).using_encoded(T::Hashing::hash);
+	let deposit_account = Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+		.expect("infinite length input; no invalid inputs for type; qed");
 	let info = old::ContractInfo {
 		trie_id: info.trie_id.clone(),
-		deposit_account: info.deposit_account().clone(),
+		deposit_account,
 		code_hash: info.code_hash,
 		storage_bytes: Default::default(),
 		storage_items: Default::default(),
@@ -79,7 +80,7 @@ pub type ContractInfoOf<T: Config> =
 #[scale_info(skip_type_params(T))]
 pub struct ContractInfo<T: Config> {
 	trie_id: TrieId,
-	deposit_account: DepositAccount<T>,
+	deposit_account: AccountIdOf<T>,
 	code_hash: CodeHash<T>,
 	storage_bytes: u32,
 	storage_items: u32,
