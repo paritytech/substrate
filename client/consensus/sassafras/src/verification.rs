@@ -329,8 +329,8 @@ where
 {
 	async fn verify(
 		&mut self,
-		mut block: BlockImportParams<Block, ()>,
-	) -> Result<BlockImportParams<Block, ()>, String> {
+		mut block: BlockImportParams<Block>,
+	) -> Result<BlockImportParams<Block>, String> {
 		trace!(
 			target: LOG_TARGET,
 			"🌳 Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",

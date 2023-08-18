@@ -235,7 +235,7 @@ where
 impl<Block, Client, Inner> SassafrasBlockImport<Block, Client, Inner>
 where
 	Block: BlockT,
-	Inner: BlockImport<Block, Transaction = sp_api::TransactionFor<Client, Block>> + Send + Sync,
+	Inner: BlockImport<Block> + Send + Sync,
 	Inner::Error: Into<ConsensusError>,
 	Client: HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
@@ -251,7 +251,7 @@ where
 	/// end up in an inconsistent state and have to resync
 	async fn import_state(
 		&mut self,
-		mut block: BlockImportParams<Block, sp_api::TransactionFor<Client, Block>>,
+		mut block: BlockImportParams<Block>,
 	) -> Result<ImportResult, ConsensusError> {
 		let hash = block.post_hash();
 		let parent_hash = *block.header.parent_hash();
@@ -305,7 +305,7 @@ where
 impl<Block, Client, Inner> BlockImport<Block> for SassafrasBlockImport<Block, Client, Inner>
 where
 	Block: BlockT,
-	Inner: BlockImport<Block, Transaction = sp_api::TransactionFor<Client, Block>> + Send + Sync,
+	Inner: BlockImport<Block> + Send + Sync,
 	Inner::Error: Into<ConsensusError>,
 	Client: HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
@@ -316,11 +316,10 @@ where
 	Client::Api: SassafrasApi<Block> + ApiExt<Block>,
 {
 	type Error = ConsensusError;
-	type Transaction = sp_api::TransactionFor<Client, Block>;
 
 	async fn import_block(
 		&mut self,
-		mut block: BlockImportParams<Block, Self::Transaction>,
+		mut block: BlockImportParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();

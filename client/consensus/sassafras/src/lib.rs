@@ -371,7 +371,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, BI, CIDP>(
 	spawner: &impl sp_core::traits::SpawnEssentialNamed,
 	registry: Option<&Registry>,
 	telemetry: Option<TelemetryHandle>,
-) -> ClientResult<DefaultImportQueue<Block, Client>>
+) -> ClientResult<DefaultImportQueue<Block>>
 where
 	Client: ProvideRuntimeApi<Block>
 		+ HeaderBackend<Block>
@@ -381,13 +381,7 @@ where
 		+ Sync
 		+ 'static,
 	Client::Api: BlockBuilderApi<Block> + SassafrasApi<Block> + ApiExt<Block>,
-	BI: BlockImport<
-			Block,
-			Error = ConsensusError,
-			Transaction = sp_api::TransactionFor<Client, Block>,
-		> + Send
-		+ Sync
-		+ 'static,
+	BI: BlockImport<Block, Error = ConsensusError> + Send + Sync + 'static,
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
 	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,

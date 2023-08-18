@@ -229,8 +229,8 @@ where
 	C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error = ClientError>,
 	C::Api: SassafrasApi<B>,
 	E: Environment<B, Error = ER> + Sync,
-	E::Proposer: Proposer<B, Error = ER, Transaction = sp_api::TransactionFor<C, B>>,
-	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
+	E::Proposer: Proposer<B, Error = ER>,
+	I: BlockImport<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone + Sync,
 	L: sc_consensus::JustificationSyncLink<B>,
 	ER: std::error::Error + Send + 'static,
@@ -322,13 +322,10 @@ where
 		header: B::Header,
 		header_hash: &B::Hash,
 		body: Vec<B::Extrinsic>,
-		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
+		storage_changes: StorageChanges<B>,
 		(_, public): Self::Claim,
 		epoch_descriptor: Self::AuxData,
-	) -> Result<
-		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
-		ConsensusError,
-	> {
+	) -> Result<BlockImportParams<B>, ConsensusError> {
 		// TODO DAVXY SASS-32: this seal may be revisited.
 		// We already have a VRF signature, this could be completelly redundant.
 		// The header.hash() can be added to the VRF signed data.
@@ -610,11 +607,8 @@ where
 	C::Api: SassafrasApi<B>,
 	SC: SelectChain<B> + 'static,
 	EN: Environment<B, Error = ER> + Send + Sync + 'static,
-	EN::Proposer: Proposer<B, Error = ER, Transaction = sp_api::TransactionFor<C, B>>,
-	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<C, B>>
-		+ Send
-		+ Sync
-		+ 'static,
+	EN::Proposer: Proposer<B, Error = ER>,
+	I: BlockImport<B, Error = ConsensusError> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
 	L: sc_consensus::JustificationSyncLink<B> + 'static,
 	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync + 'static,
