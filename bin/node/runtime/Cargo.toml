@@ -190,6 +190,7 @@ std = [
 	"sp-core/std",
 	"pallet-insecure-randomness-collective-flip/std",
 	"sp-std/std",
+	"sp-storage/std",
 	"pallet-session/std",
 	"pallet-session-benchmarking?/std",
 	"sp-api/std",
