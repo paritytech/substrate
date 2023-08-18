@@ -429,7 +429,7 @@ macro_rules! benchmarks_iter {
 		verify $postcode:block
 		$( $rest:tt )*
 	) => {
-		$crate::paste::paste! {
+		$crate::__private::paste::paste! {
 			$crate::benchmarks_iter! {
 				{ $($bench_module, $new_test_ext, $test $(, $( $args )* )?)? }
 				{ $( $instance: $instance_bound )? }
@@ -456,7 +456,7 @@ macro_rules! benchmarks_iter {
 					>::decode(&mut &__benchmarked_call_encoded[..])
 						.expect("call is encoded above, encoding must be correct");
 					let __origin = $crate::to_origin!($origin $(, $origin_type)?);
-					<Call<T $(, $instance)? > as $crate::traits::UnfilteredDispatchable
+					<Call<T $(, $instance)? > as $crate::__private::traits::UnfilteredDispatchable
 						>::dispatch_bypass_filter(__call_decoded, __origin)?;
 				}
 				verify $postcode
@@ -1189,7 +1189,7 @@ macro_rules! impl_benchmark {
 					.map_err(|_| -> $crate::BenchmarkError { "`name` is not a valid utf8 string!".into() })?;
 				match name {
 					$( stringify!($name) => {
-						$crate::paste::paste! { Self::[< test_benchmark_ $name >]() }
+						$crate::__private::paste::paste! { Self::[< test_benchmark_ $name >]() }
 					} )*
 					_ => Err("Could not find test for requested benchmark.".into()),
 				}
@@ -1211,7 +1211,7 @@ macro_rules! impl_benchmark_test {
 		{ $( $instance:ident: $instance_bound:tt )? }
 		$name:ident
 	) => {
-		$crate::paste::item! {
+		$crate::__private::paste::item! {
 			#[cfg(test)]
 			impl<T: Config $(<$instance>, $instance: $instance_bound )? >
 				Pallet<T $(, $instance)? >
@@ -1236,7 +1236,7 @@ macro_rules! impl_benchmark_test {
 						>::instance(&selected_benchmark, &c, true)?;
 
 						// Set the block number to at least 1 so events are deposited.
-						if $crate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
+						if $crate::__private::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
 							frame_system::Pallet::<T>::set_block_number(1u32.into());
 						}
 

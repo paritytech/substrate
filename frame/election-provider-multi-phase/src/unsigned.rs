@@ -983,14 +983,13 @@ mod tests {
 		TransactionValidityError,
 	};
 	use codec::Decode;
-	use frame_benchmarking::Zero;
 	use frame_election_provider_support::IndexAssignment;
 	use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};
 	use sp_npos_elections::ElectionScore;
 	use sp_runtime::{
 		bounded_vec,
 		offchain::storage_lock::{BlockAndTime, StorageLock},
-		traits::ValidateUnsigned,
+		traits::{ValidateUnsigned, Zero},
 		ModuleError, PerU16, Perbill,
 	};
 

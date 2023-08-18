@@ -35,7 +35,7 @@ pub mod v1;
 /// The exports are not stable and should not be relied on.
 #[doc(hidden)]
 pub mod __private {
-	pub use codec::{Decode, Encode};
+	pub use codec;
 	pub use frame_support::{storage, traits};
 	pub use log;
 	pub use paste;
