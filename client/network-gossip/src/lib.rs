@@ -89,6 +89,12 @@ pub trait Network<B: BlockT>: NetworkPeers + NetworkEventStream + NetworkNotific
 			log::error!(target: "gossip", "add_set_reserved failed: {}", err);
 		}
 	}
+	fn remove_set_reserved(&self, who: PeerId, protocol: ProtocolName) {
+		let result = self.remove_peers_from_reserved_set(protocol, iter::once(who).collect());
+		if let Err(err) = result {
+			log::error!(target: "gossip", "remove_set_reserved failed: {}", err);
+		}
+	}
 }
 
 impl<T, B: BlockT> Network<B> for T where T: NetworkPeers + NetworkEventStream + NetworkNotification {}

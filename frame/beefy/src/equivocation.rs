@@ -39,8 +39,9 @@ use frame_support::{
 	log,
 	traits::{Get, KeyOwnerProofSystem},
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use log::{error, info};
-use sp_consensus_beefy::{EquivocationProof, ValidatorSetId, KEY_TYPE};
+use sp_consensus_beefy::{EquivocationProof, ValidatorSetId, KEY_TYPE as BEEFY_KEY_TYPE};
 use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
@@ -117,7 +118,7 @@ where
 ///
 /// This type implements `OffenceReportSystem` such that:
 /// - Equivocation reports are published on-chain as unsigned extrinsic via
-///   `offchain::SendTransactioinsTypes`.
+///   `offchain::SendTransactionTypes`.
 /// - On-chain validity checks and processing are mostly delegated to the user provided generic
 ///   types implementing `KeyOwnerProofSystem` and `ReportOffence` traits.
 /// - Offence reporter for unsigned transactions is fetched via the the authorship pallet.
@@ -126,7 +127,7 @@ pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, 
 /// Equivocation evidence convenience alias.
 pub type EquivocationEvidenceFor<T> = (
 	EquivocationProof<
-		<T as frame_system::Config>::BlockNumber,
+		BlockNumberFor<T>,
 		<T as Config>::BeefyId,
 		<<T as Config>::BeefyId as RuntimeAppPublic>::Signature,
 	>,
@@ -140,7 +141,7 @@ where
 	R: ReportOffence<
 		T::AccountId,
 		P::IdentificationTuple,
-		EquivocationOffence<P::IdentificationTuple, T::BlockNumber>,
+		EquivocationOffence<P::IdentificationTuple, BlockNumberFor<T>>,
 	>,
 	P: KeyOwnerProofSystem<(KeyTypeId, T::BeefyId), Proof = T::KeyOwnerProof>,
 	P::IdentificationTuple: Clone,
@@ -171,7 +172,7 @@ where
 		let (equivocation_proof, key_owner_proof) = evidence;
 
 		// Check the membership proof to extract the offender's id
-		let key = (KEY_TYPE, equivocation_proof.offender_id().clone());
+		let key = (BEEFY_KEY_TYPE, equivocation_proof.offender_id().clone());
 		let offender = P::check_proof(key, key_owner_proof).ok_or(InvalidTransaction::BadProof)?;
 
 		// Check if the offence has already been reported, and if so then we can discard the report.
@@ -205,7 +206,7 @@ where
 		let validator_set_count = key_owner_proof.validator_count();
 
 		// Validate the key ownership proof extracting the id of the offender.
-		let offender = P::check_proof((KEY_TYPE, offender), key_owner_proof)
+		let offender = P::check_proof((BEEFY_KEY_TYPE, offender), key_owner_proof)
 			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
 		// Validate equivocation proof (check votes are different and signatures are valid).

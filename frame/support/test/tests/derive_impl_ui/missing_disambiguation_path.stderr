@@ -1,0 +1,7 @@
+error: unexpected end of input, expected identifier
+  --> tests/derive_impl_ui/missing_disambiguation_path.rs:38:1
+   |
+38 | #[derive_impl(FourLeggedAnimal as)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the attribute macro `derive_impl` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -37,7 +37,10 @@ use schnorrkel::{
 use sp_std::vec::Vec;
 
 use crate::{
-	crypto::{ByteArray, CryptoType, CryptoTypeId, Derive, Public as TraitPublic, UncheckedFrom},
+	crypto::{
+		ByteArray, CryptoType, CryptoTypeId, Derive, FromEntropy, Public as TraitPublic,
+		UncheckedFrom,
+	},
 	hash::{H256, H512},
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -88,6 +91,14 @@ impl Clone for Pair {
 			secret: schnorrkel::SecretKey::from_bytes(&self.0.secret.to_bytes()[..])
 				.expect("key is always the correct size; qed"),
 		})
+	}
+}
+
+impl FromEntropy for Public {
+	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
+		let mut result = Self([0u8; 32]);
+		input.read(&mut result.0[..])?;
+		Ok(result)
 	}
 }
 
@@ -229,7 +240,7 @@ impl Serialize for Signature {
 	where
 		S: Serializer,
 	{
-		serializer.serialize_str(&array_bytes::bytes2hex("", self.as_ref()))
+		serializer.serialize_str(&array_bytes::bytes2hex("", self))
 	}
 }
 
@@ -493,13 +504,9 @@ impl TraitPair for Pair {
 		self.0.sign(context.bytes(message)).into()
 	}
 
-	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
-		let Ok(signature) = schnorrkel::Signature::from_bytes(sig.as_ref()) else {
-			return false
-		};
-		let Ok(public) = PublicKey::from_bytes(pubkey.as_ref()) else {
-			return false
-		};
+	fn verify<M: AsRef<[u8]>>(sig: &Signature, message: M, pubkey: &Public) -> bool {
+		let Ok(signature) = schnorrkel::Signature::from_bytes(sig.as_ref()) else { return false };
+		let Ok(public) = PublicKey::from_bytes(pubkey.as_ref()) else { return false };
 		public.verify_simple(SIGNING_CTX, message.as_ref(), &signature).is_ok()
 	}
 
@@ -561,7 +568,7 @@ pub mod vrf {
 	impl VrfTranscript {
 		/// Build a new transcript instance.
 		///
-		/// Each `data` element is a tuple `(domain, message)` composing the transcipt.
+		/// Each `data` element is a tuple `(domain, message)` used to build the transcript.
 		pub fn new(label: &'static [u8], data: &[(&'static [u8], &[u8])]) -> Self {
 			let mut transcript = merlin::Transcript::new(label);
 			data.iter().for_each(|(l, b)| transcript.append_message(l, b));

@@ -13,23 +13,23 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
 log = { version = "0.4.17", default-features = false }
-scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.5.0", default-features = false, features = ["derive", "serde"] }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../timestamp" }
-sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
-sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-application-crypto = { version = "23.0.0", default-features = false, path = "../../primitives/application-crypto", features = ["serde"] }
+sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe", features = ["serde"] }
+sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core", features = ["serde"] }
+sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime", features = ["serde"] }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
-sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking", features = ["serde"] }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
@@ -37,7 +37,7 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-offences = { version = "4.0.0-dev", path = "../offences" }
 pallet-staking = { version = "4.0.0-dev", path = "../staking" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-core = { version = "21.0.0", path = "../../primitives/core" }
 
 [features]
 default = ["std"]
@@ -59,6 +59,32 @@ std = [
 	"sp-session/std",
 	"sp-staking/std",
 	"sp-std/std",
+	"frame-election-provider-support/std",
+	"pallet-balances/std",
+	"pallet-offences/std",
+	"pallet-staking/std"
 ]
-runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
-try-runtime = ["frame-support/try-runtime"]
+runtime-benchmarks = [
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-election-provider-support/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
+	"pallet-offences/runtime-benchmarks",
+	"pallet-staking/runtime-benchmarks",
+	"pallet-timestamp/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+	"sp-staking/runtime-benchmarks"
+]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-election-provider-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-authorship/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-offences/try-runtime",
+	"pallet-session/try-runtime",
+	"pallet-staking/try-runtime",
+	"pallet-timestamp/try-runtime",
+	"sp-runtime/try-runtime"
+]

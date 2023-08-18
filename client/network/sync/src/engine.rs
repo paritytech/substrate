@@ -28,30 +28,24 @@ use codec::{Decode, Encode};
 use futures::{FutureExt, StreamExt};
 use futures_timer::Delay;
 use libp2p::PeerId;
-use lru::LruCache;
 use prometheus_endpoint::{
 	register, Gauge, GaugeVec, MetricSource, Opts, PrometheusError, Registry, SourcedGauge, U64,
 };
+use schnellru::{ByLength, LruMap};
 
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::ImportQueueService;
 use sc_network::{
-	config::{
-		FullNetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
-	},
+	config::{FullNetworkConfiguration, NonDefaultSetConfig, ProtocolId},
 	utils::LruHashSet,
-	NotificationsSink, ProtocolName,
+	NotificationsSink, ProtocolName, ReputationChange,
 };
 use sc_network_common::{
 	role::Roles,
 	sync::{
-		message::{
-			generic::{BlockData, BlockResponse},
-			BlockAnnounce, BlockAnnouncesHandshake, BlockState,
-		},
+		message::{BlockAnnounce, BlockAnnouncesHandshake, BlockState},
 		warp::WarpSyncParams,
 		BadPeer, ChainSync as ChainSyncT, ExtendedPeerInfo, PollBlockAnnounceValidation, SyncEvent,
-		SyncMode,
 	},
 };
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
@@ -76,13 +70,25 @@ const TICK_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1100)
 /// Maximum number of known block hashes to keep for a peer.
 const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
 
-/// If the block announces stream to peer has been inactive for two minutes meaning local node
+/// If the block announces stream to peer has been inactive for 30 seconds meaning local node
 /// has not sent or received block announcements to/from the peer, report the node for inactivity,
 /// disconnect it and attempt to establish connection to some other peer.
 const INACTIVITY_EVICT_THRESHOLD: Duration = Duration::from_secs(30);
 
+/// When `SyncingEngine` is started, wait two minutes before actually staring to count peers as
+/// evicted.
+///
+/// Parachain collator may incorrectly get evicted because it's waiting to receive a number of
+/// relaychain blocks before it can start creating parachain blocks. During this wait,
+/// `SyncingEngine` still counts it as active and as the peer is not sending blocks, it may get
+/// evicted if a block is not received within the first 30 secons since the peer connected.
+///
+/// To prevent this from happening, define a threshold for how long `SyncingEngine` should wait
+/// before it starts evicting peers.
+const INITIAL_EVICTION_WAIT_PERIOD: Duration = Duration::from_secs(2 * 60);
+
 mod rep {
-	use sc_peerset::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 	/// Peer has different genesis.
 	pub const GENESIS_MISMATCH: Rep = Rep::new_fatal("Genesis mismatch");
 	/// Peer send us a block announcement that failed at validation.
@@ -168,10 +174,8 @@ pub struct Peer<B: BlockT> {
 	pub known_blocks: LruHashSet<B::Hash>,
 	/// Notification sink.
 	sink: NotificationsSink,
-	/// Instant when the last notification was sent to peer.
-	last_notification_sent: Instant,
-	/// Instant when the last notification was received from peer.
-	last_notification_received: Instant,
+	/// Is the peer inbound.
+	inbound: bool,
 }
 
 pub struct SyncingEngine<B: BlockT, Client> {
@@ -212,9 +216,6 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	/// All connected peers. Contains both full and light node peers.
 	peers: HashMap<PeerId, Peer<B>>,
 
-	/// Evicted peers
-	evicted: HashSet<PeerId>,
-
 	/// List of nodes for which we perform additional logging because they are important for the
 	/// user.
 	important_peers: HashSet<PeerId>,
@@ -232,8 +233,14 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	/// Number of slots to allocate to light nodes.
 	default_peers_set_num_light: usize,
 
+	/// Maximum number of inbound peers.
+	max_in_peers: usize,
+
+	/// Number of inbound peers accepted so far.
+	num_in_peers: usize,
+
 	/// A cache for the data that was associated to a block announcement.
-	block_announce_data_cache: LruCache<B::Hash, Vec<u8>>,
+	block_announce_data_cache: LruMap<B::Hash, Vec<u8>>,
 
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: HashSet<PeerId>,
@@ -243,6 +250,15 @@ pub struct SyncingEngine<B: BlockT, Client> {
 
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
+
+	/// When the syncing was started.
+	///
+	/// Stored as an `Option<Instant>` so once the initial wait has passed, `SyncingEngine`
+	/// can reset the peer timers and continue with the normal eviction process.
+	syncing_started: Option<Instant>,
+
+	/// Instant when the last notification was sent or received.
+	last_notification_io: Instant,
 }
 
 impl<B: BlockT, Client> SyncingEngine<B, Client>
@@ -272,12 +288,7 @@ where
 		warp_sync_protocol_name: Option<ProtocolName>,
 		rx: sc_utils::mpsc::TracingUnboundedReceiver<sc_network::SyncEvent<B>>,
 	) -> Result<(Self, SyncingService<B>, NonDefaultSetConfig), ClientError> {
-		let mode = match net_config.network_config.sync_mode {
-			SyncOperationMode::Full => SyncMode::Full,
-			SyncOperationMode::Fast { skip_proofs, storage_chain_mode } =>
-				SyncMode::LightState { skip_proofs, storage_chain_mode },
-			SyncOperationMode::Warp => SyncMode::Warp,
-		};
+		let mode = net_config.network_config.sync_mode;
 		let max_parallel_downloads = net_config.network_config.max_parallel_downloads;
 		let max_blocks_per_request = if net_config.network_config.max_blocks_per_request >
 			crate::MAX_BLOCKS_IN_RESPONSE as u32
@@ -287,12 +298,9 @@ where
 		} else {
 			net_config.network_config.max_blocks_per_request
 		};
-		let cache_capacity = NonZeroUsize::new(
-			(net_config.network_config.default_peers_set.in_peers as usize +
-				net_config.network_config.default_peers_set.out_peers as usize)
-				.max(1),
-		)
-		.expect("cache capacity is not zero");
+		let cache_capacity = (net_config.network_config.default_peers_set.in_peers +
+			net_config.network_config.default_peers_set.out_peers)
+			.max(1);
 		let important_peers = {
 			let mut imp_p = HashSet::new();
 			for reserved in &net_config.network_config.default_peers_set.reserved_nodes {
@@ -366,6 +374,12 @@ where
 			.flatten()
 			.expect("Genesis block exists; qed");
 
+		// `default_peers_set.in_peers` contains an unspecified amount of light peers so the number
+		// of full inbound peers must be calculated from the total full peer count
+		let max_full_peers = net_config.network_config.default_peers_set_num_full;
+		let max_out_peers = net_config.network_config.default_peers_set.out_peers;
+		let max_in_peers = (max_full_peers - max_out_peers) as usize;
+
 		Ok((
 			Self {
 				roles,
@@ -373,8 +387,7 @@ where
 				chain_sync,
 				network_service,
 				peers: HashMap::new(),
-				evicted: HashSet::new(),
-				block_announce_data_cache: LruCache::new(cache_capacity),
+				block_announce_data_cache: LruMap::new(ByLength::new(cache_capacity)),
 				block_announce_protocol_name,
 				num_connected: num_connected.clone(),
 				is_major_syncing: is_major_syncing.clone(),
@@ -387,8 +400,12 @@ where
 				default_peers_set_no_slot_peers,
 				default_peers_set_num_full,
 				default_peers_set_num_light,
+				num_in_peers: 0usize,
+				max_in_peers,
 				event_streams: Vec::new(),
 				tick_timeout: Delay::new(TICK_TIMEOUT),
+				syncing_started: None,
+				last_notification_io: Instant::now(),
 				metrics: if let Some(r) = metrics_registry {
 					match Metrics::register(r, is_major_syncing.clone()) {
 						Ok(metrics) => Some(metrics),
@@ -450,29 +467,16 @@ where
 		&mut self,
 		validation_result: PollBlockAnnounceValidation<B::Header>,
 	) {
-		let (header, _is_best, who) = match validation_result {
-			PollBlockAnnounceValidation::Skip => return,
+		match validation_result {
+			PollBlockAnnounceValidation::Skip => {},
 			PollBlockAnnounceValidation::Nothing { is_best: _, who, announce } => {
 				self.update_peer_info(&who);
 
 				if let Some(data) = announce.data {
 					if !data.is_empty() {
-						self.block_announce_data_cache.put(announce.header.hash(), data);
+						self.block_announce_data_cache.insert(announce.header.hash(), data);
 					}
 				}
-
-				return
-			},
-			PollBlockAnnounceValidation::ImportHeader { announce, is_best, who } => {
-				self.update_peer_info(&who);
-
-				if let Some(data) = announce.data {
-					if !data.is_empty() {
-						self.block_announce_data_cache.put(announce.header.hash(), data);
-					}
-				}
-
-				(announce.header, is_best, who)
 			},
 			PollBlockAnnounceValidation::Failure { who, disconnect } => {
 				if disconnect {
@@ -481,31 +485,8 @@ where
 				}
 
 				self.network_service.report_peer(who, rep::BAD_BLOCK_ANNOUNCEMENT);
-				return
 			},
-		};
-
-		// to import header from announced block let's construct response to request that normally
-		// would have been sent over network (but it is not in our case)
-		let blocks_to_import = self.chain_sync.on_block_data(
-			&who,
-			None,
-			BlockResponse {
-				id: 0,
-				blocks: vec![BlockData {
-					hash: header.hash(),
-					header: Some(header),
-					body: None,
-					indexed_body: None,
-					receipt: None,
-					message_queue: None,
-					justification: None,
-					justifications: None,
-				}],
-			},
-		);
-
-		self.chain_sync.process_block_response_data(blocks_to_import);
+		}
 	}
 
 	/// Push a block announce validation.
@@ -537,7 +518,6 @@ where
 			},
 		};
 		peer.known_blocks.insert(hash);
-		peer.last_notification_received = Instant::now();
 
 		if peer.info.roles.is_full() {
 			let is_best = match announce.state.unwrap_or(BlockState::Best) {
@@ -588,7 +568,7 @@ where
 					data: Some(data.clone()),
 				};
 
-				peer.last_notification_sent = Instant::now();
+				self.last_notification_io = Instant::now();
 				peer.sink.send_sync_notification(message.encode());
 			}
 		}
@@ -607,6 +587,8 @@ where
 	}
 
 	pub async fn run(mut self) {
+		self.syncing_started = Some(Instant::now());
+
 		loop {
 			futures::future::poll_fn(|cx| self.poll(cx)).await;
 		}
@@ -619,36 +601,37 @@ where
 
 		while let Poll::Ready(()) = self.tick_timeout.poll_unpin(cx) {
 			self.report_metrics();
+			self.tick_timeout.reset(TICK_TIMEOUT);
 
-			// go over all connected peers and check if any of them have been idle for a while. Idle
-			// in this case means that we haven't sent or received block announcements to/from this
-			// peer. If that is the case, because of #5685, it could be that the block announces
-			// substream is not actually open and and this peer is just wasting a slot and is should
-			// be replaced with some other node that is willing to send us block announcements.
-			for (id, peer) in self.peers.iter() {
-				// because of a delay between disconnecting a peer in `SyncingEngine` and getting
-				// the response back from `Protocol`, a peer might be reported and disconnect
-				// multiple times. To prevent this from happening (until the underlying issue is
-				// fixed), keep track of evicted peers and report and disconnect them only once.
-				if self.evicted.contains(id) {
+			// if `SyncingEngine` has just started, don't evict seemingly inactive peers right away
+			// as they may not have produced blocks not because they've disconnected but because
+			// they're still waiting to receive enough relaychain blocks to start producing blocks.
+			if let Some(started) = self.syncing_started {
+				if started.elapsed() < INITIAL_EVICTION_WAIT_PERIOD {
 					continue
 				}
 
-				let last_received_late =
-					peer.last_notification_received.elapsed() > INACTIVITY_EVICT_THRESHOLD;
-				let last_sent_late =
-					peer.last_notification_sent.elapsed() > INACTIVITY_EVICT_THRESHOLD;
-
-				if last_received_late && last_sent_late {
-					log::debug!(target: "sync", "evict peer {id} since it has been idling for too long");
-					self.network_service.report_peer(*id, rep::INACTIVE_SUBSTREAM);
-					self.network_service
-						.disconnect_peer(*id, self.block_announce_protocol_name.clone());
-					self.evicted.insert(*id);
-				}
+				self.syncing_started = None;
+				self.last_notification_io = Instant::now();
 			}
 
-			self.tick_timeout.reset(TICK_TIMEOUT);
+			// if syncing hasn't sent or received any blocks within `INACTIVITY_EVICT_THRESHOLD`,
+			// it means the local node has stalled and is connected to peers who either don't
+			// consider it connected or are also all stalled. In order to unstall the node,
+			// disconnect all peers and allow `ProtocolController` to establish new connections.
+			if self.last_notification_io.elapsed() > INACTIVITY_EVICT_THRESHOLD {
+				log::debug!(target: "sync", "syncing has halted due to inactivity, evicting all peers");
+
+				for peer in self.peers.keys() {
+					self.network_service.report_peer(*peer, rep::INACTIVE_SUBSTREAM);
+					self.network_service
+						.disconnect_peer(*peer, self.block_announce_protocol_name.clone());
+				}
+
+				// after all the peers have been evicted, start timer again to prevent evicting
+				// new peers that join after the old peer have been evicted
+				self.last_notification_io = Instant::now();
+			}
 		}
 
 		while let Poll::Ready(Some(event)) = self.service_rx.poll_next_unpin(cx) {
@@ -681,7 +664,7 @@ where
 							.disconnect_peer(peer, self.block_announce_protocol_name.clone());
 						self.network_service.report_peer(
 							peer,
-							sc_peerset::ReputationChange::new_fatal("Invalid justification"),
+							ReputationChange::new_fatal("Invalid justification"),
 						);
 					}
 				},
@@ -730,8 +713,9 @@ where
 					remote,
 					received_handshake,
 					sink,
+					inbound,
 					tx,
-				} => match self.on_sync_peer_connected(remote, &received_handshake, sink) {
+				} => match self.on_sync_peer_connected(remote, &received_handshake, sink, inbound) {
 					Ok(()) => {
 						let _ = tx.send(true);
 					},
@@ -744,7 +728,6 @@ where
 					},
 				},
 				sc_network::SyncEvent::NotificationStreamClosed { remote } => {
-					self.evicted.remove(&remote);
 					if self.on_sync_peer_disconnected(remote).is_err() {
 						log::trace!(
 							target: "sync",
@@ -757,6 +740,7 @@ where
 					for message in messages {
 						if self.peers.contains_key(&remote) {
 							if let Ok(announce) = BlockAnnounce::decode(&mut message.as_ref()) {
+								self.last_notification_io = Instant::now();
 								self.push_block_announce_validation(remote, announce);
 
 								// Make sure that the newly added block announce validation future
@@ -800,15 +784,31 @@ where
 	///
 	/// Returns a result if the handshake of this peer was indeed accepted.
 	pub fn on_sync_peer_disconnected(&mut self, peer: PeerId) -> Result<(), ()> {
-		if self.peers.remove(&peer).is_some() {
+		if let Some(info) = self.peers.remove(&peer) {
 			if self.important_peers.contains(&peer) {
 				log::warn!(target: "sync", "Reserved peer {} disconnected", peer);
 			} else {
 				log::debug!(target: "sync", "{} disconnected", peer);
 			}
 
+			if !self.default_peers_set_no_slot_connected_peers.remove(&peer) &&
+				info.inbound && info.info.roles.is_full()
+			{
+				match self.num_in_peers.checked_sub(1) {
+					Some(value) => {
+						self.num_in_peers = value;
+					},
+					None => {
+						log::error!(
+							target: "sync",
+							"trying to disconnect an inbound node which is not counted as inbound"
+						);
+						debug_assert!(false);
+					},
+				}
+			}
+
 			self.chain_sync.peer_disconnected(&peer);
-			self.default_peers_set_no_slot_connected_peers.remove(&peer);
 			self.event_streams
 				.retain(|stream| stream.unbounded_send(SyncEvent::PeerDisconnected(peer)).is_ok());
 			Ok(())
@@ -827,6 +827,7 @@ where
 		who: PeerId,
 		status: &BlockAnnouncesHandshake<B>,
 		sink: NotificationsSink,
+		inbound: bool,
 	) -> Result<(), ()> {
 		log::trace!(target: "sync", "New peer {} {:?}", who, status);
 
@@ -869,6 +870,15 @@ where
 		let no_slot_peer = self.default_peers_set_no_slot_peers.contains(&who);
 		let this_peer_reserved_slot: usize = if no_slot_peer { 1 } else { 0 };
 
+		// make sure to accept no more than `--in-peers` many full nodes
+		if !no_slot_peer &&
+			status.roles.is_full() &&
+			inbound && self.num_in_peers == self.max_in_peers
+		{
+			log::debug!(target: "sync", "All inbound slots have been consumed, rejecting {who}");
+			return Err(())
+		}
+
 		if status.roles.is_full() &&
 			self.chain_sync.num_peers() >=
 				self.default_peers_set_num_full +
@@ -897,8 +907,7 @@ where
 				NonZeroUsize::new(MAX_KNOWN_BLOCKS).expect("Constant is nonzero"),
 			),
 			sink,
-			last_notification_sent: Instant::now(),
-			last_notification_received: Instant::now(),
+			inbound,
 		};
 
 		let req = if peer.info.roles.is_full() {
@@ -916,8 +925,11 @@ where
 		log::debug!(target: "sync", "Connected {}", who);
 
 		self.peers.insert(who, peer);
+
 		if no_slot_peer {
 			self.default_peers_set_no_slot_connected_peers.insert(who);
+		} else if inbound && status.roles.is_full() {
+			self.num_in_peers += 1;
 		}
 
 		if let Some(req) = req {

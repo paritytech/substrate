@@ -109,12 +109,12 @@
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
 //!         }
-//!         fn electing_voters(maybe_max_len: Option<usize>)
+//!         fn electing_voters(bounds: DataProviderBounds)
 //!           -> data_provider::Result<Vec<VoterOf<Self>>>
 //!         {
 //!             Ok(Default::default())
 //!         }
-//!         fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+//!         fn electable_targets(bounds: DataProviderBounds) -> data_provider::Result<Vec<AccountId>> {
 //!             Ok(vec![10, 20, 30])
 //!         }
 //!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
@@ -145,7 +145,7 @@
 //!     impl<T: Config> ElectionProvider for GenericElectionProvider<T> {
 //!         fn ongoing() -> bool { false }
 //!         fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
-//!             Self::DataProvider::electable_targets(None)
+//!             Self::DataProvider::electable_targets(DataProviderBounds::default())
 //!                 .map_err(|_| "failed to elect")
 //!                 .map(|t| bounded_vec![(t[0], Support::default())])
 //!         }
@@ -173,11 +173,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod bounds;
 pub mod onchain;
 pub mod traits;
+
 use sp_runtime::traits::{Bounded, Saturating, Zero};
 use sp_std::{fmt::Debug, prelude::*};
 
+pub use bounds::DataProviderBounds;
+pub use codec::{Decode, Encode};
 /// Re-export the solution generation macro.
 pub use frame_election_provider_solution_type::generate_solution_type;
 pub use frame_support::{traits::Get, weights::Weight, BoundedVec, RuntimeDebug};
@@ -189,15 +193,32 @@ pub use sp_npos_elections::{
 };
 pub use traits::NposSolution;
 
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
+
 // re-export for the solution macro, with the dependencies of the macro.
 #[doc(hidden)]
-pub use codec;
-#[doc(hidden)]
-pub use scale_info;
-#[doc(hidden)]
-pub use sp_arithmetic;
-#[doc(hidden)]
-pub use sp_std;
+pub mod private {
+	pub use codec;
+	pub use scale_info;
+	pub use sp_arithmetic;
+	pub use sp_std;
+
+	// Simple Extension trait to easily convert `None` from index closures to `Err`.
+	//
+	// This is only generated and re-exported for the solution code to use.
+	pub trait __OrInvalidIndex<T> {
+		fn or_invalid_index(self) -> Result<T, crate::Error>;
+	}
+
+	impl<T> __OrInvalidIndex<T> for Option<T> {
+		fn or_invalid_index(self) -> Result<T, crate::Error> {
+			self.ok_or(crate::Error::SolutionInvalidIndex)
+		}
+	}
+}
+
+use private::__OrInvalidIndex;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -206,19 +227,6 @@ pub use weights::WeightInfo;
 mod mock;
 #[cfg(test)]
 mod tests;
-// Simple Extension trait to easily convert `None` from index closures to `Err`.
-//
-// This is only generated and re-exported for the solution code to use.
-#[doc(hidden)]
-pub trait __OrInvalidIndex<T> {
-	fn or_invalid_index(self) -> Result<T, Error>;
-}
-
-impl<T> __OrInvalidIndex<T> for Option<T> {
-	fn or_invalid_index(self) -> Result<T, Error> {
-		self.ok_or(Error::SolutionInvalidIndex)
-	}
-}
 
 /// The [`IndexAssignment`] type is an intermediate between the assignments list
 /// ([`&[Assignment<T>]`][Assignment]) and `SolutionOf<T>`.
@@ -227,7 +235,7 @@ impl<T> __OrInvalidIndex<T> for Option<T> {
 /// making it fast to repeatedly encode into a `SolutionOf<T>`. This property turns out
 /// to be important when trimming for solution length.
 #[derive(RuntimeDebug, Clone, Default)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, codec::Encode, codec::Decode))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct IndexAssignment<VoterIndex, TargetIndex, P: PerThing> {
 	/// Index of the voter among the voters list.
 	pub who: VoterIndex,
@@ -271,7 +279,7 @@ pub mod data_provider {
 /// Something that can provide the data to an [`ElectionProvider`].
 pub trait ElectionDataProvider {
 	/// The account identifier type.
-	type AccountId;
+	type AccountId: Encode;
 
 	/// The block number type.
 	type BlockNumber;
@@ -282,25 +290,18 @@ pub trait ElectionDataProvider {
 	/// All possible targets for the election, i.e. the targets that could become elected, thus
 	/// "electable".
 	///
-	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
-	/// long.
-	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn electable_targets(
-		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<Self::AccountId>>;
+	fn electable_targets(bounds: DataProviderBounds)
+		-> data_provider::Result<Vec<Self::AccountId>>;
 
 	/// All the voters that participate in the election, thus "electing".
 	///
 	/// Note that if a notion of self-vote exists, it should be represented here.
 	///
-	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
-	/// long.
-	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>>;
+	fn electing_voters(bounds: DataProviderBounds) -> data_provider::Result<Vec<VoterOf<Self>>>;
 
 	/// The number of targets to elect.
 	///
@@ -421,8 +422,8 @@ pub trait ElectionProvider: ElectionProviderBase {
 /// data provider at runtime via `forced_input_voters_bound` and `forced_input_target_bound`.
 pub trait InstantElectionProvider: ElectionProviderBase {
 	fn instant_elect(
-		forced_input_voters_bound: Option<u32>,
-		forced_input_target_bound: Option<u32>,
+		forced_input_voters_bound: DataProviderBounds,
+		forced_input_target_bound: DataProviderBounds,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error>;
 }
 
@@ -464,8 +465,8 @@ where
 	MaxWinners: Get<u32>,
 {
 	fn instant_elect(
-		_: Option<u32>,
-		_: Option<u32>,
+		_: DataProviderBounds,
+		_: DataProviderBounds,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Err("`NoElection` cannot do anything.")
 	}
@@ -564,7 +565,7 @@ pub trait SortedListProvider<AccountId> {
 
 	/// Check internal state of the list. Only meant for debugging.
 	#[cfg(feature = "try-runtime")]
-	fn try_state() -> Result<(), &'static str>;
+	fn try_state() -> Result<(), TryRuntimeError>;
 
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.

@@ -1,6 +1,6 @@
 error: There is no 'default' method with this name (without `changed_in` attribute).
        The 'default' method is used to call into the latest implementation.
-  --> tests/ui/changed_in_no_default_method.rs:15:6
-   |
-15 |         fn test(data: u64);
-   |            ^^^^
+ --> tests/ui/changed_in_no_default_method.rs:9:6
+  |
+9 |         fn test(data: u64);
+  |            ^^^^

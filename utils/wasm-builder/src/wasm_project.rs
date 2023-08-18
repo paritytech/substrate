@@ -19,6 +19,7 @@ use crate::{write_file_if_changed, CargoCommandVersioned, OFFLINE};
 
 use build_helper::rerun_if_changed;
 use cargo_metadata::{CargoOpt, Metadata, MetadataCommand};
+use parity_wasm::elements::{deserialize_buffer, Module};
 use std::{
 	borrow::ToOwned,
 	collections::HashSet,
@@ -116,6 +117,7 @@ pub(crate) fn create_and_compile(
 	cargo_cmd: CargoCommandVersioned,
 	features_to_enable: Vec<String>,
 	wasm_binary_name: Option<String>,
+	check_for_runtime_version_section: bool,
 ) -> (Option<WasmBinary>, WasmBinaryBloaty) {
 	let wasm_workspace_root = get_wasm_workspace_root();
 	let wasm_workspace = wasm_workspace_root.join("wbuild");
@@ -133,6 +135,10 @@ pub(crate) fn create_and_compile(
 	let profile = build_project(&project, default_rustflags, cargo_cmd);
 	let (wasm_binary, wasm_binary_compressed, bloaty) =
 		compact_wasm_file(&project, profile, project_cargo_toml, wasm_binary_name);
+
+	if check_for_runtime_version_section {
+		ensure_runtime_version_wasm_section_exists(bloaty.wasm_binary_bloaty_path());
+	}
 
 	wasm_binary
 		.as_ref()
@@ -157,6 +163,29 @@ pub(crate) fn create_and_compile(
 	}
 
 	(final_wasm_binary, bloaty)
+}
+
+/// Ensures that the `runtime_version` wasm section exists in the given wasm file.
+///
+/// If the section can not be found, it will print an error and exit the builder.
+fn ensure_runtime_version_wasm_section_exists(wasm: &Path) {
+	let wasm_blob = fs::read(wasm).expect("`{wasm}` was just written and should exist; qed");
+
+	let module: Module = match deserialize_buffer(&wasm_blob) {
+		Ok(m) => m,
+		Err(e) => {
+			println!("Failed to deserialize `{}`: {e:?}", wasm.display());
+			process::exit(1);
+		},
+	};
+
+	if !module.custom_sections().any(|cs| cs.name() == "runtime_version") {
+		println!(
+			"Couldn't find the `runtime_version` wasm section. \
+				  Please ensure that you are using the `sp_version::runtime_version` attribute macro!"
+		);
+		process::exit(1);
+	}
 }
 
 /// Adjust the mtime of the bloaty and compressed/compact wasm files.

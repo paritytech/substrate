@@ -62,7 +62,7 @@ pub type Statements = Vec<Statement>;
 pub type StatementImportFuture = oneshot::Receiver<SubmitResult>;
 
 mod rep {
-	use sc_peerset::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 	/// Reputation change when a peer sends us any statement.
 	///
 	/// This forces node to verify it, thus the negative value here. Once statement is verified,
@@ -297,10 +297,13 @@ where
 				}
 			},
 			SyncEvent::PeerDisconnected(remote) => {
-				self.network.remove_peers_from_reserved_set(
+				let result = self.network.remove_peers_from_reserved_set(
 					self.protocol_name.clone(),
 					iter::once(remote).collect(),
 				);
+				if let Err(err) = result {
+					log::error!(target: LOG_TARGET, "Failed to remove reserved peer: {err}");
+				}
 			},
 		}
 	}

@@ -87,6 +87,10 @@ use std::{
 /// a given address.
 const MAX_KNOWN_EXTERNAL_ADDRESSES: usize = 32;
 
+/// Default value for Kademlia replication factor which  determines to how many closest peers a
+/// record is replicated to.
+pub const DEFAULT_KADEMLIA_REPLICATION_FACTOR: usize = 20;
+
 /// `DiscoveryBehaviour` configuration.
 ///
 /// Note: In order to discover nodes or load and store values via Kademlia one has to add
@@ -101,6 +105,7 @@ pub struct DiscoveryConfig {
 	enable_mdns: bool,
 	kademlia_disjoint_query_paths: bool,
 	kademlia_protocols: Vec<Vec<u8>>,
+	kademlia_replication_factor: NonZeroUsize,
 }
 
 impl DiscoveryConfig {
@@ -116,6 +121,8 @@ impl DiscoveryConfig {
 			enable_mdns: false,
 			kademlia_disjoint_query_paths: false,
 			kademlia_protocols: Vec::new(),
+			kademlia_replication_factor: NonZeroUsize::new(DEFAULT_KADEMLIA_REPLICATION_FACTOR)
+				.expect("value is a constant; constant is non-zero; qed."),
 		}
 	}
 
@@ -182,6 +189,12 @@ impl DiscoveryConfig {
 		self
 	}
 
+	/// Sets Kademlia replication factor.
+	pub fn with_kademlia_replication_factor(&mut self, value: NonZeroUsize) -> &mut Self {
+		self.kademlia_replication_factor = value;
+		self
+	}
+
 	/// Create a `DiscoveryBehaviour` from this config.
 	pub fn finish(self) -> DiscoveryBehaviour {
 		let Self {
@@ -194,10 +207,13 @@ impl DiscoveryConfig {
 			enable_mdns,
 			kademlia_disjoint_query_paths,
 			kademlia_protocols,
+			kademlia_replication_factor,
 		} = self;
 
 		let kademlia = if !kademlia_protocols.is_empty() {
 			let mut config = KademliaConfig::default();
+
+			config.set_replication_factor(kademlia_replication_factor);
 			config.set_protocol_names(kademlia_protocols.into_iter().map(Into::into).collect());
 			// By default Kademlia attempts to insert all peers into its routing table once a
 			// dialing attempt succeeds. In order to control which peer is added, disable the
@@ -234,14 +250,14 @@ impl DiscoveryConfig {
 			discovery_only_if_under_num,
 			mdns: if enable_mdns {
 				match TokioMdns::new(mdns::Config::default(), local_peer_id) {
-					Ok(mdns) => Some(mdns),
+					Ok(mdns) => Toggle::from(Some(mdns)),
 					Err(err) => {
 						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
-						None
+						Toggle::from(None)
 					},
 				}
 			} else {
-				None
+				Toggle::from(None)
 			},
 			allow_non_globals_in_dht,
 			known_external_addresses: LruHashSet::new(
@@ -265,7 +281,7 @@ pub struct DiscoveryBehaviour {
 	/// it's always enabled in `NetworkWorker::new()`.
 	kademlia: Toggle<Kademlia<MemoryStore>>,
 	/// Discovers nodes on the local network.
-	mdns: Option<TokioMdns>,
+	mdns: Toggle<TokioMdns>,
 	/// Stream that fires when we need to perform the next random Kademlia query. `None` if
 	/// random walking is disabled.
 	next_kad_random_query: Option<Delay>,
@@ -532,7 +548,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		addresses: &[Multiaddr],
 		effective_role: Endpoint,
 	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
-		let Some(peer_id) = maybe_peer else { return Ok(Vec::new()); };
+		let Some(peer_id) = maybe_peer else { return Ok(Vec::new()) };
 
 		let mut list = self
 			.permanent_addresses
@@ -552,14 +568,12 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				effective_role,
 			)?;
 
-			if let Some(ref mut mdns) = self.mdns {
-				list_to_filter.extend(mdns.handle_pending_outbound_connection(
-					connection_id,
-					maybe_peer,
-					addresses,
-					effective_role,
-				)?);
-			}
+			list_to_filter.extend(self.mdns.handle_pending_outbound_connection(
+				connection_id,
+				maybe_peer,
+				addresses,
+				effective_role,
+			)?);
 
 			if !self.allow_private_ip {
 				list_to_filter.retain(|addr| match addr.iter().next() {
@@ -647,6 +661,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			},
 			FromSwarm::NewListenAddr(e) => {
 				self.kademlia.on_swarm_event(FromSwarm::NewListenAddr(e));
+				self.mdns.on_swarm_event(FromSwarm::NewListenAddr(e));
 			},
 		}
 	}
@@ -883,34 +898,32 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		}
 
 		// Poll mDNS.
-		if let Some(ref mut mdns) = self.mdns {
-			while let Poll::Ready(ev) = mdns.poll(cx, params) {
-				match ev {
-					ToSwarm::GenerateEvent(event) => match event {
-						mdns::Event::Discovered(list) => {
-							if self.num_connections >= self.discovery_only_if_under_num {
-								continue
-							}
+		while let Poll::Ready(ev) = self.mdns.poll(cx, params) {
+			match ev {
+				ToSwarm::GenerateEvent(event) => match event {
+					mdns::Event::Discovered(list) => {
+						if self.num_connections >= self.discovery_only_if_under_num {
+							continue
+						}
 
-							self.pending_events
-								.extend(list.map(|(peer_id, _)| DiscoveryOut::Discovered(peer_id)));
-							if let Some(ev) = self.pending_events.pop_front() {
-								return Poll::Ready(ToSwarm::GenerateEvent(ev))
-							}
-						},
-						mdns::Event::Expired(_) => {},
+						self.pending_events
+							.extend(list.map(|(peer_id, _)| DiscoveryOut::Discovered(peer_id)));
+						if let Some(ev) = self.pending_events.pop_front() {
+							return Poll::Ready(ToSwarm::GenerateEvent(ev))
+						}
 					},
-					ToSwarm::Dial { .. } => {
-						unreachable!("mDNS never dials!");
-					},
-					ToSwarm::NotifyHandler { event, .. } => match event {}, /* `event` is an */
-					// enum with no
-					// variant
-					ToSwarm::ReportObservedAddr { address, score } =>
-						return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
-					ToSwarm::CloseConnection { peer_id, connection } =>
-						return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
-				}
+					mdns::Event::Expired(_) => {},
+				},
+				ToSwarm::Dial { .. } => {
+					unreachable!("mDNS never dials!");
+				},
+				ToSwarm::NotifyHandler { event, .. } => match event {}, /* `event` is an */
+				// enum with no
+				// variant
+				ToSwarm::ReportObservedAddr { address, score } =>
+					return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
+				ToSwarm::CloseConnection { peer_id, connection } =>
+					return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
 			}
 		}
 
@@ -1003,6 +1016,7 @@ mod tests {
 					TokioExecutor(runtime),
 				)
 				.build();
+
 				let listen_addr: Multiaddr =
 					format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 

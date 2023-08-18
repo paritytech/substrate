@@ -24,13 +24,10 @@ use frame_support::weights::{
 };
 
 impl crate::WeightInfo for () {
-	fn report_equivocation(validator_count: u32) -> Weight {
+	fn report_equivocation(validator_count: u32, max_nominators_per_validator: u32) -> Weight {
 		// we take the validator set count from the membership proof to
 		// calculate the weight but we set a floor of 100 validators.
 		let validator_count = validator_count.max(100) as u64;
-
-		// worst case we are considering is that the given offender is backed by 200 nominators
-		const MAX_NOMINATORS: u64 = 200;
 
 		// checking membership proof
 		Weight::from_parts(35u64 * WEIGHT_REF_TIME_PER_MICROS, 0)
@@ -44,11 +41,11 @@ impl crate::WeightInfo for () {
 			// report offence
 			.saturating_add(Weight::from_parts(110u64 * WEIGHT_REF_TIME_PER_MICROS, 0))
 			.saturating_add(Weight::from_parts(
-				25u64 * WEIGHT_REF_TIME_PER_MICROS * MAX_NOMINATORS,
+				25u64 * WEIGHT_REF_TIME_PER_MICROS * max_nominators_per_validator as u64,
 				0,
 			))
-			.saturating_add(DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
-			.saturating_add(DbWeight::get().writes(10 + 3 * MAX_NOMINATORS))
+			.saturating_add(DbWeight::get().reads(14 + 3 * max_nominators_per_validator as u64))
+			.saturating_add(DbWeight::get().writes(10 + 3 * max_nominators_per_validator as u64))
 			// fetching set id -> session index mappings
 			.saturating_add(DbWeight::get().reads(2))
 	}

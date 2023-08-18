@@ -18,7 +18,6 @@
 
 //! Utilities to build a `TestClient` for `kitchensink-runtime`.
 
-use sc_service::client;
 use sp_runtime::BuildStorage;
 /// Re-export test-client utilities.
 pub use substrate_test_client::*;
@@ -36,9 +35,6 @@ pub type Client = client::Client<
 	node_primitives::Block,
 	kitchensink_runtime::RuntimeApi,
 >;
-
-/// Transaction for kitchensink-runtime.
-pub type Transaction = sc_client_api::backend::TransactionFor<Backend, node_primitives::Block>;
 
 /// Genesis configuration parameters for `TestClient`.
 #[derive(Default)]

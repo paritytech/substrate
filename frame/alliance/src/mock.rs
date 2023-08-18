@@ -20,7 +20,6 @@
 pub use sp_core::H256;
 use sp_runtime::traits::Hash;
 pub use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
@@ -28,7 +27,7 @@ use sp_std::convert::{TryFrom, TryInto};
 
 pub use frame_support::{
 	assert_noop, assert_ok, ord_parameter_types, parameter_types,
-	traits::{EitherOfDiverse, GenesisBuild, SortedMembers},
+	traits::{EitherOfDiverse, SortedMembers},
 	BoundedVec,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
@@ -52,13 +51,12 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = BlockNumber;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type DbWeight = ();
@@ -89,7 +87,7 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type HoldIdentifier = ();
+	type RuntimeHoldReason = ();
 	type MaxHolds = ();
 }
 
@@ -238,14 +236,10 @@ impl Config for Test {
 	type RetirementPeriod = RetirementPeriod;
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		Balances: pallet_balances,
@@ -256,7 +250,7 @@ frame_support::construct_runtime!(
 );
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![
@@ -274,14 +268,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.assimilate_storage(&mut t)
 	.unwrap();
 
-	GenesisBuild::<Test>::assimilate_storage(
-		&pallet_alliance::GenesisConfig {
-			fellows: vec![],
-			allies: vec![],
-			phantom: Default::default(),
-		},
-		&mut t,
-	)
+	pallet_alliance::GenesisConfig::<Test> {
+		fellows: vec![],
+		allies: vec![],
+		phantom: Default::default(),
+	}
+	.assimilate_storage(&mut t)
 	.unwrap();
 
 	let mut ext = sp_io::TestExternalities::new(t);
@@ -372,7 +364,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 #[cfg(feature = "runtime-benchmarks")]
 pub fn new_bench_ext() -> sp_io::TestExternalities {
-	GenesisConfig::default().build_storage().unwrap().into()
+	RuntimeGenesisConfig::default().build_storage().unwrap().into()
 }
 
 pub fn test_cid() -> Cid {

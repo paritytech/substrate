@@ -23,72 +23,44 @@ use super::*;
 
 use crate as pallet_multisig;
 use frame_support::{
-	assert_noop, assert_ok,
+	assert_noop, assert_ok, derive_impl,
 	traits::{ConstU32, ConstU64, Contains},
 };
-use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-	TokenError,
-};
+use sp_runtime::{BuildStorage, TokenError};
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
+type Block = frame_system::mocking::MockBlockU32<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Multisig: pallet_multisig::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
-	type BaseCallFilter = TestBaseCallFilter;
-	type BlockWeights = ();
-	type BlockLength = ();
-	type DbWeight = ();
+	type Block = Block;
+	type BlockHashCount = ConstU32<250>;
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
-	type Hashing = BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
-	type BlockHashCount = ConstU64<250>;
-	type Version = ();
+	type BaseCallFilter = TestBaseCallFilter;
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<u64>;
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = ConstU32<16>;
+
+	type AccountData = pallet_balances::AccountData<u64>;
 }
 
+#[derive_impl(pallet_balances::config_preludes::TestDefaultConfig as pallet_balances::DefaultConfig)]
 impl pallet_balances::Config for Test {
-	type MaxLocks = ();
-	type MaxReserves = ();
-	type ReserveIdentifier = [u8; 8];
-	type Balance = u64;
 	type RuntimeEvent = RuntimeEvent;
+	type RuntimeHoldReason = ();
+	type ReserveIdentifier = [u8; 8];
 	type DustRemoval = ();
-	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
-	type WeightInfo = ();
-	type FreezeIdentifier = ();
-	type MaxFreezes = ();
-	type HoldIdentifier = ();
-	type MaxHolds = ();
+	type ExistentialDeposit = ConstU64<1>;
 }
 
 pub struct TestBaseCallFilter;
@@ -115,7 +87,7 @@ impl Config for Test {
 use pallet_balances::Call as BalancesCall;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2)],
 	}
@@ -126,7 +98,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-fn now() -> Timepoint<u64> {
+fn now() -> Timepoint<u32> {
 	Multisig::timepoint()
 }
 

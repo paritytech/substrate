@@ -196,7 +196,7 @@ fn transaction_fee_is_correct() {
 fn block_weight_capacity_report() {
 	// Just report how many transfer calls you could fit into a block. The number should at least
 	// be a few hundred (250 at the time of writing but can change over time). Runs until panic.
-	use node_primitives::Index;
+	use node_primitives::Nonce;
 
 	// execution ext.
 	let mut t = new_test_ext(compact_code_unwrap());
@@ -205,7 +205,7 @@ fn block_weight_capacity_report() {
 
 	let factor = 50;
 	let mut time = 10;
-	let mut nonce: Index = 0;
+	let mut nonce: Nonce = 0;
 	let mut block_number = 1;
 	let mut previous_hash: node_primitives::Hash = GENESIS_HASH.into();
 
@@ -213,7 +213,7 @@ fn block_weight_capacity_report() {
 		let num_transfers = block_number * factor;
 		let mut xts = (0..num_transfers)
 			.map(|i| CheckedExtrinsic {
-				signed: Some((charlie(), signed_extra(nonce + i as Index, 0))),
+				signed: Some((charlie(), signed_extra(nonce + i as Nonce, 0))),
 				function: RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 					dest: bob().into(),
 					value: 0,
@@ -266,7 +266,7 @@ fn block_length_capacity_report() {
 	// Just report how big a block can get. Executes until panic. Should be ignored unless if
 	// manually inspected. The number should at least be a few megabytes (5 at the time of
 	// writing but can change over time).
-	use node_primitives::Index;
+	use node_primitives::Nonce;
 
 	// execution ext.
 	let mut t = new_test_ext(compact_code_unwrap());
@@ -275,7 +275,7 @@ fn block_length_capacity_report() {
 
 	let factor = 256 * 1024;
 	let mut time = 10;
-	let mut nonce: Index = 0;
+	let mut nonce: Nonce = 0;
 	let mut block_number = 1;
 	let mut previous_hash: node_primitives::Hash = GENESIS_HASH.into();
 

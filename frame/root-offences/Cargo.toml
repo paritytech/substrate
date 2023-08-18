@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 
 pallet-session = { version = "4.0.0-dev", features = [ "historical" ], path = "../../frame/session", default-features = false }
@@ -21,7 +21,7 @@ pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../.
 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 
 [dev-dependencies]
@@ -29,22 +29,48 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
 
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "21.0.0", path = "../../primitives/core" }
+sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 
 [features]
-runtime-benchmarks = []
-try-runtime = ["frame-support/try-runtime"]
+runtime-benchmarks = [
+	"frame-election-provider-support/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
+	"pallet-staking/runtime-benchmarks",
+	"pallet-timestamp/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+	"sp-staking/runtime-benchmarks"
+]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-election-provider-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-session/try-runtime",
+	"pallet-staking/try-runtime",
+	"pallet-timestamp/try-runtime",
+	"sp-runtime/try-runtime"
+]
 default = ["std"]
 std = [
 	"codec/std",
 	"frame-support/std",
-    "frame-system/std",
+    
+	"frame-system/std",
 	"pallet-session/std",
 	"pallet-staking/std",
 	"scale-info/std",
 	"sp-runtime/std",
+	"frame-election-provider-support/std",
+	"pallet-balances/std",
+	"pallet-timestamp/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-staking/std",
+	"sp-std/std"
 ]

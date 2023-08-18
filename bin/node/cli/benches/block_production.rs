@@ -21,7 +21,6 @@ use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughpu
 use kitchensink_runtime::{constants::currency::*, BalancesCall};
 use node_cli::service::{create_extrinsic, FullClient};
 use sc_block_builder::{BlockBuilderProvider, BuiltBlock, RecordProof};
-use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_consensus::{
 	block_import::{BlockImportParams, ForkChoiceStrategy},
 	BlockImport, StateAction,
@@ -56,9 +55,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 
 	let spec = Box::new(node_cli::chain_spec::development_config());
 
-	// NOTE: We enforce the use of the WASM runtime to benchmark block production using WASM.
-	let execution_strategy = sc_client_api::ExecutionStrategy::AlwaysWasm;
-
 	let config = Configuration {
 		impl_name: "BenchmarkImpl".into(),
 		impl_version: "1.0".into(),
@@ -76,13 +72,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		chain_spec: spec,
 		wasm_method: WasmExecutionMethod::Compiled {
 			instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
-		},
-		execution_strategies: ExecutionStrategies {
-			syncing: execution_strategy,
-			importing: execution_strategy,
-			block_construction: execution_strategy,
-			offchain_worker: execution_strategy,
-			other: execution_strategy,
 		},
 		rpc_addr: None,
 		rpc_max_connections: Default::default(),
@@ -123,13 +112,7 @@ fn extrinsic_set_time(now: u64) -> OpaqueExtrinsic {
 	.into()
 }
 
-fn import_block(
-	mut client: &FullClient,
-	built: BuiltBlock<
-		node_primitives::Block,
-		<FullClient as sp_api::CallApiAt<node_primitives::Block>>::StateBackend,
-	>,
-) {
+fn import_block(mut client: &FullClient, built: BuiltBlock<node_primitives::Block>) {
 	let mut params = BlockImportParams::new(BlockOrigin::File, built.block.header);
 	params.state_action =
 		StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(built.storage_changes));

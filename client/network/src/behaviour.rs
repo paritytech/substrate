@@ -20,9 +20,11 @@ use crate::{
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	event::DhtEvent,
 	peer_info,
+	peer_store::PeerStoreHandle,
 	protocol::{CustomMessageOutcome, NotificationsSink, Protocol},
 	request_responses::{self, IfDisconnected, ProtocolConfig, RequestFailure},
 	types::ProtocolName,
+	ReputationChange,
 };
 
 use bytes::Bytes;
@@ -32,10 +34,10 @@ use libp2p::{
 	swarm::NetworkBehaviour, PeerId,
 };
 
+use parking_lot::Mutex;
 use sc_network_common::role::{ObservedRole, Roles};
-use sc_peerset::{PeersetHandle, ReputationChange};
 use sp_runtime::traits::Block as BlockT;
-use std::{collections::HashSet, time::Duration};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 pub use crate::request_responses::{InboundFailure, OutboundFailure, RequestId, ResponseFailure};
 
@@ -169,15 +171,20 @@ impl<B: BlockT> Behaviour<B> {
 		local_public_key: PublicKey,
 		disco_config: DiscoveryConfig,
 		request_response_protocols: Vec<ProtocolConfig>,
-		peerset: PeersetHandle,
+		peer_store_handle: PeerStoreHandle,
+		external_addresses: Arc<Mutex<HashSet<Multiaddr>>>,
 	) -> Result<Self, request_responses::RegisterError> {
 		Ok(Self {
 			substrate,
-			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
+			peer_info: peer_info::PeerInfoBehaviour::new(
+				user_agent,
+				local_public_key,
+				external_addresses,
+			),
 			discovery: disco_config.finish(),
 			request_responses: request_responses::RequestResponsesBehaviour::new(
 				request_response_protocols.into_iter(),
-				peerset,
+				Box::new(peer_store_handle),
 			)?,
 		})
 	}

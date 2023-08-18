@@ -226,6 +226,19 @@ impl<T: Config<I>, I: 'static> fungibles::metadata::Mutate<<T as SystemConfig>::
 	}
 }
 
+impl<T: Config<I>, I: 'static>
+	fungibles::metadata::MetadataDeposit<
+		<T::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance,
+	> for Pallet<T, I>
+{
+	fn calc_metadata_deposit(
+		name: &[u8],
+		symbol: &[u8],
+	) -> <T::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance {
+		Self::calc_metadata_deposit(&name, &symbol)
+	}
+}
+
 impl<T: Config<I>, I: 'static> fungibles::approvals::Inspect<<T as SystemConfig>::AccountId>
 	for Pallet<T, I>
 {
@@ -244,6 +257,7 @@ impl<T: Config<I>, I: 'static> fungibles::approvals::Inspect<<T as SystemConfig>
 impl<T: Config<I>, I: 'static> fungibles::approvals::Mutate<<T as SystemConfig>::AccountId>
 	for Pallet<T, I>
 {
+	// Approve spending tokens from a given account
 	fn approve(
 		asset: T::AssetId,
 		owner: &<T as SystemConfig>::AccountId,
@@ -253,7 +267,6 @@ impl<T: Config<I>, I: 'static> fungibles::approvals::Mutate<<T as SystemConfig>:
 		Self::do_approve_transfer(asset, owner, delegate, amount)
 	}
 
-	// Aprove spending tokens from a given account
 	fn transfer_from(
 		asset: T::AssetId,
 		owner: &<T as SystemConfig>::AccountId,

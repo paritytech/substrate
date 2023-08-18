@@ -54,7 +54,7 @@ pub const DEFAULT_WASMTIME_INSTANTIATION_STRATEGY: WasmtimeInstantiationStrategy
 #[derive(Debug, Clone, Copy, ValueEnum)]
 #[value(rename_all = "kebab-case")]
 pub enum WasmExecutionMethod {
-	/// Uses an interpreter.
+	/// Uses an interpreter which now is deprecated.
 	#[clap(name = "interpreted-i-know-what-i-do")]
 	Interpreted,
 	/// Uses a compiled runtime.
@@ -76,21 +76,24 @@ pub fn execution_method_from_cli(
 	execution_method: WasmExecutionMethod,
 	instantiation_strategy: WasmtimeInstantiationStrategy,
 ) -> sc_service::config::WasmExecutionMethod {
-	match execution_method {
-		WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
-		WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled {
-			instantiation_strategy: match instantiation_strategy {
-				WasmtimeInstantiationStrategy::PoolingCopyOnWrite =>
-					sc_service::config::WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
-				WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite =>
-					sc_service::config::WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite,
-				WasmtimeInstantiationStrategy::Pooling =>
-					sc_service::config::WasmtimeInstantiationStrategy::Pooling,
-				WasmtimeInstantiationStrategy::RecreateInstance =>
-					sc_service::config::WasmtimeInstantiationStrategy::RecreateInstance,
-				WasmtimeInstantiationStrategy::LegacyInstanceReuse =>
-					sc_service::config::WasmtimeInstantiationStrategy::LegacyInstanceReuse,
-			},
+	if let WasmExecutionMethod::Interpreted = execution_method {
+		log::warn!(
+			"`interpreted-i-know-what-i-do` is deprecated and will be removed in the future. Defaults to `compiled` execution mode."
+		);
+	}
+
+	sc_service::config::WasmExecutionMethod::Compiled {
+		instantiation_strategy: match instantiation_strategy {
+			WasmtimeInstantiationStrategy::PoolingCopyOnWrite =>
+				sc_service::config::WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
+			WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite =>
+				sc_service::config::WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite,
+			WasmtimeInstantiationStrategy::Pooling =>
+				sc_service::config::WasmtimeInstantiationStrategy::Pooling,
+			WasmtimeInstantiationStrategy::RecreateInstance =>
+				sc_service::config::WasmtimeInstantiationStrategy::RecreateInstance,
+			WasmtimeInstantiationStrategy::LegacyInstanceReuse =>
+				sc_service::config::WasmtimeInstantiationStrategy::LegacyInstanceReuse,
 		},
 	}
 }
@@ -156,17 +159,6 @@ pub enum ExecutionStrategy {
 	Both,
 	/// Execute with the native build if possible; if it fails, then execute with WebAssembly.
 	NativeElseWasm,
-}
-
-impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
-	fn into(self) -> sc_client_api::ExecutionStrategy {
-		match self {
-			ExecutionStrategy::Native => sc_client_api::ExecutionStrategy::NativeWhenPossible,
-			ExecutionStrategy::Wasm => sc_client_api::ExecutionStrategy::AlwaysWasm,
-			ExecutionStrategy::Both => sc_client_api::ExecutionStrategy::Both,
-			ExecutionStrategy::NativeElseWasm => sc_client_api::ExecutionStrategy::NativeElseWasm,
-		}
-	}
 }
 
 /// Available RPC methods.
@@ -255,24 +247,15 @@ impl Into<sc_network::config::SyncMode> for SyncMode {
 	fn into(self) -> sc_network::config::SyncMode {
 		match self {
 			SyncMode::Full => sc_network::config::SyncMode::Full,
-			SyncMode::Fast =>
-				sc_network::config::SyncMode::Fast { skip_proofs: false, storage_chain_mode: false },
-			SyncMode::FastUnsafe =>
-				sc_network::config::SyncMode::Fast { skip_proofs: true, storage_chain_mode: false },
+			SyncMode::Fast => sc_network::config::SyncMode::LightState {
+				skip_proofs: false,
+				storage_chain_mode: false,
+			},
+			SyncMode::FastUnsafe => sc_network::config::SyncMode::LightState {
+				skip_proofs: true,
+				storage_chain_mode: false,
+			},
 			SyncMode::Warp => sc_network::config::SyncMode::Warp,
 		}
 	}
 }
-
-/// Default value for the `--execution-syncing` parameter.
-pub const DEFAULT_EXECUTION_SYNCING: ExecutionStrategy = ExecutionStrategy::Wasm;
-/// Default value for the `--execution-import-block` parameter.
-pub const DEFAULT_EXECUTION_IMPORT_BLOCK: ExecutionStrategy = ExecutionStrategy::Wasm;
-/// Default value for the `--execution-import-block` parameter when the node is a validator.
-pub const DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR: ExecutionStrategy = ExecutionStrategy::Wasm;
-/// Default value for the `--execution-block-construction` parameter.
-pub const DEFAULT_EXECUTION_BLOCK_CONSTRUCTION: ExecutionStrategy = ExecutionStrategy::Wasm;
-/// Default value for the `--execution-offchain-worker` parameter.
-pub const DEFAULT_EXECUTION_OFFCHAIN_WORKER: ExecutionStrategy = ExecutionStrategy::Wasm;
-/// Default value for the `--execution-other` parameter.
-pub const DEFAULT_EXECUTION_OTHER: ExecutionStrategy = ExecutionStrategy::Wasm;

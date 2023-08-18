@@ -18,8 +18,6 @@
 
 //! Rust executor possible errors.
 
-use wasmi;
-
 /// Result type alias.
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -27,9 +25,6 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 pub enum Error {
-	#[error(transparent)]
-	Wasmi(#[from] wasmi::Error),
-
 	#[error("Error calling api function: {0}")]
 	ApiError(Box<dyn std::error::Error + Send + Sync>),
 
@@ -47,9 +42,6 @@ pub enum Error {
 
 	#[error("Invalid type returned (should be u64)")]
 	InvalidReturn,
-
-	#[error("Runtime error")]
-	Runtime,
 
 	#[error("Runtime panicked: {0}")]
 	RuntimePanicked(String),
@@ -108,8 +100,6 @@ pub enum Error {
 	#[error("Output exceeds bounds of wasm memory")]
 	OutputExceedsBounds,
 }
-
-impl wasmi::HostError for Error {}
 
 impl From<&'static str> for Error {
 	fn from(err: &'static str) -> Error {

@@ -16,7 +16,7 @@
 
 //! Utilities for generating and verifying GRANDPA warp sync proofs.
 
-use sp_runtime::codec::{self, Decode, Encode};
+use parity_scale_codec::{Decode, DecodeAll, Encode};
 
 use crate::{
 	best_justification, find_scheduled_change, AuthoritySetChanges, AuthoritySetHardFork,
@@ -38,7 +38,7 @@ use std::{collections::HashMap, sync::Arc};
 pub enum Error {
 	/// Decoding error.
 	#[error("Failed to decode block hash: {0}.")]
-	DecodeScale(#[from] codec::Error),
+	DecodeScale(#[from] parity_scale_codec::Error),
 	/// Client backend error.
 	#[error("{0}")]
 	Client(#[from] sp_blockchain::Error),
@@ -137,7 +137,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 				.and_then(|just| just.into_justification(GRANDPA_ENGINE_ID))
 				.ok_or_else(|| Error::MissingData)?;
 
-			let justification = GrandpaJustification::<Block>::decode(&mut &justification[..])?;
+			let justification = GrandpaJustification::<Block>::decode_all(&mut &justification[..])?;
 
 			let proof = WarpSyncFragment { header: header.clone(), justification };
 			let proof_size = proof.encoded_size();
@@ -291,7 +291,7 @@ where
 		authorities: AuthorityList,
 	) -> Result<VerificationResult<Block>, Box<dyn std::error::Error + Send + Sync>> {
 		let EncodedProof(proof) = proof;
-		let proof = WarpSyncProof::<Block>::decode(&mut proof.as_slice())
+		let proof = WarpSyncProof::<Block>::decode_all(&mut proof.as_slice())
 			.map_err(|e| format!("Proof decoding error: {:?}", e))?;
 		let last_header = proof
 			.proofs
@@ -318,8 +318,9 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::{codec::Encode, WarpSyncProof};
+	use super::WarpSyncProof;
 	use crate::{AuthoritySetChanges, GrandpaJustification};
+	use parity_scale_codec::Encode;
 	use rand::prelude::*;
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_blockchain::HeaderBackend;

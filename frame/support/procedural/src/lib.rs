@@ -20,26 +20,27 @@
 #![recursion_limit = "512"]
 
 mod benchmark;
-mod clone_no_bound;
 mod construct_runtime;
 mod crate_version;
-mod debug_no_bound;
-mod default_no_bound;
+mod derive_impl;
 mod dummy_part_checker;
 mod key_prefix;
 mod match_and_insert;
+mod no_bound;
 mod pallet;
 mod pallet_error;
-mod partial_eq_no_bound;
-mod storage;
 mod storage_alias;
 mod transactional;
 mod tt_macro;
 
+use frame_support_procedural_tools::generate_crate_access_2018;
+use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
 use std::{cell::RefCell, str::FromStr};
-pub(crate) use storage::INHERENT_INSTANCE_NAME;
+use syn::{parse_macro_input, Error, ItemImpl, ItemMod};
+
+pub(crate) const INHERENT_INSTANCE_NAME: &str = "__InherentHiddenInstance";
 
 thread_local! {
 	/// A global counter, can be used to generate a relatively unique identifier.
@@ -73,233 +74,6 @@ fn get_cargo_env_var<T: FromStr>(version_env: &str) -> std::result::Result<T, ()
 /// counter_prefix is used by counted storage map.
 fn counter_prefix(prefix: &str) -> String {
 	format!("CounterFor{}", prefix)
-}
-
-/// Declares strongly-typed wrappers around codec-compatible types in storage.
-///
-/// ## Example
-///
-/// ```nocompile
-/// decl_storage! {
-/// 	trait Store for Module<T: Config> as Example {
-/// 		Foo get(fn foo) config(): u32=12;
-/// 		Bar: map hasher(identity) u32 => u32;
-/// 		pub Zed build(|config| vec![(0, 0)]): map hasher(identity) u32 => u32;
-/// 	}
-/// }
-/// ```
-///
-/// Declaration is set with the header `(pub) trait Store for Module<T: Config> as Example`,
-/// with `Store` a (pub) trait generated associating each storage item to the `Module` and
-/// `as Example` setting the prefix used for storage items of this module. `Example` must be unique:
-/// another module with the same name and the same inner storage item name will conflict.
-/// `Example` is called the module prefix.
-///
-/// note: For instantiable modules the module prefix is prepended with instance
-/// prefix. Instance prefix is "" for default instance and "Instance$n" for instance number $n.
-/// Thus, instance 3 of module Example has a module prefix of `Instance3Example`
-///
-/// Basic storage consists of a name and a type; supported types are:
-///
-/// * Value: `Foo: type`: Implements the
-///   [`StorageValue`](../frame_support/storage/trait.StorageValue.html) trait using the
-///   [`StorageValue generator`](../frame_support/storage/generator/trait.StorageValue.html).
-///
-///   The generator is implemented with:
-///   * `module_prefix`: module_prefix
-///   * `storage_prefix`: storage_name
-///
-///   Thus the storage value is finally stored at:
-///   ```nocompile
-///   Twox128(module_prefix) ++ Twox128(storage_prefix)
-///   ```
-///
-/// * Map: `Foo: map hasher($hash) type => type`: Implements the
-///   [`StorageMap`](../frame_support/storage/trait.StorageMap.html) trait using the [`StorageMap
-///   generator`](../frame_support/storage/generator/trait.StorageMap.html). And
-///   [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
-///
-///   `$hash` representing a choice of hashing algorithms available in the
-///   [`Hashable`](../frame_support/trait.Hashable.html) trait. You will generally want to use one
-///   of three hashers:
-///   * `blake2_128_concat`: The default, safe choice. Use if you are unsure or don't care. It is
-///     secure against user-tainted keys, fairly fast and memory-efficient and supports iteration
-///     over its keys and values. This must be used if the keys of your map can be selected *en
-///     masse* by untrusted users.
-///   * `twox_64_concat`: This is an insecure hasher and can only be used safely if you know that
-///     the preimages cannot be chosen at will by untrusted users. It is memory-efficient, extremely
-///     performant and supports iteration over its keys and values. You can safely use this is the
-///     key is:
-///     - A (slowly) incrementing index.
-///     - Known to be the result of a cryptographic hash (though `identity` is a better choice
-///       here).
-///     - Known to be the public key of a cryptographic key pair in existence.
-///   * `identity`: This is not a hasher at all, and just uses the key material directly. Since it
-///     does no hashing or appending, it's the fastest possible hasher, however, it's also the least
-///     secure. It can be used only if you know that the key will be cryptographically/securely
-///     randomly distributed over the binary encoding space. In most cases this will not be true.
-///     One case where it is true, however, if where the key is itself the result of a cryptographic
-///     hash of some existent data.
-///
-///   Other hashers will tend to be "opaque" and not support iteration over the keys in the
-///   map. It is not recommended to use these.
-///
-///   The generator is implemented with:
-///   * `module_prefix`: $module_prefix
-///   * `storage_prefix`: storage_name
-///   * `Hasher`: $hash
-///
-///   Thus the keys are stored at:
-///   ```nocompile
-///   twox128(module_prefix) ++ twox128(storage_prefix) ++ hasher(encode(key))
-///   ```
-///
-/// * Double map: `Foo: double_map hasher($hash1) u32, hasher($hash2) u32 => u32`: Implements the
-///   [`StorageDoubleMap`](../frame_support/storage/trait.StorageDoubleMap.html) trait using the
-///   [`StorageDoubleMap
-///   generator`](../frame_support/storage/generator/trait.StorageDoubleMap.html). And
-///   [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
-///
-///   `$hash1` and `$hash2` representing choices of hashing algorithms available in the
-///   [`Hashable`](../frame_support/trait.Hashable.html) trait. They must be chosen with care, see
-///   generator documentation.
-///
-///   The generator is implemented with:
-///   * `module_prefix`: $module_prefix
-///   * `storage_prefix`: storage_name
-///   * `Hasher1`: $hash1
-///   * `Hasher2`: $hash2
-///
-///   Thus keys are stored at:
-///   ```nocompile
-///   Twox128(module_prefix) ++ Twox128(storage_prefix) ++ Hasher1(encode(key1)) ++
-/// Hasher2(encode(key2))   ```
-///
-/// Supported hashers (ordered from least to best security):
-///
-/// * `identity` - Just the unrefined key material. Use only when it is known to be a secure hash
-///   already. The most efficient and iterable over keys.
-/// * `twox_64_concat` - TwoX with 64bit + key concatenated. Use only when an untrusted source
-///   cannot select and insert key values. Very efficient and iterable over keys.
-/// * `blake2_128_concat` - Blake2 with 128bit + key concatenated. Slower but safe to use in all
-///   circumstances. Iterable over keys.
-///
-/// Deprecated hashers, which do not support iteration over keys include:
-/// * `twox_128` - TwoX with 128bit.
-/// * `twox_256` - TwoX with with 256bit.
-/// * `blake2_128` - Blake2 with 128bit.
-/// * `blake2_256` - Blake2 with 256bit.
-///
-/// Basic storage can be extended as such:
-///
-/// `#vis #name get(fn #getter) config(#field_name) build(#closure): #type = #default;`
-///
-/// * `#vis`: Set the visibility of the structure. `pub` or nothing.
-/// * `#name`: Name of the storage item, used as a prefix in storage.
-/// * \[optional\] `get(fn #getter)`: Implements the function #getter to `Module`.
-/// * \[optional\] `config(#field_name)`: `field_name` is optional if get is set.
-/// Will include the item in `GenesisConfig`.
-/// * \[optional\] `build(#closure)`: Closure called with storage overlays.
-/// * \[optional\] `max_values(#expr)`: `expr` is an expression returning a `u32`. It is used to
-/// implement `StorageInfoTrait`. Note this attribute is not available for storage value as the
-/// maximum number of values is 1.
-/// * `#type`: Storage type.
-/// * \[optional\] `#default`: Value returned when none.
-///
-/// Storage items are accessible in multiple ways:
-///
-/// * The structure: `Foo` or `Foo::<T>` depending if the value type is generic or not.
-/// * The `Store` trait structure: `<Module<T> as Store>::Foo`
-/// * The getter on the module that calls get on the structure: `Module::<T>::foo()`
-///
-/// ## GenesisConfig
-///
-/// An optional `GenesisConfig` struct for storage initialization can be defined, either
-/// when at least one storage field requires default initialization
-/// (both `get` and `config` or `build`), or specifically as in:
-///
-/// ```nocompile
-/// decl_storage! {
-/// 	trait Store for Module<T: Config> as Example {
-///
-/// 		// Your storage items
-/// 	}
-/// 		add_extra_genesis {
-/// 			config(genesis_field): GenesisFieldType;
-/// 			config(genesis_field2): GenesisFieldType;
-/// 			...
-/// 			build(|_: &Self| {
-/// 				// Modification of storage
-/// 			})
-/// 		}
-/// }
-/// ```
-///
-/// This struct can be exposed as `ExampleConfig` by the `construct_runtime!` macro like follows:
-///
-/// ```nocompile
-/// construct_runtime!(
-/// 	pub enum Runtime with ... {
-///         ...,
-///         Example: example::{Pallet, Storage, ..., Config<T>},
-///         ...,
-/// 	}
-/// );
-/// ```
-///
-/// ### Module with Instances
-///
-/// The `decl_storage!` macro supports building modules with instances with the following syntax
-/// (`DefaultInstance` type is optional):
-///
-/// ```nocompile
-/// trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Example {}
-/// ```
-///
-/// Accessing the structure no requires the instance as generic parameter:
-/// * `Foo::<I>` if the value type is not generic
-/// * `Foo::<T, I>` if the value type is generic
-///
-/// ## Where clause
-///
-/// This macro supports a where clause which will be replicated to all generated types.
-///
-/// ```nocompile
-/// trait Store for Module<T: Config> as Example where T::AccountId: std::fmt::Display {}
-/// ```
-///
-/// ## Limitations
-///
-/// # Instancing and generic `GenesisConfig`
-///
-/// If your module supports instancing and you see an error like `parameter `I` is never used` for
-/// your `decl_storage!`, you are hitting a limitation of the current implementation. You probably
-/// try to use an associated type of a non-instantiable trait. To solve this, add the following to
-/// your macro call:
-///
-/// ```nocompile
-/// add_extra_genesis {
-/// 	config(phantom): std::marker::PhantomData<I>,
-/// }
-/// ```
-///
-/// This adds a field to your `GenesisConfig` with the name `phantom` that you can initialize with
-/// `Default::default()`.
-///
-/// ## PoV information
-///
-/// To implement the trait `StorageInfoTrait` for storages an additional attribute can be used
-/// `generate_storage_info`:
-/// ```nocompile
-/// decl_storage! { generate_storage_info
-/// 	trait Store for ...
-/// }
-/// ```
-#[proc_macro]
-#[deprecated(note = "Will be removed soon; use the attribute `#[pallet]` macro instead.
-	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
-pub fn decl_storage(input: TokenStream) -> TokenStream {
-	storage::decl_storage_impl(input)
 }
 
 /// Construct a runtime, with the given name and the given pallets.
@@ -464,6 +238,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// * Weights no longer need to be specified on every `#[pallet::call]` declaration. By default, dev
 ///   mode pallets will assume a weight of zero (`0`) if a weight is not specified. This is
 ///   equivalent to specifying `#[weight(0)]` on all calls that do not specify a weight.
+/// * Call indices no longer need to be specified on every `#[pallet::call]` declaration. By
+///   default, dev mode pallets will assume a call index based on the order of the call.
 /// * All storages are marked as unbounded, meaning you do not need to implement `MaxEncodedLen` on
 ///   storage types. This is equivalent to specifying `#[pallet::unbounded]` on all storage type
 ///   definitions.
@@ -639,13 +415,13 @@ pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStre
 /// Derive [`Clone`] but do not bound any generic. Docs are at `frame_support::CloneNoBound`.
 #[proc_macro_derive(CloneNoBound)]
 pub fn derive_clone_no_bound(input: TokenStream) -> TokenStream {
-	clone_no_bound::derive_clone_no_bound(input)
+	no_bound::clone::derive_clone_no_bound(input)
 }
 
 /// Derive [`Debug`] but do not bound any generics. Docs are at `frame_support::DebugNoBound`.
 #[proc_macro_derive(DebugNoBound)]
 pub fn derive_debug_no_bound(input: TokenStream) -> TokenStream {
-	debug_no_bound::derive_debug_no_bound(input)
+	no_bound::debug::derive_debug_no_bound(input)
 }
 
 /// Derive [`Debug`], if `std` is enabled it uses `frame_support::DebugNoBound`, if `std` is not
@@ -654,7 +430,7 @@ pub fn derive_debug_no_bound(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(RuntimeDebugNoBound)]
 pub fn derive_runtime_debug_no_bound(input: TokenStream) -> TokenStream {
 	if cfg!(any(feature = "std", feature = "try-runtime")) {
-		debug_no_bound::derive_debug_no_bound(input)
+		no_bound::debug::derive_debug_no_bound(input)
 	} else {
 		let input: syn::DeriveInput = match syn::parse(input) {
 			Ok(input) => input,
@@ -681,7 +457,7 @@ pub fn derive_runtime_debug_no_bound(input: TokenStream) -> TokenStream {
 /// `frame_support::PartialEqNoBound`.
 #[proc_macro_derive(PartialEqNoBound)]
 pub fn derive_partial_eq_no_bound(input: TokenStream) -> TokenStream {
-	partial_eq_no_bound::derive_partial_eq_no_bound(input)
+	no_bound::partial_eq::derive_partial_eq_no_bound(input)
 }
 
 /// derive Eq but do no bound any generic. Docs are at `frame_support::EqNoBound`.
@@ -706,7 +482,7 @@ pub fn derive_eq_no_bound(input: TokenStream) -> TokenStream {
 /// derive `Default` but do no bound any generic. Docs are at `frame_support::DefaultNoBound`.
 #[proc_macro_derive(DefaultNoBound, attributes(default))]
 pub fn derive_default_no_bound(input: TokenStream) -> TokenStream {
-	default_no_bound::derive_default_no_bound(input)
+	no_bound::default::derive_default_no_bound(input)
 }
 
 #[proc_macro]
@@ -771,10 +547,300 @@ pub fn __create_tt_macro(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
-	storage_alias::storage_alias(input.into())
+pub fn storage_alias(attributes: TokenStream, input: TokenStream) -> TokenStream {
+	storage_alias::storage_alias(attributes.into(), input.into())
 		.unwrap_or_else(|r| r.into_compile_error())
 		.into()
+}
+
+/// This attribute can be used to derive a full implementation of a trait based on a local partial
+/// impl and an external impl containing defaults that can be overriden in the local impl.
+///
+/// For a full end-to-end example, see [below](#use-case-auto-derive-test-pallet-config-traits).
+///
+/// # Usage
+///
+/// The attribute should be attached to an impl block (strictly speaking a `syn::ItemImpl`) for
+/// which we want to inject defaults in the event of missing trait items in the block.
+///
+/// The attribute minimally takes a single `default_impl_path` argument, which should be the module
+/// path to an impl registered via [`#[register_default_impl]`](`macro@register_default_impl`) that
+/// contains the default trait items we want to potentially inject, with the general form:
+///
+/// ```ignore
+/// #[derive_impl(default_impl_path)]
+/// impl SomeTrait for SomeStruct {
+///     ...
+/// }
+/// ```
+///
+/// Optionally, a `disambiguation_path` can be specified as follows by providing `as path::here`
+/// after the `default_impl_path`:
+///
+/// ```ignore
+/// #[derive_impl(default_impl_path as disambiguation_path)]
+/// impl SomeTrait for SomeStruct {
+///     ...
+/// }
+/// ```
+///
+/// The `disambiguation_path`, if specified, should be the path to a trait that will be used to
+/// qualify all default entries that are injected into the local impl. For example if your
+/// `default_impl_path` is `some::path::TestTraitImpl` and your `disambiguation_path` is
+/// `another::path::DefaultTrait`, any items injected into the local impl will be qualified as
+/// `<some::path::TestTraitImpl as another::path::DefaultTrait>::specific_trait_item`.
+///
+/// If you omit the `as disambiguation_path` portion, the `disambiguation_path` will internally
+/// default to `A` from the `impl A for B` part of the default impl. This is useful for scenarios
+/// where all of the relevant types are already in scope via `use` statements.
+///
+/// Conversely, the `default_impl_path` argument is required and cannot be omitted.
+///
+/// You can also make use of `#[pallet::no_default]` on specific items in your default impl that you
+/// want to ensure will not be copied over but that you nonetheless want to use locally in the
+/// context of the foreign impl and the pallet (or context) in which it is defined.
+///
+/// ## Use-Case Example: Auto-Derive Test Pallet Config Traits
+///
+/// The `#[derive_imp(..)]` attribute can be used to derive a test pallet `Config` based on an
+/// existing pallet `Config` that has been marked with
+/// [`#[pallet::config(with_default)]`](`macro@config`) (which under the hood, generates a
+/// `DefaultConfig` trait in the pallet in which the macro was invoked).
+///
+/// In this case, the `#[derive_impl(..)]` attribute should be attached to an `impl` block that
+/// implements a compatible `Config` such as `frame_system::Config` for a test/mock runtime, and
+/// should receive as its first argument the path to a `DefaultConfig` impl that has been registered
+/// via [`#[register_default_impl]`](`macro@register_default_impl`), and as its second argument, the
+/// path to the auto-generated `DefaultConfig` for the existing pallet `Config` we want to base our
+/// test config off of.
+///
+/// The following is what the `basic` example pallet would look like with a default testing config:
+///
+/// ```ignore
+/// #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::pallet::DefaultConfig)]
+/// impl frame_system::Config for Test {
+///     // These are all defined by system as mandatory.
+///     type BaseCallFilter = frame_support::traits::Everything;
+///     type RuntimeEvent = RuntimeEvent;
+///     type RuntimeCall = RuntimeCall;
+///     type RuntimeOrigin = RuntimeOrigin;
+///     type OnSetCode = ();
+///     type PalletInfo = PalletInfo;
+///     type Block = Block;
+///     // We decide to override this one.
+///     type AccountData = pallet_balances::AccountData<u64>;
+/// }
+/// ```
+///
+/// where `TestDefaultConfig` was defined and registered as follows:
+///
+/// ```ignore
+/// pub struct TestDefaultConfig;
+///
+/// #[register_default_impl(TestDefaultConfig)]
+/// impl DefaultConfig for TestDefaultConfig {
+///     type Version = ();
+///     type BlockWeights = ();
+///     type BlockLength = ();
+///     type DbWeight = ();
+///     type Nonce = u64;
+///     type BlockNumber = u64;
+///     type Hash = sp_core::hash::H256;
+///     type Hashing = sp_runtime::traits::BlakeTwo256;
+///     type AccountId = AccountId;
+///     type Lookup = IdentityLookup<AccountId>;
+///     type BlockHashCount = frame_support::traits::ConstU64<10>;
+///     type AccountData = u32;
+///     type OnNewAccount = ();
+///     type OnKilledAccount = ();
+///     type SystemWeightInfo = ();
+///     type SS58Prefix = ();
+///     type MaxConsumers = frame_support::traits::ConstU32<16>;
+/// }
+/// ```
+///
+/// The above call to `derive_impl` would expand to roughly the following:
+///
+/// ```ignore
+/// impl frame_system::Config for Test {
+///     use frame_system::config_preludes::TestDefaultConfig;
+///     use frame_system::pallet::DefaultConfig;
+///
+///     type BaseCallFilter = frame_support::traits::Everything;
+///     type RuntimeEvent = RuntimeEvent;
+///     type RuntimeCall = RuntimeCall;
+///     type RuntimeOrigin = RuntimeOrigin;
+///     type OnSetCode = ();
+///     type PalletInfo = PalletInfo;
+///     type Block = Block;
+///     type AccountData = pallet_balances::AccountData<u64>;
+///     type Version = <TestDefaultConfig as DefaultConfig>::Version;
+///     type BlockWeights = <TestDefaultConfig as DefaultConfig>::BlockWeights;
+///     type BlockLength = <TestDefaultConfig as DefaultConfig>::BlockLength;
+///     type DbWeight = <TestDefaultConfig as DefaultConfig>::DbWeight;
+///     type Nonce = <TestDefaultConfig as DefaultConfig>::Nonce;
+///     type BlockNumber = <TestDefaultConfig as DefaultConfig>::BlockNumber;
+///     type Hash = <TestDefaultConfig as DefaultConfig>::Hash;
+///     type Hashing = <TestDefaultConfig as DefaultConfig>::Hashing;
+///     type AccountId = <TestDefaultConfig as DefaultConfig>::AccountId;
+///     type Lookup = <TestDefaultConfig as DefaultConfig>::Lookup;
+///     type BlockHashCount = <TestDefaultConfig as DefaultConfig>::BlockHashCount;
+///     type OnNewAccount = <TestDefaultConfig as DefaultConfig>::OnNewAccount;
+///     type OnKilledAccount = <TestDefaultConfig as DefaultConfig>::OnKilledAccount;
+///     type SystemWeightInfo = <TestDefaultConfig as DefaultConfig>::SystemWeightInfo;
+///     type SS58Prefix = <TestDefaultConfig as DefaultConfig>::SS58Prefix;
+///     type MaxConsumers = <TestDefaultConfig as DefaultConfig>::MaxConsumers;
+/// }
+/// ```
+///
+/// You can then use the resulting `Test` config in test scenarios.
+///
+/// Note that items that are _not_ present in our local `DefaultConfig` are automatically copied
+/// from the foreign trait (in this case `TestDefaultConfig`) into the local trait impl (in this
+/// case `Test`), unless the trait item in the local trait impl is marked with
+/// [`#[pallet::no_default]`](`macro@no_default`), in which case it cannot be overridden, and any
+/// attempts to do so will result in a compiler error.
+///
+/// See `frame/examples/default-config/tests.rs` for a runnable end-to-end example pallet that makes
+/// use of `derive_impl` to derive its testing config.
+///
+/// See [here](`macro@config`) for more information and caveats about the auto-generated
+/// `DefaultConfig` trait.
+///
+/// ## Optional Conventions
+///
+/// Note that as an optional convention, we encourage creating a `config_preludes` module inside of
+/// your pallet. This is the convention we follow for `frame_system`'s `TestDefaultConfig` which, as
+/// shown above, is located at `frame_system::config_preludes::TestDefaultConfig`. This is just a
+/// suggested convention -- there is nothing in the code that expects modules with these names to be
+/// in place, so there is no imperative to follow this pattern unless desired.
+///
+/// In `config_preludes`, you can place types named like:
+///
+/// * `TestDefaultConfig`
+/// * `ParachainDefaultConfig`
+/// * `SolochainDefaultConfig`
+///
+/// Signifying in which context they can be used.
+///
+/// # Advanced Usage
+///
+/// ## Expansion
+///
+/// The `#[derive_impl(default_impl_path as disambiguation_path)]` attribute will expand to the
+/// local impl, with any extra items from the foreign impl that aren't present in the local impl
+/// also included. In the case of a colliding trait item, the version of the item that exists in the
+/// local impl will be retained. All imported items are qualified by the `disambiguation_path`, as
+/// discussed above.
+///
+/// ## Handling of Unnamed Trait Items
+///
+/// Items that lack a `syn::Ident` for whatever reason are first checked to see if they exist,
+/// verbatim, in the local/destination trait before they are copied over, so you should not need to
+/// worry about collisions between identical unnamed items.
+#[import_tokens_attr {
+    format!(
+        "{}::macro_magic",
+        match generate_crate_access_2018("frame-support") {
+            Ok(path) => Ok(path),
+            Err(_) => generate_crate_access_2018("frame"),
+        }
+        .expect("Failed to find either `frame-support` or `frame` in `Cargo.toml` dependencies.")
+        .to_token_stream()
+        .to_string()
+    )
+}]
+#[with_custom_parsing(derive_impl::DeriveImplAttrArgs)]
+#[proc_macro_attribute]
+pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> TokenStream {
+	let custom_attrs = parse_macro_input!(__custom_tokens as derive_impl::DeriveImplAttrArgs);
+	derive_impl::derive_impl(
+		__source_path.into(),
+		attrs.into(),
+		input.into(),
+		custom_attrs.disambiguation_path,
+	)
+	.unwrap_or_else(|r| r.into_compile_error())
+	.into()
+}
+
+/// The optional attribute `#[pallet::no_default]` can be attached to trait items within a
+/// `Config` trait impl that has [`#[pallet::config(with_default)]`](`macro@config`) attached.
+///
+/// Attaching this attribute to a trait item ensures that that trait item will not be used as a
+/// default with the [`#[derive_impl(..)]`](`macro@derive_impl`) attribute macro.
+#[proc_macro_attribute]
+pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// Attach this attribute to an impl statement that you want to use with
+/// [`#[derive_impl(..)]`](`macro@derive_impl`).
+///
+/// You must also provide an identifier/name as the attribute's argument. This is the name you
+/// must provide to [`#[derive_impl(..)]`](`macro@derive_impl`) when you import this impl via
+/// the `default_impl_path` argument. This name should be unique at the crate-level.
+///
+/// ## Example
+///
+/// ```ignore
+/// pub struct ExampleTestDefaultConfig;
+///
+/// #[register_default_impl(ExampleTestDefaultConfig)]
+/// impl DefaultConfig for ExampleTestDefaultConfig {
+/// 	type Version = ();
+/// 	type BlockWeights = ();
+/// 	type BlockLength = ();
+/// 	...
+/// 	type SS58Prefix = ();
+/// 	type MaxConsumers = frame_support::traits::ConstU32<16>;
+/// }
+/// ```
+///
+/// ## Advanced Usage
+///
+/// This macro acts as a thin wrapper around macro_magic's `#[export_tokens]`. See the docs
+/// [here](https://docs.rs/macro_magic/latest/macro_magic/attr.export_tokens.html) for more
+/// info.
+///
+/// There are some caveats when applying a `use` statement to bring a
+/// `#[register_default_impl]` item into scope. If you have a `#[register_default_impl]`
+/// defined in `my_crate::submodule::MyItem`, it is currently not sufficient to do something
+/// like:
+///
+/// ```ignore
+/// use my_crate::submodule::MyItem;
+/// #[derive_impl(MyItem as Whatever)]
+/// ```
+///
+/// This will fail with a mysterious message about `__export_tokens_tt_my_item` not being
+/// defined.
+///
+/// You can, however, do any of the following:
+/// ```ignore
+/// // partial path works
+/// use my_crate::submodule;
+/// #[derive_impl(submodule::MyItem as Whatever)]
+/// ```
+/// ```ignore
+/// // full path works
+/// #[derive_impl(my_crate::submodule::MyItem as Whatever)]
+/// ```
+/// ```ignore
+/// // wild-cards work
+/// use my_crate::submodule::*;
+/// #[derive_impl(MyItem as Whatever)]
+/// ```
+#[proc_macro_attribute]
+pub fn register_default_impl(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
+	// ensure this is a impl statement
+	let item_impl = syn::parse_macro_input!(tokens as ItemImpl);
+
+	// internally wrap macro_magic's `#[export_tokens]` macro
+	match macro_magic::mm_core::export_tokens_internal(attrs, item_impl.to_token_stream(), true) {
+		Ok(tokens) => tokens.into(),
+		Err(err) => err.to_compile_error().into(),
+	}
 }
 
 /// Used internally to decorate pallet attribute macro stubs when they are erroneously used
@@ -809,6 +875,52 @@ fn pallet_macro_stub() -> TokenStream {
 ///
 /// [`pallet::event`](`macro@event`) must be present if `RuntimeEvent` exists as a config item
 /// in your `#[pallet::config]`.
+///
+/// ## Optional: `with_default`
+///
+/// An optional `with_default` argument may also be specified. Doing so will automatically
+/// generate a `DefaultConfig` trait inside your pallet which is suitable for use with
+/// [`[#[derive_impl(..)]`](`macro@derive_impl`) to derive a default testing config:
+///
+/// ```ignore
+/// #[pallet::config(with_default)]
+/// pub trait Config: frame_system::Config {
+/// 		type RuntimeEvent: Parameter
+/// 			+ Member
+/// 			+ From<Event<Self>>
+/// 			+ Debug
+/// 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+///
+/// 		#[pallet::no_default]
+/// 		type BaseCallFilter: Contains<Self::RuntimeCall>;
+/// 	// ...
+/// }
+/// ```
+///
+/// As shown above, you may also attach the [`#[pallet::no_default]`](`macro@no_default`)
+/// attribute to specify that a particular trait item _cannot_ be used as a default when a test
+/// `Config` is derived using the [`#[derive_impl(..)]`](`macro@derive_impl`) attribute macro.
+/// This will cause that particular trait item to simply not appear in default testing configs
+/// based on this config (the trait item will not be included in `DefaultConfig`).
+///
+/// ### `DefaultConfig` Caveats
+///
+/// The auto-generated `DefaultConfig` trait:
+/// - is always a _subset_ of your pallet's `Config` trait.
+/// - can only contain items that don't rely on externalities, such as `frame_system::Config`.
+///
+/// Trait items that _do_ rely on externalities should be marked with
+/// [`#[pallet::no_default]`](`macro@no_default`)
+///
+/// Consequently:
+/// - Any items that rely on externalities _must_ be marked with
+///   [`#[pallet::no_default]`](`macro@no_default`) or your trait will fail to compile when used
+///   with [`derive_impl`](`macro@derive_impl`).
+/// - Items marked with [`#[pallet::no_default]`](`macro@no_default`) are entirely excluded from the
+///   `DefaultConfig` trait, and therefore any impl of `DefaultConfig` doesn't need to implement
+///   such items.
+///
+/// For more information, see [`macro@derive_impl`].
 #[proc_macro_attribute]
 pub fn config(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
@@ -1217,7 +1329,7 @@ pub fn unbounded(_: TokenStream, _: TokenStream) -> TokenStream {
 /// ```ignore
 /// #[pallet::storage]
 /// #[pallet::whitelist_storage]
-/// pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+/// pub(super) type Number<T: Config> = StorageValue<_, frame_system::pallet_prelude::BlockNumberFor::<T>, ValueQuery>;
 /// ```
 ///
 /// NOTE: As with all `pallet::*` attributes, this one _must_ be written as
@@ -1309,8 +1421,7 @@ pub fn genesis_config(_: TokenStream, _: TokenStream) -> TokenStream {
 /// The macro will add the following attribute:
 /// * `#[cfg(feature = "std")]`
 ///
-/// The macro will implement `sp_runtime::BuildModuleGenesisStorage` using `()` as a second
-/// generic for non-instantiable pallets.
+/// The macro will implement `sp_runtime::BuildStorage`.
 #[proc_macro_attribute]
 pub fn genesis_build(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
@@ -1420,4 +1531,114 @@ pub fn origin(_: TokenStream, _: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn composite_enum(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
+}
+
+/// Can be attached to a module. Doing so will declare that module as importable into a pallet
+/// via [`#[import_section]`](`macro@import_section`).
+///
+/// Note that sections are imported by their module name/ident, and should be referred to by
+/// their _full path_ from the perspective of the target pallet. Do not attempt to make use
+/// of `use` statements to bring pallet sections into scope, as this will not work (unless
+/// you do so as part of a wildcard import, in which case it will work).
+///
+/// ## Naming Logistics
+///
+/// Also note that because of how `#[pallet_section]` works, pallet section names must be
+/// globally unique _within the crate in which they are defined_. For more information on
+/// why this must be the case, see macro_magic's
+/// [`#[export_tokens]`](https://docs.rs/macro_magic/latest/macro_magic/attr.export_tokens.html) macro.
+///
+/// Optionally, you may provide an argument to `#[pallet_section]` such as
+/// `#[pallet_section(some_ident)]`, in the event that there is another pallet section in
+/// same crate with the same ident/name. The ident you specify can then be used instead of
+/// the module's ident name when you go to import it via `#[import_section]`.
+#[proc_macro_attribute]
+pub fn pallet_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	let tokens_clone = tokens.clone();
+	// ensure this can only be attached to a module
+	let _mod = parse_macro_input!(tokens_clone as ItemMod);
+
+	// use macro_magic's export_tokens as the internal implementation otherwise
+	match macro_magic::mm_core::export_tokens_internal(attr, tokens, false) {
+		Ok(tokens) => tokens.into(),
+		Err(err) => err.to_compile_error().into(),
+	}
+}
+
+/// An attribute macro that can be attached to a module declaration. Doing so will
+/// Imports the contents of the specified external pallet section that was defined
+/// previously using [`#[pallet_section]`](`macro@pallet_section`).
+///
+/// ## Example
+/// ```ignore
+/// #[import_section(some_section)]
+/// #[pallet]
+/// pub mod pallet {
+///     // ...
+/// }
+/// ```
+/// where `some_section` was defined elsewhere via:
+/// ```ignore
+/// #[pallet_section]
+/// pub mod some_section {
+///     // ...
+/// }
+/// ```
+///
+/// This will result in the contents of `some_section` being _verbatim_ imported into
+/// the pallet above. Note that since the tokens for `some_section` are essentially
+/// copy-pasted into the target pallet, you cannot refer to imports that don't also
+/// exist in the target pallet, but this is easily resolved by including all relevant
+/// `use` statements within your pallet section, so they are imported as well, or by
+/// otherwise ensuring that you have the same imports on the target pallet.
+///
+/// It is perfectly permissible to import multiple pallet sections into the same pallet,
+/// which can be done by having multiple `#[import_section(something)]` attributes
+/// attached to the pallet.
+///
+/// Note that sections are imported by their module name/ident, and should be referred to by
+/// their _full path_ from the perspective of the target pallet.
+#[import_tokens_attr {
+    format!(
+        "{}::macro_magic",
+        match generate_crate_access_2018("frame-support") {
+            Ok(path) => Ok(path),
+            Err(_) => generate_crate_access_2018("frame"),
+        }
+        .expect("Failed to find either `frame-support` or `frame` in `Cargo.toml` dependencies.")
+        .to_token_stream()
+        .to_string()
+    )
+}]
+#[proc_macro_attribute]
+pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	let foreign_mod = parse_macro_input!(attr as ItemMod);
+	let mut internal_mod = parse_macro_input!(tokens as ItemMod);
+
+	// check that internal_mod is a pallet module
+	if !internal_mod.attrs.iter().any(|attr| {
+		if let Some(last_seg) = attr.path().segments.last() {
+			last_seg.ident == "pallet"
+		} else {
+			false
+		}
+	}) {
+		return Error::new(
+			internal_mod.ident.span(),
+			"`#[import_section]` can only be applied to a valid pallet module",
+		)
+		.to_compile_error()
+		.into()
+	}
+
+	if let Some(ref mut content) = internal_mod.content {
+		if let Some(foreign_content) = foreign_mod.content {
+			content.1.extend(foreign_content.1);
+		}
+	}
+
+	quote! {
+		#internal_mod
+	}
+	.into()
 }

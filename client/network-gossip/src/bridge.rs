@@ -21,9 +21,8 @@ use crate::{
 	Network, Syncing, Validator,
 };
 
-use sc_network::{event::Event, types::ProtocolName};
+use sc_network::{event::Event, types::ProtocolName, ReputationChange};
 use sc_network_common::sync::SyncEvent;
-use sc_peerset::ReputationChange;
 
 use futures::{
 	channel::mpsc::{channel, Receiver, Sender},
@@ -239,10 +238,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 							SyncEvent::PeerConnected(remote) =>
 								this.network.add_set_reserved(remote, this.protocol.clone()),
 							SyncEvent::PeerDisconnected(remote) =>
-								this.network.remove_peers_from_reserved_set(
-									this.protocol.clone(),
-									vec![remote],
-								),
+								this.network.remove_set_reserved(remote, this.protocol.clone()),
 						},
 						// The sync event stream closed. Do the same for [`GossipValidator`].
 						Poll::Ready(None) => {
@@ -414,17 +410,11 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {}
-
-		fn add_to_peers_set(
+		fn remove_peers_from_reserved_set(
 			&self,
 			_protocol: ProtocolName,
-			_peers: HashSet<Multiaddr>,
+			_peers: Vec<PeerId>,
 		) -> Result<(), String> {
-			unimplemented!();
-		}
-
-		fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
 			unimplemented!();
 		}
 

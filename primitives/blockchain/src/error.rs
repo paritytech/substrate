@@ -150,7 +150,7 @@ pub enum Error {
 	#[error("Transaction pool not ready for block production.")]
 	TransactionPoolNotReady,
 
-	#[error("Database")]
+	#[error("Database error: {0}")]
 	DatabaseError(#[from] sp_database::error::DatabaseError),
 
 	#[error("Failed to get header for hash {0}")]

@@ -550,7 +550,10 @@ async fn can_sync_explicit_forks() {
 	.await;
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+// TODO: for unknown reason, this test is flaky on a multithreaded runtime, so we run it
+//       in a single-threaded mode.
+//       See issue https://github.com/paritytech/substrate/issues/14622.
+#[tokio::test]
 async fn syncs_header_only_forks() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(0);
@@ -1132,7 +1135,7 @@ async fn syncs_state() {
 		let mut config_two = FullPeerConfig::default();
 		config_two.extra_storage = Some(genesis_storage);
 		config_two.sync_mode =
-			SyncMode::Fast { skip_proofs: *skip_proofs, storage_chain_mode: false };
+			SyncMode::LightState { skip_proofs: *skip_proofs, storage_chain_mode: false };
 		net.add_full_peer_with_config(config_two);
 		let hashes = net.peer(0).push_blocks(64, false);
 		// Wait for peer 1 to sync header chain.
@@ -1175,7 +1178,7 @@ async fn syncs_indexed_blocks() {
 	net.add_full_peer_with_config(FullPeerConfig { storage_chain: true, ..Default::default() });
 	net.add_full_peer_with_config(FullPeerConfig {
 		storage_chain: true,
-		sync_mode: SyncMode::Fast { skip_proofs: false, storage_chain_mode: true },
+		sync_mode: SyncMode::LightState { skip_proofs: false, storage_chain_mode: true },
 		..Default::default()
 	});
 	net.peer(0).generate_blocks_at(

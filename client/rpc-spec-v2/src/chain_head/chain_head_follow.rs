@@ -24,7 +24,7 @@ use crate::chain_head::{
 		BestBlockChanged, Finalized, FollowEvent, Initialized, NewBlock, RuntimeEvent,
 		RuntimeVersionEvent,
 	},
-	subscription::{SubscriptionManagement, SubscriptionManagementError},
+	subscription::{InsertedSubscriptionData, SubscriptionManagement, SubscriptionManagementError},
 };
 use futures::{
 	channel::oneshot,
@@ -52,7 +52,7 @@ pub struct ChainHeadFollower<BE: Backend<Block>, Block: BlockT, Client> {
 	/// Subscriptions handle.
 	sub_handle: Arc<SubscriptionManagement<Block, BE>>,
 	/// Subscription was started with the runtime updates flag.
-	runtime_updates: bool,
+	with_runtime: bool,
 	/// Subscription ID.
 	sub_id: String,
 	/// The best reported block by this subscription.
@@ -65,10 +65,10 @@ impl<BE: Backend<Block>, Block: BlockT, Client> ChainHeadFollower<BE, Block, Cli
 		client: Arc<Client>,
 		backend: Arc<BE>,
 		sub_handle: Arc<SubscriptionManagement<Block, BE>>,
-		runtime_updates: bool,
+		with_runtime: bool,
 		sub_id: String,
 	) -> Self {
-		Self { client, backend, sub_handle, runtime_updates, sub_id, best_block_cache: None }
+		Self { client, backend, sub_handle, with_runtime, sub_id, best_block_cache: None }
 	}
 }
 
@@ -80,6 +80,8 @@ enum NotificationType<Block: BlockT> {
 	NewBlock(BlockImportNotification<Block>),
 	/// The finalized block notification obtained from `finality_notification_stream`.
 	Finalized(FinalityNotification<Block>),
+	/// The response of `chainHead` method calls.
+	MethodResponse(FollowEvent<Block::Hash>),
 }
 
 /// The initial blocks that should be reported or ignored by the chainHead.
@@ -144,7 +146,7 @@ where
 		parent: Option<Block::Hash>,
 	) -> Option<RuntimeEvent> {
 		// No runtime versions should be reported.
-		if !self.runtime_updates {
+		if !self.with_runtime {
 			return None
 		}
 
@@ -228,7 +230,7 @@ where
 		let initialized_event = FollowEvent::Initialized(Initialized {
 			finalized_block_hash,
 			finalized_block_runtime,
-			runtime_updates: self.runtime_updates,
+			with_runtime: self.with_runtime,
 		});
 
 		let mut finalized_block_descendants = Vec::with_capacity(initial_blocks.len() + 1);
@@ -243,7 +245,7 @@ where
 				block_hash: child,
 				parent_block_hash: parent,
 				new_runtime,
-				runtime_updates: self.runtime_updates,
+				with_runtime: self.with_runtime,
 			});
 
 			finalized_block_descendants.push(event);
@@ -274,7 +276,7 @@ where
 			block_hash,
 			parent_block_hash,
 			new_runtime,
-			runtime_updates: self.runtime_updates,
+			with_runtime: self.with_runtime,
 		});
 
 		if !is_best_block {
@@ -339,9 +341,7 @@ where
 		let mut events = Vec::new();
 
 		// Nothing to be done if no finalized hashes are provided.
-		let Some(first_hash) = finalized_block_hashes.get(0) else {
-			return Ok(Default::default())
-		};
+		let Some(first_hash) = finalized_block_hashes.get(0) else { return Ok(Default::default()) };
 
 		// Find the parent header.
 		let Some(first_header) = self.client.header(*first_hash)? else {
@@ -517,6 +517,7 @@ where
 					self.handle_import_blocks(notification, &startup_point),
 				NotificationType::Finalized(notification) =>
 					self.handle_finalized_blocks(notification, &mut to_ignore, &startup_point),
+				NotificationType::MethodResponse(notification) => Ok(vec![notification]),
 			};
 
 			let events = match events {
@@ -574,7 +575,7 @@ where
 	pub async fn generate_events(
 		&mut self,
 		mut sink: SubscriptionSink,
-		rx_stop: oneshot::Receiver<()>,
+		sub_data: InsertedSubscriptionData<Block>,
 	) {
 		// Register for the new block and finalized notifications.
 		let stream_import = self
@@ -586,6 +587,10 @@ where
 			.client
 			.finality_notification_stream()
 			.map(|notification| NotificationType::Finalized(notification));
+
+		let stream_responses = sub_data
+			.response_receiver
+			.map(|response| NotificationType::MethodResponse(response));
 
 		let startup_point = StartupPoint::from(self.client.info());
 		let (initial_events, pruned_forks) = match self.generate_init_events(&startup_point) {
@@ -604,9 +609,10 @@ where
 
 		let initial = NotificationType::InitialEvents(initial_events);
 		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
+		let merged = tokio_stream::StreamExt::merge(merged, stream_responses);
 		let stream = stream::once(futures::future::ready(initial)).chain(merged);
 
-		self.submit_events(&startup_point, stream.boxed(), pruned_forks, sink, rx_stop)
+		self.submit_events(&startup_point, stream.boxed(), pruned_forks, sink, sub_data.rx_stop)
 			.await;
 	}
 }

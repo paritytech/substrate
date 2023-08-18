@@ -18,33 +18,14 @@
 
 //! Tests that are only relevant for Linux.
 
+mod smaps;
+
 use super::mk_test_runtime;
 use crate::WasmExecutionMethod;
 use codec::Encode as _;
 use sc_executor_common::wasm_runtime::DEFAULT_HEAP_ALLOC_STRATEGY;
 
-mod smaps;
-
 use self::smaps::Smaps;
-
-#[test]
-fn memory_consumption_interpreted() {
-	let _ = sp_tracing::try_init_simple();
-
-	if std::env::var("RUN_TEST").is_ok() {
-		memory_consumption(WasmExecutionMethod::Interpreted);
-	} else {
-		// We need to run the test in isolation, to not getting interfered by the other tests.
-		let executable = std::env::current_exe().unwrap();
-		let output = std::process::Command::new(executable)
-			.env("RUN_TEST", "1")
-			.args(&["--nocapture", "memory_consumption_interpreted"])
-			.output()
-			.unwrap();
-
-		assert!(output.status.success());
-	}
-}
 
 #[test]
 fn memory_consumption_compiled() {

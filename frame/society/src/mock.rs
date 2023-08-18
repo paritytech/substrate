@@ -21,27 +21,25 @@ use super::*;
 use crate as pallet_society;
 
 use frame_support::{
-	ord_parameter_types, parameter_types,
+	assert_noop, assert_ok, ord_parameter_types, parameter_types,
 	traits::{ConstU32, ConstU64},
 };
 use frame_support_test::TestRandomness;
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+use RuntimeOrigin as Origin;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Society: pallet_society::{Pallet, Call, Storage, Event<T>, Config<T>},
 	}
@@ -52,8 +50,12 @@ parameter_types! {
 }
 
 ord_parameter_types! {
+	pub const ChallengePeriod: u64 = 8;
+	pub const ClaimPeriod: u64 = 1;
 	pub const FounderSetAccount: u128 = 1;
 	pub const SuspensionJudgementSetAccount: u128 = 2;
+	pub const MaxPayouts: u32 = 10;
+	pub const MaxBids: u32 = 10;
 }
 
 impl frame_system::Config for Test {
@@ -62,14 +64,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u128;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -95,40 +96,37 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type HoldIdentifier = ();
+	type RuntimeHoldReason = ();
 	type MaxHolds = ();
 }
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
+	type PalletId = SocietyPalletId;
 	type Currency = pallet_balances::Pallet<Self>;
 	type Randomness = TestRandomness<Self>;
-	type CandidateDeposit = ConstU64<25>;
-	type WrongSideDeduction = ConstU64<2>;
-	type MaxStrikes = ConstU32<2>;
+	type GraceStrikes = ConstU32<1>;
 	type PeriodSpend = ConstU64<1000>;
-	type MembershipChanged = ();
-	type RotationPeriod = ConstU64<4>;
+	type VotingPeriod = ConstU64<3>;
+	type ClaimPeriod = ClaimPeriod;
 	type MaxLockDuration = ConstU64<100>;
 	type FounderSetOrigin = EnsureSignedBy<FounderSetAccount, u128>;
-	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
-	type ChallengePeriod = ConstU64<8>;
-	type MaxCandidateIntake = ConstU32<10>;
-	type PalletId = SocietyPalletId;
+	type ChallengePeriod = ChallengePeriod;
+	type MaxPayouts = MaxPayouts;
+	type MaxBids = MaxBids;
+	type WeightInfo = ();
 }
 
 pub struct EnvBuilder {
-	members: Vec<u128>,
 	balance: u64,
 	balances: Vec<(u128, u64)>,
 	pot: u64,
-	max_members: u32,
+	founded: bool,
 }
 
 impl EnvBuilder {
 	pub fn new() -> Self {
 		Self {
-			members: vec![10],
 			balance: 10_000,
 			balances: vec![
 				(10, 50),
@@ -142,49 +140,32 @@ impl EnvBuilder {
 				(90, 50),
 			],
 			pot: 0,
-			max_members: 100,
+			founded: true,
 		}
 	}
 
 	pub fn execute<R, F: FnOnce() -> R>(mut self, f: F) -> R {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		self.balances.push((Society::account_id(), self.balance.max(self.pot)));
 		pallet_balances::GenesisConfig::<Test> { balances: self.balances }
 			.assimilate_storage(&mut t)
 			.unwrap();
-		pallet_society::GenesisConfig::<Test> {
-			members: self.members,
-			pot: self.pot,
-			max_members: self.max_members,
-		}
-		.assimilate_storage(&mut t)
-		.unwrap();
+		pallet_society::GenesisConfig::<Test> { pot: self.pot }
+			.assimilate_storage(&mut t)
+			.unwrap();
 		let mut ext: sp_io::TestExternalities = t.into();
-		ext.execute_with(f)
+		ext.execute_with(|| {
+			if self.founded {
+				let r = b"be cool".to_vec();
+				assert!(Society::found_society(Origin::signed(1), 10, 10, 8, 2, 25, r).is_ok());
+			}
+			let r = f();
+			migrations::assert_internal_consistency::<Test, ()>();
+			r
+		})
 	}
-	#[allow(dead_code)]
-	pub fn with_members(mut self, m: Vec<u128>) -> Self {
-		self.members = m;
-		self
-	}
-	#[allow(dead_code)]
-	pub fn with_balances(mut self, b: Vec<(u128, u64)>) -> Self {
-		self.balances = b;
-		self
-	}
-	#[allow(dead_code)]
-	pub fn with_pot(mut self, p: u64) -> Self {
-		self.pot = p;
-		self
-	}
-	#[allow(dead_code)]
-	pub fn with_balance(mut self, b: u64) -> Self {
-		self.balance = b;
-		self
-	}
-	#[allow(dead_code)]
-	pub fn with_max_members(mut self, n: u32) -> Self {
-		self.max_members = n;
+	pub fn founded(mut self, f: bool) -> Self {
+		self.founded = f;
 		self
 	}
 }
@@ -202,10 +183,121 @@ pub fn run_to_block(n: u64) {
 }
 
 /// Creates a bid struct using input parameters.
-pub fn create_bid<AccountId, Balance>(
-	value: Balance,
+pub fn bid<AccountId, Balance>(
 	who: AccountId,
 	kind: BidKind<AccountId, Balance>,
+	value: Balance,
 ) -> Bid<AccountId, Balance> {
 	Bid { who, kind, value }
+}
+
+/// Creates a candidate struct using input parameters.
+pub fn candidacy<AccountId, Balance>(
+	round: RoundIndex,
+	bid: Balance,
+	kind: BidKind<AccountId, Balance>,
+	approvals: VoteCount,
+	rejections: VoteCount,
+) -> Candidacy<AccountId, Balance> {
+	Candidacy { round, kind, bid, tally: Tally { approvals, rejections }, skeptic_struck: false }
+}
+
+pub fn next_challenge() {
+	let challenge_period: u64 = <Test as Config>::ChallengePeriod::get();
+	let now = System::block_number();
+	run_to_block(now + challenge_period - now % challenge_period);
+}
+
+pub fn next_voting() {
+	if let Period::Voting { more, .. } = Society::period() {
+		run_to_block(System::block_number() + more);
+	}
+}
+
+pub fn conclude_intake(allow_resignation: bool, judge_intake: Option<bool>) {
+	next_voting();
+	let round = RoundCount::<Test>::get();
+	for (who, candidacy) in Candidates::<Test>::iter() {
+		if candidacy.tally.clear_approval() {
+			assert_ok!(Society::claim_membership(Origin::signed(who)));
+			assert_noop!(
+				Society::claim_membership(Origin::signed(who)),
+				Error::<Test>::NotCandidate
+			);
+			continue
+		}
+		if candidacy.tally.clear_rejection() && allow_resignation {
+			assert_noop!(
+				Society::claim_membership(Origin::signed(who)),
+				Error::<Test>::NotApproved
+			);
+			assert_ok!(Society::resign_candidacy(Origin::signed(who)));
+			continue
+		}
+		if let (Some(founder), Some(approve)) = (Founder::<Test>::get(), judge_intake) {
+			if !candidacy.tally.clear_approval() && !approve {
+				// can be rejected by founder
+				assert_ok!(Society::kick_candidate(Origin::signed(founder), who));
+				continue
+			}
+			if !candidacy.tally.clear_rejection() && approve {
+				// can be rejected by founder
+				assert_ok!(Society::bestow_membership(Origin::signed(founder), who));
+				continue
+			}
+		}
+		if candidacy.tally.clear_rejection() && round > candidacy.round + 1 {
+			assert_noop!(
+				Society::claim_membership(Origin::signed(who)),
+				Error::<Test>::NotApproved
+			);
+			assert_ok!(Society::drop_candidate(Origin::signed(0), who));
+			assert_noop!(
+				Society::drop_candidate(Origin::signed(0), who),
+				Error::<Test>::NotCandidate
+			);
+			continue
+		}
+		if !candidacy.skeptic_struck {
+			assert_ok!(Society::punish_skeptic(Origin::signed(who)));
+		}
+	}
+}
+
+pub fn next_intake() {
+	let claim_period: u64 = <Test as Config>::ClaimPeriod::get();
+	match Society::period() {
+		Period::Voting { more, .. } => run_to_block(System::block_number() + more + claim_period),
+		Period::Claim { more, .. } => run_to_block(System::block_number() + more),
+	}
+}
+
+pub fn place_members(members: impl AsRef<[u128]>) {
+	for who in members.as_ref() {
+		assert_ok!(Society::insert_member(who, 0));
+	}
+}
+
+pub fn members() -> Vec<u128> {
+	let mut r = Members::<Test>::iter_keys().collect::<Vec<_>>();
+	r.sort();
+	r
+}
+
+pub fn membership() -> Vec<(u128, MemberRecord)> {
+	let mut r = Members::<Test>::iter().collect::<Vec<_>>();
+	r.sort_by_key(|x| x.0);
+	r
+}
+
+pub fn candidacies() -> Vec<(u128, Candidacy<u128, u64>)> {
+	let mut r = Candidates::<Test>::iter().collect::<Vec<_>>();
+	r.sort_by_key(|x| x.0);
+	r
+}
+
+pub fn candidates() -> Vec<u128> {
+	let mut r = Candidates::<Test>::iter_keys().collect::<Vec<_>>();
+	r.sort();
+	r
 }

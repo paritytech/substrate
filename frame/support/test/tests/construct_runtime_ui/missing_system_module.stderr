@@ -1,6 +1,6 @@
-error: `System` pallet declaration is missing. Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`
- --> $DIR/missing_system_module.rs:8:2
+error: `System` pallet declaration is missing. Please add this line: `System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},`
+ --> tests/construct_runtime_ui/missing_system_module.rs:5:2
   |
-8 | /     {
-9 | |     }
+5 | /     {
+6 | |     }
   | |_____^
