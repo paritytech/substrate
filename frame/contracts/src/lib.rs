@@ -95,8 +95,8 @@ mod schedule;
 mod storage;
 mod wasm;
 
+pub mod call_observability;
 pub mod chain_extension;
-pub mod debug;
 pub mod migration;
 pub mod weights;
 
@@ -108,6 +108,7 @@ use crate::{
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
 	wasm::{CodeInfo, WasmBlob},
 };
+use call_observability::{CallObserver, CallSpan};
 use codec::{Codec, Decode, Encode, HasCompact, MaxEncodedLen};
 use environmental::*;
 use frame_support::{
@@ -354,8 +355,8 @@ pub mod pallet {
 		type Migrations: MigrateSequence;
 
 		/// Type that provides debug handling for the contract execution process.
-		type DebugSpan: debug::CallSpan;
-		type Debug: debug::CallObserver<Self, Self::DebugSpan>;
+		type DebugSpan: CallSpan;
+		type Debug: CallObserver<Self, Self::DebugSpan>;
 	}
 
 	#[pallet::hooks]

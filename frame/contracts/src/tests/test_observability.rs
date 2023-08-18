@@ -1,4 +1,4 @@
-use crate::debug::{CallObserver, CallSpan, ExportedFunction};
+use crate::call_observability::{CallObserver, CallSpan, ExportedFunction};
 
 use super::*;
 use frame_support::traits::Currency;

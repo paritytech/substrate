@@ -16,10 +16,10 @@
 // limitations under the License.
 
 mod pallet_dummy;
-mod test_debug;
+mod test_observability;
 
 use self::{
-	test_debug::{TestCallSpan, TestDebugger},
+	test_observability::{TestCallSpan, TestDebugger},
 	test_utils::{ensure_stored, expected_deposit, hash},
 };
 use crate::{
