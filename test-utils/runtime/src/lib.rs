@@ -694,7 +694,7 @@ impl_runtime_apis! {
 	}
 
 	impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
-		fn ring_context() -> Option<sp_consensus_sassafras::RingContext> {
+		fn ring_context() -> Option<sp_consensus_sassafras::vrf::RingContext> {
 			Sassafras::ring_context()
 		}
 

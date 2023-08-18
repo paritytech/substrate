@@ -58,8 +58,8 @@ use frame_system::{
 };
 use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
-	vrf, AuthorityId, Epoch, EpochConfiguration, EquivocationProof, Randomness, RingContext, Slot,
-	SlotDuration, TicketBody, TicketEnvelope, TicketId, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID,
+	vrf, AuthorityId, Epoch, EpochConfiguration, EquivocationProof, Randomness, Slot, SlotDuration,
+	TicketBody, TicketEnvelope, TicketId, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID,
 };
 use sp_io::hashing;
 use sp_runtime::{
@@ -235,7 +235,7 @@ pub mod pallet {
 	/// In practice: Updatable Universal Reference String and the seed.
 	#[pallet::storage]
 	#[pallet::getter(fn ring_context)]
-	pub type RingVrfContext<T: Config> = StorageValue<_, RingContext>;
+	pub type RingContext<T: Config> = StorageValue<_, vrf::RingContext>;
 
 	/// Genesis configuration for Sassafras protocol.
 	#[pallet::genesis_config]
@@ -258,9 +258,9 @@ pub mod pallet {
 
 			// TODO: davxy... remove for pallet tests
 			warn!(target: LOG_TARGET, "Constructing testing ring context (in build)");
-			let ring_ctx = RingContext::new_testing();
+			let ring_ctx = vrf::RingContext::new_testing();
 			warn!(target: LOG_TARGET, "... done");
-			RingVrfContext::<T>::set(Some(ring_ctx.clone()));
+			RingContext::<T>::set(Some(ring_ctx.clone()));
 		}
 	}
 
@@ -368,7 +368,7 @@ pub mod pallet {
 			debug!(target: LOG_TARGET, "Received {} tickets", tickets.len());
 
 			debug!(target: LOG_TARGET, "LOADING RING CTX");
-			let Some(ring_ctx) = RingVrfContext::<T>::get() else {
+			let Some(ring_ctx) = RingContext::<T>::get() else {
 				return Err("Ring context not initialized".into())
 			};
 			debug!(target: LOG_TARGET, "... Loaded");

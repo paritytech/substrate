@@ -18,8 +18,8 @@
 //! Sassafras digests structures and helpers.
 
 use crate::{
-	ticket::TicketClaim, AuthorityId, AuthorityIndex, AuthoritySignature, EpochConfiguration,
-	Randomness, Slot, VrfSignature, SASSAFRAS_ENGINE_ID,
+	ticket::TicketClaim, vrf::VrfSignature, AuthorityId, AuthorityIndex, AuthoritySignature,
+	EpochConfiguration, Randomness, Slot, SASSAFRAS_ENGINE_ID,
 };
 
 use scale_codec::{Decode, Encode, MaxEncodedLen};
@@ -50,7 +50,7 @@ pub struct NextEpochDescriptor {
 	pub authorities: Vec<AuthorityId>,
 	/// Epoch randomness.
 	pub randomness: Randomness,
-	/// Mutable epoch parameters. If not present previous epoch parameters are used.
+	/// Configurable parameters. If not present previous epoch parameters are used.
 	pub config: Option<EpochConfiguration>,
 }
 
@@ -60,7 +60,7 @@ pub enum ConsensusLog {
 	/// Provides information about the next epoch parameters.
 	#[codec(index = 1)]
 	NextEpochData(NextEpochDescriptor),
-	/// Disable the authority with given index (TODO @davxy).
+	/// Disable the authority with given index.
 	#[codec(index = 2)]
 	OnDisabled(AuthorityIndex),
 }

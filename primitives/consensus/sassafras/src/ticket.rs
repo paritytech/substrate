@@ -17,7 +17,7 @@
 
 //! Primitives related to tickets.
 
-use crate::RingVrfSignature;
+use crate::vrf::RingVrfSignature;
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
@@ -26,9 +26,10 @@ pub use sp_core::ed25519::{Public as EphemeralPublic, Signature as EphemeralSign
 /// Ticket identifier.
 ///
 /// Its value is the output of a VRF whose inputs cannot be controlled by the
-/// creator of the ticket (refer to [`ticket_id_vrf_input`] parameters).
+/// ticket's creator (refer to [`crate::vrf::ticket_id_input`] parameters).
 /// Because of this, it is also used as the ticket score to compare against
-/// the epoch ticket's threshold.
+/// the epoch ticket's threshold to decide if the ticket is worth being considered
+/// for slot assignment (refer to [`ticket_id_threshold`]).
 pub type TicketId = u128;
 
 /// Ticket data persisted on-chain.
@@ -61,14 +62,22 @@ pub struct TicketClaim {
 	pub erased_signature: EphemeralSignature,
 }
 
-/// Computes the threshold for a given epoch as T = (x*s)/(a*v), where:
-/// - x: redundancy factor;
-/// - s: number of slots in epoch;
-/// - a: max number of attempts;
-/// - v: number of validator in epoch.
-/// The parameters should be chosen such that T <= 1.
-/// If `attempts * validators` is zero then we fallback to T = 0
-// TODO-SASS-P3: this formula must be double-checked...
+/// Computes ticket-id maximum allowed value for a given epoch.
+///
+/// Only ticket identifiers below this threshold should be considered for slot
+/// assignment.
+///
+/// The value is computed as
+///
+/// 	TicketId::MAX*(redundancy*slots)/(attempts*validators)
+///
+/// Where:
+/// - `redundancy`: redundancy factor;
+/// - `slots`: number of slots in epoch;
+/// - `attempts`: max number of tickets attempts per validator;
+/// - `validators`: number of validators in epoch.
+///
+/// If `attempts * validators = 0` then we return 0.
 pub fn ticket_id_threshold(
 	redundancy: u32,
 	slots: u32,
