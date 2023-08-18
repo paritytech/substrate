@@ -50,6 +50,7 @@ use frame_support::{
 		ConstantMultiplier, IdentityFee, Weight,
 	},
 	BoundedVec, PalletId, RuntimeDebug,
+	migrations::VersionedRuntimeUpgrade
 };
 use frame_system::{
 	limits::{BlockLength, BlockWeights},
