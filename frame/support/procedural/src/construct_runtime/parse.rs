@@ -391,7 +391,7 @@ fn parse_pallet_parts(input: ParseStream) -> Result<Vec<PalletPart>> {
 	Ok(pallet_parts.content.inner.into_iter().collect())
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum PalletPartKeyword {
 	Pallet(keyword::Pallet),
 	Call(keyword::Call),

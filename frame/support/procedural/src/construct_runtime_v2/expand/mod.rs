@@ -36,6 +36,8 @@ use crate::construct_runtime::{
 	decl_all_pallets, decl_integrity_test, decl_pallet_runtime_setup, decl_static_assertions,
 };
 
+use super::parse::runtime_types::RuntimeType;
+
 /// The fixed name of the system pallet.
 const SYSTEM_PALLET_NAME: &str = "System";
 
@@ -48,7 +50,11 @@ pub fn expand(def: Def) -> proc_macro2::TokenStream {
 				.and_then(|_| construct_runtime_implicit_to_explicit(input.into(), decl.clone())),
 		AllPalletsDeclaration::Explicit(ref decl) => check_pallet_number(input, decl.pallets.len())
 			.and_then(|_| {
-				construct_runtime_final_expansion(def.runtime_struct.ident.clone(), decl.clone())
+				construct_runtime_final_expansion(
+					def.runtime_struct.ident.clone(),
+					decl.clone(),
+					def.runtime_types.clone(),
+				)
 			}),
 	};
 
@@ -94,6 +100,7 @@ fn construct_runtime_implicit_to_explicit(
 fn construct_runtime_final_expansion(
 	name: Ident,
 	definition: ExplicitAllPalletsDeclaration,
+	runtime_types: Vec<RuntimeType>,
 ) -> Result<TokenStream2> {
 	let ExplicitAllPalletsDeclaration { pallets, name: pallets_name } = definition;
 
@@ -136,16 +143,58 @@ fn construct_runtime_final_expansion(
 	let block = quote!(<#name as #frame_system::Config>::Block);
 	let unchecked_extrinsic = quote!(<#block as #scrate::sp_runtime::traits::Block>::Extrinsic);
 
-	let outer_event =
-		expand::expand_outer_enum(&name, &pallets, &scrate, expand::OuterEnumType::Event)?;
-	let outer_error =
-		expand::expand_outer_enum(&name, &pallets, &scrate, expand::OuterEnumType::Error)?;
+	let mut dispatch = quote!();
+	let mut outer_event = quote!();
+	let mut outer_error = quote!();
+	let mut outer_origin = quote!();
+	let mut freeze_reason = quote!();
+	let mut hold_reason = quote!();
+	let mut slash_reason = quote!();
+	let mut lock_id = quote!();
 
-	let outer_origin = expand::expand_outer_origin(&name, system_pallet, &pallets, &scrate)?;
+	for runtime_type in runtime_types.iter() {
+		match runtime_type {
+			RuntimeType::RuntimeCall(_) => {
+				dispatch = expand::expand_outer_dispatch(&name, system_pallet, &pallets, &scrate);
+			},
+			RuntimeType::RuntimeEvent(_) => {
+				outer_event = expand::expand_outer_enum(
+					&name,
+					&pallets,
+					&scrate,
+					expand::OuterEnumType::Event,
+				)?;
+			},
+			RuntimeType::RuntimeError(_) => {
+				outer_error = expand::expand_outer_enum(
+					&name,
+					&pallets,
+					&scrate,
+					expand::OuterEnumType::Error,
+				)?;
+			},
+			RuntimeType::RuntimeOrigin(_) => {
+				outer_origin =
+					expand::expand_outer_origin(&name, system_pallet, &pallets, &scrate)?;
+			},
+			RuntimeType::RuntimeFreezeReason(_) => {
+				freeze_reason = expand::expand_outer_freeze_reason(&pallets, &scrate);
+			},
+			RuntimeType::RuntimeHoldReason(_) => {
+				hold_reason = expand::expand_outer_hold_reason(&pallets, &scrate);
+			},
+			RuntimeType::RuntimeSlashReason(_) => {
+				slash_reason = expand::expand_outer_slash_reason(&pallets, &scrate);
+			},
+			RuntimeType::RuntimeLockId(_) => {
+				lock_id = expand::expand_outer_lock_id(&pallets, &scrate);
+			},
+		}
+	}
+
 	let all_pallets = decl_all_pallets(&name, pallets.iter(), &features);
 	let pallet_to_index = decl_pallet_runtime_setup(&name, &pallets, &scrate);
 
-	let dispatch = expand::expand_outer_dispatch(&name, system_pallet, &pallets, &scrate);
 	let metadata = expand::expand_runtime_metadata(
 		&name,
 		&pallets,
@@ -157,10 +206,6 @@ fn construct_runtime_final_expansion(
 	let inherent =
 		expand::expand_outer_inherent(&name, &block, &unchecked_extrinsic, &pallets, &scrate);
 	let validate_unsigned = expand::expand_outer_validate_unsigned(&name, &pallets, &scrate);
-	let freeze_reason = expand::expand_outer_freeze_reason(&pallets, &scrate);
-	let hold_reason = expand::expand_outer_hold_reason(&pallets, &scrate);
-	let lock_id = expand::expand_outer_lock_id(&pallets, &scrate);
-	let slash_reason = expand::expand_outer_slash_reason(&pallets, &scrate);
 	let integrity_test = decl_integrity_test(&scrate);
 	let static_assertions = decl_static_assertions(&name, &pallets, &scrate);
 
