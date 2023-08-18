@@ -16,10 +16,10 @@
 // limitations under the License.
 
 use crate::construct_runtime::parse::Pallet;
-use quote::ToTokens;
+use crate::construct_runtime_v2::parse::pallet_decl::PalletDeclaration;
 use std::collections::{HashMap, HashSet};
 use syn::{
-	spanned::Spanned, Attribute, Error, GenericArgument, Ident,
+	spanned::Spanned, Ident,
 };
 
 #[derive(Debug, Clone)]
@@ -81,58 +81,5 @@ impl AllPalletsDeclaration {
 		} else {
 			Ok(AllPalletsDeclaration::Explicit(ExplicitAllPalletsDeclaration { name, pallets }))
 		}
-	}
-}
-
-/// The declaration of a pallet.
-#[derive(Debug, Clone)]
-pub struct PalletDeclaration {
-	/// The name of the pallet, e.g.`System` in `System: frame_system`.
-	pub name: Ident,
-	/// Optional attributes tagged right above a pallet declaration.
-	pub attrs: Vec<Attribute>,
-	/// Optional fixed index, e.g. `MyPallet ...  = 3,`.
-	pub index: Option<u8>,
-	/// The path of the pallet, e.g. `frame_system` in `System: frame_system`.
-	pub path: syn::Path,
-	/// The instance of the pallet, e.g. `Instance1` in `Council: pallet_collective::<Instance1>`.
-	pub instance: Option<Ident>,
-}
-
-impl PalletDeclaration {
-	pub fn try_from(
-		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &syn::Field,
-		path: &syn::TypePath,
-	) -> syn::Result<Self> {
-		let name = item
-			.ident
-			.clone()
-			.ok_or(Error::new(attr_span, "Invalid pallet declaration, expected a named field"))?;
-
-		let mut path = path.path.clone();
-
-		let mut instance = None;
-		// Todo: revisit this
-		if let Some(segment) = path.segments.iter_mut().find(|seg| !seg.arguments.is_empty()) {
-			if let syn::PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments {
-				args,
-				..
-			}) = segment.arguments.clone()
-			{
-				if let Some(GenericArgument::Type(syn::Type::Path(arg_path))) = args.first() {
-					instance = Some(syn::Ident::new(
-						&arg_path.to_token_stream().to_string(),
-						arg_path.span(),
-					));
-					segment.arguments = syn::PathArguments::None;
-				}
-			}
-		}
-
-		let index = Some(index as u8);
-
-		Ok(Self { name, path, instance, index, attrs: item.attrs.clone() })
 	}
 }
