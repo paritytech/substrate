@@ -66,8 +66,6 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 	Ok(quote!(
 		impl #crate_::ApiExt<#block_type> for #self_ty {
-			type StateBackend = #crate_::InMemoryBackend<#crate_::HashingFor<#block_type>>;
-
 			fn execute_in_transaction<F: FnOnce(&Self) -> #crate_::TransactionOutcome<R>, R>(
 				&self,
 				call: F,
@@ -111,12 +109,12 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 				unimplemented!("`proof_recorder` not implemented for runtime api mocks")
 			}
 
-			fn into_storage_changes(
+			fn into_storage_changes<B: #crate_::StateBackend<#crate_::HashingFor<#block_type>>>(
 				&self,
-				_: &Self::StateBackend,
+				_: &B,
 				_: <#block_type as #crate_::BlockT>::Hash,
 			) -> std::result::Result<
-				#crate_::StorageChanges<Self::StateBackend, #block_type>,
+				#crate_::StorageChanges<#block_type>,
 				String
 			> where Self: Sized {
 				unimplemented!("`into_storage_changes` not implemented for runtime api mocks")

@@ -20,6 +20,7 @@ sp-io = { version = "23.0.0", default-features = false, path = "../../primitives
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-weights = { version = "20.0.0", default-features = false, path = "../../primitives/weights" }
+docify = "0.2.1"
 
 [dev-dependencies]
 pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }

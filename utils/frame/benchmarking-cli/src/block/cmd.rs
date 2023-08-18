@@ -90,7 +90,7 @@ impl BlockCmd {
 			+ StorageProvider<Block, BA>
 			+ UsageProvider<Block>
 			+ HeaderBackend<Block>,
-		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
+		C::Api: ApiExt<Block> + BlockBuilderApi<Block>,
 	{
 		// Put everything in the benchmark type to have the generic types handy.
 		Benchmark::new(client, self.params.clone()).run()
