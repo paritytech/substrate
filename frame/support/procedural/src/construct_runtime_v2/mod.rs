@@ -15,21 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use proc_macro::TokenStream;
 pub use parse::Def;
+use proc_macro::TokenStream;
 
-mod parse;
 mod expand;
+mod parse;
 
-use proc_macro2::TokenStream as TokenStream2;
-use quote::ToTokens;
-
-pub fn construct_runtime(
-    attrs: TokenStream,
-	item: TokenStream,
-) -> TokenStream {
-    let item = syn::parse_macro_input!(item as syn::ItemMod);
-    match parse::Def::try_from(item) {
+pub fn construct_runtime(_attrs: TokenStream, tokens: TokenStream) -> TokenStream {
+	let item = syn::parse_macro_input!(tokens as syn::ItemMod);
+	match parse::Def::try_from(item) {
 		Ok(def) => expand::expand(def).into(),
 		Err(e) => e.to_compile_error().into(),
 	}

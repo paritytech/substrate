@@ -15,61 +15,92 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::construct_runtime_v2::Def;
-use crate::construct_runtime_v2::parse::pallets::{AllPalletsDeclaration, ExplicitAllPalletsDeclaration};
-use syn::{Ident, Result};
-use quote::quote;
-use proc_macro2::TokenStream as TokenStream2;
-use std::collections::HashSet;
-use frame_support_procedural_tools::generate_crate_access;
-use frame_support_procedural_tools::generate_hidden_includes;
-use frame_support_procedural_tools::generate_crate_access_2018;
-use std::str::FromStr;
-use itertools::Itertools;
+use crate::construct_runtime_v2::{
+	parse::pallets::{
+		AllPalletsDeclaration, ExplicitAllPalletsDeclaration, ImplicitAllPalletsDeclaration,
+	},
+	Def,
+};
 use cfg_expr::Predicate;
+use frame_support_procedural_tools::{
+	generate_crate_access, generate_crate_access_2018, generate_hidden_includes,
+};
+use proc_macro2::TokenStream as TokenStream2;
+use quote::quote;
+use std::collections::HashSet;
+use syn::{Ident, Result};
 
-use crate::construct_runtime::expand;
-use crate::construct_runtime::parse::Pallet;
+use crate::construct_runtime::{check_pallet_number, expand};
 
-use crate::construct_runtime::decl_all_pallets;
-use crate::construct_runtime::decl_pallet_runtime_setup;
-use crate::construct_runtime::decl_integrity_test;
-use crate::construct_runtime::decl_static_assertions;
+use crate::construct_runtime::{
+	decl_all_pallets, decl_integrity_test, decl_pallet_runtime_setup, decl_static_assertions,
+};
 
 /// The fixed name of the system pallet.
 const SYSTEM_PALLET_NAME: &str = "System";
 
-pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
-    match def.pallets {
-        (AllPalletsDeclaration::Implicit(decl), result) => {
-            result
-        }
-        (AllPalletsDeclaration::Explicit(ref decl), ref result) => {
-            let res = construct_runtime_final_expansion(def.runtime_struct.ident.clone(), decl.clone());
+pub fn expand(def: Def) -> proc_macro2::TokenStream {
+	let input = def.input;
 
-            let res = res.unwrap_or_else(|e| e.to_compile_error());
+	let res = match def.pallets {
+		AllPalletsDeclaration::Implicit(ref decl) =>
+			check_pallet_number(input.clone(), decl.pallet_count)
+				.and_then(|_| construct_runtime_implicit_to_explicit(input.into(), decl.clone())),
+		AllPalletsDeclaration::Explicit(ref decl) => check_pallet_number(input, decl.pallets.len())
+			.and_then(|_| {
+				construct_runtime_final_expansion(def.runtime_struct.ident.clone(), decl.clone())
+			}),
+	};
 
-            let res = expander::Expander::new("construct_runtime")
-                .dry(std::env::var("FRAME_EXPAND").is_err())
-                .verbose(true)
-                .write_to_out_dir(res)
-                .expect("Does not fail because of IO in OUT_DIR; qed");
-        
-            res.into()
-        }
-    }
+	let res = res.unwrap_or_else(|e| e.to_compile_error());
+
+	let res = expander::Expander::new("construct_runtime")
+		.dry(std::env::var("FRAME_EXPAND").is_err())
+		.verbose(true)
+		.write_to_out_dir(res)
+		.expect("Does not fail because of IO in OUT_DIR; qed");
+
+	res.into()
+}
+
+fn construct_runtime_implicit_to_explicit(
+	input: TokenStream2,
+	definition: ImplicitAllPalletsDeclaration,
+) -> Result<TokenStream2> {
+	let frame_support = generate_crate_access_2018("frame-support")?;
+	let mut expansion = quote::quote!(
+		#[frame_support::construct_runtime_v2]
+		#input
+	);
+	for pallet in definition.pallet_decls.iter() {
+		let pallet_path = &pallet.path;
+		let pallet_name = &pallet.name;
+		let pallet_instance = pallet.instance.as_ref().map(|instance| quote::quote!(::<#instance>));
+		expansion = quote::quote!(
+			#frame_support::tt_call! {
+				macro = [{ #pallet_path::tt_default_parts_v2 }]
+				frame_support = [{ #frame_support }]
+				~~> #frame_support::match_and_insert! {
+					target = [{ #expansion }]
+					pattern = [{ #pallet_name: #pallet_path #pallet_instance  }]
+				}
+			}
+		);
+	}
+
+	Ok(expansion)
 }
 
 fn construct_runtime_final_expansion(
 	name: Ident,
 	definition: ExplicitAllPalletsDeclaration,
 ) -> Result<TokenStream2> {
-	let ExplicitAllPalletsDeclaration { pallets, pallets_token, .. } = definition;
+	let ExplicitAllPalletsDeclaration { pallets, name: pallets_name } = definition;
 
 	let system_pallet =
 		pallets.iter().find(|decl| decl.name == SYSTEM_PALLET_NAME).ok_or_else(|| {
 			syn::Error::new(
-				pallets_token.span.join(),
+				pallets_name.span(),
 				"`System` pallet declaration is missing. \
 			 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},`",
 			)
@@ -106,9 +137,9 @@ fn construct_runtime_final_expansion(
 	let unchecked_extrinsic = quote!(<#block as #scrate::sp_runtime::traits::Block>::Extrinsic);
 
 	let outer_event =
-	expand::expand_outer_enum(&name, &pallets, &scrate, expand::OuterEnumType::Event)?;
+		expand::expand_outer_enum(&name, &pallets, &scrate, expand::OuterEnumType::Event)?;
 	let outer_error =
-    expand::expand_outer_enum(&name, &pallets, &scrate, expand::OuterEnumType::Error)?;
+		expand::expand_outer_enum(&name, &pallets, &scrate, expand::OuterEnumType::Error)?;
 
 	let outer_origin = expand::expand_outer_origin(&name, system_pallet, &pallets, &scrate)?;
 	let all_pallets = decl_all_pallets(&name, pallets.iter(), &features);
@@ -124,7 +155,7 @@ fn construct_runtime_final_expansion(
 	);
 	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate);
 	let inherent =
-	expand::expand_outer_inherent(&name, &block, &unchecked_extrinsic, &pallets, &scrate);
+		expand::expand_outer_inherent(&name, &block, &unchecked_extrinsic, &pallets, &scrate);
 	let validate_unsigned = expand::expand_outer_validate_unsigned(&name, &pallets, &scrate);
 	let freeze_reason = expand::expand_outer_freeze_reason(&pallets, &scrate);
 	let hold_reason = expand::expand_outer_hold_reason(&pallets, &scrate);

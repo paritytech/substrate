@@ -22,21 +22,14 @@ pub struct RuntimeStructDef {
 }
 
 impl RuntimeStructDef {
-	pub fn try_from(
-		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &mut syn::Item,
-	) -> syn::Result<Self> {
-        let item = if let syn::Item::Struct(item) = item {
+	pub fn try_from(attr_span: proc_macro2::Span, item: &mut syn::Item) -> syn::Result<Self> {
+		let item = if let syn::Item::Struct(item) = item {
 			item
 		} else {
 			let msg = "Invalid frame::runtime, expected struct definition";
 			return Err(syn::Error::new(item.span(), msg))
 		};
 
-        Ok(Self {
-			ident: item.ident.clone(),
-            attr_span
-        })
-    }
+		Ok(Self { ident: item.ident.clone(), attr_span })
+	}
 }
