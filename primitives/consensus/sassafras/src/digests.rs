@@ -18,8 +18,8 @@
 //! Sassafras digests structures and helpers.
 
 use crate::{
-	ticket::TicketClaim, AuthorityId, AuthorityIndex, AuthoritySignature, EpochConfiguration,
-	Randomness, Slot, VrfSignature, SASSAFRAS_ENGINE_ID,
+	ticket::TicketClaim, vrf::VrfSignature, AuthorityId, AuthorityIndex, AuthoritySignature,
+	EpochConfiguration, Randomness, Slot, SASSAFRAS_ENGINE_ID,
 };
 
 use scale_codec::{Decode, Encode, MaxEncodedLen};
