@@ -37,7 +37,7 @@ impl PalletDeclaration {
 	pub fn try_from(
 		attr_span: proc_macro2::Span,
 		index: usize,
-		item: &syn::Field,
+		item: &mut syn::Field,
 		path: &syn::TypePath,
 	) -> syn::Result<Self> {
 		let name = item

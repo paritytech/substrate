@@ -19,7 +19,7 @@ use crate::{
 	construct_runtime::parse::Pallet, construct_runtime_v2::parse::pallet_decl::PalletDeclaration,
 };
 use std::collections::{HashMap, HashSet};
-use syn::{spanned::Spanned, Ident};
+use syn::{spanned::Spanned, Ident, Error};
 
 #[derive(Debug, Clone)]
 pub enum AllPalletsDeclaration {
@@ -43,7 +43,6 @@ pub struct ExplicitAllPalletsDeclaration {
 }
 
 impl AllPalletsDeclaration {
-	// Todo: Check for indices and name conflicts.
 	pub fn try_from(attr_span: proc_macro2::Span, item: &mut syn::Item) -> syn::Result<Self> {
 		let item = if let syn::Item::Struct(item) = item {
 			item
@@ -53,17 +52,44 @@ impl AllPalletsDeclaration {
 		};
 
 		let name = item.ident.clone();
+		
+		let mut indices = HashMap::new();
+		let mut names = HashMap::new();
+
+		let mut last_index: Option<u8> = None;
+
 		let mut pallet_decls = vec![];
 		let mut pallets = vec![];
 
-		for (index, item) in item.fields.iter().enumerate() {
+		for (index, item) in item.fields.iter_mut().enumerate() {
 			match item.ty.clone() {
 				syn::Type::Path(ref path) => {
 					let pallet_decl = PalletDeclaration::try_from(attr_span, index, item, path)?;
 					pallet_decls.push(pallet_decl);
 				},
 				syn::Type::TraitObject(syn::TypeTraitObject { bounds, .. }) => {
-					let pallet = Pallet::try_from(attr_span, index, item, &bounds)?;
+					let index_u8: u8 = index.try_into().map_err(|_| Error::new(attr_span, "Invalid pallet index, cannot fit in u8"))?;
+					let pallet = Pallet::try_from(attr_span, last_index.unwrap_or(index_u8), item, &bounds)?;
+
+					if let Some(used_pallet) = indices.insert(pallet.index, pallet.name.clone()) {
+						let msg = format!(
+							"Pallet indices are conflicting: Both pallets {} and {} are at index {}",
+							used_pallet, pallet.name, pallet.index,
+						);
+						let mut err = syn::Error::new(used_pallet.span(), &msg);
+						err.combine(syn::Error::new(pallet.name.span(), msg));
+						return Err(err)
+					}
+
+					if let Some(used_pallet) = names.insert(pallet.name.clone(), pallet.name.span()) {
+						let msg = "Two pallets with the same name!";
+		
+						let mut err = syn::Error::new(used_pallet, &msg);
+						err.combine(syn::Error::new(pallet.name.span(), &msg));
+						return Err(err)
+					}
+
+					last_index = Some(pallet.index);
 					pallets.push(pallet);
 				},
 				_ => continue,
