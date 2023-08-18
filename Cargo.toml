@@ -31,14 +31,14 @@ node-cli = { path = "bin/node/cli" }
 
 # Dependencies necessary to optionaly build Sassafras related crates.
 #
-# Sassafras requires to enable `bandersnatch-experimental` feature.
-# This feature ends up being transitively enabled in:
+# Sassafras requires to enable `bandersnatch-experimental` feature and this ends up
+# being transitively enabled in:
 #  sp-consensus-sassafras → sp-application-crypto → sp-io → sp-keystore
-# Thus the bandersnatch experimental api is exposed in the `Keystore` trait.
-# Follow that we require to expose these functions in the client keystore as well.
+# Bandersnatch experimental api is thus exposed in the `Keystore` trait and we require
+# to expose these functions implementations in the client keystore as well.
 # At this stage, by default, we don't want this.
-# We prefer instead to keep sassafras crates (and thus bandersnatch feature) hidden
-# and optionally enabled via the `sassafras-experimental` feature.
+# We prefer instead to keep sassafras crates (and thus bandersnatch feature) out of
+# workspace and optionally enabled via the `sassafras-experimental` feature.
 sp-consensus-sassafras = { path = "primitives/consensus/sassafras", optional = true }
 sc-keystore = { path = "client/keystore" }
 
