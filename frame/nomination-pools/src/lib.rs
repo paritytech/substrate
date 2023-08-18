@@ -537,7 +537,7 @@ impl<T: Config> PoolMember<T> {
 
 	/// Total balance of the member, both active and unbonding.
 	/// Doesn't mutate state.
-	#[cfg(any(feature = "try-runtime", test))]
+	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
 	fn total_balance(&mut self) -> BalanceOf<T> {
 		let pool = match BondedPool::<T>::get(self.pool_id).defensive() {
 			Some(pool) => pool,
@@ -2194,9 +2194,9 @@ pub mod pallet {
 			);
 
 			let mut sum_unlocked_points: BalanceOf<T> = Zero::zero();
-			let balance_to_unbond = withdrawn_points
-				.iter()
-				.fold(BalanceOf::<T>::zero(), |accumulator, (era, unlocked_points)| {
+			let mut balance_to_unbond = withdrawn_points.iter().fold(
+				BalanceOf::<T>::zero(),
+				|accumulator, (era, unlocked_points)| {
 					sum_unlocked_points = sum_unlocked_points.saturating_add(*unlocked_points);
 					if let Some(era_pool) = sub_pools.with_era.get_mut(era) {
 						let balance_to_unbond = era_pool.dissolve(*unlocked_points);
@@ -2209,15 +2209,28 @@ pub mod pallet {
 						// era-less pool.
 						accumulator.saturating_add(sub_pools.no_era.dissolve(*unlocked_points))
 					}
-				})
-				// A call to this transaction may cause the pool's stash to get dusted. If this
-				// happens before the last member has withdrawn, then all subsequent withdraws will
-				// be 0. However the unbond pools do no get updated to reflect this. In the
-				// aforementioned scenario, this check ensures we don't try to withdraw funds that
-				// don't exist. This check is also defensive in cases where the unbond pool does not
-				// update its balance (e.g. a bug in the slashing hook.) We gracefully proceed in
-				// order to ensure members can leave the pool and it can be destroyed.
-				.min(bonded_pool.transferrable_balance());
+				},
+			);
+
+			// A call to this transaction may cause the pool's stash to get dusted. If this
+			// happens before the last member has withdrawn, then all subsequent withdraws will
+			// be 0. However the unbond pools do no get updated to reflect this. In the
+			// aforementioned scenario, this check ensures we don't try to withdraw funds that
+			// don't exist. This check is also defensive in cases where the unbond pool does not
+			// update its balance (e.g. a bug in the slashing hook.) We gracefully proceed in
+			// order to ensure members can leave the pool and it can be destroyed.
+
+			// In this case the [`TotalValueLocked`] needs to be increased by the difference of
+			// these two values. Otherwise the issue and dissolve calls would lead to an incorrect
+			// value.
+			// TODO: This case still needs a test.
+			let transferrable = bonded_pool.transferrable_balance();
+			if balance_to_unbond > transferrable {
+				TotalValueLocked::<T>::mutate(|tvl| {
+					tvl.saturating_add(balance_to_unbond.saturating_sub(transferrable));
+				});
+			}
+			balance_to_unbond = balance_to_unbond.min(transferrable);
 
 			T::Currency::transfer(
 				&bonded_pool.bonded_account(),
@@ -3119,7 +3132,6 @@ impl<T: Config> Pallet<T> {
 			bonded_pools == reward_pools,
 			"`BondedPools` and `RewardPools` must all have the EXACT SAME key-set."
 		);
-		// let mut expected_tvl = Zero::zero();
 
 		ensure!(
 			SubPoolsStorage::<T>::iter_keys().all(|k| bonded_pools.contains(&k)),
@@ -3212,8 +3224,16 @@ impl<T: Config> Pallet<T> {
 				"depositor must always have MinCreateBond stake in the pool, except for when the \
 				pool is being destroyed and the depositor is the last member",
 			);
-			//expected_tvl += T::Staking::total_stake(&bonded_pool.bonded_account())
-			//.expect("all pools must have total stake");
+
+			let mut expected_tvl: BalanceOf<T> = Zero::zero();
+			PoolMembers::<T>::iter().for_each(|(_, member)| {
+				expected_tvl = expected_tvl.saturating_add(member.clone().total_balance())
+			});
+
+			ensure!(
+				TotalValueLocked::<T>::get() == expected_tvl,
+				"TVL deviates from the actual sum of funds of all PoolMembers."
+			);
 
 			Ok(())
 		})?;
@@ -3319,30 +3339,27 @@ impl<T: Config> sp_staking::OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pall
 		total_slashed: BalanceOf<T>,
 	) {
 		if let Some(pool_id) = ReversePoolIdLookup::<T>::get(pool_account).defensive() {
-			// TODO: bug here: a slash toward a pool who's subpools were missing would not be
-			// tracked. write a test for it.
-			Self::deposit_event(Event::<T>::PoolSlashed { pool_id, balance: slashed_bonded });
-
-			let mut sub_pools = match SubPoolsStorage::<T>::get(pool_id) {
-				Some(sub_pools) => sub_pools,
-				None => return,
+			match SubPoolsStorage::<T>::get(pool_id) {
+				Some(mut sub_pools) => {
+					for (era, slashed_balance) in slashed_unlocking.iter() {
+						if let Some(pool) = sub_pools.with_era.get_mut(era) {
+							pool.balance = *slashed_balance;
+							Self::deposit_event(Event::<T>::UnbondingPoolSlashed {
+								era: *era,
+								pool_id,
+								balance: *slashed_balance,
+							});
+						}
+					}
+					SubPoolsStorage::<T>::insert(pool_id, sub_pools);
+				},
+				None => {},
 			};
-
-			for (era, slashed_balance) in slashed_unlocking.iter() {
-				if let Some(pool) = sub_pools.with_era.get_mut(era) {
-					pool.balance = *slashed_balance;
-					Self::deposit_event(Event::<T>::UnbondingPoolSlashed {
-						era: *era,
-						pool_id,
-						balance: *slashed_balance,
-					});
-				}
-			}
-			SubPoolsStorage::<T>::insert(pool_id, sub_pools);
 
 			TotalValueLocked::<T>::mutate(|tvl| {
 				tvl.saturating_reduce(total_slashed);
 			});
+			Self::deposit_event(Event::<T>::PoolSlashed { pool_id, balance: slashed_bonded });
 		}
 	}
 }

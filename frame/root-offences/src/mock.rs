@@ -35,7 +35,6 @@ use sp_runtime::{
 	BuildStorage,
 };
 use sp_staking::{EraIndex, SessionIndex};
-use sp_std::collections::btree_map::BTreeMap;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
