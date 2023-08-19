@@ -557,7 +557,7 @@ impl<T: Config> PoolMember<T> {
 				// if the [`SubPools::with_era`] has already been merged into the
 				// [`SubPools::no_era`] use this pool instead.
 				let era_pool = sub_pools.with_era.get(era).unwrap_or(&sub_pools.no_era);
-				accumulator.saturating_add(era_pool.point_to_balance(unlocked_points.clone()))
+				accumulator.saturating_add(era_pool.point_to_balance(*unlocked_points))
 			},
 		);
 
@@ -2196,9 +2196,9 @@ pub mod pallet {
 			);
 
 			let mut sum_unlocked_points: BalanceOf<T> = Zero::zero();
-			let mut balance_to_unbond = withdrawn_points.iter().fold(
-				BalanceOf::<T>::zero(),
-				|accumulator, (era, unlocked_points)| {
+			let balance_to_unbond = withdrawn_points
+				.iter()
+				.fold(BalanceOf::<T>::zero(), |accumulator, (era, unlocked_points)| {
 					sum_unlocked_points = sum_unlocked_points.saturating_add(*unlocked_points);
 					if let Some(era_pool) = sub_pools.with_era.get_mut(era) {
 						let balance_to_unbond = era_pool.dissolve(*unlocked_points);
@@ -2211,28 +2211,15 @@ pub mod pallet {
 						// era-less pool.
 						accumulator.saturating_add(sub_pools.no_era.dissolve(*unlocked_points))
 					}
-				},
-			);
-
-			// A call to this transaction may cause the pool's stash to get dusted. If this
-			// happens before the last member has withdrawn, then all subsequent withdraws will
-			// be 0. However the unbond pools do no get updated to reflect this. In the
-			// aforementioned scenario, this check ensures we don't try to withdraw funds that
-			// don't exist. This check is also defensive in cases where the unbond pool does not
-			// update its balance (e.g. a bug in the slashing hook.) We gracefully proceed in
-			// order to ensure members can leave the pool and it can be destroyed.
-
-			// In this case the [`TotalValueLocked`] needs to be increased by the difference of
-			// these two values. Otherwise the `issue` and `dissolve` calls would lead to an
-			// incorrect value.
-			// TODO: This case still needs a test.
-			let transferrable = bonded_pool.transferrable_balance();
-			if balance_to_unbond > transferrable {
-				TotalValueLocked::<T>::mutate(|tvl| {
-					tvl.saturating_add(balance_to_unbond.saturating_sub(transferrable));
-				});
-			}
-			balance_to_unbond = balance_to_unbond.min(transferrable);
+				})
+				// A call to this transaction may cause the pool's stash to get dusted. If this
+				// happens before the last member has withdrawn, then all subsequent withdraws will
+				// be 0. However the unbond pools do no get updated to reflect this. In the
+				// aforementioned scenario, this check ensures we don't try to withdraw funds that
+				// don't exist. This check is also defensive in cases where the unbond pool does not
+				// update its balance (e.g. a bug in the slashing hook.) We gracefully proceed in
+				// order to ensure members can leave the pool and it can be destroyed.
+				.min(bonded_pool.transferrable_balance());
 
 			T::Currency::transfer(
 				&bonded_pool.bonded_account(),
