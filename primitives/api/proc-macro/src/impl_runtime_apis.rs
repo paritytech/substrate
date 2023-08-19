@@ -518,10 +518,12 @@ impl<'a> ApiImplItem<'a> {
 
 	pub fn process(&mut self, item: ItemImpl) -> Result<ItemImpl> {
 		let res = self.fold_item_impl(item);
-
-		if let Some(e) = self.errors.pop() {
-			// TODO: what to do with the rest of the errors?
-			return Err(e)
+		if let Some(mut err) = self.errors.pop() {
+			// combine all errors and return them
+			for e in self.errors.drain(..) {
+				err.combine(e);
+			}
+			return Err(err)
 		}
 
 		Ok(res)
