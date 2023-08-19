@@ -19,10 +19,10 @@
 use crate::unsafe_debug::ExecutionObserver;
 use crate::{
 	gas::GasMeter,
-	storage::{self, meter::Diff, DepositAccount, WriteOutcome},
+	storage::{self, meter::Diff, WriteOutcome},
 	BalanceOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo, ContractInfoOf,
 	DebugBufferVec, Determinism, Error, Event, Nonce, Origin, Pallet as Contracts, Schedule,
-	System, WasmBlob, LOG_TARGET,
+	WasmBlob, LOG_TARGET,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
@@ -33,7 +33,7 @@ use frame_support::{
 	storage::{with_transaction, TransactionOutcome},
 	traits::{
 		fungible::{Inspect, Mutate},
-		tokens::{Fortitude::Polite, Preservation},
+		tokens::Preservation,
 		Contains, OriginTrait, Randomness, Time,
 	},
 	weights::Weight,
@@ -547,7 +547,7 @@ enum CachedContract<T: Config> {
 	///
 	/// In this case a reload is neither allowed nor possible. Please note that recursive
 	/// calls cannot remove a contract as this is checked and denied.
-	Terminated(DepositAccount<T>),
+	Terminated,
 }
 
 impl<T: Config> CachedContract<T> {
@@ -566,15 +566,6 @@ impl<T: Config> CachedContract<T> {
 			Some(contract)
 		} else {
 			None
-		}
-	}
-
-	/// Returns `Some` iff the contract is not `Cached::Invalidated`.
-	fn deposit_account(&self) -> Option<&DepositAccount<T>> {
-		match self {
-			CachedContract::Cached(contract) => Some(contract.deposit_account()),
-			CachedContract::Terminated(deposit_account) => Some(&deposit_account),
-			CachedContract::Invalidated => None,
 		}
 	}
 }
@@ -655,9 +646,7 @@ impl<T: Config> CachedContract<T> {
 	/// Terminate and return the contract info.
 	fn terminate(&mut self, account_id: &T::AccountId) -> ContractInfo<T> {
 		self.load(account_id);
-		let contract = get_cached_or_panic_after_load!(self);
-		let deposit_account = contract.deposit_account().clone();
-		get_cached_or_panic_after_load!(mem::replace(self, Self::Terminated(deposit_account)))
+		get_cached_or_panic_after_load!(mem::replace(self, Self::Terminated))
 	}
 }
 
@@ -955,7 +944,7 @@ where
 			match (entry_point, delegated_code_hash) {
 				(ExportedFunction::Constructor, _) => {
 					// It is not allowed to terminate a contract inside its constructor.
-					if matches!(frame.contract_info, CachedContract::Terminated(_)) {
+					if matches!(frame.contract_info, CachedContract::Terminated) {
 						return Err(Error::<T>::TerminatedInConstructor.into())
 					}
 
@@ -1059,18 +1048,8 @@ where
 			// in its contract info. The load is necessary to pull it from storage in case
 			// it was invalidated.
 			frame.contract_info.load(account_id);
-			let deposit_account = frame
-				.contract_info
-				.deposit_account()
-				.expect(
-					"Is only `None` when the info is invalidated.
-				We just re-loaded from storage which either makes the state `Cached` or `Terminated`.
-				qed",
-				)
-				.clone();
 			let mut contract = frame.contract_info.into_contract();
-			prev.nested_storage
-				.absorb(frame.nested_storage, deposit_account, contract.as_mut());
+			prev.nested_storage.absorb(frame.nested_storage, account_id, contract.as_mut());
 
 			// In case the contract wasn't terminated we need to persist changes made to it.
 			if let Some(contract) = contract {
@@ -1105,14 +1084,10 @@ where
 			if !persist {
 				return
 			}
-			let deposit_account = self.first_frame.contract_info.deposit_account().expect(
-				"Is only `None` when the info is invalidated. The first frame can't be invalidated.
-				qed",
-			).clone();
 			let mut contract = self.first_frame.contract_info.as_contract();
 			self.storage_meter.absorb(
 				mem::take(&mut self.first_frame.nested_storage),
-				deposit_account,
+				&self.first_frame.account_id,
 				contract.as_deref_mut(),
 			);
 			if let Some(contract) = contract {
@@ -1311,14 +1286,8 @@ where
 		}
 		let frame = self.top_frame_mut();
 		let info = frame.terminate();
-		frame.nested_storage.terminate(&info);
-		System::<T>::dec_consumers(&frame.account_id);
-		Self::transfer(
-			Preservation::Expendable,
-			&frame.account_id,
-			beneficiary,
-			T::Currency::reducible_balance(&frame.account_id, Preservation::Expendable, Polite),
-		)?;
+		frame.nested_storage.terminate(&info, beneficiary.clone());
+
 		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::decrement_refcount(info.code_hash);
@@ -1327,7 +1296,7 @@ where
 			E::decrement_refcount(*code_hash);
 			frame
 				.nested_storage
-				.charge_deposit(info.deposit_account().clone(), StorageDeposit::Refund(*deposit));
+				.charge_deposit(frame.account_id.clone(), StorageDeposit::Refund(*deposit));
 		}
 
 		Contracts::<T>::deposit_event(
@@ -1521,8 +1490,7 @@ where
 		let deposit = StorageDeposit::Charge(new_base_deposit)
 			.saturating_sub(&StorageDeposit::Charge(old_base_deposit));
 
-		let deposit_account = info.deposit_account().clone();
-		frame.nested_storage.charge_deposit(deposit_account, deposit);
+		frame.nested_storage.charge_deposit(frame.account_id.clone(), deposit);
 
 		E::increment_refcount(hash)?;
 		E::decrement_refcount(prev_hash);
@@ -1573,7 +1541,7 @@ where
 		<WasmBlob<T>>::increment_refcount(code_hash)?;
 		frame
 			.nested_storage
-			.charge_deposit(info.deposit_account().clone(), StorageDeposit::Charge(deposit));
+			.charge_deposit(frame.account_id.clone(), StorageDeposit::Charge(deposit));
 		Ok(())
 	}
 
@@ -1589,7 +1557,7 @@ where
 
 		frame
 			.nested_storage
-			.charge_deposit(info.deposit_account().clone(), StorageDeposit::Refund(deposit));
+			.charge_deposit(frame.account_id.clone(), StorageDeposit::Refund(deposit));
 		Ok(())
 	}
 }
