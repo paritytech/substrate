@@ -967,15 +967,20 @@ fn extract_cfg_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<
 
 		// If there is a cfg attribute containing api_version - save if for processing
 		if let (Some(feature_name), Some(api_version)) = (feature_name, api_version) {
-			cfg_api_version_attr.push((feature_name, api_version));
+			cfg_api_version_attr.push((feature_name, api_version, cfg_attr.span()));
 		}
 	}
 
 	if cfg_api_version_attr.len() > 1 {
-		return Err(Error::new(span, format!("Found multiple feature gated api versions (cfg attribute with nested {} attribute). This is not supported.", API_VERSION_ATTRIBUTE)))
+		let mut err = Error::new(span, format!("Found multiple feature gated api versions (cfg attribute with nested `{}` attribute). This is not supported.", API_VERSION_ATTRIBUTE));
+		for (_, _, attr_span) in cfg_api_version_attr {
+			err.combine(Error::new(attr_span, format!("`{}` found here", API_VERSION_ATTRIBUTE)));
+		}
+
+		return Err(err)
 	}
 
-	let result = cfg_api_version_attr.drain(..).next();
+	let result = cfg_api_version_attr.drain(..).next().map(|(feature, name, _)| (feature, name));
 	Ok(result)
 }
 
