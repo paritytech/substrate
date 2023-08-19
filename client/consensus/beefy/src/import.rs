@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use log::debug;
 
-use sp_api::{ProvideRuntimeApi, TransactionFor};
+use sp_api::ProvideRuntimeApi;
 use sp_consensus::Error as ConsensusError;
 use sp_consensus_beefy::{ecdsa_crypto::AuthorityId, BeefyApi, BEEFY_ENGINE_ID};
 use sp_runtime::{
@@ -118,21 +118,15 @@ impl<Block, BE, Runtime, I> BlockImport<Block> for BeefyBlockImport<Block, BE, R
 where
 	Block: BlockT,
 	BE: Backend<Block>,
-	I: BlockImport<
-			Block,
-			Error = ConsensusError,
-			Transaction = sp_api::TransactionFor<Runtime, Block>,
-		> + Send
-		+ Sync,
+	I: BlockImport<Block, Error = ConsensusError> + Send + Sync,
 	Runtime: ProvideRuntimeApi<Block> + Send + Sync,
 	Runtime::Api: BeefyApi<Block, AuthorityId>,
 {
 	type Error = ConsensusError;
-	type Transaction = TransactionFor<Runtime, Block>;
 
 	async fn import_block(
 		&mut self,
-		mut block: BlockImportParams<Block, Self::Transaction>,
+		mut block: BlockImportParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();

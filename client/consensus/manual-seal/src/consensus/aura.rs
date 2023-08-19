@@ -22,7 +22,7 @@
 use crate::{ConsensusDataProvider, Error};
 use sc_client_api::{AuxStore, UsageProvider};
 use sc_consensus::BlockImportParams;
-use sp_api::{ProvideRuntimeApi, TransactionFor};
+use sp_api::ProvideRuntimeApi;
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus_aura::{
 	digests::CompatibleDigestItem,
@@ -69,7 +69,6 @@ where
 	C::Api: AuraApi<B, AuthorityId>,
 	P: Send + Sync,
 {
-	type Transaction = TransactionFor<C, B>;
 	type Proof = P;
 
 	fn create_digest(
@@ -92,7 +91,7 @@ where
 	fn append_block_import(
 		&self,
 		_parent: &B::Header,
-		_params: &mut BlockImportParams<B, Self::Transaction>,
+		_params: &mut BlockImportParams<B>,
 		_inherents: &InherentData,
 		_proof: Self::Proof,
 	) -> Result<(), Error> {

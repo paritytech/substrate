@@ -18,25 +18,28 @@
 //! This module contains functions to meter the storage deposit.
 
 use crate::{
-	storage::{ContractInfo, DepositAccount},
-	BalanceOf, CodeInfo, Config, Error, Inspect, Origin, Pallet, StorageDeposit as Deposit, System,
+	storage::ContractInfo, AccountIdOf, BalanceOf, CodeInfo, Config, Error, Event, HoldReason,
+	Inspect, Origin, Pallet, StorageDeposit as Deposit, System, LOG_TARGET,
 };
 
 use frame_support::{
 	dispatch::{fmt::Debug, DispatchError},
 	ensure,
 	traits::{
-		fungible::Mutate,
-		tokens::{Fortitude::Polite, Preservation, WithdrawConsequence},
+		fungible::{Mutate, MutateHold},
+		tokens::{
+			Fortitude, Fortitude::Polite, Precision, Preservation, Restriction, WithdrawConsequence,
+		},
 		Get,
 	},
 	DefaultNoBound, RuntimeDebugNoBound,
 };
+use sp_api::HashT;
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	FixedPointNumber, FixedU128,
 };
-use sp_std::{marker::PhantomData, vec::Vec};
+use sp_std::{marker::PhantomData, vec, vec::Vec};
 
 /// Deposit that uses the native fungible's balance type.
 pub type DepositOf<T> = Deposit<BalanceOf<T>>;
@@ -75,16 +78,15 @@ pub trait Ext<T: Config> {
 	/// This is called to inform the implementer that some balance should be charged due to
 	/// some interaction of the `origin` with a `contract`.
 	///
-	/// The balance transfer can either flow from `origin` to `deposit_account` or the other way
+	/// The balance transfer can either flow from `origin` to `contract` or the other way
 	/// around depending on whether `amount` constitutes a `Charge` or a `Refund`.
-	/// It is guaranteed that this succeeds because no more balance than returned by
-	/// `check_limit` is ever charged. This is why this function is infallible.
-	/// `terminated` designates whether the `contract` was terminated.
+	/// It should be used in combination with `check_limit` to check that no more balance than this
+	/// limit is ever charged.
 	fn charge(
 		origin: &T::AccountId,
-		deposit_account: &DepositAccount<T>,
+		contract: &T::AccountId,
 		amount: &DepositOf<T>,
-		terminated: bool,
+		state: &ContractState<T>,
 	) -> Result<(), DispatchError>;
 }
 
@@ -220,6 +222,15 @@ impl Diff {
 	}
 }
 
+/// The state of a contract.
+///
+/// In case of termination the beneficiary is indicated.
+#[derive(RuntimeDebugNoBound, Clone, PartialEq, Eq)]
+pub enum ContractState<T: Config> {
+	Alive,
+	Terminated { beneficiary: AccountIdOf<T> },
+}
+
 /// Records information to charge or refund a plain account.
 ///
 /// All the charges are deferred to the end of a whole call stack. Reason is that by doing
@@ -231,9 +242,9 @@ impl Diff {
 /// exhausted.
 #[derive(RuntimeDebugNoBound, Clone)]
 struct Charge<T: Config> {
-	deposit_account: DepositAccount<T>,
+	contract: T::AccountId,
 	amount: DepositOf<T>,
-	terminated: bool,
+	state: ContractState<T>,
 }
 
 /// Records the storage changes of a storage meter.
@@ -245,8 +256,9 @@ enum Contribution<T: Config> {
 	/// its execution. In this process the [`Diff`] was converted into a [`Deposit`].
 	Checked(DepositOf<T>),
 	/// The contract was terminated. In this process the [`Diff`] was converted into a [`Deposit`]
-	/// in order to calculate the refund.
-	Terminated(DepositOf<T>),
+	/// in order to calculate the refund. Upon termination the `reducible_balance` in the
+	/// contract's account is transferred to the [`beneficiary`].
+	Terminated { deposit: DepositOf<T>, beneficiary: AccountIdOf<T> },
 }
 
 impl<T: Config> Contribution<T> {
@@ -254,7 +266,8 @@ impl<T: Config> Contribution<T> {
 	fn update_contract(&self, info: Option<&mut ContractInfo<T>>) -> DepositOf<T> {
 		match self {
 			Self::Alive(diff) => diff.update_contract::<T>(info),
-			Self::Terminated(deposit) | Self::Checked(deposit) => deposit.clone(),
+			Self::Terminated { deposit, beneficiary: _ } | Self::Checked(deposit) =>
+				deposit.clone(),
 		}
 	}
 }
@@ -279,7 +292,7 @@ where
 	/// usage for this sub call separately. This is necessary because we want to exchange balance
 	/// with the current contract we are interacting with.
 	pub fn nested(&self, limit: BalanceOf<T>) -> RawMeter<T, E, Nested> {
-		debug_assert!(self.is_alive());
+		debug_assert!(matches!(self.contract_state(), ContractState::Alive));
 		// If a special limit is specified higher than it is available,
 		// we want to enforce the lesser limit to the nested meter, to fail in the sub-call.
 		let limit = self.available().min(limit);
@@ -293,7 +306,7 @@ where
 	/// Absorb a child that was spawned to handle a sub call.
 	///
 	/// This should be called whenever a sub call comes to its end and it is **not** reverted.
-	/// This does the actual balance transfer from/to `origin` and `deposit_account` based on the
+	/// This does the actual balance transfer from/to `origin` and `contract` based on the
 	/// overall storage consumption of the call. It also updates the supplied contract info.
 	///
 	/// In case a contract reverted the child meter should just be dropped in order to revert
@@ -303,12 +316,12 @@ where
 	///
 	/// - `absorbed`: The child storage meter that should be absorbed.
 	/// - `origin`: The origin that spawned the original root meter.
-	/// - `deposit_account`: The contract's deposit account that this sub call belongs to.
+	/// - `contract`: The contract's account that this sub call belongs to.
 	/// - `info`: The info of the contract in question. `None` if the contract was terminated.
 	pub fn absorb(
 		&mut self,
 		absorbed: RawMeter<T, E, Nested>,
-		deposit_account: DepositAccount<T>,
+		contract: &T::AccountId,
 		info: Option<&mut ContractInfo<T>>,
 	) {
 		let own_deposit = absorbed.own_contribution.update_contract(info);
@@ -319,9 +332,9 @@ where
 		self.charges.extend_from_slice(&absorbed.charges);
 		if !own_deposit.is_zero() {
 			self.charges.push(Charge {
-				deposit_account,
+				contract: contract.clone(),
 				amount: own_deposit,
-				terminated: absorbed.is_terminated(),
+				state: absorbed.contract_state(),
 			});
 		}
 	}
@@ -331,14 +344,13 @@ where
 		self.total_deposit.available(&self.limit)
 	}
 
-	/// True if the contract is alive.
-	fn is_alive(&self) -> bool {
-		matches!(self.own_contribution, Contribution::Alive(_))
-	}
-
-	/// True if the contract is terminated.
-	fn is_terminated(&self) -> bool {
-		matches!(self.own_contribution, Contribution::Terminated(_))
+	/// Returns the state of the currently executed contract.
+	fn contract_state(&self) -> ContractState<T> {
+		match &self.own_contribution {
+			Contribution::Terminated { deposit: _, beneficiary } =>
+				ContractState::Terminated { beneficiary: beneficiary.clone() },
+			_ => ContractState::Alive,
+		}
 	}
 }
 
@@ -375,7 +387,6 @@ where
 	///
 	/// This drops the root meter in order to make sure it is only called when the whole
 	/// execution did finish.
-
 	pub fn try_into_deposit(self, origin: &Origin<T>) -> Result<DepositOf<T>, DispatchError> {
 		// Only refund or charge deposit if the origin is not root.
 		let origin = match origin {
@@ -383,10 +394,10 @@ where
 			Origin::Signed(o) => o,
 		};
 		for charge in self.charges.iter().filter(|c| matches!(c.amount, Deposit::Refund(_))) {
-			E::charge(origin, &charge.deposit_account, &charge.amount, charge.terminated)?;
+			E::charge(origin, &charge.contract, &charge.amount, &charge.state)?;
 		}
 		for charge in self.charges.iter().filter(|c| matches!(c.amount, Deposit::Charge(_))) {
-			E::charge(origin, &charge.deposit_account, &charge.amount, charge.terminated)?;
+			E::charge(origin, &charge.contract, &charge.amount, &charge.state)?;
 		}
 		Ok(self.total_deposit)
 	}
@@ -412,9 +423,9 @@ where
 	/// change. This is the case when a `delegate_dependency` is added or removed, or when the
 	/// `code_hash` is updated. [`Self::charge`] cannot be used here because we keep track of the
 	/// deposit charge separately from the storage charge.
-	pub fn charge_deposit(&mut self, deposit_account: DepositAccount<T>, amount: DepositOf<T>) {
+	pub fn charge_deposit(&mut self, contract: T::AccountId, amount: DepositOf<T>) {
 		self.total_deposit = self.total_deposit.saturating_add(&amount);
-		self.charges.push(Charge { deposit_account, amount, terminated: false });
+		self.charges.push(Charge { contract, amount, state: ContractState::Alive });
 	}
 
 	/// Charges from `origin` a storage deposit for contract instantiation.
@@ -427,7 +438,7 @@ where
 		contract_info: &mut ContractInfo<T>,
 		code_info: &CodeInfo<T>,
 	) -> Result<DepositOf<T>, DispatchError> {
-		debug_assert!(self.is_alive());
+		debug_assert!(matches!(self.contract_state(), ContractState::Alive));
 		let ed = Pallet::<T>::min_balance();
 
 		let deposit = contract_info.update_base_deposit(&code_info);
@@ -439,34 +450,32 @@ where
 
 		// We do not increase `own_contribution` because this will be charged later when the
 		// contract execution does conclude and hence would lead to a double charge.
-		self.total_deposit = deposit.clone();
+		self.total_deposit = Deposit::Charge(ed);
 
-		// Normally, deposit charges are deferred to be able to coalesce them with refunds.
-		// However, we need to charge immediately so that the account is created before
-		// charges possibly below the ed are collected and fail.
-		E::charge(
-			origin,
-			contract_info.deposit_account(),
-			&deposit.saturating_sub(&Deposit::Charge(ed)),
-			false,
-		)?;
-
-		System::<T>::inc_consumers(contract_info.deposit_account())?;
-
-		// We also need to make sure that the contract's account itself exists.
+		// We need to make sure that the contract's account exists.
 		T::Currency::transfer(origin, contract, ed, Preservation::Preserve)?;
+
+		// A consumer is added at account creation and removed it on termination, otherwise the
+		// runtime could remove the account. As long as a contract exists its account must exist.
+		// With the consumer, a correct runtime cannot remove the account.
 		System::<T>::inc_consumers(contract)?;
+
+		self.charge_deposit(contract.clone(), deposit.saturating_sub(&Deposit::Charge(ed)));
 
 		Ok(deposit)
 	}
 
-	/// Call to tell the meter that the currently executing contract was executed.
+	/// Call to tell the meter that the currently executing contract was terminated.
 	///
 	/// This will manipulate the meter so that all storage deposit accumulated in
-	/// `contract_info` will be refunded to the `origin` of the meter.
-	pub fn terminate(&mut self, info: &ContractInfo<T>) {
-		debug_assert!(self.is_alive());
-		self.own_contribution = Contribution::Terminated(Deposit::Refund(info.total_deposit()));
+	/// `contract_info` will be refunded to the `origin` of the meter. And the free
+	/// (`reducible_balance`) will be sent to the `beneficiary`.
+	pub fn terminate(&mut self, info: &ContractInfo<T>, beneficiary: T::AccountId) {
+		debug_assert!(matches!(self.contract_state(), ContractState::Alive));
+		self.own_contribution = Contribution::Terminated {
+			deposit: Deposit::Refund(info.total_deposit()),
+			beneficiary,
+		};
 	}
 
 	/// [`Self::charge`] does not enforce the storage limit since we want to do this check as late
@@ -485,7 +494,7 @@ where
 		let deposit = self.own_contribution.update_contract(info);
 		let total_deposit = self.total_deposit.saturating_add(&deposit);
 		// We don't want to override a `Terminated` with a `Checked`.
-		if self.is_alive() {
+		if matches!(self.contract_state(), ContractState::Alive) {
 			self.own_contribution = Contribution::Checked(deposit);
 		}
 		if let Deposit::Charge(amount) = total_deposit {
@@ -533,31 +542,77 @@ impl<T: Config> Ext<T> for ReservingExt {
 
 	fn charge(
 		origin: &T::AccountId,
-		deposit_account: &DepositAccount<T>,
+		contract: &T::AccountId,
 		amount: &DepositOf<T>,
-		terminated: bool,
+		state: &ContractState<T>,
 	) -> Result<(), DispatchError> {
 		match amount {
 			Deposit::Charge(amount) | Deposit::Refund(amount) if amount.is_zero() => return Ok(()),
 			Deposit::Charge(amount) => {
-				T::Currency::transfer(origin, deposit_account, *amount, Preservation::Preserve)?;
-				Ok(())
+				// This could fail if the `origin` does not have enough liquidity. Ideally, though,
+				// this should have been checked before with `check_limit`.
+				T::Currency::transfer_and_hold(
+					&HoldReason::StorageDepositReserve.into(),
+					origin,
+					contract,
+					*amount,
+					Precision::Exact,
+					Preservation::Preserve,
+					Fortitude::Polite,
+				)?;
+
+				Pallet::<T>::deposit_event(
+					vec![T::Hashing::hash_of(&origin), T::Hashing::hash_of(&contract)],
+					Event::StorageDepositTransferredAndHeld {
+						from: origin.clone(),
+						to: contract.clone(),
+						amount: *amount,
+					},
+				);
 			},
 			Deposit::Refund(amount) => {
-				if terminated {
-					System::<T>::dec_consumers(&deposit_account);
-				}
-				T::Currency::transfer(
-					deposit_account,
+				let transferred = T::Currency::transfer_on_hold(
+					&HoldReason::StorageDepositReserve.into(),
+					contract,
 					origin,
 					*amount,
-					// We can safely make it `Expendable` because our own consumer prevents a
-					// removal.
-					Preservation::Expendable,
+					Precision::BestEffort,
+					Restriction::Free,
+					Fortitude::Polite,
 				)?;
-				Ok(())
+
+				Pallet::<T>::deposit_event(
+					vec![T::Hashing::hash_of(&contract), T::Hashing::hash_of(&origin)],
+					Event::StorageDepositTransferredAndReleased {
+						from: contract.clone(),
+						to: origin.clone(),
+						amount: transferred,
+					},
+				);
+
+				if transferred < *amount {
+					// This should never happen, if it does it means that there is a bug in the
+					// runtime logic. In the rare case this happens we try to refund as much as we
+					// can, thus the `Precision::BestEffort`.
+					log::error!(
+						target: LOG_TARGET,
+						"Failed to repatriate full storage deposit {:?} from contract {:?} to origin {:?}. Transferred {:?}.",
+						amount, contract, origin, transferred,
+					);
+				}
 			},
 		}
+		if let ContractState::<T>::Terminated { beneficiary } = state {
+			System::<T>::dec_consumers(&contract);
+			// Whatever is left in the contract is sent to the termination beneficiary.
+			T::Currency::transfer(
+				&contract,
+				&beneficiary,
+				T::Currency::reducible_balance(&contract, Preservation::Expendable, Polite),
+				Preservation::Expendable,
+			)?;
+		}
+		Ok(())
 	}
 }
 
@@ -593,9 +648,9 @@ mod tests {
 	#[derive(Debug, PartialEq, Eq, Clone)]
 	struct Charge {
 		origin: AccountIdOf<Test>,
-		contract: DepositAccount<Test>,
+		contract: AccountIdOf<Test>,
 		amount: DepositOf<Test>,
-		terminated: bool,
+		state: ContractState<Test>,
 	}
 
 	#[derive(Default, Debug, PartialEq, Eq, Clone)]
@@ -627,16 +682,16 @@ mod tests {
 
 		fn charge(
 			origin: &AccountIdOf<Test>,
-			contract: &DepositAccount<Test>,
+			contract: &AccountIdOf<Test>,
 			amount: &DepositOf<Test>,
-			terminated: bool,
+			state: &ContractState<Test>,
 		) -> Result<(), DispatchError> {
 			TestExtTestValue::mutate(|ext| {
 				ext.charges.push(Charge {
 					origin: origin.clone(),
 					contract: contract.clone(),
 					amount: amount.clone(),
-					terminated,
+					state: state.clone(),
 				})
 			});
 			Ok(())
@@ -664,7 +719,6 @@ mod tests {
 	fn new_info(info: StorageInfo) -> ContractInfo<Test> {
 		ContractInfo::<Test> {
 			trie_id: Default::default(),
-			deposit_account: DepositAccount([0u8; 32].into()),
 			code_hash: Default::default(),
 			storage_bytes: info.bytes,
 			storage_items: info.items,
@@ -700,7 +754,7 @@ mod tests {
 		// an empty charge does not create a `Charge` entry
 		let mut nested0 = meter.nested(BalanceOf::<Test>::zero());
 		nested0.charge(&Default::default());
-		meter.absorb(nested0, DepositAccount(BOB), None);
+		meter.absorb(nested0, &BOB, None);
 
 		assert_eq!(
 			TestExtTestValue::get(),
@@ -722,21 +776,21 @@ mod tests {
 					charges: vec![
 						Charge {
 							origin: ALICE,
-							contract: DepositAccount(CHARLIE),
+							contract: CHARLIE,
 							amount: Deposit::Refund(10),
-							terminated: false,
+							state: ContractState::Alive,
 						},
 						Charge {
 							origin: ALICE,
-							contract: DepositAccount(CHARLIE),
+							contract: CHARLIE,
 							amount: Deposit::Refund(20),
-							terminated: false,
+							state: ContractState::Alive,
 						},
 						Charge {
 							origin: ALICE,
-							contract: DepositAccount(BOB),
+							contract: BOB,
 							amount: Deposit::Charge(2),
-							terminated: false,
+							state: ContractState::Alive,
 						},
 					],
 				},
@@ -777,7 +831,7 @@ mod tests {
 			});
 			let mut nested1 = nested0.nested(BalanceOf::<Test>::zero());
 			nested1.charge(&Diff { items_removed: 5, ..Default::default() });
-			nested0.absorb(nested1, DepositAccount(CHARLIE), Some(&mut nested1_info));
+			nested0.absorb(nested1, &CHARLIE, Some(&mut nested1_info));
 
 			let mut nested2_info = new_info(StorageInfo {
 				bytes: 100,
@@ -787,10 +841,10 @@ mod tests {
 			});
 			let mut nested2 = nested0.nested(BalanceOf::<Test>::zero());
 			nested2.charge(&Diff { items_removed: 7, ..Default::default() });
-			nested0.absorb(nested2, DepositAccount(CHARLIE), Some(&mut nested2_info));
+			nested0.absorb(nested2, &CHARLIE, Some(&mut nested2_info));
 
 			nested0.enforce_limit(Some(&mut nested0_info)).unwrap();
-			meter.absorb(nested0, DepositAccount(BOB), Some(&mut nested0_info));
+			meter.absorb(nested0, &BOB, Some(&mut nested0_info));
 
 			assert_eq!(meter.try_into_deposit(&test_case.origin).unwrap(), test_case.deposit);
 
@@ -813,15 +867,15 @@ mod tests {
 					charges: vec![
 						Charge {
 							origin: ALICE,
-							contract: DepositAccount(CHARLIE),
+							contract: CHARLIE,
 							amount: Deposit::Refund(119),
-							terminated: true,
+							state: ContractState::Terminated { beneficiary: CHARLIE },
 						},
 						Charge {
 							origin: ALICE,
-							contract: DepositAccount(BOB),
+							contract: BOB,
 							amount: Deposit::Charge(12),
-							terminated: false,
+							state: ContractState::Alive,
 						},
 					],
 				},
@@ -857,11 +911,11 @@ mod tests {
 			let mut nested1 = nested0.nested(BalanceOf::<Test>::zero());
 			nested1.charge(&Diff { items_removed: 5, ..Default::default() });
 			nested1.charge(&Diff { bytes_added: 20, ..Default::default() });
-			nested1.terminate(&nested1_info);
+			nested1.terminate(&nested1_info, CHARLIE);
 			nested0.enforce_limit(Some(&mut nested1_info)).unwrap();
-			nested0.absorb(nested1, DepositAccount(CHARLIE), None);
+			nested0.absorb(nested1, &CHARLIE, None);
 
-			meter.absorb(nested0, DepositAccount(BOB), None);
+			meter.absorb(nested0, &BOB, None);
 			assert_eq!(meter.try_into_deposit(&test_case.origin).unwrap(), test_case.deposit);
 
 			assert_eq!(TestExtTestValue::get(), test_case.expected)

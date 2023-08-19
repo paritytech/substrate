@@ -148,9 +148,9 @@ impl<H> PrePostHeader<H> {
 	}
 }
 
-enum PrepareStorageChangesResult<B: backend::Backend<Block>, Block: BlockT> {
+enum PrepareStorageChangesResult<Block: BlockT> {
 	Discard(ImportResult),
-	Import(Option<sc_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>>),
+	Import(Option<sc_consensus::StorageChanges<Block>>),
 }
 
 /// Create an instance of in-memory client.
@@ -489,15 +489,12 @@ where
 	fn apply_block(
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
-		import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
-		storage_changes: Option<
-			sc_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>,
-		>,
+		import_block: BlockImportParams<Block>,
+		storage_changes: Option<sc_consensus::StorageChanges<Block>>,
 	) -> sp_blockchain::Result<ImportResult>
 	where
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api:
-			CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> + ApiExt<Block>,
 	{
 		let BlockImportParams {
 			origin,
@@ -580,9 +577,7 @@ where
 		justifications: Option<Justifications>,
 		body: Option<Vec<Block::Extrinsic>>,
 		indexed_body: Option<Vec<Vec<u8>>>,
-		storage_changes: Option<
-			sc_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>,
-		>,
+		storage_changes: Option<sc_consensus::StorageChanges<Block>>,
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		fork_choice: ForkChoiceStrategy,
@@ -590,8 +585,7 @@ where
 	) -> sp_blockchain::Result<ImportResult>
 	where
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api:
-			CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> + ApiExt<Block>,
 	{
 		let parent_hash = *import_headers.post().parent_hash();
 		let status = self.backend.blockchain().status(hash)?;
@@ -830,12 +824,11 @@ where
 	/// provided, the block is re-executed to get the storage changes.
 	fn prepare_block_storage_changes(
 		&self,
-		import_block: &mut BlockImportParams<Block, backend::TransactionFor<B, Block>>,
-	) -> sp_blockchain::Result<PrepareStorageChangesResult<B, Block>>
+		import_block: &mut BlockImportParams<Block>,
+	) -> sp_blockchain::Result<PrepareStorageChangesResult<Block>>
 	where
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api:
-			CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> + ApiExt<Block>,
 	{
 		let parent_hash = import_block.header.parent_hash();
 		let state_action = std::mem::replace(&mut import_block.state_action, StateAction::Skip);
@@ -1418,8 +1411,7 @@ where
 	E: CallExecutor<Block> + Send + Sync + 'static,
 	Block: BlockT,
 	Self: ChainHeaderBackend<Block> + ProvideRuntimeApi<Block>,
-	<Self as ProvideRuntimeApi<Block>>::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
+	<Self as ProvideRuntimeApi<Block>>::Api: ApiExt<Block> + BlockBuilderApi<Block>,
 {
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
@@ -1705,17 +1697,13 @@ where
 {
 	type StateBackend = B::State;
 
-	fn call_api_at(
-		&self,
-		params: CallApiAtParams<Block, B::State>,
-	) -> Result<Vec<u8>, sp_api::ApiError> {
+	fn call_api_at(&self, params: CallApiAtParams<Block>) -> Result<Vec<u8>, sp_api::ApiError> {
 		self.executor
 			.contextual_call(
 				params.at,
 				params.function,
 				&params.arguments,
 				params.overlayed_changes,
-				Some(params.storage_transaction_cache),
 				params.recorder,
 				params.call_context,
 				params.extensions,
@@ -1754,13 +1742,10 @@ where
 	E: CallExecutor<Block> + Send + Sync,
 	Block: BlockT,
 	Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
-		CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
+	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> + ApiExt<Block>,
 	RA: Sync + Send,
-	backend::TransactionFor<B, Block>: Send + 'static,
 {
 	type Error = ConsensusError;
-	type Transaction = backend::TransactionFor<B, Block>;
 
 	/// Import a checked and validated block. If a justification is provided in
 	/// `BlockImportParams` then `finalized` *must* be true.
@@ -1773,7 +1758,7 @@ where
 	/// algorithm, don't use this function.
 	async fn import_block(
 		&mut self,
-		mut import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
+		mut import_block: BlockImportParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		let span = tracing::span!(tracing::Level::DEBUG, "import_block");
 		let _enter = span.enter();
@@ -1867,17 +1852,14 @@ where
 	E: CallExecutor<Block> + Send + Sync,
 	Block: BlockT,
 	Self: ProvideRuntimeApi<Block>,
-	<Self as ProvideRuntimeApi<Block>>::Api:
-		CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
+	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> + ApiExt<Block>,
 	RA: Sync + Send,
-	backend::TransactionFor<B, Block>: Send + 'static,
 {
 	type Error = ConsensusError;
-	type Transaction = backend::TransactionFor<B, Block>;
 
 	async fn import_block(
 		&mut self,
-		import_block: BlockImportParams<Block, Self::Transaction>,
+		import_block: BlockImportParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		(&*self).import_block(import_block).await
 	}
