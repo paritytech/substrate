@@ -9,7 +9,7 @@ sp_api::decl_runtime_apis! {
 		fn staging();
 	}
 
-	pub trait Ap2 {
+	pub trait Api2 {
 		fn test(data: u64);
 		#[api_version(99)]
 		fn staging();
