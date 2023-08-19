@@ -221,10 +221,7 @@ mod bonded_pool {
 
 			// slash half of the pool's balance. expected result of `fn api_points_to_balance`
 			// to be 1/2 of the pool's balance.
-			StakingMock::set_bonded_balance(
-				default_bonded_account(),
-				Pools::depositor_min_bond() / 2,
-			);
+			StakingMock::slash_to(1, Pools::depositor_min_bond() / 2);
 			assert_eq!(Pallet::<Runtime>::api_points_to_balance(1, 10), 5);
 
 			// if pool does not exist, points to balance ratio is 0.
@@ -241,10 +238,7 @@ mod bonded_pool {
 
 			// slash half of the pool's balance. expect result of `fn api_balance_to_points`
 			// to be 2 * of the balance to add to the pool.
-			StakingMock::set_bonded_balance(
-				default_bonded_account(),
-				Pools::depositor_min_bond() / 2,
-			);
+			StakingMock::slash_to(1, Pools::depositor_min_bond() / 2);
 			assert_eq!(Pallet::<Runtime>::api_balance_to_points(1, 10), 20);
 
 			// if pool does not exist, balance to points ratio is 0.
@@ -4591,6 +4585,9 @@ mod set_state {
 			let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 			bonded_pool.points = 100;
 			bonded_pool.put();
+			// This unsafe_set_state leads to an error in the try-runtime check for the
+			// [`TotalValueLocked`]. Needs to be artificaliiy decreased aswell.
+			TotalValueLocked::<T>::mutate(|tvl| tvl.saturating_reduce(9));
 			// When
 			assert_ok!(Pools::set_state(RuntimeOrigin::signed(11), 1, PoolState::Destroying));
 			// Then

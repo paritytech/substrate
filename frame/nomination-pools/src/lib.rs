@@ -554,6 +554,8 @@ impl<T: Config> PoolMember<T> {
 		let unbonding_balance = self.unbonding_eras.iter().fold(
 			BalanceOf::<T>::zero(),
 			|accumulator, (era, unlocked_points)| {
+				// if the [`SubPools::with_era`] has already been merged into the
+				// [`SubPools::no_era`] use this pool instead.
 				let era_pool = sub_pools.with_era.get(era).unwrap_or(&sub_pools.no_era);
 				accumulator.saturating_add(era_pool.point_to_balance(unlocked_points.clone()))
 			},
@@ -2221,8 +2223,8 @@ pub mod pallet {
 			// order to ensure members can leave the pool and it can be destroyed.
 
 			// In this case the [`TotalValueLocked`] needs to be increased by the difference of
-			// these two values. Otherwise the issue and dissolve calls would lead to an incorrect
-			// value.
+			// these two values. Otherwise the `issue` and `dissolve` calls would lead to an
+			// incorrect value.
 			// TODO: This case still needs a test.
 			let transferrable = bonded_pool.transferrable_balance();
 			if balance_to_unbond > transferrable {
@@ -2851,9 +2853,12 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// Equivalent of (current_balance / current_points) * points
-		balance(u256(current_balance).saturating_mul(u256(points)))
-			// We check for zero above
-			.div(current_points)
+		balance(
+			u256(current_balance)
+				.saturating_mul(u256(points))
+				// We check for zero above
+				.div(u256(current_points)),
+		)
 	}
 
 	/// If the member has some rewards, transfer a payout from the reward pool to the member.
