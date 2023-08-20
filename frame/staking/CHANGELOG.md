@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes and migrations to pallet-staking will be documented in this file.
 
 The format is loosely based
 on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). We maintain a
@@ -19,9 +19,9 @@ migrations.
 
 ### Deprecated
 
-- `ErasStakersClipped` is deprecated and may be removed after 84 eras.
-- `ErasStakers` is deprecated and may be removed after 84 eras.
+- `ErasStakers` and `ErasStakersClipped` is deprecated, will not be used any longer for the exposures of the new era
+  post v14 and can be removed after 84 eras once all the exposures are stale.
 - Field `claimed_rewards` in item `Ledger` is renamed
-  to `legacy_claimed_rewards` and may be removed after 84 eras.
+  to `legacy_claimed_rewards` and can be removed after 84 eras.
 
 [v14]: https://github.com/paritytech/substrate/pull/13498
