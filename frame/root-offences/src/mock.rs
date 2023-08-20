@@ -35,6 +35,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 use sp_staking::{EraIndex, SessionIndex};
+use sp_std::collections::btree_map::BTreeMap;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
@@ -157,6 +158,7 @@ parameter_types! {
 	pub static SessionsPerEra: SessionIndex = 3;
 	pub static SlashDeferDuration: EraIndex = 0;
 	pub const BondingDuration: EraIndex = 3;
+	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(75);
 }
 
