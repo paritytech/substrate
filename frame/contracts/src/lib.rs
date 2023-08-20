@@ -95,7 +95,7 @@ mod schedule;
 mod storage;
 mod wasm;
 
-pub mod call_observability;
+pub mod tracing;
 pub mod chain_extension;
 pub mod migration;
 pub mod weights;
@@ -137,7 +137,7 @@ use sp_std::{fmt::Debug, prelude::*};
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
-	call_observability::Tracing,
+	tracing::Tracing,
 	exec::Frame,
 	migration::{MigrateSequence, Migration, NoopMigration},
 	pallet::*,

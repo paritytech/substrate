@@ -16,10 +16,10 @@
 // limitations under the License.
 
 mod pallet_dummy;
-mod test_observability;
+mod test_tracing;
 
 use self::{
-	test_observability::TestTracing,
+	test_tracing::TestTracing,
 	test_utils::{ensure_stored, expected_deposit, hash},
 };
 use crate::{

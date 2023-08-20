@@ -1,4 +1,4 @@
-use crate::call_observability::{CallSpan, ExportedFunction, Tracing};
+use crate::tracing::{CallSpan, ExportedFunction, Tracing};
 
 use super::*;
 use frame_support::traits::Currency;
