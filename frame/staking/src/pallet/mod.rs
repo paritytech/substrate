@@ -214,15 +214,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxExposurePageSize: Get<u32>;
 
-		/// Maximum number of exposure pages that can be stored for a single validator in an era.
-		///
-		/// Must be greater than 0.
-		///
-		/// When this is set to 1, the reward payout behaviour is similar to how it used to work
-		/// before we had paged exposures.
-		#[pallet::constant]
-		type MaxExposurePageCount: Get<u32>;
-
 		/// The fraction of the validator set that is safe to be offending.
 		/// After the threshold is reached a new era will be forced.
 		type OffendingValidatorsThreshold: Get<Perbill>;

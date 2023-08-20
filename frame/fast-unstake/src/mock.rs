@@ -152,7 +152,6 @@ impl pallet_staking::Config for Runtime {
 	type NextNewSession = ();
 	type HistoryDepth = ConstU32<84>;
 	type MaxExposurePageSize = ConstU32<64>;
-	type MaxExposurePageCount = ConstU32<1>;
 	type OffendingValidatorsThreshold = ();
 	type ElectionProvider = MockElection;
 	type GenesisElectionProvider = Self::ElectionProvider;

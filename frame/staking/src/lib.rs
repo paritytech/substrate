@@ -116,13 +116,11 @@
 //! [`HistoryDepth`](`Config::HistoryDepth`) using the `payout_stakers` call. Any account can call
 //! `payout_stakers`, which pays the reward to the validator as well as its nominators. Only
 //! [`Config::MaxExposurePageSize`] nominator rewards can be claimed in a single call. When the
-//! number of nominators exceeds [`Config::MaxExposurePageSize`], then the nominators are stored in
-//! multiple pages of [`Config::MaxExposurePageSize`], each with up to a maximum of
-//! [`Config::MaxExposurePageCount`] pages. To pay out all nominators, `payout_stakers` must be
-//! called once for each available page. In a scenario where the number of nominators N exceed M,
-//! where M = [`Config::MaxExposurePageSize`] * [`Config::MaxExposurePageCount`], only the top M
-//! nominators by stake balance are paid out. The rest of the nominators are not paid out. Paging
-//! exists to limit the i/o cost to mutate storage for each nominator's account.
+//! number of nominators exceeds [`Config::MaxExposurePageSize`], then the exposed nominators are
+//! stored in multiple pages, with each page containing up to
+//! [`Config::MaxExposurePageSize`] nominators. To pay out all nominators, `payout_stakers` must be
+//! called once for each available page. Paging exists to limit the i/o cost to mutate storage for
+//! each nominator's account.
 //!
 //! Slashing can occur at any point in time, once misbehavior is reported. Once slashing is
 //! determined, a value is deducted from the balance of the validator and all the nominators who
@@ -1169,28 +1167,14 @@ impl<T: Config> EraInfo<T> {
 		exposure: Exposure<T::AccountId, BalanceOf<T>>,
 	) {
 		let page_size = T::MaxExposurePageSize::get().defensive_max(1);
-		let max_page_count = T::MaxExposurePageCount::get();
 
 		let nominator_count = exposure.others.len();
-		let mut required_page_count =
+		// expected page count is the number of nominators divided by the page size, rounded up.
+		let expected_page_count =
 			nominator_count.defensive_saturating_add(page_size as usize - 1) / page_size as usize;
 
-		// clip nominators if it exceeds the maximum page count.
-		let exposure = if required_page_count as PageIndex > max_page_count {
-			required_page_count = max_page_count as usize;
-			// sort before clipping.
-			let mut exposure_clipped = exposure;
-			let clipped_max_len = max_page_count.saturating_mul(page_size);
-
-			exposure_clipped.others.sort_by(|a, b| b.value.cmp(&a.value));
-			exposure_clipped.others.truncate(clipped_max_len as usize);
-			exposure_clipped
-		} else {
-			exposure
-		};
-
 		let (exposure_metadata, exposure_pages) = exposure.into_pages(page_size);
-		defensive_assert!(exposure_pages.len() == required_page_count, "unexpected page count");
+		defensive_assert!(exposure_pages.len() == expected_page_count, "unexpected page count");
 
 		<ErasStakersOverview<T>>::insert(era, &validator, &exposure_metadata);
 		exposure_pages.iter().enumerate().for_each(|(page, paged_exposure)| {
