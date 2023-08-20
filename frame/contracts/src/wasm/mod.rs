@@ -701,6 +701,7 @@ mod tests {
 		fn gas_meter_mut(&mut self) -> &mut GasMeter<Self::T> {
 			&mut self.gas_meter
 		}
+		fn charge_storage(&mut self, _diff: &crate::storage::meter::Diff) {}
 		fn append_debug_buffer(&mut self, msg: &str) -> bool {
 			self.debug_buffer.extend(msg.as_bytes());
 			true

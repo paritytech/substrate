@@ -160,7 +160,7 @@ impl std::ops::DerefMut for CustomProtoWithAddr {
 
 impl NetworkBehaviour for CustomProtoWithAddr {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
-	type ToSwarm = <Notifications as NetworkBehaviour>::ToSwarm;
+	type OutEvent = <Notifications as NetworkBehaviour>::OutEvent;
 
 	fn handle_pending_inbound_connection(
 		&mut self,
@@ -238,10 +238,9 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
+	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
 		let _ = self.peer_store_future.poll_unpin(cx);
 		let _ = self.protocol_controller_future.poll_unpin(cx);
-
 		self.inner.poll(cx, params)
 	}
 }
