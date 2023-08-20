@@ -108,7 +108,6 @@ use crate::{
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
 	wasm::{CodeInfo, WasmBlob},
 };
-use call_observability::CallSpan;
 use codec::{Codec, Decode, Encode, HasCompact, MaxEncodedLen};
 use environmental::*;
 use frame_support::{
@@ -138,6 +137,7 @@ use sp_std::{fmt::Debug, prelude::*};
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
+	call_observability::Tracing,
 	exec::Frame,
 	migration::{MigrateSequence, Migration, NoopMigration},
 	pallet::*,
@@ -354,9 +354,8 @@ pub mod pallet {
 		/// ```
 		type Migrations: MigrateSequence;
 
-		/// TraceableCallSpan defines methods to capture and trace contract calls
-		/// for improved observability.
-		type TraceableCallSpan: CallSpan<Self>;
+		/// Defines methods to capture and trace contract calls for improved observability.
+		type Tracing: Tracing<Self>;
 	}
 
 	#[pallet::hooks]

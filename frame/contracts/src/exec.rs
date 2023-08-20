@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	call_observability::CallSpan,
+	call_observability::{CallSpan, Tracing},
 	gas::GasMeter,
 	storage::{self, meter::Diff, WriteOutcome},
 	BalanceOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo, ContractInfoOf,
@@ -907,8 +907,7 @@ where
 			// Every non delegate call or instantiate also optionally transfers the balance.
 			self.initial_transfer()?;
 
-			let call_span =
-				T::TraceableCallSpan::new(executable.code_hash(), entry_point, &input_data);
+			let call_span = T::Tracing::call_span(executable.code_hash(), entry_point, &input_data);
 
 			// Call into the Wasm blob.
 			let output = executable

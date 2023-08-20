@@ -1,4 +1,4 @@
-use crate::call_observability::{CallSpan, ExportedFunction};
+use crate::call_observability::{CallSpan, ExportedFunction, Tracing};
 
 use super::*;
 use frame_support::traits::Currency;
@@ -18,14 +18,17 @@ thread_local! {
 	static DEBUG_EXECUTION_TRACE: RefCell<Vec<DebugFrame>> = RefCell::new(Vec::new());
 }
 
+pub struct TestTracing;
 pub struct TestCallSpan {
 	code_hash: CodeHash<Test>,
 	call: ExportedFunction,
 	input: Vec<u8>,
 }
 
-impl CallSpan<Test> for TestCallSpan {
-	fn new(
+impl Tracing<Test> for TestTracing {
+	type CallSpan = TestCallSpan;
+
+	fn call_span(
 		code_hash: &CodeHash<Test>,
 		entry_point: ExportedFunction,
 		input_data: &[u8],
@@ -40,7 +43,9 @@ impl CallSpan<Test> for TestCallSpan {
 		});
 		TestCallSpan { code_hash: *code_hash, call: entry_point, input: input_data.to_vec() }
 	}
+}
 
+impl CallSpan for TestCallSpan {
 	fn after_call(self, output: &ExecReturnValue) {
 		DEBUG_EXECUTION_TRACE.with(|d| {
 			d.borrow_mut().push(DebugFrame {
