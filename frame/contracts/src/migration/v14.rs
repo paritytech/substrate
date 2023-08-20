@@ -15,7 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Update the code owner balance, make the storage deposit reserved balance to be held instead.
+//! Update the code owner balance, make the code upload deposit balance to be held instead of
+//! reserved. Since [`Currency`](frame_support::traits::Currency) has been
+//! [deprecated](https://github.com/paritytech/substrate/pull/12951), we need the deposits to be
+//! handled by the [`frame_support::traits::fungible`] traits.
 
 use crate::{
 	exec::AccountIdOf,
@@ -102,7 +105,7 @@ where
 	T: Config,
 	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
 {
-	/// Total reserved balance as storage deposit for the owner.
+	/// Total reserved balance as code upload deposit for the owner.
 	reserved: old::BalanceOf<T, OldCurrency>,
 	/// Total balance of the owner.
 	total: old::BalanceOf<T, OldCurrency>,
@@ -140,7 +143,7 @@ where
 		};
 
 		if let Some((hash, code_info)) = iter.next() {
-			log::debug!(target: LOG_TARGET, "Migrating storage deposit for 0x{:?}", HexDisplay::from(&code_info.owner.encode()));
+			log::debug!(target: LOG_TARGET, "Migrating code upload deposit for 0x{:?}", HexDisplay::from(&code_info.owner.encode()));
 
 			let remaining = OldCurrency::unreserve(&code_info.owner, code_info.deposit);
 
@@ -185,7 +188,7 @@ where
 			self.last_code_hash = Some(hash);
 			(IsFinished::No, T::WeightInfo::v14_migration_step())
 		} else {
-			log::debug!(target: LOG_TARGET, "No more storage deposit to migrate");
+			log::debug!(target: LOG_TARGET, "No more code upload deposit to migrate");
 			(IsFinished::Yes, T::WeightInfo::v14_migration_step())
 		}
 	}
@@ -197,8 +200,8 @@ where
 		let mut owner_balance_allocation =
 			BTreeMap::<AccountIdOf<T>, BalanceAllocation<T, OldCurrency>>::new();
 
-		// Calculates the balance allocation by accumulating the storage deposits of all codes owned
-		// by an owner.
+		// Calculates the balance allocation by accumulating the code upload deposits of all codes
+		// owned by an owner.
 		for (_, code_info) in info {
 			owner_balance_allocation
 				.entry(code_info.owner.clone())
@@ -229,7 +232,7 @@ where
 				T::Currency::balance_on_hold(&HoldReason::CodeUploadDepositReserve.into(), &owner);
 			log::debug!(
 				target: LOG_TARGET,
-				"Validating storage deposit for owner 0x{:?}, reserved: {:?}, held: {:?}",
+				"Validating code upload deposit for owner 0x{:?}, reserved: {:?}, held: {:?}",
 				HexDisplay::from(&owner.encode()),
 				old_balance_allocation.reserved,
 				held
@@ -260,7 +263,7 @@ where
 
 		log::info!(
 			target: LOG_TARGET,
-			"Total held amount for storage deposit: {:?}",
+			"Total held amount for code upload deposit: {:?}",
 			total_held
 		);
 
