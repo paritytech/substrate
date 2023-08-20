@@ -43,7 +43,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 	};
 
 	let initialize_on_chain_storage_version = if let Some(current_version) =
-		def.pallet_struct.storage_version.as_ref()
+		&def.pallet_struct.storage_version
 	{
 		quote::quote! {
 			#frame_support::log::info!(
