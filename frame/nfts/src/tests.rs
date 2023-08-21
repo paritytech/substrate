@@ -427,7 +427,7 @@ fn mint_should_work() {
 				1,
 				42,
 				account(2),
-				Some(MintWitness { owned_item: 42, ..Default::default() })
+				Some(MintWitness { owned_item: Some(42), ..Default::default() })
 			),
 			Error::<Test>::BadWitness
 		);
@@ -436,7 +436,7 @@ fn mint_should_work() {
 			1,
 			42,
 			account(2),
-			Some(MintWitness { owned_item: 43, ..Default::default() })
+			Some(MintWitness { owned_item: Some(43), ..Default::default() })
 		));
 
 		// can't mint twice
@@ -446,7 +446,7 @@ fn mint_should_work() {
 				1,
 				46,
 				account(2),
-				Some(MintWitness { owned_item: 43, ..Default::default() })
+				Some(MintWitness { owned_item: Some(43), ..Default::default() })
 			),
 			Error::<Test>::AlreadyClaimed
 		);

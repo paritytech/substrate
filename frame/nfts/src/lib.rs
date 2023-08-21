@@ -662,7 +662,7 @@ pub mod pallet {
 		///
 		/// The origin must be Signed and the sender must have sufficient funds free.
 		///
-		/// `ItemDeposit` funds of sender are reserved.
+		/// `CollectionDeposit` funds of sender are reserved.
 		///
 		/// Parameters:
 		/// - `admin`: The admin of this collection. The admin is the initial address of each
@@ -844,6 +844,7 @@ pub mod pallet {
 						MintType::HolderOf(collection_id) => {
 							let MintWitness { owned_item, .. } =
 								witness_data.clone().ok_or(Error::<T, I>::WitnessRequired)?;
+							let owned_item = owned_item.ok_or(Error::<T, I>::BadWitness)?;
 
 							let owns_item = Account::<T, I>::contains_key((
 								&caller,

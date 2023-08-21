@@ -133,7 +133,7 @@ impl<AccountId, DepositBalance> CollectionDetails<AccountId, DepositBalance> {
 #[derive(Clone, Encode, Decode, Default, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct MintWitness<ItemId, Balance> {
 	/// Provide the id of the item in a required collection.
-	pub owned_item: ItemId,
+	pub owned_item: Option<ItemId>,
 	/// The price specified in mint settings.
 	pub mint_price: Option<Balance>,
 }
