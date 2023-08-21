@@ -60,6 +60,7 @@ sp-keystore = { version = "0.27.0", path = "../../../primitives/keystore" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../../primitives/transaction-storage-proof" }
 sp-io = { path = "../../../primitives/io" }
+sp-mixnet = { version = "0.1.0-dev", path = "../../../primitives/mixnet" }
 sp-statement-store = { path = "../../../primitives/statement-store" }
 
 # client dependencies
@@ -95,7 +96,6 @@ pallet-assets = { version = "4.0.0-dev", path = "../../../frame/assets/" }
 pallet-asset-conversion-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-conversion-tx-payment" }
 pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment" }
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
-pallet-mixnet = { version = "0.1.0-dev", path = "../../../frame/mixnet" }
 
 # node-specific dependencies
 kitchensink-runtime = { version = "3.0.0-dev", path = "../runtime" }

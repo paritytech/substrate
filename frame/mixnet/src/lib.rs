@@ -38,29 +38,16 @@ use sp_application_crypto::RuntimeAppPublic;
 use sp_arithmetic::traits::{CheckedSub, Saturating, UniqueSaturatedInto, Zero};
 use sp_io::MultiRemovalResults;
 use sp_mixnet::types::{
-	KxPublic, Mixnode, MixnodesErr, PeerId, SessionIndex, SessionPhase, SessionStatus,
-	KX_PUBLIC_SIZE,
+	AuthorityId, AuthoritySignature, KxPublic, Mixnode, MixnodesErr, PeerId, SessionIndex,
+	SessionPhase, SessionStatus, KX_PUBLIC_SIZE,
 };
 use sp_runtime::RuntimeDebug;
 use sp_std::{cmp::Ordering, vec::Vec};
 
 const LOG_TARGET: &str = "runtime::mixnet";
 
-////////////////////////////////////////////////////////////////////////////////
-// Authority types
-////////////////////////////////////////////////////////////////////////////////
-
-mod app {
-	use sp_application_crypto::{app_crypto, key_types::MIXNET, sr25519};
-	app_crypto!(sr25519, MIXNET);
-}
-
 /// Index of an authority in the authority list for a session.
 pub type AuthorityIndex = u32;
-/// Authority public session key, used to verify registration signatures.
-pub type AuthorityId = app::Public;
-/// Authority signature, attached to mixnode registrations.
-pub type AuthoritySignature = app::Signature;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Bounded mixnode type

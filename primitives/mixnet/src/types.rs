@@ -21,6 +21,16 @@ use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 
+mod app {
+	use sp_application_crypto::{app_crypto, key_types::MIXNET, sr25519};
+	app_crypto!(sr25519, MIXNET);
+}
+
+/// Authority public session key, used to verify registration signatures.
+pub type AuthorityId = app::Public;
+/// Authority signature, attached to mixnode registrations.
+pub type AuthoritySignature = app::Signature;
+
 /// Absolute session index.
 pub type SessionIndex = u32;
 
