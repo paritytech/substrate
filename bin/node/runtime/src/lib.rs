@@ -48,6 +48,7 @@ use frame_support::{
 		ConstantMultiplier, IdentityFee, Weight,
 	},
 	BoundedVec, PalletId, RuntimeDebug,
+	migrations::VersionedRuntimeUpgrade
 };
 use frame_system::{
 	limits::{BlockLength, BlockWeights},
@@ -1995,12 +1996,19 @@ pub type Executive = frame_executive::Executive<
 	Migrations,
 >;
 
+pub type VersionCheckedMigrateV1ToV2<Runtime> =
+	VersionedRuntimeUpgrade<
+		1,
+		2,
+		pallet_nomination_pools::migration::v2::VersionUncheckedMigrateV1ToV2<Runtime>,
+		pallet_nomination_pools::Pallet<Runtime>,
+		<Runtime as frame_system::Config>::DbWeight
+	>;
+
 // All migrations executed on runtime upgrade as a nested tuple of types implementing
 // `OnRuntimeUpgrade`.
 type Migrations = (
-	pallet_nomination_pools::migration::v2::MigrateToV2<Runtime>,
-	pallet_alliance::migration::Migration<Runtime>,
-	pallet_contracts::Migration<Runtime>,
+	VersionCheckedMigrateV1ToV2<Runtime>,
 );
 
 type EventRecord = frame_system::EventRecord<
