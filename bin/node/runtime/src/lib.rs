@@ -1887,7 +1887,6 @@ impl pallet_mixnet::Config for Runtime {
 	type MaxAuthorities = MaxAuthorities;
 	type MaxExternalAddressSize = ConstU32<128>;
 	type MaxExternalAddressesPerMixnode = ConstU32<16>;
-	type ValidatorSet = Historical;
 	type NextSessionRotation = Babe;
 	type NumCoverToCurrentBlocks = MixnetNumCoverToCurrentBlocks;
 	type NumRequestsToCurrentBlocks = MixnetNumRequestsToCurrentBlocks;

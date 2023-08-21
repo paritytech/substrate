@@ -24,7 +24,7 @@
 use arrayref::array_mut_ref;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	traits::{EstimateNextSessionRotation, Get, OneSessionHandler, ValidatorSet},
+	traits::{EstimateNextSessionRotation, Get, OneSessionHandler},
 	BoundedVec,
 };
 use frame_system::{
@@ -216,9 +216,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxExternalAddressesPerMixnode: Get<u32>;
 
-		/// Just for retrieving the current session index.
-		type ValidatorSet: ValidatorSet<Self::AccountId>;
-
 		/// Session progress/length estimation. Used to determine when to send registration
 		/// transactions and the longevity of these transactions.
 		type NextSessionRotation: EstimateNextSessionRotation<BlockNumberFor<Self>>;
@@ -257,6 +254,11 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinMixnodes: Get<u32>;
 	}
+
+	/// Index of the current session. This may be offset relative to the session index tracked by
+	/// eg `pallet_session`; mixnet session indices are independent.
+	#[pallet::storage]
+	pub(crate) type CurrentSessionIndex<T> = StorageValue<_, SessionIndex, ValueQuery>;
 
 	/// Block in which the current session started.
 	#[pallet::storage]
@@ -333,7 +335,7 @@ pub mod pallet {
 			ensure_none(origin)?;
 
 			// Checked by ValidateUnsigned
-			debug_assert_eq!(registration.session_index, T::ValidatorSet::session_index());
+			debug_assert_eq!(registration.session_index, CurrentSessionIndex::<T>::get());
 			debug_assert!(
 				Self::session_phase(frame_system::Pallet::<T>::block_number()).0 ==
 					SessionPhase::DisconnectFromPrev
@@ -361,7 +363,7 @@ pub mod pallet {
 			};
 
 			// Check session index matches
-			match registration.session_index.cmp(&T::ValidatorSet::session_index()) {
+			match registration.session_index.cmp(&CurrentSessionIndex::<T>::get()) {
 				Ordering::Greater => return InvalidTransaction::Future.into(),
 				Ordering::Less => return InvalidTransaction::Stale.into(),
 				Ordering::Equal => (),
@@ -422,7 +424,7 @@ pub mod pallet {
 			{
 				// Right at the start of the register phase. Drop the previous mixnode set. From
 				// this point forward, the storage will be used for the next mixnode set.
-				Self::clear_mixnodes(false);
+				Self::clear_prev_next_mixnodes();
 			}
 			Weight::zero() // TODO
 		}
@@ -452,7 +454,7 @@ impl<T: Config> Pallet<T> {
 	/// Returns the index and phase of the current session.
 	pub fn session_status() -> SessionStatus {
 		SessionStatus {
-			current_index: T::ValidatorSet::session_index(),
+			current_index: CurrentSessionIndex::<T>::get(),
 			phase: Self::session_phase(frame_system::Pallet::<T>::block_number()).0,
 		}
 	}
@@ -461,7 +463,7 @@ impl<T: Config> Pallet<T> {
 	/// previous/next mixnode set (depending on the session phase).
 	fn mixnodes(current: bool) -> Result<Vec<Mixnode>, MixnodesErr> {
 		let mixnodes: Vec<_> = with_mixnodes!(
-			T::ValidatorSet::session_index(),
+			CurrentSessionIndex::<T>::get(),
 			current,
 			Mixnodes,
 			Mixnodes::<T>::iter_values()
@@ -495,12 +497,11 @@ impl<T: Config> Pallet<T> {
 		Self::mixnodes(true)
 	}
 
-	/// If `current` is `true`, clears the current mixnode set. Otherwise, clears the previous/next
-	/// mixnode set (depending on the session phase).
-	fn clear_mixnodes(current: bool) {
+	/// Clear the previous/next mixnode set (depending on the session phase).
+	fn clear_prev_next_mixnodes() {
 		with_mixnodes!(
-			T::ValidatorSet::session_index(),
-			current,
+			CurrentSessionIndex::<T>::get(),
+			false, // Want to clear the previous/next mixnode set
 			Mixnodes,
 			check_removed_all(Mixnodes::<T>::clear(T::MaxAuthorities::get(), None))
 		);
@@ -570,7 +571,7 @@ impl<T: Config> Pallet<T> {
 	/// except, after `true` is returned, this should not be called for a few blocks, to give the
 	/// submitted extrinsic a chance to get included.
 	pub fn maybe_register(session_index: SessionIndex, mixnode: Mixnode) -> bool {
-		let current_session_index = T::ValidatorSet::session_index();
+		let current_session_index = CurrentSessionIndex::<T>::get();
 		if session_index != current_session_index {
 			log::debug!(
 				target: LOG_TARGET,
@@ -646,15 +647,16 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	{
 		let block_number = frame_system::Pallet::<T>::block_number();
 
-		// It is possible for the previous session to have never entered the register phase
+		// It is possible for the ending session to have never entered the register phase
 		// (DisconnectFromPrev). Handle this case. Note that this should work whether
 		// on_new_session() is called before or after our on_initialize() function; in the latter
 		// case we may end up clearing the mixnode set twice, but this is harmless.
 		let (phase, block_in_phase) = Self::session_phase(block_number);
 		if (phase != SessionPhase::DisconnectFromPrev) || block_in_phase.is_zero() {
-			Self::clear_mixnodes(true);
+			Self::clear_prev_next_mixnodes();
 		}
 
+		CurrentSessionIndex::<T>::mutate(|index| *index += 1);
 		CurrentSessionStartBlock::<T>::put(block_number);
 
 		if changed {
