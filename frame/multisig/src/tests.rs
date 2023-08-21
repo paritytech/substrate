@@ -287,7 +287,13 @@ fn mutlisig_with_expiry_works() {
 
 		// Cannot clear the multisig operation since it has not expired yet.
 		assert_noop!(
-			Multisig::clear_multi(RuntimeOrigin::signed(42), 2, vec![1, 2, 3], timepoint, hash),
+			Multisig::clear_expired_multi(
+				RuntimeOrigin::signed(42),
+				2,
+				vec![1, 2, 3],
+				timepoint,
+				hash
+			),
 			Error::<Test>::MultisigNotExpired
 		);
 
@@ -355,7 +361,7 @@ fn mutlisig_wont_get_executed_when_expired() {
 			Error::<Test>::MultisigExpired
 		);
 
-		assert_ok!(Multisig::clear_multi(
+		assert_ok!(Multisig::clear_expired_multi(
 			RuntimeOrigin::signed(42),
 			2,
 			vec![1, 2, 3],
@@ -374,7 +380,13 @@ fn mutlisig_wont_get_executed_when_expired() {
 
 		// Cannot clear the multisig operation since it does not longer exist.
 		assert_noop!(
-			Multisig::clear_multi(RuntimeOrigin::signed(42), 2, vec![1, 2, 3], timepoint, hash),
+			Multisig::clear_expired_multi(
+				RuntimeOrigin::signed(42),
+				2,
+				vec![1, 2, 3],
+				timepoint,
+				hash
+			),
 			Error::<Test>::NotFound
 		);
 	})

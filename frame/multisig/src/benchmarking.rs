@@ -210,7 +210,7 @@ benchmarks! {
 		assert!(!Multisigs::<T>::contains_key(multi_account_id, call_hash));
 	}
 
-	clear_multi {
+	clear_expired_multi {
 		// Signatories, need at least 2 people
 		let s in 2 .. T::MaxSignatories::get();
 		// Transaction Length, not a component
@@ -229,7 +229,7 @@ benchmarks! {
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
-		// For calling clear_multi all the signatories must be specified.
+		// For calling clear_expired_multi all the signatories must be specified.
 		signatories.push(caller.clone());
 	}: _(RawOrigin::Signed(caller), s as u16, signatories, timepoint, call_hash)
 	verify {
