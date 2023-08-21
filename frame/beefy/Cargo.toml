@@ -34,31 +34,33 @@ sp-io = { version = "23.0.0", path = "../../primitives/io" }
 sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
 
 [features]
-default = ["std"]
+default = [
+	"std",
+]
 std = [
 	"codec/std",
+	"frame-election-provider-support/std",
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-authorship/std",
+	"pallet-balances/std",
+	"pallet-offences/std",
 	"pallet-session/std",
+	"pallet-staking/std",
+	"pallet-timestamp/std",
 	"scale-info/std",
 	"serde/std",
 	"sp-consensus-beefy/std",
+	"sp-core/std",
+	"sp-io/std",
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-staking/std",
 	"sp-std/std",
-	"frame-election-provider-support/std",
-	"pallet-balances/std",
-	"pallet-offences/std",
-	"pallet-staking/std",
-	"pallet-timestamp/std",
-	"sp-core/std",
-	"sp-io/std"
 ]
 try-runtime = [
-	"frame-support/try-runtime",
 	"frame-election-provider-support/try-runtime",
+	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"pallet-authorship/try-runtime",
 	"pallet-balances/try-runtime",
@@ -66,5 +68,5 @@ try-runtime = [
 	"pallet-session/try-runtime",
 	"pallet-staking/try-runtime",
 	"pallet-timestamp/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

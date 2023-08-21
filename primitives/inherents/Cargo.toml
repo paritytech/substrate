@@ -26,7 +26,9 @@ sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 futures = "0.3.21"
 
 [features]
-default = [ "std" ]
+default = [
+	"std",
+]
 std = [
 	"async-trait",
 	"codec/std",

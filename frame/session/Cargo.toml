@@ -29,8 +29,13 @@ sp-std = { version = "8.0.0", default-features = false, path = "../../primitives
 sp-trie = { version = "22.0.0", default-features = false, optional = true, path = "../../primitives/trie" }
 
 [features]
-default = ["historical", "std"]
-historical = ["sp-trie"]
+default = [
+	"historical",
+	"std",
+]
+historical = [
+	"sp-trie",
+]
 std = [
 	"codec/std",
 	"frame-support/std",
@@ -50,5 +55,5 @@ try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"pallet-timestamp/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

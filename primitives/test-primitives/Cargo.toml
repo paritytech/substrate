@@ -26,12 +26,12 @@ default = [
 ]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"serde/std",
 	"sp-application-crypto/std",
 	"sp-core/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"scale-info/std",
 ]
 
 # Serde support without relying on std features.

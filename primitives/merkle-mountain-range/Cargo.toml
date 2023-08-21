@@ -28,7 +28,9 @@ thiserror = "1.0"
 array-bytes = "6.1"
 
 [features]
-default = ["std"]
+default = [
+	"std",
+]
 std = [
 	"codec/std",
 	"log/std",

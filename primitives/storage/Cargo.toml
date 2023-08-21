@@ -22,7 +22,9 @@ sp-debug-derive = { version = "8.0.0", default-features = false, path = "../debu
 sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 
 [features]
-default = [ "std" ]
+default = [
+	"std",
+]
 std = [
 	"codec/std",
 	"impl-serde/std",
