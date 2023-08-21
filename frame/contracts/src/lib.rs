@@ -182,9 +182,8 @@ const LOG_TARGET: &str = "runtime::contracts";
 
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::debug::Debugging;
-
 	use super::*;
+	use crate::debug::Debugging;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::Perbill;
