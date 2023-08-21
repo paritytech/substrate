@@ -25,11 +25,11 @@ use sc_executor::{sp_wasm_interface::HostFunctions, WasmExecutor};
 use serde::de::DeserializeOwned;
 use sp_core::H256;
 use sp_inherents::{InherentData, InherentDataProvider};
-use sp_io::TestExternalities;
 use sp_runtime::{
-	traits::{Header, NumberFor, One},
+	traits::{HashingFor, Header, NumberFor, One},
 	Digest,
 };
+use sp_state_machine::TestExternalities;
 use std::{fmt::Debug, str::FromStr};
 use substrate_rpc_client::{ws_client, ChainApi};
 
@@ -92,8 +92,8 @@ where
 }
 
 /// Call `method` with `data` and return the result. `externalities` will not change.
-async fn dry_run<T: Decode, Block: BlockT, HostFns: HostFunctions>(
-	externalities: &TestExternalities,
+fn dry_run<T: Decode, Block: BlockT, HostFns: HostFunctions>(
+	externalities: &TestExternalities<HashingFor<Block>>,
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
@@ -111,7 +111,7 @@ async fn dry_run<T: Decode, Block: BlockT, HostFns: HostFunctions>(
 
 /// Call `method` with `data` and actually save storage changes to `externalities`.
 async fn run<Block: BlockT, HostFns: HostFunctions>(
-	externalities: &mut TestExternalities,
+	externalities: &mut TestExternalities<HashingFor<Block>>,
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
@@ -124,11 +124,8 @@ async fn run<Block: BlockT, HostFns: HostFunctions>(
 		full_extensions(executor.clone()),
 	)?;
 
-	let storage_changes = changes.drain_storage_changes(
-		&externalities.backend,
-		&mut Default::default(),
-		externalities.state_version,
-	)?;
+	let storage_changes =
+		changes.drain_storage_changes(&externalities.backend, externalities.state_version)?;
 
 	externalities
 		.backend
@@ -143,7 +140,7 @@ async fn next_empty_block<
 	HostFns: HostFunctions,
 	BBIP: BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>>,
 >(
-	externalities: &mut TestExternalities,
+	externalities: &mut TestExternalities<HashingFor<Block>>,
 	executor: &WasmExecutor<HostFns>,
 	parent_height: NumberFor<Block>,
 	parent_hash: Block::Hash,
@@ -182,8 +179,7 @@ async fn next_empty_block<
 			executor,
 			"BlockBuilder_inherent_extrinsics",
 			&inherent_data.encode(),
-		)
-		.await?;
+		)?;
 	}
 
 	for xt in &extrinsics {
@@ -196,8 +192,7 @@ async fn next_empty_block<
 		executor,
 		"BlockBuilder_finalize_block",
 		&[0u8; 0],
-	)
-	.await?;
+	)?;
 
 	run::<Block, _>(externalities, executor, "BlockBuilder_finalize_block", &[0u8; 0]).await?;
 

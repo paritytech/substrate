@@ -22,7 +22,7 @@ use crate::{rpc, ConsensusDataProvider, CreatedBlock, Error};
 use futures::prelude::*;
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult, StateAction};
 use sc_transaction_pool_api::TransactionPool;
-use sp_api::{ProvideRuntimeApi, TransactionFor};
+use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::{self, BlockOrigin, Environment, Proposer, SelectChain};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
@@ -52,8 +52,7 @@ pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, TP
 	/// SelectChain object
 	pub select_chain: &'a SC,
 	/// Digest provider for inclusion in blocks.
-	pub consensus_data_provider:
-		Option<&'a dyn ConsensusDataProvider<B, Proof = P, Transaction = TransactionFor<C, B>>>,
+	pub consensus_data_provider: Option<&'a dyn ConsensusDataProvider<B, Proof = P>>,
 	/// block import object
 	pub block_import: &'a mut BI,
 	/// Something that can create the inherent data providers.
@@ -77,16 +76,12 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, P>(
 	}: SealBlockParams<'_, B, BI, SC, C, E, TP, CIDP, P>,
 ) where
 	B: BlockT,
-	BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
-		+ Send
-		+ Sync
-		+ 'static,
+	BI: BlockImport<B, Error = sp_consensus::Error> + Send + Sync + 'static,
 	C: HeaderBackend<B> + ProvideRuntimeApi<B>,
 	E: Environment<B>,
-	E::Proposer: Proposer<B, Proof = P, Transaction = TransactionFor<C, B>>,
+	E::Proposer: Proposer<B, Proof = P>,
 	TP: TransactionPool<Block = B>,
 	SC: SelectChain<B>,
-	TransactionFor<C, B>: 'static,
 	CIDP: CreateInherentDataProviders<B, ()>,
 	P: Send + Sync + 'static,
 {

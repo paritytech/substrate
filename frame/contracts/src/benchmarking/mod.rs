@@ -30,7 +30,9 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
-	migration::{codegen::LATEST_MIGRATION_VERSION, v09, v10, v11, v12, v13, v14, MigrationStep},
+	migration::{
+		codegen::LATEST_MIGRATION_VERSION, v09, v10, v11, v12, v13, v14, v15, MigrationStep,
+	},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -296,6 +298,19 @@ benchmarks! {
 		m.step();
 	}
 
+	// This benchmarks the v15 migration step (remove deposit account).
+	#[pov_mode = Measured]
+	v15_migration_step {
+		let contract = <Contract<T>>::with_caller(
+			whitelisted_caller(), WasmModule::dummy(), vec![],
+		)?;
+
+		v15::store_old_contract_info::<T>(contract.account_id.clone(), contract.info()?);
+		let mut m = v15::Migration::<T>::default();
+	}: {
+		m.step();
+	}
+
 	// This benchmarks the weight of executing Migration::migrate to execute a noop migration.
 	#[pov_mode = Measured]
 	migration_noop {
@@ -397,10 +412,9 @@ benchmarks! {
 		let addr = Contracts::<T>::contract_address(&caller, &hash, &input, &salt);
 	}: _(origin, value, Weight::MAX, None, code, input, salt)
 	verify {
-		let deposit_account = Contract::<T>::address_info(&addr)?.deposit_account().clone();
-		let deposit = T::Currency::balance(&deposit_account);
+		let deposit = T::Currency::balance_on_hold(&HoldReason::StorageDepositReserve.into(), &addr);
 		// uploading the code reserves some balance in the callers account
-		let code_deposit = T::Currency::total_balance_on_hold(&caller);
+		let code_deposit = T::Currency::balance_on_hold(&HoldReason::CodeUploadDepositReserve.into(), &caller);
 		assert_eq!(
 			T::Currency::balance(&caller),
 			caller_funding::<T>() - value - deposit - code_deposit - Pallet::<T>::min_balance(),
@@ -427,8 +441,7 @@ benchmarks! {
 		Contracts::<T>::store_code_raw(code, caller.clone())?;
 	}: _(origin, value, Weight::MAX, None, hash, input, salt)
 	verify {
-		let deposit_account = Contract::<T>::address_info(&addr)?.deposit_account().clone();
-		let deposit = T::Currency::balance(&deposit_account);
+		let deposit = T::Currency::balance_on_hold(&HoldReason::StorageDepositReserve.into(), &addr);
 		// value was removed from the caller
 		assert_eq!(
 			T::Currency::balance(&caller),
@@ -451,15 +464,13 @@ benchmarks! {
 		let instance = Contract::<T>::with_caller(
 			whitelisted_caller(), WasmModule::dummy(), vec![],
 		)?;
-		let deposit_account = instance.info()?.deposit_account().clone();
 		let value = Pallet::<T>::min_balance();
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let callee = instance.addr.clone();
 		let before = T::Currency::balance(&instance.account_id);
-		let before_deposit = T::Currency::balance(&deposit_account);
 	}: _(origin, callee, value, Weight::MAX, None, data)
 	verify {
-		let deposit = T::Currency::balance(&deposit_account);
+		let deposit = T::Currency::balance_on_hold(&HoldReason::StorageDepositReserve.into(), &instance.account_id);
 		// value and value transferred via call should be removed from the caller
 		assert_eq!(
 			T::Currency::balance(&instance.caller),
@@ -930,15 +941,14 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-		let deposit_account = instance.info()?.deposit_account().clone();
 		assert_eq!(T::Currency::total_balance(&beneficiary), 0u32.into());
 		assert_eq!(T::Currency::balance(&instance.account_id), Pallet::<T>::min_balance() * 2u32.into());
-		assert_ne!(T::Currency::balance(&deposit_account), 0u32.into());
+		assert_ne!(T::Currency::balance_on_hold(&HoldReason::StorageDepositReserve.into(), &instance.account_id), 0u32.into());
 	}: call(origin, instance.addr.clone(), 0u32.into(), Weight::MAX, None, vec![])
 	verify {
 		if r > 0 {
 			assert_eq!(T::Currency::total_balance(&instance.account_id), 0u32.into());
-			assert_eq!(T::Currency::total_balance(&deposit_account), 0u32.into());
+			assert_eq!(T::Currency::balance_on_hold(&HoldReason::StorageDepositReserve.into(), &instance.account_id), 0u32.into());
 			assert_eq!(T::Currency::total_balance(&beneficiary), Pallet::<T>::min_balance() * 2u32.into());
 		}
 	}
