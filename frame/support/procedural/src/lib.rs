@@ -605,8 +605,8 @@ pub fn storage_alias(attributes: TokenStream, input: TokenStream) -> TokenStream
 /// }
 /// ```
 ///
-/// If specified, this indicates whether the aggregated types (as denoted by impl items
-/// attached with [`#[runtime_type]`]) should be injected with the correct concrete types. By
+/// If specified, this indicates that the aggregated types (as denoted by impl items
+/// attached with [`#[runtime_type]`]) should not be injected with the respective concrete types. By
 /// default, all such types are injected.
 ///
 /// You can also make use of `#[pallet::no_default]` on specific items in your default impl that you
