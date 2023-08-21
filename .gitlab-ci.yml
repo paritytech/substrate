@@ -311,11 +311,12 @@ cargo-frame-test-ui:
   stage: test
   variables:
     RUSTY_CACHIER_TOOLCHAIN: nightly
+    RUN_UI_TESTS: 1
   extends:
     - .docker-env
     - .test-refs
   script:
-    - RUN_UI_TESTS=1 cargo +1.70.0 test -q --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml --test construct_runtime_ui
+    - cargo +1.70.0 test -q --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml --test construct_runtime_ui
 
 #### stage:                        notify
 
