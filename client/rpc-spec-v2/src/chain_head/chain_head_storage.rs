@@ -160,8 +160,8 @@ where
 		let mut storage_results = Vec::with_capacity(items.len());
 		for item in items {
 			let Some(result) = self.query_storage(hash, &item, child_key.as_ref()) else {
-				continue
-			};
+                continue
+            };
 
 			match result {
 				QueryResult::Ok(storage_result) => storage_results.push(storage_result),
