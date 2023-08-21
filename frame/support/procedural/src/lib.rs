@@ -596,16 +596,16 @@ pub fn storage_alias(attributes: TokenStream, input: TokenStream) -> TokenStream
 ///
 /// Conversely, the `default_impl_path` argument is required and cannot be omitted.
 ///
-/// Optionally, a boolean can be specified as follows:
+/// Optionally, `no_aggregated_types` can be specified as follows:
 ///
 /// ```ignore
-/// #[derive_impl(default_impl_path as disambiguation_path, false)]
+/// #[derive_impl(default_impl_path as disambiguation_path, no_aggregated_types)]
 /// impl SomeTrait for SomeStruct {
 ///     ...
 /// }
 /// ```
 ///
-/// The boolean if specified indicates whether the runtime types (as denoted by impl items
+/// If specified, this indicates whether the aggregated types (as denoted by impl items
 /// attached with [`#[runtime_type]`]) should be injected with the correct concrete types. By
 /// default, all such types are injected.
 ///
@@ -772,7 +772,7 @@ pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> TokenStream {
 		attrs.into(),
 		input.into(),
 		custom_attrs.disambiguation_path,
-		custom_attrs.inject_runtime_types,
+		custom_attrs.no_aggregated_types,
 	)
 	.unwrap_or_else(|r| r.into_compile_error())
 	.into()

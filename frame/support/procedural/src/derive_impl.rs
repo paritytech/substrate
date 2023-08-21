@@ -23,12 +23,12 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use std::collections::HashSet;
 use syn::{
-	parse2, parse_quote, spanned::Spanned, token, Ident, ImplItem, ItemImpl, LitBool, Path, Result,
-	Token,
+	parse2, parse_quote, spanned::Spanned, token, Ident, ImplItem, ItemImpl, Path, Result, Token,
 };
 
 mod keyword {
 	syn::custom_keyword!(runtime_type);
+	syn::custom_keyword!(no_aggregated_types);
 }
 
 #[derive(derive_syn_parse::Parse, PartialEq, Eq)]
@@ -66,7 +66,7 @@ pub struct DeriveImplAttrArgs {
 	pub disambiguation_path: Option<Path>,
 	_comma: Option<Token![,]>,
 	#[parse_if(_comma.is_some())]
-	pub inject_runtime_types: Option<LitBool>,
+	pub no_aggregated_types: Option<keyword::no_aggregated_types>,
 }
 
 impl ForeignPath for DeriveImplAttrArgs {
@@ -81,7 +81,7 @@ impl ToTokens for DeriveImplAttrArgs {
 		tokens.extend(self._as.to_token_stream());
 		tokens.extend(self.disambiguation_path.to_token_stream());
 		tokens.extend(self._comma.to_token_stream());
-		tokens.extend(self.inject_runtime_types.to_token_stream());
+		tokens.extend(self.no_aggregated_types.to_token_stream());
 	}
 }
 
@@ -185,7 +185,7 @@ pub fn derive_impl(
 	foreign_tokens: TokenStream2,
 	local_tokens: TokenStream2,
 	disambiguation_path: Option<Path>,
-	inject_runtime_types: Option<LitBool>,
+	no_aggregated_types: Option<keyword::no_aggregated_types>,
 ) -> Result<TokenStream2> {
 	let local_impl = parse2::<ItemImpl>(local_tokens)?;
 	let foreign_impl = parse2::<ItemImpl>(foreign_tokens)?;
@@ -204,17 +204,13 @@ pub fn derive_impl(
 			)),
 	};
 
-	let inject_runtime_types = match inject_runtime_types {
-		Some(LitBool { value, .. }) => value,
-		_ => true,
-	};
 	// generate the combined impl
 	let combined_impl = combine_impls(
 		local_impl,
 		foreign_impl,
 		default_impl_path,
 		disambiguation_path,
-		inject_runtime_types,
+		no_aggregated_types.is_none(),
 	);
 
 	Ok(quote!(#combined_impl))
