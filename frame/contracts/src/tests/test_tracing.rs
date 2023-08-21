@@ -1,6 +1,5 @@
-use crate::tracing::{CallSpan, ExportedFunction, Tracing};
-
 use super::*;
+use crate::tracing::{CallSpan, ExportedFunction, Tracing};
 use frame_support::traits::Currency;
 use pallet_contracts_primitives::ExecReturnValue;
 use pretty_assertions::assert_eq;

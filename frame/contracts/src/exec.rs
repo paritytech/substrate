@@ -16,9 +16,9 @@
 // limitations under the License.
 
 use crate::{
-	tracing::{CallSpan, Tracing},
 	gas::GasMeter,
 	storage::{self, meter::Diff, WriteOutcome},
+	tracing::{CallSpan, Tracing},
 	BalanceOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo, ContractInfoOf,
 	DebugBufferVec, Determinism, Error, Event, Nonce, Origin, Pallet as Contracts, Schedule,
 	WasmBlob, LOG_TARGET,

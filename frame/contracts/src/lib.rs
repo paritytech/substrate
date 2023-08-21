@@ -95,9 +95,9 @@ mod schedule;
 mod storage;
 mod wasm;
 
-pub mod tracing;
 pub mod chain_extension;
 pub mod migration;
+pub mod tracing;
 pub mod weights;
 
 #[cfg(test)]
@@ -137,11 +137,11 @@ use sp_std::{fmt::Debug, prelude::*};
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
-	tracing::Tracing,
 	exec::Frame,
 	migration::{MigrateSequence, Migration, NoopMigration},
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
+	tracing::Tracing,
 	wasm::Determinism,
 };
 pub use weights::WeightInfo;
