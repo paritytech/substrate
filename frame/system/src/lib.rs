@@ -205,7 +205,7 @@ pub mod pallet {
 
 	/// Default implementations of [`DefaultConfig`], which can be used to implement [`Config`].
 	pub mod config_preludes {
-		use super::{DefaultConfig, runtime_type};
+		use super::{runtime_type, DefaultConfig};
 
 		/// Provides a viable default config that can be used with
 		/// [`derive_impl`](`frame_support::derive_impl`) to derive a testing pallet config
