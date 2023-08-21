@@ -58,6 +58,18 @@ cargo-fmt:
     - cargo +nightly fmt --all -- --check
     - rusty-cachier cache upload
 
+cargo-cargo-toml-fmt:
+  stage: test
+  extends:
+    - .docker-env
+    - .test-refs
+  script:
+    - cargo install zepter --locked --version 0.9.2 -q -f --no-default-features && zepter --version
+    - zepter format features --fix --workspace
+    - echo "👉 Hello developer! If you see this CI check failing then it means that one of the your changes in a Cargo.toml file introduced ill-formatted or unsorted features. Please apply the following diff to them:"
+    - git diff --exit-code
+  allow_failure: true # Experimental
+
 cargo-clippy:
   stage: test
   # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
