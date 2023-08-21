@@ -671,8 +671,9 @@ impl<T: Config> Pallet<T> {
 			let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
 			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 
+			let maybe_expiry = <MultisigExpiries<T>>::get(&id, call_hash);
 			// Ensure that the mutlisig did not expire.
-			match <MultisigExpiries<T>>::get(&id, call_hash) {
+			match maybe_expiry {
 				Some(expiry) if expiry < <frame_system::Pallet<T>>::block_number() => {
 					// If the multisig is expired we will take the chance to remove it now so that
 					// the multisig creator does not have to make a separate call to clean it up.
@@ -701,9 +702,7 @@ impl<T: Config> Pallet<T> {
 
 				// Clean up storage before executing call to avoid an possibility of reentrancy
 				// attack.
-				<Multisigs<T>>::remove(&id, call_hash);
-				<MultisigExpiries<T>>::remove(&id, call_hash);
-				T::Currency::unreserve(&m.depositor, m.deposit);
+				Self::remove_multisig(&id, call_hash, &m.depositor, m.deposit, maybe_expiry);
 
 				let result = call.dispatch(RawOrigin::Signed(id.clone()).into());
 				Self::deposit_event(Event::MultisigExecuted {
