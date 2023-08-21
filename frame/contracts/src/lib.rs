@@ -190,7 +190,7 @@ pub mod pallet {
 	use sp_runtime::Perbill;
 
 	/// The current storage version.
-	pub(crate) const STORAGE_VERSION: StorageVersion = StorageVersion::new(14);
+	pub(crate) const STORAGE_VERSION: StorageVersion = StorageVersion::new(15);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -902,6 +902,20 @@ pub mod pallet {
 			/// The code hash that was delegate called.
 			code_hash: CodeHash<T>,
 		},
+
+		/// Some funds have been transferred and held as storage deposit.
+		StorageDepositTransferredAndHeld {
+			from: T::AccountId,
+			to: T::AccountId,
+			amount: BalanceOf<T>,
+		},
+
+		/// Some storage deposit funds have been transferred and released.
+		StorageDepositTransferredAndReleased {
+			from: T::AccountId,
+			to: T::AccountId,
+			amount: BalanceOf<T>,
+		},
 	}
 
 	#[pallet::error]
@@ -1002,6 +1016,8 @@ pub mod pallet {
 	pub enum HoldReason {
 		/// The Pallet has reserved it for storing code on-chain.
 		CodeUploadDepositReserve,
+		/// The Pallet has reserved it for storage deposit.
+		StorageDepositReserve,
 	}
 
 	/// A mapping from a contract's code hash to its code.

@@ -24,36 +24,22 @@ use crate::{
 use codec::Codec;
 use hash_db::Hasher;
 use sp_core::storage::{ChildInfo, StateVersion, Storage};
-use sp_trie::{empty_trie_root, GenericMemoryDB, HashKey, KeyFunction, LayoutV1, MemoryDB};
+use sp_trie::{empty_trie_root, LayoutV1, PrefixedMemoryDB};
 use std::collections::{BTreeMap, HashMap};
 
 /// Create a new empty instance of in-memory backend.
-///
-/// It will use [`HashKey`] to store the keys internally.
-pub fn new_in_mem_hash_key<H>() -> TrieBackend<MemoryDB<H>, H>
+pub fn new_in_mem<H>() -> TrieBackend<PrefixedMemoryDB<H>, H>
 where
 	H: Hasher,
 	H::Out: Codec + Ord,
 {
-	new_in_mem::<H, HashKey<H>>()
-}
-
-/// Create a new empty instance of in-memory backend.
-pub fn new_in_mem<H, KF>() -> TrieBackend<GenericMemoryDB<H, KF>, H>
-where
-	H: Hasher,
-	H::Out: Codec + Ord,
-	KF: KeyFunction<H> + Send + Sync,
-{
-	let db = GenericMemoryDB::default();
 	// V1 is same as V0 for an empty trie.
-	TrieBackendBuilder::new(db, empty_trie_root::<LayoutV1<H>>()).build()
+	TrieBackendBuilder::new(Default::default(), empty_trie_root::<LayoutV1<H>>()).build()
 }
 
-impl<H: Hasher, KF> TrieBackend<GenericMemoryDB<H, KF>, H>
+impl<H: Hasher> TrieBackend<PrefixedMemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
-	KF: KeyFunction<H> + Send + Sync,
 {
 	/// Copy the state, with applied updates
 	pub fn update<T: IntoIterator<Item = (Option<ChildInfo>, StorageCollection)>>(
@@ -85,15 +71,16 @@ where
 	}
 
 	/// Merge trie nodes into this backend.
-	pub fn update_backend(&self, root: H::Out, changes: GenericMemoryDB<H, KF>) -> Self {
+	pub fn update_backend(&self, root: H::Out, changes: PrefixedMemoryDB<H>) -> Self {
 		let mut clone = self.backend_storage().clone();
 		clone.consolidate(changes);
 		TrieBackendBuilder::new(clone, root).build()
 	}
 
 	/// Apply the given transaction to this backend and set the root to the given value.
-	pub fn apply_transaction(&mut self, root: H::Out, transaction: GenericMemoryDB<H, KF>) {
+	pub fn apply_transaction(&mut self, root: H::Out, transaction: PrefixedMemoryDB<H>) {
 		let mut storage = sp_std::mem::take(self).into_storage();
+
 		storage.consolidate(transaction);
 		*self = TrieBackendBuilder::new(storage, root).build();
 	}
@@ -104,33 +91,29 @@ where
 	}
 }
 
-impl<H: Hasher, KF> Clone for TrieBackend<GenericMemoryDB<H, KF>, H>
+impl<H: Hasher> Clone for TrieBackend<PrefixedMemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
-	KF: KeyFunction<H> + Send + Sync,
 {
 	fn clone(&self) -> Self {
 		TrieBackendBuilder::new(self.backend_storage().clone(), *self.root()).build()
 	}
 }
 
-impl<H, KF> Default for TrieBackend<GenericMemoryDB<H, KF>, H>
+impl<H> Default for TrieBackend<PrefixedMemoryDB<H>, H>
 where
 	H: Hasher,
 	H::Out: Codec + Ord,
-	KF: KeyFunction<H> + Send + Sync,
 {
 	fn default() -> Self {
 		new_in_mem()
 	}
 }
 
-impl<H: Hasher, KF>
-	From<(HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>, StateVersion)>
-	for TrieBackend<GenericMemoryDB<H, KF>, H>
+impl<H: Hasher> From<(HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>, StateVersion)>
+	for TrieBackend<PrefixedMemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
-	KF: KeyFunction<H> + Send + Sync,
 {
 	fn from(
 		(inner, state_version): (
@@ -149,10 +132,9 @@ where
 	}
 }
 
-impl<H: Hasher, KF> From<(Storage, StateVersion)> for TrieBackend<GenericMemoryDB<H, KF>, H>
+impl<H: Hasher> From<(Storage, StateVersion)> for TrieBackend<PrefixedMemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
-	KF: KeyFunction<H> + Send + Sync,
 {
 	fn from((inners, state_version): (Storage, StateVersion)) -> Self {
 		let mut inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> = inners
@@ -165,11 +147,10 @@ where
 	}
 }
 
-impl<H: Hasher, KF> From<(BTreeMap<StorageKey, StorageValue>, StateVersion)>
-	for TrieBackend<GenericMemoryDB<H, KF>, H>
+impl<H: Hasher> From<(BTreeMap<StorageKey, StorageValue>, StateVersion)>
+	for TrieBackend<PrefixedMemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
-	KF: KeyFunction<H> + Send + Sync,
 {
 	fn from((inner, state_version): (BTreeMap<StorageKey, StorageValue>, StateVersion)) -> Self {
 		let mut expanded = HashMap::new();
@@ -178,11 +159,10 @@ where
 	}
 }
 
-impl<H: Hasher, KF> From<(Vec<(Option<ChildInfo>, StorageCollection)>, StateVersion)>
-	for TrieBackend<GenericMemoryDB<H, KF>, H>
+impl<H: Hasher> From<(Vec<(Option<ChildInfo>, StorageCollection)>, StateVersion)>
+	for TrieBackend<PrefixedMemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
-	KF: KeyFunction<H> + Send + Sync,
 {
 	fn from(
 		(inner, state_version): (Vec<(Option<ChildInfo>, StorageCollection)>, StateVersion),
@@ -212,7 +192,7 @@ mod tests {
 	#[test]
 	fn in_memory_with_child_trie_only() {
 		let state_version = StateVersion::default();
-		let storage = new_in_mem_hash_key::<BlakeTwo256>();
+		let storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
 		let child_info = &child_info;
 		let storage = storage.update(
@@ -228,7 +208,7 @@ mod tests {
 	#[test]
 	fn insert_multiple_times_child_data_works() {
 		let state_version = StateVersion::default();
-		let mut storage = new_in_mem_hash_key::<BlakeTwo256>();
+		let mut storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
 
 		storage.insert(

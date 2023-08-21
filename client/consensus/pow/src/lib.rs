@@ -237,7 +237,7 @@ impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone, CIDP> Clone
 impl<B, I, C, S, Algorithm, CIDP> PowBlockImport<B, I, C, S, Algorithm, CIDP>
 where
 	B: BlockT,
-	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
+	I: BlockImport<B> + Send + Sync,
 	I::Error: Into<ConsensusError>,
 	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + BlockOf,
 	C::Api: BlockBuilderApi<B>,
@@ -301,7 +301,7 @@ where
 impl<B, I, C, S, Algorithm, CIDP> BlockImport<B> for PowBlockImport<B, I, C, S, Algorithm, CIDP>
 where
 	B: BlockT,
-	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
+	I: BlockImport<B> + Send + Sync,
 	I::Error: Into<ConsensusError>,
 	S: SelectChain<B>,
 	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + BlockOf,
@@ -311,7 +311,6 @@ where
 	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync,
 {
 	type Error = ConsensusError;
-	type Transaction = sp_api::TransactionFor<C, B>;
 
 	async fn check_block(
 		&mut self,
@@ -322,7 +321,7 @@ where
 
 	async fn import_block(
 		&mut self,
-		mut block: BlockImportParams<B, Self::Transaction>,
+		mut block: BlockImportParams<B>,
 	) -> Result<ImportResult, Self::Error> {
 		let best_header = self
 			.select_chain
@@ -444,8 +443,8 @@ where
 {
 	async fn verify(
 		&mut self,
-		mut block: BlockImportParams<B, ()>,
-	) -> Result<BlockImportParams<B, ()>, String> {
+		mut block: BlockImportParams<B>,
+	) -> Result<BlockImportParams<B>, String> {
 		let hash = block.header.hash();
 		let (checked_header, seal) = self.check_header(block.header)?;
 
@@ -460,19 +459,18 @@ where
 }
 
 /// The PoW import queue type.
-pub type PowImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
+pub type PowImportQueue<B> = BasicQueue<B>;
 
 /// Import queue for PoW engine.
-pub fn import_queue<B, Transaction, Algorithm>(
-	block_import: BoxBlockImport<B, Transaction>,
+pub fn import_queue<B, Algorithm>(
+	block_import: BoxBlockImport<B>,
 	justification_import: Option<BoxJustificationImport<B>>,
 	algorithm: Algorithm,
 	spawner: &impl sp_core::traits::SpawnEssentialNamed,
 	registry: Option<&Registry>,
-) -> Result<PowImportQueue<B, Transaction>, sp_consensus::Error>
+) -> Result<PowImportQueue<B>, sp_consensus::Error>
 where
 	B: BlockT,
-	Transaction: Send + Sync + 'static,
 	Algorithm: PowAlgorithm<B> + Clone + Send + Sync + 'static,
 	Algorithm::Difficulty: Send,
 {
@@ -491,7 +489,7 @@ where
 /// `pre_runtime` is a parameter that allows a custom additional pre-runtime digest to be inserted
 /// for blocks being built. This can encode authorship information, or just be a graffiti.
 pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, L, CIDP>(
-	block_import: BoxBlockImport<Block, sp_api::TransactionFor<C, Block>>,
+	block_import: BoxBlockImport<Block>,
 	client: Arc<C>,
 	select_chain: S,
 	algorithm: Algorithm,
@@ -503,18 +501,18 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, L, CIDP>(
 	timeout: Duration,
 	build_time: Duration,
 ) -> (
-	MiningHandle<Block, Algorithm, C, L, <E::Proposer as Proposer<Block>>::Proof>,
+	MiningHandle<Block, Algorithm, L, <E::Proposer as Proposer<Block>>::Proof>,
 	impl Future<Output = ()>,
 )
 where
 	Block: BlockT,
-	C: ProvideRuntimeApi<Block> + BlockchainEvents<Block> + 'static,
+	C: BlockchainEvents<Block> + 'static,
 	S: SelectChain<Block> + 'static,
 	Algorithm: PowAlgorithm<Block> + Clone,
 	Algorithm::Difficulty: Send + 'static,
 	E: Environment<Block> + Send + Sync + 'static,
 	E::Error: std::fmt::Debug,
-	E::Proposer: Proposer<Block, Transaction = sp_api::TransactionFor<C, Block>>,
+	E::Proposer: Proposer<Block>,
 	SO: SyncOracle + Clone + Send + Sync + 'static,
 	L: sc_consensus::JustificationSyncLink<Block>,
 	CIDP: CreateInherentDataProviders<Block, ()>,
@@ -632,7 +630,7 @@ where
 					},
 				};
 
-			let build = MiningBuild::<Block, Algorithm, C, _> {
+			let build = MiningBuild::<Block, Algorithm, _> {
 				metadata: MiningMetadata {
 					best_hash,
 					pre_hash: proposal.block.header().hash(),

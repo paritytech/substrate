@@ -119,9 +119,9 @@ pub struct BlockCheckParams<Block: BlockT> {
 }
 
 /// Precomputed storage.
-pub enum StorageChanges<Block: BlockT, Transaction> {
+pub enum StorageChanges<Block: BlockT> {
 	/// Changes coming from block execution.
-	Changes(sp_state_machine::StorageChanges<Transaction, HashingFor<Block>>),
+	Changes(sp_state_machine::StorageChanges<HashingFor<Block>>),
 	/// Whole new state.
 	Import(ImportedState<Block>),
 }
@@ -142,9 +142,9 @@ impl<B: BlockT> std::fmt::Debug for ImportedState<B> {
 }
 
 /// Defines how a new state is computed for a given imported block.
-pub enum StateAction<Block: BlockT, Transaction> {
+pub enum StateAction<Block: BlockT> {
 	/// Apply precomputed changes coming from block execution or state sync.
-	ApplyChanges(StorageChanges<Block, Transaction>),
+	ApplyChanges(StorageChanges<Block>),
 	/// Execute block body (required) and compute state.
 	Execute,
 	/// Execute block body if parent state is available and compute state.
@@ -153,7 +153,7 @@ pub enum StateAction<Block: BlockT, Transaction> {
 	Skip,
 }
 
-impl<Block: BlockT, Transaction> StateAction<Block, Transaction> {
+impl<Block: BlockT> StateAction<Block> {
 	/// Check if execution checks that require runtime calls should be skipped.
 	pub fn skip_execution_checks(&self) -> bool {
 		match self {
@@ -167,7 +167,7 @@ impl<Block: BlockT, Transaction> StateAction<Block, Transaction> {
 
 /// Data required to import a Block.
 #[non_exhaustive]
-pub struct BlockImportParams<Block: BlockT, Transaction> {
+pub struct BlockImportParams<Block: BlockT> {
 	/// Origin of the Block
 	pub origin: BlockOrigin,
 	/// The header, without consensus post-digests applied. This should be in the same
@@ -192,7 +192,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// Indexed transaction body of the block.
 	pub indexed_body: Option<Vec<Vec<u8>>>,
 	/// Specify how the new state is computed.
-	pub state_action: StateAction<Block, Transaction>,
+	pub state_action: StateAction<Block>,
 	/// Is this block finalized already?
 	/// `true` implies instant finality.
 	pub finalized: bool,
@@ -218,7 +218,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	pub post_hash: Option<Block::Hash>,
 }
 
-impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
+impl<Block: BlockT> BlockImportParams<Block> {
 	/// Create a new block import params.
 	pub fn new(origin: BlockOrigin, header: Block::Header) -> Self {
 		Self {
@@ -258,39 +258,6 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 			}
 
 			hdr
-		}
-	}
-
-	/// Auxiliary function for "converting" the transaction type.
-	///
-	/// Actually this just sets `StorageChanges::Changes` to `None` and makes rustc think that
-	/// `Self` now uses a different transaction type.
-	pub fn clear_storage_changes_and_mutate<Transaction2>(
-		self,
-	) -> BlockImportParams<Block, Transaction2> {
-		// Preserve imported state.
-		let state_action = match self.state_action {
-			StateAction::ApplyChanges(StorageChanges::Import(state)) =>
-				StateAction::ApplyChanges(StorageChanges::Import(state)),
-			StateAction::ApplyChanges(StorageChanges::Changes(_)) => StateAction::Skip,
-			StateAction::Execute => StateAction::Execute,
-			StateAction::ExecuteIfPossible => StateAction::ExecuteIfPossible,
-			StateAction::Skip => StateAction::Skip,
-		};
-		BlockImportParams {
-			origin: self.origin,
-			header: self.header,
-			justifications: self.justifications,
-			post_digests: self.post_digests,
-			body: self.body,
-			indexed_body: self.indexed_body,
-			state_action,
-			finalized: self.finalized,
-			auxiliary: self.auxiliary,
-			intermediates: self.intermediates,
-			fork_choice: self.fork_choice,
-			import_existing: self.import_existing,
-			post_hash: self.post_hash,
 		}
 	}
 
@@ -338,8 +305,6 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 pub trait BlockImport<B: BlockT> {
 	/// The error type.
 	type Error: std::error::Error + Send + 'static;
-	/// The transaction type used by the backend.
-	type Transaction: Send + 'static;
 
 	/// Check block preconditions.
 	async fn check_block(
@@ -350,17 +315,13 @@ pub trait BlockImport<B: BlockT> {
 	/// Import a block.
 	async fn import_block(
 		&mut self,
-		block: BlockImportParams<B, Self::Transaction>,
+		block: BlockImportParams<B>,
 	) -> Result<ImportResult, Self::Error>;
 }
 
 #[async_trait::async_trait]
-impl<B: BlockT, Transaction> BlockImport<B> for crate::import_queue::BoxBlockImport<B, Transaction>
-where
-	Transaction: Send + 'static,
-{
+impl<B: BlockT> BlockImport<B> for crate::import_queue::BoxBlockImport<B> {
 	type Error = sp_consensus::error::Error;
-	type Transaction = Transaction;
 
 	/// Check block preconditions.
 	async fn check_block(
@@ -373,21 +334,19 @@ where
 	/// Import a block.
 	async fn import_block(
 		&mut self,
-		block: BlockImportParams<B, Transaction>,
+		block: BlockImportParams<B>,
 	) -> Result<ImportResult, Self::Error> {
 		(**self).import_block(block).await
 	}
 }
 
 #[async_trait::async_trait]
-impl<B: BlockT, T, E: std::error::Error + Send + 'static, Transaction> BlockImport<B> for Arc<T>
+impl<B: BlockT, T, E: std::error::Error + Send + 'static> BlockImport<B> for Arc<T>
 where
-	for<'r> &'r T: BlockImport<B, Error = E, Transaction = Transaction>,
+	for<'r> &'r T: BlockImport<B, Error = E>,
 	T: Send + Sync,
-	Transaction: Send + 'static,
 {
 	type Error = E;
-	type Transaction = Transaction;
 
 	async fn check_block(
 		&mut self,
@@ -398,7 +357,7 @@ where
 
 	async fn import_block(
 		&mut self,
-		block: BlockImportParams<B, Transaction>,
+		block: BlockImportParams<B>,
 	) -> Result<ImportResult, Self::Error> {
 		(&**self).import_block(block).await
 	}

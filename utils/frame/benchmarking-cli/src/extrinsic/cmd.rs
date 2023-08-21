@@ -97,7 +97,7 @@ impl ExtrinsicCmd {
 		C: BlockBuilderProvider<BA, Block, C>
 			+ ProvideRuntimeApi<Block>
 			+ sp_blockchain::HeaderBackend<Block>,
-		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
+		C::Api: ApiExt<Block> + BlockBuilderApi<Block>,
 	{
 		// Short circuit if --list was specified.
 		if self.params.list {
