@@ -10968,8 +10968,9 @@ checksum = "5e9f0ab6ef7eb7353d9119c170a436d1bf248eea575ac42d19d12f4e34130831"
 
 [[package]]
 name = "snow"
-version = "0.9.2"
-source = "git+https://github.com/andresilva/snow?rev=03b3bcbdb3c2b1259f9ab874c3d8f13ec003a7e4#03b3bcbdb3c2b1259f9ab874c3d8f13ec003a7e4"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c9d1425eb528a21de2755c75af4c9b5d57f50a0d4c3b7f1828a4cd03f8ba155"
 dependencies = [
  "aes-gcm 0.9.4",
  "blake2",
