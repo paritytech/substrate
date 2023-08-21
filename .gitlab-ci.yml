@@ -316,7 +316,30 @@ cargo-frame-test-ui:
     - .docker-env
     - .test-refs
   script:
-    - cargo +1.70.0 test -q --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml --test construct_runtime_ui
+    - test -q --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml --test construct_runtime_ui
+
+test-frame-support:
+  stage: test
+  extends:
+    - .docker-env
+    - .test-refs
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: "-C debug-assertions -D warnings"
+    RUST_BACKTRACE: 1
+    WASM_BUILD_NO_COLOR: 1
+    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
+    # Ensure we run the UI tests.
+    RUN_UI_TESTS: 1
+  script:
+    - rusty-cachier snapshot create
+    - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
+    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml
+    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,frame-feature-testing-2,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml
+    - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
+    - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
+    - rusty-cachier cache upload
 
 #### stage:                        notify
 
