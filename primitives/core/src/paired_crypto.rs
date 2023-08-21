@@ -64,7 +64,8 @@ pub mod ecdsa_n_bls377 {
 #[cfg(feature = "full_crypto")]
 //type Seed = [u8; SECRET_KEY_SERIALIZED_SIZE];
 
-pub trait PublicKeyBound: TraitPublic + sp_std::hash::Hash + ByteArray + for<'a> TryFrom<&'a[u8]>  {}
+//pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {}
+pub trait PublicKeyBound: TraitPublic + sp_std::hash::Hash + ByteArray + for<'a> TryFrom<&'a[u8]> {}
 /// A public key.
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, PartialEq, Eq, PartialOrd, Ord)]
 #[scale_info(skip_type_params(T))]
@@ -132,3 +133,35 @@ impl<LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RI
 	&self.inner[..]
     }
 }
+
+impl<LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RIGHT_LEN: usize,> PassByInner for Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN> {
+	type Inner = [u8; LEFT_PLUS_RIGHT_LEN];
+
+	fn into_inner(self) -> Self::Inner {
+		self.inner
+	}
+
+	fn inner(&self) -> &Self::Inner {
+		&self.inner
+	}
+
+	fn from_inner(inner: Self::Inner) -> Self {
+        let mut left : LeftPublic = inner[0..LeftPublic::LEN].try_into().unwrap();
+	    let mut right : RightPublic = inner[LeftPublic::LEN..LEFT_PLUS_RIGHT_LEN].try_into().unwrap();
+
+		Self { left, right, inner }
+	}
+}
+
+#[cfg(feature = "full_crypto")]
+impl<LeftPair: TraitPair, RightPair: TraitPair, LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RIGHT_PUBLIC_LEN: usize,> From<Pair<LeftPair, RightPair>> for Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_PUBLIC_LEN> where Pair<LeftPair, RightPair> : TraitPair<Public = Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_PUBLIC_LEN>>,
+{
+	fn from(x: Pair<LeftPair, RightPair>) -> Self {
+		x.public()
+	}
+}
+
+/// A key pair.
+#[cfg(feature = "full_crypto")]
+#[derive(Clone)]
+pub struct Pair<LeftPair: TraitPair, RightPair: TraitPair>(LeftPair, RightPair);
