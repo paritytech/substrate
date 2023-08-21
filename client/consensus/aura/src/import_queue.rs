@@ -175,8 +175,8 @@ where
 {
 	async fn verify(
 		&mut self,
-		mut block: BlockImportParams<B, ()>,
-	) -> Result<BlockImportParams<B, ()>, String> {
+		mut block: BlockImportParams<B>,
+	) -> Result<BlockImportParams<B>, String> {
 		// Skip checks that include execution, if being told so or when importing only state.
 		//
 		// This is done for example when gap syncing and it is expected that the block after the gap
@@ -348,7 +348,7 @@ pub fn import_queue<P, Block, I, C, S, CIDP>(
 		telemetry,
 		compatibility_mode,
 	}: ImportQueueParams<Block, I, C, S, CIDP>,
-) -> Result<DefaultImportQueue<Block, C>, sp_consensus::Error>
+) -> Result<DefaultImportQueue<Block>, sp_consensus::Error>
 where
 	Block: BlockT,
 	C::Api: BlockBuilderApi<Block> + AuraApi<Block, AuthorityId<P>> + ApiExt<Block>,
@@ -360,10 +360,7 @@ where
 		+ AuxStore
 		+ UsageProvider<Block>
 		+ HeaderBackend<Block>,
-	I: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<C, Block>>
-		+ Send
-		+ Sync
-		+ 'static,
+	I: BlockImport<Block, Error = ConsensusError> + Send + Sync + 'static,
 	P: Pair + 'static,
 	P::Public: Codec + Debug,
 	P::Signature: Codec,

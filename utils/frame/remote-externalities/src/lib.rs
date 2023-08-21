@@ -36,10 +36,12 @@ use sp_core::{
 		well_known_keys::{is_default_child_storage_key, DEFAULT_CHILD_STORAGE_KEY_PREFIX},
 		ChildInfo, ChildType, PrefixedStorageKey, StorageData, StorageKey,
 	},
-	H256,
 };
-pub use sp_io::TestExternalities;
-use sp_runtime::{traits::Block as BlockT, StateVersion};
+use sp_runtime::{
+	traits::{Block as BlockT, HashingFor},
+	StateVersion,
+};
+use sp_state_machine::TestExternalities;
 use spinners::{Spinner, Spinners};
 use std::{
 	cmp::max,
@@ -58,7 +60,7 @@ type SnapshotVersion = Compact<u16>;
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_HTTP_ENDPOINT: &str = "https://rpc.polkadot.io:443";
-const SNAPSHOT_VERSION: SnapshotVersion = Compact(2);
+const SNAPSHOT_VERSION: SnapshotVersion = Compact(3);
 
 /// The snapshot that we store on disk.
 #[derive(Decode, Encode)]
@@ -67,16 +69,16 @@ struct Snapshot<B: BlockT> {
 	state_version: StateVersion,
 	block_hash: B::Hash,
 	// <Vec<Key, (Value, MemoryDbRefCount)>>
-	raw_storage: Vec<(H256, (Vec<u8>, i32))>,
-	storage_root: H256,
+	raw_storage: Vec<(Vec<u8>, (Vec<u8>, i32))>,
+	storage_root: B::Hash,
 }
 
 impl<B: BlockT> Snapshot<B> {
 	pub fn new(
 		state_version: StateVersion,
 		block_hash: B::Hash,
-		raw_storage: Vec<(H256, (Vec<u8>, i32))>,
-		storage_root: H256,
+		raw_storage: Vec<(Vec<u8>, (Vec<u8>, i32))>,
+		storage_root: B::Hash,
 	) -> Self {
 		Self {
 			snapshot_version: SNAPSHOT_VERSION,
@@ -91,21 +93,14 @@ impl<B: BlockT> Snapshot<B> {
 		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
 		// The first item in the SCALE encoded struct bytes is the snapshot version. We decode and
 		// check that first, before proceeding to decode the rest of the snapshot.
-		let maybe_version: Result<SnapshotVersion, _> = Decode::decode(&mut &*bytes);
-		match maybe_version {
-			Ok(snapshot_version) => {
-				if snapshot_version != SNAPSHOT_VERSION {
-					return Err(
-						"Unsupported snapshot version detected. Please create a new snapshot.",
-					)
-				}
-				match Decode::decode(&mut &*bytes) {
-					Ok(snapshot) => return Ok(snapshot),
-					Err(_) => Err("Decode failed"),
-				}
-			},
-			Err(_) => Err("Decode failed"),
+		let snapshot_version = SnapshotVersion::decode(&mut &*bytes)
+			.map_err(|_| "Failed to decode snapshot version")?;
+
+		if snapshot_version != SNAPSHOT_VERSION {
+			return Err("Unsupported snapshot version detected. Please create a new snapshot.")
 		}
+
+		Decode::decode(&mut &*bytes).map_err(|_| "Decode failed")
 	}
 }
 
@@ -113,13 +108,13 @@ impl<B: BlockT> Snapshot<B> {
 /// bits and pieces to it, and can be loaded remotely.
 pub struct RemoteExternalities<B: BlockT> {
 	/// The inner externalities.
-	pub inner_ext: TestExternalities,
+	pub inner_ext: TestExternalities<HashingFor<B>>,
 	/// The block hash it which we created this externality env.
 	pub block_hash: B::Hash,
 }
 
 impl<B: BlockT> Deref for RemoteExternalities<B> {
-	type Target = TestExternalities;
+	type Target = TestExternalities<HashingFor<B>>;
 	fn deref(&self) -> &Self::Target {
 		&self.inner_ext
 	}
@@ -319,8 +314,6 @@ pub struct Builder<B: BlockT> {
 	overwrite_state_version: Option<StateVersion>,
 }
 
-// NOTE: ideally we would use `DefaultNoBound` here, but not worth bringing in frame-support for
-// that.
 impl<B: BlockT> Default for Builder<B> {
 	fn default() -> Self {
 		Self {
@@ -576,7 +569,7 @@ where
 		&self,
 		prefix: StorageKey,
 		at: B::Hash,
-		pending_ext: &mut TestExternalities,
+		pending_ext: &mut TestExternalities<HashingFor<B>>,
 	) -> Result<Vec<KeyValue>, &'static str> {
 		let start = Instant::now();
 		let mut sp = Spinner::with_timer(Spinners::Dots, "Scraping keys...".into());
@@ -768,7 +761,7 @@ where
 	async fn load_child_remote(
 		&self,
 		top_kv: &[KeyValue],
-		pending_ext: &mut TestExternalities,
+		pending_ext: &mut TestExternalities<HashingFor<B>>,
 	) -> Result<ChildKeyValues, &'static str> {
 		let child_roots = top_kv
 			.into_iter()
@@ -826,7 +819,7 @@ where
 	/// cache, we can also optimize further.
 	async fn load_top_remote(
 		&self,
-		pending_ext: &mut TestExternalities,
+		pending_ext: &mut TestExternalities<HashingFor<B>>,
 	) -> Result<TopKeyValues, &'static str> {
 		let config = self.as_online();
 		let at = self
@@ -926,7 +919,9 @@ where
 	/// `load_child_remote`.
 	///
 	/// Must be called after `init_remote_client`.
-	async fn load_remote_and_maybe_save(&mut self) -> Result<TestExternalities, &'static str> {
+	async fn load_remote_and_maybe_save(
+		&mut self,
+	) -> Result<TestExternalities<HashingFor<B>>, &'static str> {
 		let state_version =
 			StateApi::<B::Hash>::runtime_version(self.as_online().rpc_client(), None)
 				.await
@@ -966,13 +961,11 @@ where
 			std::fs::write(path, encoded).map_err(|_| "fs::write failed")?;
 
 			// pending_ext was consumed when creating the snapshot, need to reinitailize it
-			let mut pending_ext = TestExternalities::new_with_code_and_state(
-				Default::default(),
-				Default::default(),
+			return Ok(TestExternalities::from_raw_snapshot(
+				raw_storage,
+				storage_root,
 				self.overwrite_state_version.unwrap_or(state_version),
-			);
-			pending_ext.from_raw_snapshot(raw_storage, storage_root);
-			return Ok(pending_ext)
+			))
 		}
 
 		Ok(pending_ext)
@@ -995,12 +988,11 @@ where
 		let Snapshot { snapshot_version: _, block_hash, state_version, raw_storage, storage_root } =
 			Snapshot::<B>::load(&config.state_snapshot.path)?;
 
-		let mut inner_ext = TestExternalities::new_with_code_and_state(
-			Default::default(),
-			Default::default(),
+		let inner_ext = TestExternalities::from_raw_snapshot(
+			raw_storage,
+			storage_root,
 			self.overwrite_state_version.unwrap_or(state_version),
 		);
-		inner_ext.from_raw_snapshot(raw_storage, storage_root);
 		sp.stop_with_message(format!("✅ Loaded snapshot ({:.2}s)", start.elapsed().as_secs_f32()));
 
 		Ok(RemoteExternalities { inner_ext, block_hash })
@@ -1099,17 +1091,12 @@ where
 
 #[cfg(test)]
 mod test_prelude {
-	use tracing_subscriber::EnvFilter;
-
 	pub(crate) use super::*;
 	pub(crate) use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper, H256 as Hash};
 	pub(crate) type Block = RawBlock<ExtrinsicWrapper<Hash>>;
 
 	pub(crate) fn init_logger() {
-		let _ = tracing_subscriber::fmt()
-			.with_env_filter(EnvFilter::from_default_env())
-			.with_level(true)
-			.try_init();
+		let _ = sp_tracing::try_init_simple();
 	}
 }
 
@@ -1369,9 +1356,6 @@ mod remote_tests {
 			.filter(|p| p.path().file_name().unwrap_or_default() == CACHE)
 			.collect::<Vec<_>>();
 
-		let snap: Snapshot<Block> = Builder::<Block>::new().load_snapshot(CACHE.into()).unwrap();
-		assert!(matches!(snap, Snapshot { raw_storage, .. } if raw_storage.len() > 0));
-
 		assert!(to_delete.len() == 1);
 		let to_delete = to_delete.first().unwrap();
 		assert!(std::fs::metadata(to_delete.path()).unwrap().size() > 1);
@@ -1400,9 +1384,6 @@ mod remote_tests {
 			.map(|d| d.unwrap())
 			.filter(|p| p.path().file_name().unwrap_or_default() == CACHE)
 			.collect::<Vec<_>>();
-
-		let snap: Snapshot<Block> = Builder::<Block>::new().load_snapshot(CACHE.into()).unwrap();
-		assert!(matches!(snap, Snapshot { raw_storage, .. } if raw_storage.len() > 0));
 
 		assert!(to_delete.len() == 1);
 		let to_delete = to_delete.first().unwrap();

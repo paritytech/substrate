@@ -19,7 +19,7 @@
 //! from storage.
 
 use crate::{
-	backend::{Consolidate, IterArgs, StorageIterator},
+	backend::{IterArgs, StorageIterator},
 	trie_backend::TrieCacheProvider,
 	warn, StorageKey, StorageValue,
 };
@@ -35,7 +35,8 @@ use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_hash,
 	read_child_trie_value, read_trie_value,
 	trie_types::{TrieDBBuilder, TrieError},
-	DBValue, KeySpacedDB, NodeCodec, Trie, TrieCache, TrieDBRawIterator, TrieRecorder,
+	DBValue, KeySpacedDB, NodeCodec, PrefixedMemoryDB, Trie, TrieCache, TrieDBRawIterator,
+	TrieRecorder,
 };
 #[cfg(feature = "std")]
 use std::{collections::HashMap, sync::Arc};
@@ -621,8 +622,8 @@ where
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (H::Out, S::Overlay) {
-		let mut write_overlay = S::Overlay::default();
+	) -> (H::Out, PrefixedMemoryDB<H>) {
+		let mut write_overlay = PrefixedMemoryDB::default();
 
 		let root = self.with_recorder_and_cache_for_storage_root(None, |recorder, cache| {
 			let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
@@ -654,11 +655,11 @@ where
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (H::Out, bool, S::Overlay) {
+	) -> (H::Out, bool, PrefixedMemoryDB<H>) {
 		let default_root = match child_info.child_type() {
 			ChildType::ParentKeyId => empty_child_trie_root::<sp_trie::LayoutV1<H>>(),
 		};
-		let mut write_overlay = S::Overlay::default();
+		let mut write_overlay = PrefixedMemoryDB::default();
 		let child_root = match self.child_root(child_info) {
 			Ok(Some(hash)) => hash,
 			Ok(None) => default_root,
@@ -707,7 +708,7 @@ where
 
 pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	storage: &'a S,
-	overlay: &'a mut S::Overlay,
+	overlay: &'a mut PrefixedMemoryDB<H>,
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> AsHashDB<H, DBValue>
@@ -722,7 +723,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> AsHashDB<H, DBValue>
 }
 
 impl<'a, S: TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
-	pub fn new(storage: &'a S, overlay: &'a mut S::Overlay) -> Self {
+	pub fn new(storage: &'a S, overlay: &'a mut PrefixedMemoryDB<H>) -> Self {
 		Ephemeral { storage, overlay }
 	}
 }
@@ -768,16 +769,11 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue> for Eph
 
 /// Key-value pairs storage that is used by trie backend essence.
 pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
-	/// Type of in-memory overlay.
-	type Overlay: HashDB<H, DBValue> + Default + Consolidate;
-
 	/// Get the value stored at key.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
 }
 
 impl<T: TrieBackendStorage<H>, H: Hasher> TrieBackendStorage<H> for &T {
-	type Overlay = T::Overlay;
-
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		(*self).get(key, prefix)
 	}
@@ -786,8 +782,6 @@ impl<T: TrieBackendStorage<H>, H: Hasher> TrieBackendStorage<H> for &T {
 // This implementation is used by normal storage trie clients.
 #[cfg(feature = "std")]
 impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
-	type Overlay = sp_trie::PrefixedMemoryDB<H>;
-
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Storage::<H>::get(std::ops::Deref::deref(self), key, prefix)
 	}
@@ -798,8 +792,6 @@ where
 	H: Hasher,
 	KF: sp_trie::KeyFunction<H> + Send + Sync,
 {
-	type Overlay = Self;
-
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}

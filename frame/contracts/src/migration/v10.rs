@@ -19,7 +19,6 @@
 //! See <https://github.com/paritytech/substrate/pull/13369>.
 
 use crate::{
-	address::AddressGenerator,
 	exec::AccountIdOf,
 	migration::{IsFinished, MigrationStep},
 	weights::WeightInfo,
@@ -40,7 +39,10 @@ use frame_support::{
 use sp_core::hexdisplay::HexDisplay;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
-use sp_runtime::{traits::Zero, Perbill, Saturating};
+use sp_runtime::{
+	traits::{Hash, TrailingZeroInput, Zero},
+	Perbill, Saturating,
+};
 use sp_std::{ops::Deref, prelude::*};
 
 mod old {
@@ -135,6 +137,16 @@ type ContractInfoOf<T: Config, OldCurrency> = StorageMap<
 	ContractInfo<T, OldCurrency>,
 >;
 
+/// Formula: `hash("contract_depo_v1" ++ contract_addr)`
+fn deposit_address<T: Config>(
+	contract_addr: &<T as frame_system::Config>::AccountId,
+) -> <T as frame_system::Config>::AccountId {
+	let entropy = (b"contract_depo_v1", contract_addr)
+		.using_encoded(<T as frame_system::Config>::Hashing::hash);
+	Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+		.expect("infinite length input; no invalid inputs for type; qed")
+}
+
 impl<T: Config, OldCurrency: 'static> MigrationStep for Migration<T, OldCurrency>
 where
 	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
@@ -162,8 +174,7 @@ where
 			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
 
 			// Get the new deposit account address
-			let deposit_account: DepositAccount<T> =
-				DepositAccount(T::AddressGenerator::deposit_address(&account));
+			let deposit_account: DepositAccount<T> = DepositAccount(deposit_address::<T>(&account));
 
 			// Calculate the existing deposit, that should be reserved on the contract account
 			let old_deposit = contract

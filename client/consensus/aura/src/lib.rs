@@ -178,9 +178,9 @@ where
 	C: ProvideRuntimeApi<B> + BlockOf + AuxStore + HeaderBackend<B> + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
-	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
+	I: BlockImport<B> + Send + Sync + 'static,
 	PF: Environment<B, Error = Error> + Send + Sync + 'static,
-	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
+	PF::Proposer: Proposer<B, Error = Error>,
 	SO: SyncOracle + Send + Sync + Clone,
 	L: sc_consensus::JustificationSyncLink<B>,
 	CIDP: CreateInherentDataProviders<B, ()> + Send + 'static,
@@ -279,11 +279,11 @@ where
 	C: ProvideRuntimeApi<B> + BlockOf + AuxStore + HeaderBackend<B> + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	PF: Environment<B, Error = Error> + Send + Sync + 'static,
-	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
+	PF::Proposer: Proposer<B, Error = Error>,
 	P: Pair,
 	P::Public: AppPublic + Member,
 	P::Signature: TryFrom<Vec<u8>> + Member + Codec,
-	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
+	I: BlockImport<B> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 	L: sc_consensus::JustificationSyncLink<B>,
@@ -330,8 +330,8 @@ where
 	C: ProvideRuntimeApi<B> + BlockOf + HeaderBackend<B> + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error = Error> + Send + Sync,
-	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
-	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
+	E::Proposer: Proposer<B, Error = Error>,
+	I: BlockImport<B> + Send + Sync + 'static,
 	P: Pair,
 	P::Public: AppPublic + Member,
 	P::Signature: TryFrom<Vec<u8>> + Member + Codec,
@@ -388,13 +388,10 @@ where
 		header: B::Header,
 		header_hash: &B::Hash,
 		body: Vec<B::Extrinsic>,
-		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
+		storage_changes: StorageChanges<B>,
 		public: Self::Claim,
 		_authorities: Self::AuxData,
-	) -> Result<
-		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
-		ConsensusError,
-	> {
+	) -> Result<sc_consensus::BlockImportParams<B>, ConsensusError> {
 		let signature_digest_item =
 			crate::standalone::seal::<_, P>(header_hash, &public, &self.keystore)?;
 
@@ -596,9 +593,7 @@ mod tests {
 
 	impl Proposer<TestBlock> for DummyProposer {
 		type Error = Error;
-		type Transaction =
-			sc_client_api::TransactionFor<substrate_test_runtime_client::Backend, TestBlock>;
-		type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction, ()>, Error>>;
+		type Proposal = future::Ready<Result<Proposal<TestBlock, ()>, Error>>;
 		type ProofRecording = DisableProofRecording;
 		type Proof = ();
 
