@@ -173,7 +173,8 @@ fn cancel_multisig_returns_deposit() {
 			vec![2, 3],
 			None,
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_ok!(Multisig::approve_as_multi(
 			RuntimeOrigin::signed(2),
@@ -181,7 +182,8 @@ fn cancel_multisig_returns_deposit() {
 			vec![1, 3],
 			Some(now()),
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_eq!(Balances::free_balance(1), 6);
 		assert_eq!(Balances::reserved_balance(1), 4);
@@ -209,7 +211,8 @@ fn timepoint_checking_works() {
 				vec![1, 3],
 				Some(now()),
 				hash,
-				Weight::zero()
+				Weight::zero(),
+				None
 			),
 			Error::<Test>::UnexpectedTimepoint,
 		);
@@ -220,7 +223,8 @@ fn timepoint_checking_works() {
 			vec![2, 3],
 			None,
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 
 		assert_noop!(
@@ -260,14 +264,14 @@ fn mutlisig_with_expiry_works() {
 		let call = call_transfer(6, 15);
 		let call_weight = call.get_dispatch_info().weight;
 		let hash = blake2_256(&call.encode());
-		assert_ok!(Multisig::create_multisig_with_expiry(
+		assert_ok!(Multisig::approve_as_multi(
 			RuntimeOrigin::signed(1),
 			2,
 			vec![2, 3],
 			None,
 			hash,
 			Weight::zero(),
-			5, // expiry is set to block five.
+			Some(5), // expiry is set to block five.
 		));
 
 		assert_eq!(Balances::free_balance(1), 2);
@@ -318,14 +322,14 @@ fn mutlisig_wont_get_executed_when_expired() {
 		let call = call_transfer(6, 15);
 		let call_weight = call.get_dispatch_info().weight;
 		let hash = blake2_256(&call.encode());
-		assert_ok!(Multisig::create_multisig_with_expiry(
+		assert_ok!(Multisig::approve_as_multi(
 			RuntimeOrigin::signed(1),
 			2,
 			vec![2, 3],
 			None,
 			hash,
 			Weight::zero(),
-			5, // expiry is set to block five.
+			Some(5), // expiry is set to block five.
 		));
 
 		assert_eq!(Balances::free_balance(1), 2);
@@ -393,7 +397,8 @@ fn multisig_2_of_3_works() {
 			vec![2, 3],
 			None,
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_eq!(Balances::free_balance(6), 0);
 
@@ -426,7 +431,8 @@ fn multisig_3_of_3_works() {
 			vec![2, 3],
 			None,
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_ok!(Multisig::approve_as_multi(
 			RuntimeOrigin::signed(2),
@@ -434,7 +440,8 @@ fn multisig_3_of_3_works() {
 			vec![1, 3],
 			Some(now()),
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_eq!(Balances::free_balance(6), 0);
 
@@ -461,7 +468,8 @@ fn cancel_multisig_works() {
 			vec![2, 3],
 			None,
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_ok!(Multisig::approve_as_multi(
 			RuntimeOrigin::signed(2),
@@ -469,7 +477,8 @@ fn cancel_multisig_works() {
 			vec![1, 3],
 			Some(now()),
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_noop!(
 			Multisig::cancel_as_multi(RuntimeOrigin::signed(2), 3, vec![1, 3], now(), hash),
@@ -679,7 +688,8 @@ fn duplicate_approvals_are_ignored() {
 			vec![2, 3],
 			None,
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_noop!(
 			Multisig::approve_as_multi(
@@ -688,7 +698,8 @@ fn duplicate_approvals_are_ignored() {
 				vec![2, 3],
 				Some(now()),
 				hash,
-				Weight::zero()
+				Weight::zero(),
+				None
 			),
 			Error::<Test>::AlreadyApproved,
 		);
@@ -698,7 +709,8 @@ fn duplicate_approvals_are_ignored() {
 			vec![1, 3],
 			Some(now()),
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_noop!(
 			Multisig::approve_as_multi(
@@ -707,7 +719,8 @@ fn duplicate_approvals_are_ignored() {
 				vec![1, 2],
 				Some(now()),
 				hash,
-				Weight::zero()
+				Weight::zero(),
+				None
 			),
 			Error::<Test>::AlreadyApproved,
 		);
@@ -731,7 +744,8 @@ fn multisig_1_of_3_works() {
 				vec![2, 3],
 				None,
 				hash,
-				Weight::zero()
+				Weight::zero(),
+				None
 			),
 			Error::<Test>::MinimumThreshold,
 		);
@@ -820,7 +834,8 @@ fn multisig_handles_no_preimage_after_all_approve() {
 			vec![2, 3],
 			None,
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_ok!(Multisig::approve_as_multi(
 			RuntimeOrigin::signed(2),
@@ -828,7 +843,8 @@ fn multisig_handles_no_preimage_after_all_approve() {
 			vec![1, 3],
 			Some(now()),
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_ok!(Multisig::approve_as_multi(
 			RuntimeOrigin::signed(3),
@@ -836,7 +852,8 @@ fn multisig_handles_no_preimage_after_all_approve() {
 			vec![1, 2],
 			Some(now()),
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_eq!(Balances::free_balance(6), 0);
 

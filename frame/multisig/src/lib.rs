@@ -404,6 +404,8 @@ pub mod pallet {
 			)
 		}
 
+		/// DEPRECATED: Use the `approve_as_multi` extrinsic instead.
+		///
 		/// Register approval for a dispatch to be made from a deterministic composite account if
 		/// approved by a total of `threshold - 1` of `other_signatories`.
 		///
@@ -442,7 +444,7 @@ pub mod pallet {
 				.max(T::WeightInfo::approve_as_multi_approve(s))
 				.saturating_add(*max_weight)
 		})]
-		pub fn approve_as_multi(
+		pub fn approve_as_multi_deprecated(
 			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
@@ -531,9 +533,6 @@ pub mod pallet {
 		/// - `call_hash`: The hash of the call to be executed.
 		/// - `expiry`: An optional expiry of the multisig operation defined in block number.
 		///
-		/// NOTE: This extrinsic is only intended to be used for creating a multisig with an expiry.
-		/// It should not be used for approving existing multisigs.
-		///
 		/// ## Complexity
 		/// - `O(S)`.
 		/// - Up to one balance-reserve or unreserve operation.
@@ -549,21 +548,18 @@ pub mod pallet {
 		#[pallet::weight({
 			let s = other_signatories.len() as u32;
 
-			// The weight is the same as for `approve_as_multi` but there is an
-			// additional write since we are writing into `MultisigExpiries`. 
 			T::WeightInfo::approve_as_multi_create(s)
 				.max(T::WeightInfo::approve_as_multi_approve(s))
 				.saturating_add(*max_weight)
-				.saturating_add(T::DbWeight::get().writes(1))
 		})]
-		pub fn create_multisig_with_expiry(
+		pub fn approve_as_multi(
 			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			maybe_timepoint: Option<Timepoint<BlockNumberFor<T>>>,
 			call_hash: [u8; 32],
 			max_weight: Weight,
-			expiry: BlockNumberFor<T>,
+			maybe_expiry: Option<BlockNumberFor<T>>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			Self::operate(
@@ -573,7 +569,7 @@ pub mod pallet {
 				maybe_timepoint,
 				CallOrHash::Hash(call_hash),
 				max_weight,
-				Some(expiry),
+				maybe_expiry,
 			)
 		}
 
