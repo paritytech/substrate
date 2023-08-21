@@ -312,15 +312,15 @@ cargo-frame-test-ui:
   variables:
     RUSTY_CACHIER_TOOLCHAIN: nightly
     # RUSTFLAGS: "-C debug-assertions -D warnings"
-    RUST_BACKTRACE: 1
-    WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
-    RUN_UI_TESTS: 1
+    # RUST_BACKTRACE: 1
+    # WASM_BUILD_NO_COLOR: 1
+    # WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
+    # RUN_UI_TESTS: 1
   extends:
     - .docker-env
     - .test-refs
   script:
-    - time cargo test -q --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml --test construct_runtime_ui
+    - RUSTFLAGS="-C debug-assertions -D warnings" RUN_UI_TESTS=1 cargo +1.70.0 test -q --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml --test construct_runtime_ui
 
 test-frame-support:
   stage: test
