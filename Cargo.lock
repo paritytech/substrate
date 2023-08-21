@@ -5740,7 +5740,6 @@ dependencies = [
  "sc-offchain",
  "sc-rpc-api",
  "sc-service",
- "sc-statement-store",
  "sc-telemetry",
  "sc-transaction-pool",
  "sc-transaction-pool-api",

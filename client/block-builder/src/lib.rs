@@ -250,9 +250,7 @@ where
 	/// Returns the build `Block`, the changes to the storage and an optional `StorageProof`
 	/// supplied by `self.api`, combined as [`BuiltBlock`].
 	/// The storage proof will be `Some(_)` when proof recording was enabled.
-	pub fn build(
-		mut self,
-	) -> Result<BuiltBlock<Block, backend::StateBackendFor<Backend, Block>>, Error> {
+	pub fn build(mut self) -> Result<BuiltBlock<Block>, Error> {
 		let header: Block::Header = self.runtime_instance.finalize_block()?;
 
 		debug_assert_eq!(
