@@ -87,6 +87,7 @@ pallet-membership = { version = "4.0.0-dev", default-features = false, path = ".
 pallet-message-queue = { version = "7.0.0-dev", default-features = false, path = "../../../frame/message-queue" }
 pallet-mmr = { version = "4.0.0-dev", default-features = false, path = "../../../frame/merkle-mountain-range" }
 pallet-multisig = { version = "4.0.0-dev", default-features = false, path = "../../../frame/multisig" }
+pallet-name-service = { version = "4.0.0-dev", default-features = false, path = "../../../frame/name-service" }
 pallet-nfts = { version = "4.0.0-dev", default-features = false, path = "../../../frame/nfts" }
 pallet-nfts-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/nfts/runtime-api" }
 pallet-nft-fractionalization = { version = "4.0.0-dev", default-features = false, path = "../../../frame/nft-fractionalization" }
@@ -175,6 +176,7 @@ std = [
 	"pallet-message-queue/std",
 	"pallet-mmr/std",
 	"pallet-multisig/std",
+	"pallet-name-service/std",
 	"pallet-nomination-pools/std",
 	"pallet-nomination-pools-runtime-api/std",
 	"pallet-nomination-pools-benchmarking?/std",
@@ -269,6 +271,7 @@ runtime-benchmarks = [
 	"pallet-message-queue/runtime-benchmarks",
 	"pallet-mmr/runtime-benchmarks",
 	"pallet-multisig/runtime-benchmarks",
+	"pallet-name-service/runtime-benchmarks",
 	"pallet-nomination-pools-benchmarking/runtime-benchmarks",
 	"pallet-offences-benchmarking/runtime-benchmarks",
 	"pallet-glutton/runtime-benchmarks",
@@ -337,6 +340,7 @@ try-runtime = [
 	"pallet-message-queue/try-runtime",
 	"pallet-mmr/try-runtime",
 	"pallet-multisig/try-runtime",
+	"pallet-name-service/try-runtime",
 	"pallet-nomination-pools/try-runtime",
 	"pallet-offences/try-runtime",
 	"pallet-glutton/try-runtime",

@@ -1201,6 +1201,32 @@ impl pallet_message_queue::Config for Runtime {
 }
 
 parameter_types! {
+	pub const CommitmentAlivePeriod: BlockNumber = 1 * DAYS;
+	pub const MaxCommitmentAge: BlockNumber = 10 * MINUTES;
+	pub const MinCommitmentAge: BlockNumber = 1 * MINUTES;
+	pub const MaxNameLength: u32 = 2048; // 2048 is the standard URL limit
+	pub const MaxRegistrationLength: u32 = 365 * DAYS;
+	pub const MaxSuffixLength: u32 = 4;
+	pub const MaxTextLength: u32 = 2048;
+	pub const MinimumCommitmentPeriod: BlockNumber = 1 * MINUTES;
+}
+
+impl pallet_name_service::Config for Runtime {
+	type BlockNumberToBalance = ConvertInto;
+	type Currency = Balances;
+	type MaxCommitmentAge = MaxCommitmentAge;
+	type MinCommitmentAge = MinCommitmentAge;
+	type MaxNameLength = MaxNameLength;
+	type MaxRegistrationLength = MaxRegistrationLength;
+	type MaxSuffixLength = MaxSuffixLength;
+	type MaxTextLength = MaxTextLength;
+	type NameServiceResolver = pallet_name_service::Pallet<Self>;
+	type RegistrationFeeHandler = (); // registration fees are currently burnt.
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_name_service::weights::SubstrateWeight<Runtime>;
+}
+
+parameter_types! {
 	pub const ChildBountyValueMinimum: Balance = 1 * DOLLARS;
 }
 
@@ -1949,6 +1975,7 @@ construct_runtime!(
 		MessageQueue: pallet_message_queue,
 		Pov: frame_benchmarking_pallet_pov,
 		Statement: pallet_statement,
+		NameService: pallet_name_service,
 	}
 );
 
@@ -2050,6 +2077,7 @@ mod benches {
 		[pallet_message_queue, MessageQueue]
 		[pallet_mmr, Mmr]
 		[pallet_multisig, Multisig]
+		[pallet_name_service, NameService]
 		[pallet_nomination_pools, NominationPoolsBench::<Runtime>]
 		[pallet_offences, OffencesBench::<Runtime>]
 		[pallet_preimage, Preimage]
