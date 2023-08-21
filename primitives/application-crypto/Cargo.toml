@@ -48,10 +48,10 @@ serde = [
 # For the regular wasm runtime builds this should not be used.
 full_crypto = [
 	"sp-core/full_crypto",
+	"sp-io/disable_oom",
 	# Don't add `panic_handler` and `alloc_error_handler` since they are expected to be provided
 	# by the user anyway.
 	"sp-io/disable_panic_handler",
-	"sp-io/disable_oom",
 ]
 
 # This feature adds BLS crypto primitives.

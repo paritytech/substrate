@@ -37,7 +37,6 @@ std = [
 	"sp-arithmetic/std",
 	"sp-core/std",
 	"sp-runtime/std",
-	
 	"sp-std/std",
 ]
 
