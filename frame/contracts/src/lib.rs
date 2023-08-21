@@ -96,8 +96,8 @@ mod storage;
 mod wasm;
 
 pub mod chain_extension;
+pub mod debug;
 pub mod migration;
-pub mod tracing;
 pub mod weights;
 
 #[cfg(test)]
@@ -137,11 +137,11 @@ use sp_std::{fmt::Debug, prelude::*};
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
+	debug::Tracing,
 	exec::Frame,
 	migration::{MigrateSequence, Migration, NoopMigration},
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
-	tracing::Tracing,
 	wasm::Determinism,
 };
 pub use weights::WeightInfo;
@@ -182,6 +182,8 @@ const LOG_TARGET: &str = "runtime::contracts";
 
 #[frame_support::pallet]
 pub mod pallet {
+	use crate::debug::Debugging;
+
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
@@ -355,7 +357,7 @@ pub mod pallet {
 		type Migrations: MigrateSequence;
 
 		/// Defines methods to capture and trace contract calls for improved observability.
-		type Tracing: Tracing<Self>;
+		type Debug: Debugging<Self>;
 	}
 
 	#[pallet::hooks]

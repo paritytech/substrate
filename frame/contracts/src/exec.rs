@@ -16,9 +16,9 @@
 // limitations under the License.
 
 use crate::{
+	debug::{CallSpan, Tracing},
 	gas::GasMeter,
 	storage::{self, meter::Diff, WriteOutcome},
-	tracing::{CallSpan, Tracing},
 	BalanceOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo, ContractInfoOf,
 	DebugBufferVec, Determinism, Error, Event, Nonce, Origin, Pallet as Contracts, Schedule,
 	WasmBlob, LOG_TARGET,
@@ -908,7 +908,7 @@ where
 			self.initial_transfer()?;
 
 			let call_span =
-				T::Tracing::new_call_span(executable.code_hash(), entry_point, &input_data);
+				T::Debug::new_call_span(executable.code_hash(), entry_point, &input_data);
 
 			// Call into the Wasm blob.
 			let output = executable

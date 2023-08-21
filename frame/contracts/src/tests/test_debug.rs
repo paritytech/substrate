@@ -1,5 +1,5 @@
 use super::*;
-use crate::tracing::{CallSpan, ExportedFunction, Tracing};
+use crate::debug::{CallSpan, ExportedFunction, Tracing};
 use frame_support::traits::Currency;
 use pallet_contracts_primitives::ExecReturnValue;
 use pretty_assertions::assert_eq;
@@ -17,14 +17,14 @@ thread_local! {
 	static DEBUG_EXECUTION_TRACE: RefCell<Vec<DebugFrame>> = RefCell::new(Vec::new());
 }
 
-pub struct TestTracing;
+pub struct TestDebug;
 pub struct TestCallSpan {
 	code_hash: CodeHash<Test>,
 	call: ExportedFunction,
 	input: Vec<u8>,
 }
 
-impl Tracing<Test> for TestTracing {
+impl Tracing<Test> for TestDebug {
 	type CallSpan = TestCallSpan;
 
 	fn new_call_span(

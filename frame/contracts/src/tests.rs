@@ -16,10 +16,10 @@
 // limitations under the License.
 
 mod pallet_dummy;
-mod test_tracing;
+mod test_debug;
 
 use self::{
-	test_tracing::TestTracing,
+	test_debug::TestDebug,
 	test_utils::{ensure_stored, expected_deposit, hash},
 };
 use crate::{
@@ -482,7 +482,7 @@ impl Config for Test {
 	type Migrations = crate::migration::codegen::BenchMigrations;
 	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
 	type MaxDelegateDependencies = MaxDelegateDependencies;
-	type Tracing = TestTracing;
+	type Debug = TestDebug;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
