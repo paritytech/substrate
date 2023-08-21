@@ -18,9 +18,9 @@
 //! Rpc for state migration.
 
 use jsonrpsee::{
-	core::{Error as JsonRpseeError, RpcResult},
+	core::RpcResult,
 	proc_macros::rpc,
-	types::error::{CallError, ErrorCode, ErrorObject},
+	types::error::{ErrorCode, ErrorObject, ErrorObjectOwned},
 };
 use sc_rpc_api::DenyUnsafe;
 use serde::{Deserialize, Serialize};
@@ -112,7 +112,7 @@ where
 }
 
 /// Current state migration status.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct MigrationStatusResult {
@@ -168,10 +168,10 @@ where
 	}
 }
 
-fn error_into_rpc_err(err: impl std::fmt::Display) -> JsonRpseeError {
-	JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+fn error_into_rpc_err(err: impl std::fmt::Display) -> ErrorObjectOwned {
+	ErrorObject::owned(
 		ErrorCode::InternalError.code(),
 		"Error while checking migration state",
 		Some(err.to_string()),
-	)))
+	)
 }

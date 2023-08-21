@@ -61,10 +61,11 @@ pub use sc_rpc_api::{
 /// Create a new `WebSocket` connection with shared settings.
 pub async fn ws_client(uri: impl AsRef<str>) -> Result<WsClient, String> {
 	WsClientBuilder::default()
-		.max_request_body_size(u32::MAX)
+		.max_request_size(u32::MAX)
+		.max_response_size(u32::MAX)
 		.request_timeout(std::time::Duration::from_secs(60 * 10))
 		.connection_timeout(std::time::Duration::from_secs(60))
-		.max_notifs_per_subscription(1024)
+		.max_buffer_capacity_per_subscription(1024)
 		.build(uri)
 		.await
 		.map_err(|e| format!("`WsClientBuilder` failed to build: {:?}", e))

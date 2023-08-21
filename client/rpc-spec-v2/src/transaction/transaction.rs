@@ -29,27 +29,22 @@ use crate::{
 	},
 	SubscriptionTaskExecutor,
 };
-use jsonrpsee::{
-	core::async_trait,
-	types::{
-		error::{CallError, ErrorObject},
-		SubscriptionResult,
-	},
-	SubscriptionSink,
-};
+use futures::FutureExt;
+use jsonrpsee::{core::async_trait, types::error::ErrorObject, PendingSubscriptionSink};
 use sc_transaction_pool_api::{
 	error::IntoPoolError, BlockHash, TransactionFor, TransactionPool, TransactionSource,
 	TransactionStatus,
 };
 use std::sync::Arc;
 
+use sc_rpc::utils::accept_and_pipe_from_stream;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_runtime::{generic, traits::Block as BlockT};
 
 use codec::Decode;
-use futures::{FutureExt, StreamExt, TryFutureExt};
+use futures::{StreamExt, TryFutureExt};
 
 /// An API for transaction RPC calls.
 pub struct Transaction<Pool, Client> {
@@ -90,56 +85,61 @@ where
 	<Pool::Block as BlockT>::Hash: Unpin,
 	Client: HeaderBackend<Pool::Block> + ProvideRuntimeApi<Pool::Block> + Send + Sync + 'static,
 {
-	fn submit_and_watch(&self, mut sink: SubscriptionSink, xt: Bytes) -> SubscriptionResult {
-		// This is the only place where the RPC server can return an error for this
-		// subscription. Other defects must be signaled as events to the sink.
-		let decoded_extrinsic = match TransactionFor::<Pool>::decode(&mut &xt[..]) {
-			Ok(decoded_extrinsic) => decoded_extrinsic,
-			Err(e) => {
-				let err = CallError::Custom(ErrorObject::owned(
-					BAD_FORMAT,
-					format!("Extrinsic has invalid format: {}", e),
-					None::<()>,
-				));
-				let _ = sink.reject(err);
-				return Ok(())
-			},
-		};
-
-		let best_block_hash = self.client.info().best_hash;
-
-		let submit = self
-			.pool
-			.submit_and_watch(
-				&generic::BlockId::hash(best_block_hash),
-				TX_SOURCE,
-				decoded_extrinsic,
-			)
-			.map_err(|e| {
-				e.into_pool_error()
-					.map(Error::from)
-					.unwrap_or_else(|e| Error::Verification(Box::new(e)))
-			});
+	fn submit_and_watch(&self, pending: PendingSubscriptionSink, xt: Bytes) {
+		let client = self.client.clone();
+		let pool = self.pool.clone();
 
 		let fut = async move {
+			// This is the only place where the RPC server can return an error for this
+			// subscription. Other defects must be signaled as events to the sink.
+			let decoded_extrinsic = match TransactionFor::<Pool>::decode(&mut &xt[..]) {
+				Ok(decoded_extrinsic) => decoded_extrinsic,
+				Err(e) => {
+					let err = ErrorObject::owned(
+						BAD_FORMAT,
+						format!("Extrinsic has invalid format: {}", e),
+						None::<()>,
+					);
+					let _ = pending.reject(err).await;
+					return
+				},
+			};
+
+			let best_block_hash = client.info().best_hash;
+
+			let submit = pool
+				.submit_and_watch(
+					&generic::BlockId::hash(best_block_hash),
+					TX_SOURCE,
+					decoded_extrinsic,
+				)
+				.map_err(|e| {
+					e.into_pool_error()
+						.map(Error::from)
+						.unwrap_or_else(|e| Error::Verification(Box::new(e)))
+				});
+
 			match submit.await {
 				Ok(stream) => {
 					let mut state = TransactionState::new();
 					let stream =
-						stream.filter_map(|event| async move { state.handle_event(event) });
-					sink.pipe_from_stream(stream.boxed()).await;
+						stream.filter_map(move |event| async move { state.handle_event(event) });
+					accept_and_pipe_from_stream(pending, stream.boxed()).await;
 				},
 				Err(err) => {
 					// We have not created an `Watcher` for the tx. Make sure the
 					// error is still propagated as an event.
 					let event: TransactionEvent<<Pool::Block as BlockT>::Hash> = err.into();
-					sink.pipe_from_stream(futures::stream::once(async { event }).boxed()).await;
+					accept_and_pipe_from_stream(
+						pending,
+						futures::stream::once(async { event }).boxed(),
+					)
+					.await;
 				},
 			};
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
-		Ok(())
 	}
 }
 

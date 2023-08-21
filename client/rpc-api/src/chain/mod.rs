@@ -18,20 +18,21 @@
 
 //! Substrate blockchain API.
 
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use sp_rpc::{list::ListOrValue, number::NumberOrHex};
-
 pub mod error;
+
+use error::Error;
+use jsonrpsee::proc_macros::rpc;
+use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 
 #[rpc(client, server)]
 pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	/// Get header.
 	#[method(name = "chain_getHeader", blocking)]
-	fn header(&self, hash: Option<Hash>) -> RpcResult<Option<Header>>;
+	fn header(&self, hash: Option<Hash>) -> Result<Option<Header>, Error>;
 
 	/// Get header and body of a block.
 	#[method(name = "chain_getBlock", blocking)]
-	fn block(&self, hash: Option<Hash>) -> RpcResult<Option<SignedBlock>>;
+	fn block(&self, hash: Option<Hash>) -> Result<Option<SignedBlock>, Error>;
 
 	/// Get hash of the n-th block in the canon chain.
 	///
@@ -40,11 +41,11 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	fn block_hash(
 		&self,
 		hash: Option<ListOrValue<NumberOrHex>>,
-	) -> RpcResult<ListOrValue<Option<Hash>>>;
+	) -> Result<ListOrValue<Option<Hash>>, Error>;
 
 	/// Get hash of the last finalized block in the canon chain.
 	#[method(name = "chain_getFinalizedHead", aliases = ["chain_getFinalisedHead"], blocking)]
-	fn finalized_head(&self) -> RpcResult<Hash>;
+	fn finalized_head(&self) -> Result<Hash, Error>;
 
 	/// All head subscription.
 	#[subscription(

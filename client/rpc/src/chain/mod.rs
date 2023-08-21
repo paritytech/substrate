@@ -27,7 +27,7 @@ use std::sync::Arc;
 
 use crate::SubscriptionTaskExecutor;
 
-use jsonrpsee::{core::RpcResult, types::SubscriptionResult, SubscriptionSink};
+use jsonrpsee::{core::async_trait, PendingSubscriptionSink};
 use sc_client_api::BlockchainEvents;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
@@ -42,6 +42,7 @@ pub use sc_rpc_api::chain::*;
 use sp_blockchain::HeaderBackend;
 
 /// Blockchain backend API
+#[async_trait]
 trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 where
 	Block: BlockT + 'static,
@@ -91,13 +92,13 @@ where
 	}
 
 	/// All new head subscription
-	fn subscribe_all_heads(&self, sink: SubscriptionSink);
+	fn subscribe_all_heads(&self, pending: PendingSubscriptionSink);
 
 	/// New best head subscription
-	fn subscribe_new_heads(&self, sink: SubscriptionSink);
+	fn subscribe_new_heads(&self, pending: PendingSubscriptionSink);
 
 	/// Finalized head subscription
-	fn subscribe_finalized_heads(&self, sink: SubscriptionSink);
+	fn subscribe_finalized_heads(&self, pending: PendingSubscriptionSink);
 }
 
 /// Create new state API that works on full node.
@@ -118,6 +119,7 @@ pub struct Chain<Block: BlockT, Client> {
 	backend: Box<dyn ChainBackend<Client, Block>>,
 }
 
+#[async_trait]
 impl<Block, Client> ChainApiServer<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
 	for Chain<Block, Client>
 where
@@ -125,20 +127,20 @@ where
 	Block::Header: Unpin,
 	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
-	fn header(&self, hash: Option<Block::Hash>) -> RpcResult<Option<Block::Header>> {
-		self.backend.header(hash).map_err(Into::into)
+	fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error> {
+		self.backend.header(hash)
 	}
 
-	fn block(&self, hash: Option<Block::Hash>) -> RpcResult<Option<SignedBlock<Block>>> {
-		self.backend.block(hash).map_err(Into::into)
+	fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error> {
+		self.backend.block(hash)
 	}
 
 	fn block_hash(
 		&self,
 		number: Option<ListOrValue<NumberOrHex>>,
-	) -> RpcResult<ListOrValue<Option<Block::Hash>>> {
+	) -> Result<ListOrValue<Option<Block::Hash>>, Error> {
 		match number {
-			None => self.backend.block_hash(None).map(ListOrValue::Value).map_err(Into::into),
+			None => self.backend.block_hash(None).map(ListOrValue::Value),
 			Some(ListOrValue::Value(number)) => self
 				.backend
 				.block_hash(Some(number))
@@ -152,23 +154,20 @@ where
 		}
 	}
 
-	fn finalized_head(&self) -> RpcResult<Block::Hash> {
-		self.backend.finalized_head().map_err(Into::into)
+	fn finalized_head(&self) -> Result<Block::Hash, Error> {
+		self.backend.finalized_head()
 	}
 
-	fn subscribe_all_heads(&self, sink: SubscriptionSink) -> SubscriptionResult {
-		self.backend.subscribe_all_heads(sink);
-		Ok(())
+	fn subscribe_all_heads(&self, pending: PendingSubscriptionSink) {
+		self.backend.subscribe_all_heads(pending);
 	}
 
-	fn subscribe_new_heads(&self, sink: SubscriptionSink) -> SubscriptionResult {
-		self.backend.subscribe_new_heads(sink);
-		Ok(())
+	fn subscribe_new_heads(&self, pending: PendingSubscriptionSink) {
+		self.backend.subscribe_new_heads(pending)
 	}
 
-	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) -> SubscriptionResult {
-		self.backend.subscribe_finalized_heads(sink);
-		Ok(())
+	fn subscribe_finalized_heads(&self, pending: PendingSubscriptionSink) {
+		self.backend.subscribe_finalized_heads(pending)
 	}
 }
 

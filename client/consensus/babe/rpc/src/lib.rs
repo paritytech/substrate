@@ -22,15 +22,15 @@ use std::{collections::HashMap, sync::Arc};
 
 use futures::TryFutureExt;
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	core::async_trait,
 	proc_macros::rpc,
-	types::{error::CallError, ErrorObject},
+	types::{ErrorObject, ErrorObjectOwned},
 };
 use serde::{Deserialize, Serialize};
 
 use sc_consensus_babe::{authorship, BabeWorkerHandle};
 use sc_consensus_epochs::Epoch as EpochT;
-use sc_rpc_api::DenyUnsafe;
+use sc_rpc_api::{DenyUnsafe, UnsafeRpcError};
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppCrypto;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
@@ -48,7 +48,7 @@ pub trait BabeApi {
 	/// Returns data about which slots (primary or secondary) can be claimed in the current epoch
 	/// with the keys in the keystore.
 	#[method(name = "babe_epochAuthorship")]
-	async fn epoch_authorship(&self) -> RpcResult<HashMap<AuthorityId, EpochAuthorship>>;
+	async fn epoch_authorship(&self) -> Result<HashMap<AuthorityId, EpochAuthorship>, Error>;
 }
 
 /// Provides RPC methods for interacting with Babe.
@@ -89,7 +89,7 @@ where
 	C::Api: BabeRuntimeApi<B>,
 	SC: SelectChain<B> + Clone + 'static,
 {
-	async fn epoch_authorship(&self) -> RpcResult<HashMap<AuthorityId, EpochAuthorship>> {
+	async fn epoch_authorship(&self) -> Result<HashMap<AuthorityId, EpochAuthorship>, Error> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let best_header = self.select_chain.best_chain().map_err(Error::SelectChain).await?;
@@ -147,7 +147,7 @@ where
 }
 
 /// Holds information about the `slot`'s that can be claimed by a given key.
-#[derive(Default, Debug, Deserialize, Serialize)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
 pub struct EpochAuthorship {
 	/// the array of primary slots that can be claimed
 	primary: Vec<u64>,
@@ -166,20 +166,26 @@ pub enum Error {
 	/// Failed to fetch epoch data.
 	#[error("Failed to fetch epoch data")]
 	FetchEpoch,
+	/// Consensus error
+	#[error(transparent)]
+	Consensus(#[from] ConsensusError),
+	/// Errors that can be formatted as a String
+	#[error("{0}")]
+	StringError(String),
+	/// Call to an unsafe RPC was denied.
+	#[error(transparent)]
+	UnsafeRpcCalled(#[from] UnsafeRpcError),
 }
 
-impl From<Error> for JsonRpseeError {
+impl From<Error> for ErrorObjectOwned {
 	fn from(error: Error) -> Self {
-		let error_code = match error {
-			Error::SelectChain(_) => 1,
-			Error::FetchEpoch => 2,
-		};
-
-		JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
-			BABE_ERROR + error_code,
-			error.to_string(),
-			Some(format!("{:?}", error)),
-		)))
+		match error {
+			Error::SelectChain(e) => ErrorObject::owned(BABE_ERROR + 1, e.to_string(), None::<()>),
+			Error::FetchEpoch => ErrorObject::owned(BABE_ERROR + 2, error.to_string(), None::<()>),
+			Error::Consensus(e) => ErrorObject::owned(BABE_ERROR + 3, e.to_string(), None::<()>),
+			Error::StringError(e) => ErrorObject::owned(BABE_ERROR + 4, e, None::<()>),
+			Error::UnsafeRpcCalled(e) => e.into(),
+		}
 	}
 }
 
@@ -251,7 +257,7 @@ mod tests {
 		let api = babe_rpc.into_rpc();
 
 		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
-		let (response, _) = api.raw_json_request(request).await.unwrap();
+		let (response, _) = api.raw_json_request(request, 1).await.unwrap();
 		let expected = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4],"secondary_vrf":[]}},"id":1}"#;
 
 		assert_eq!(&response.result, expected);
@@ -263,7 +269,7 @@ mod tests {
 		let api = babe_rpc.into_rpc();
 
 		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params":[],"id":1}"#;
-		let (response, _) = api.raw_json_request(request).await.unwrap();
+		let (response, _) = api.raw_json_request(request, 1).await.unwrap();
 		let expected = r#"{"jsonrpc":"2.0","error":{"code":-32601,"message":"RPC call is unsafe to be called externally"},"id":1}"#;
 
 		assert_eq!(&response.result, expected);

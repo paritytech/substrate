@@ -19,8 +19,11 @@
 #![allow(non_snake_case)]
 
 //! API trait of the chain head.
-use crate::chain_head::event::{FollowEvent, MethodResponse, StorageQuery};
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use crate::chain_head::{
+	error::Error,
+	event::{FollowEvent, MethodResponse, StorageQuery},
+};
+use jsonrpsee::proc_macros::rpc;
 
 #[rpc(client, server)]
 pub trait ChainHeadApi<Hash> {
@@ -52,7 +55,7 @@ pub trait ChainHeadApi<Hash> {
 		&self,
 		follow_subscription: String,
 		hash: Hash,
-	) -> RpcResult<MethodResponse>;
+	) -> Result<MethodResponse, Error>;
 
 	/// Retrieves the header of a pinned block.
 	///
@@ -71,7 +74,7 @@ pub trait ChainHeadApi<Hash> {
 		&self,
 		follow_subscription: String,
 		hash: Hash,
-	) -> RpcResult<Option<String>>;
+	) -> Result<Option<String>, Error>;
 
 	/// Get the chain's genesis hash.
 	///
@@ -79,7 +82,7 @@ pub trait ChainHeadApi<Hash> {
 	///
 	/// This method is unstable and subject to change in the future.
 	#[method(name = "chainHead_unstable_genesisHash", blocking)]
-	fn chain_head_unstable_genesis_hash(&self) -> RpcResult<String>;
+	fn chain_head_unstable_genesis_hash(&self) -> Result<String, Error>;
 
 	/// Returns storage entries at a specific block's state.
 	///
@@ -93,7 +96,7 @@ pub trait ChainHeadApi<Hash> {
 		hash: Hash,
 		items: Vec<StorageQuery<String>>,
 		child_trie: Option<String>,
-	) -> RpcResult<MethodResponse>;
+	) -> Result<MethodResponse, Error>;
 
 	/// Call into the Runtime API at a specified block's state.
 	///
@@ -107,7 +110,7 @@ pub trait ChainHeadApi<Hash> {
 		hash: Hash,
 		function: String,
 		call_parameters: String,
-	) -> RpcResult<MethodResponse>;
+	) -> Result<MethodResponse, Error>;
 
 	/// Unpin a block reported by the `follow` method.
 	///
@@ -118,5 +121,9 @@ pub trait ChainHeadApi<Hash> {
 	///
 	/// This method is unstable and subject to change in the future.
 	#[method(name = "chainHead_unstable_unpin", blocking)]
-	fn chain_head_unstable_unpin(&self, follow_subscription: String, hash: Hash) -> RpcResult<()>;
+	fn chain_head_unstable_unpin(
+		&self,
+		follow_subscription: String,
+		hash: Hash,
+	) -> Result<(), Error>;
 }

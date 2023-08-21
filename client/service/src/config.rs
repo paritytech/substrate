@@ -100,6 +100,8 @@ pub struct Configuration {
 	pub rpc_max_subs_per_conn: u32,
 	/// JSON-RPC server default port.
 	pub rpc_port: u16,
+	/// The number of messages the JSON-RPC server is allowed to keep in memory.
+	pub rpc_message_buffer_capacity: u32,
 	/// Prometheus endpoint configuration. `None` if disabled.
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.

@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// Also it's nice to be able to maintain backward compatibility for methods that
 /// were initially taking a value and now we want to expand them to take a list.
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[serde(untagged)]
 pub enum ListOrValue<T> {
 	/// A list of values of given type.

@@ -18,10 +18,7 @@
 
 //! Error helpers for Chain RPC module.
 
-use jsonrpsee::{
-	core::Error as JsonRpseeError,
-	types::error::{CallError, ErrorObject},
-};
+use jsonrpsee::types::{error::ErrorObject, ErrorObjectOwned};
 /// Chain RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -39,12 +36,11 @@ pub enum Error {
 /// Base error code for all chain errors.
 const BASE_ERROR: i32 = crate::error::base::CHAIN;
 
-impl From<Error> for JsonRpseeError {
-	fn from(e: Error) -> Self {
+impl From<Error> for ErrorObjectOwned {
+	fn from(e: Error) -> ErrorObjectOwned {
 		match e {
-			Error::Other(message) =>
-				CallError::Custom(ErrorObject::owned(BASE_ERROR + 1, message, None::<()>)).into(),
-			e => e.into(),
+			Error::Other(message) => ErrorObject::owned(BASE_ERROR + 1, message, None::<()>),
+			e => ErrorObject::owned(BASE_ERROR + 2, e.to_string(), None::<()>),
 		}
 	}
 }

@@ -36,15 +36,14 @@ use crate::{
 use codec::Encode;
 use futures::future::FutureExt;
 use jsonrpsee::{
-	core::{async_trait, RpcResult},
-	types::{SubscriptionEmptyError, SubscriptionId, SubscriptionResult},
-	SubscriptionSink,
+	core::async_trait, types::SubscriptionId, PendingSubscriptionSink, SubscriptionSink,
 };
 use log::debug;
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ChildInfo, ExecutorProvider, StorageKey,
 	StorageProvider,
 };
+use sc_rpc::utils::to_sub_message;
 use sp_api::CallApiAt;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
 use sp_core::{traits::CallContext, Bytes};
@@ -87,7 +86,6 @@ impl Default for ChainHeadConfig {
 		}
 	}
 }
-
 /// An API for chain head RPC calls.
 pub struct ChainHead<BE: Backend<Block>, Block: BlockT, Client> {
 	/// Substrate client.
@@ -128,27 +126,13 @@ impl<BE: Backend<Block>, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 			_phantom: PhantomData,
 		}
 	}
+}
 
-	/// Accept the subscription and return the subscription ID on success.
-	fn accept_subscription(
-		&self,
-		sink: &mut SubscriptionSink,
-	) -> Result<String, SubscriptionEmptyError> {
-		// The subscription must be accepted before it can provide a valid subscription ID.
-		sink.accept()?;
-
-		let Some(sub_id) = sink.subscription_id() else {
-			// This can only happen if the subscription was not accepted.
-			return Err(SubscriptionEmptyError)
-		};
-
-		// Get the string representation for the subscription.
-		let sub_id = match sub_id {
-			SubscriptionId::Num(num) => num.to_string(),
-			SubscriptionId::Str(id) => id.into_owned().into(),
-		};
-
-		Ok(sub_id)
+/// Helper to convert the `subscription ID` to a string.
+pub fn read_subscription_id_as_string(sink: &SubscriptionSink) -> String {
+	match sink.subscription_id() {
+		SubscriptionId::Num(n) => n.to_string(),
+		SubscriptionId::Str(s) => s.into_owned().into(),
 	}
 }
 
@@ -182,33 +166,27 @@ where
 		+ StorageProvider<Block, BE>
 		+ 'static,
 {
-	fn chain_head_unstable_follow(
-		&self,
-		mut sink: SubscriptionSink,
-		with_runtime: bool,
-	) -> SubscriptionResult {
-		let sub_id = match self.accept_subscription(&mut sink) {
-			Ok(sub_id) => sub_id,
-			Err(err) => {
-				sink.close(ChainHeadRpcError::InvalidSubscriptionID);
-				return Err(err)
-			},
-		};
-		// Keep track of the subscription.
-		let Some(sub_data) = self.subscriptions.insert_subscription(sub_id.clone(), with_runtime)
-		else {
-			// Inserting the subscription can only fail if the JsonRPSee
-			// generated a duplicate subscription ID.
-			debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription already accepted", sub_id);
-			let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
-			return Ok(())
-		};
-		debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription accepted", sub_id);
-
+	fn chain_head_unstable_follow(&self, pending: PendingSubscriptionSink, with_runtime: bool) {
 		let subscriptions = self.subscriptions.clone();
 		let backend = self.backend.clone();
 		let client = self.client.clone();
+
 		let fut = async move {
+			let Ok(sink) = pending.accept().await else { return };
+
+			let sub_id = read_subscription_id_as_string(&sink);
+
+			// Keep track of the subscription.
+			let Some(sub_data) = subscriptions.insert_subscription(sub_id.clone(), with_runtime)
+			else {
+				// Inserting the subscription can only fail if the JsonRPSee
+				// generated a duplicate subscription ID.
+				debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription already accepted", sub_id);
+				let _ = sink.send(to_sub_message(&FollowEvent::<Block::Hash>::Stop)).await;
+				return
+			};
+			debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription accepted", sub_id);
+
 			let mut chain_head_follow = ChainHeadFollower::new(
 				client,
 				backend,
@@ -224,14 +202,13 @@ where
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
-		Ok(())
 	}
 
 	fn chain_head_unstable_body(
 		&self,
 		follow_subscription: String,
 		hash: Block::Hash,
-	) -> RpcResult<MethodResponse> {
+	) -> Result<MethodResponse, ChainHeadRpcError> {
 		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash, 1) {
 			Ok(block) => block,
 			Err(SubscriptionManagementError::SubscriptionAbsent) |
@@ -284,7 +261,7 @@ where
 		&self,
 		follow_subscription: String,
 		hash: Block::Hash,
-	) -> RpcResult<Option<String>> {
+	) -> Result<Option<String>, ChainHeadRpcError> {
 		let _block_guard = match self.subscriptions.lock_block(&follow_subscription, hash, 1) {
 			Ok(block) => block,
 			Err(SubscriptionManagementError::SubscriptionAbsent) |
@@ -300,10 +277,9 @@ where
 			.header(hash)
 			.map(|opt_header| opt_header.map(|h| hex_string(&h.encode())))
 			.map_err(ChainHeadRpcError::FetchBlockHeader)
-			.map_err(Into::into)
 	}
 
-	fn chain_head_unstable_genesis_hash(&self) -> RpcResult<String> {
+	fn chain_head_unstable_genesis_hash(&self) -> Result<String, ChainHeadRpcError> {
 		Ok(self.genesis_hash.clone())
 	}
 
@@ -313,7 +289,7 @@ where
 		hash: Block::Hash,
 		items: Vec<StorageQuery<String>>,
 		child_trie: Option<String>,
-	) -> RpcResult<MethodResponse> {
+	) -> Result<MethodResponse, ChainHeadRpcError> {
 		// Gain control over parameter parsing and returned error.
 		let items = items
 			.into_iter()
@@ -376,7 +352,7 @@ where
 		hash: Block::Hash,
 		function: String,
 		call_parameters: String,
-	) -> RpcResult<MethodResponse> {
+	) -> Result<MethodResponse, ChainHeadRpcError> {
 		let call_parameters = Bytes::from(parse_hex_param(call_parameters)?);
 
 		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash, 1) {
@@ -429,7 +405,7 @@ where
 		&self,
 		follow_subscription: String,
 		hash: Block::Hash,
-	) -> RpcResult<()> {
+	) -> Result<(), ChainHeadRpcError> {
 		match self.subscriptions.unpin_block(&follow_subscription, hash) {
 			Ok(()) => Ok(()),
 			Err(SubscriptionManagementError::SubscriptionAbsent) => {
@@ -438,9 +414,9 @@ where
 			},
 			Err(SubscriptionManagementError::BlockHashAbsent) => {
 				// Block is not part of the subscription.
-				Err(ChainHeadRpcError::InvalidBlock.into())
+				Err(ChainHeadRpcError::InvalidBlock)
 			},
-			Err(_) => Err(ChainHeadRpcError::InvalidBlock.into()),
+			Err(_) => Err(ChainHeadRpcError::InvalidBlock),
 		}
 	}
 }

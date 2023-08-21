@@ -21,9 +21,12 @@ use std::{convert::TryInto, sync::Arc};
 
 use codec::{Codec, Decode};
 use jsonrpsee::{
-	core::{Error as JsonRpseeError, RpcResult},
+	core::RpcResult,
 	proc_macros::rpc,
-	types::error::{CallError, ErrorCode, ErrorObject},
+	types::{
+		error::{ErrorCode, ErrorObject},
+		ErrorObjectOwned,
+	},
 };
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 use sp_api::ProvideRuntimeApi;
@@ -100,19 +103,15 @@ where
 		let encoded_len = encoded_xt.len() as u32;
 
 		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| {
-			CallError::Custom(ErrorObject::owned(
+			ErrorObject::owned(
 				Error::DecodeError.into(),
 				"Unable to query dispatch info.",
 				Some(format!("{:?}", e)),
-			))
+			)
 		})?;
 
-		fn map_err(error: impl ToString, desc: &'static str) -> CallError {
-			CallError::Custom(ErrorObject::owned(
-				Error::RuntimeError.into(),
-				desc,
-				Some(error.to_string()),
-			))
+		fn map_err(error: impl ToString, desc: &'static str) -> ErrorObjectOwned {
+			ErrorObject::owned(Error::RuntimeError.into(), desc, Some(error.to_string()))
 		}
 
 		let res = api
@@ -137,27 +136,27 @@ where
 		let encoded_len = encoded_xt.len() as u32;
 
 		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| {
-			CallError::Custom(ErrorObject::owned(
+			ErrorObject::owned(
 				Error::DecodeError.into(),
 				"Unable to query fee details.",
 				Some(format!("{:?}", e)),
-			))
+			)
 		})?;
 		let fee_details = api.query_fee_details(at_hash, uxt, encoded_len).map_err(|e| {
-			CallError::Custom(ErrorObject::owned(
+			ErrorObject::owned(
 				Error::RuntimeError.into(),
 				"Unable to query fee details.",
 				Some(e.to_string()),
-			))
+			)
 		})?;
 
 		let try_into_rpc_balance = |value: Balance| {
 			value.try_into().map_err(|_| {
-				JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+				ErrorObject::owned(
 					ErrorCode::InvalidParams.code(),
 					format!("{} doesn't fit in NumberOrHex representation", value),
 					None::<()>,
-				)))
+				)
 			})
 		};
 

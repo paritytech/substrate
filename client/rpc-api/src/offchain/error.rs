@@ -18,10 +18,7 @@
 
 //! Offchain RPC errors.
 
-use jsonrpsee::{
-	core::Error as JsonRpseeError,
-	types::error::{CallError, ErrorObject},
-};
+use jsonrpsee::types::error::{ErrorObject, ErrorObjectOwned};
 
 /// Offchain RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -40,15 +37,14 @@ pub enum Error {
 /// Base error code for all offchain errors.
 const BASE_ERROR: i32 = crate::error::base::OFFCHAIN;
 
-impl From<Error> for JsonRpseeError {
+impl From<Error> for ErrorObjectOwned {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::UnavailableStorageKind => CallError::Custom(ErrorObject::owned(
+			Error::UnavailableStorageKind => ErrorObject::owned(
 				BASE_ERROR + 1,
 				"This storage kind is not available yet",
 				None::<()>,
-			))
-			.into(),
+			),
 			Error::UnsafeRpcCalled(e) => e.into(),
 		}
 	}

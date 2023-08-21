@@ -16,10 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use jsonrpsee::{
-	core::Error as JsonRpseeError,
-	types::error::{CallError, ErrorObject},
-};
+use jsonrpsee::types::error::{ErrorObject, ErrorObjectOwned};
 
 #[derive(Debug, thiserror::Error)]
 /// Top-level error type for the RPC handler
@@ -61,15 +58,11 @@ impl From<Error> for ErrorCode {
 	}
 }
 
-impl From<Error> for JsonRpseeError {
+impl From<Error> for ErrorObjectOwned {
 	fn from(error: Error) -> Self {
 		let message = error.to_string();
 		let code = ErrorCode::from(error);
-		JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
-			code as i32,
-			message,
-			None::<()>,
-		)))
+		ErrorObject::owned(code as i32, message, None::<()>)
 	}
 }
 

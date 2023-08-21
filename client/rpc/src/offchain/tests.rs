@@ -39,7 +39,6 @@ fn local_storage_should_work() {
 
 #[test]
 fn offchain_calls_considered_unsafe() {
-	use jsonrpsee::types::error::CallError;
 	let storage = InMemOffchainStorage::default();
 	let offchain = Offchain::new(storage, DenyUnsafe::Yes);
 	let key = Bytes(b"offchain_storage".to_vec());
@@ -47,14 +46,14 @@ fn offchain_calls_considered_unsafe() {
 
 	assert_matches!(
 		offchain.set_local_storage(StorageKind::PERSISTENT, key.clone(), value.clone()),
-		Err(JsonRpseeError::Call(CallError::Custom(err))) => {
-			assert_eq!(err.message(), "RPC call is unsafe to be called externally")
+		Err(Error::UnsafeRpcCalled(e)) => {
+			assert_eq!(e.to_string(), "RPC call is unsafe to be called externally")
 		}
 	);
 	assert_matches!(
 		offchain.get_local_storage(StorageKind::PERSISTENT, key),
-		Err(JsonRpseeError::Call(CallError::Custom(err))) => {
-			assert_eq!(err.message(), "RPC call is unsafe to be called externally")
+		Err(Error::UnsafeRpcCalled(e)) => {
+			assert_eq!(e.to_string(), "RPC call is unsafe to be called externally")
 		}
 	);
 }

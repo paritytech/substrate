@@ -18,10 +18,7 @@
 
 //! Error helpers for `chainHead` RPC module.
 
-use jsonrpsee::{
-	core::Error as RpcError,
-	types::error::{CallError, ErrorObject},
-};
+use jsonrpsee::types::{error::ErrorObject, ErrorObjectOwned};
 use sp_blockchain::Error as BlockchainError;
 
 /// ChainHead RPC errors.
@@ -39,9 +36,6 @@ pub enum Error {
 	/// Invalid subscription ID provided by the RPC server.
 	#[error("Invalid subscription ID")]
 	InvalidSubscriptionID,
-	/// Wait-for-continue event not generated.
-	#[error("Wait for continue event was not generated for the subscription")]
-	InvalidContinue,
 }
 
 // Base code for all `chainHead` errors.
@@ -54,10 +48,8 @@ const FETCH_BLOCK_HEADER_ERROR: i32 = BASE_ERROR + 2;
 const INVALID_PARAM_ERROR: i32 = BASE_ERROR + 3;
 /// Invalid subscription ID.
 const INVALID_SUB_ID: i32 = BASE_ERROR + 4;
-/// Wait-for-continue event not generated.
-const INVALID_CONTINUE: i32 = BASE_ERROR + 5;
 
-impl From<Error> for ErrorObject<'static> {
+impl From<Error> for ErrorObjectOwned {
 	fn from(e: Error) -> Self {
 		let msg = e.to_string();
 
@@ -67,14 +59,6 @@ impl From<Error> for ErrorObject<'static> {
 				ErrorObject::owned(FETCH_BLOCK_HEADER_ERROR, msg, None::<()>),
 			Error::InvalidParam(_) => ErrorObject::owned(INVALID_PARAM_ERROR, msg, None::<()>),
 			Error::InvalidSubscriptionID => ErrorObject::owned(INVALID_SUB_ID, msg, None::<()>),
-			Error::InvalidContinue => ErrorObject::owned(INVALID_CONTINUE, msg, None::<()>),
 		}
-		.into()
-	}
-}
-
-impl From<Error> for RpcError {
-	fn from(e: Error) -> Self {
-		CallError::Custom(e.into()).into()
 	}
 }

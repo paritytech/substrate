@@ -283,7 +283,7 @@ pub struct RpcTransactionOutput {
 	/// The output string of the transaction if any.
 	pub result: String,
 	/// An async receiver if data will be returned via a callback.
-	pub receiver: futures::channel::mpsc::UnboundedReceiver<String>,
+	pub receiver: tokio::sync::mpsc::Receiver<String>,
 }
 
 impl std::fmt::Debug for RpcTransactionOutput {
@@ -343,7 +343,7 @@ impl RpcHandlersExt for RpcHandlers {
 
 pub(crate) fn parse_rpc_result(
 	result: String,
-	receiver: futures::channel::mpsc::UnboundedReceiver<String>,
+	receiver: tokio::sync::mpsc::Receiver<String>,
 ) -> Result<RpcTransactionOutput, RpcTransactionError> {
 	let json: serde_json::Value =
 		serde_json::from_str(&result).expect("the result can only be a JSONRPC string; qed");
@@ -397,7 +397,7 @@ where
 mod tests {
 	#[test]
 	fn parses_error_properly() {
-		let (_, rx) = futures::channel::mpsc::unbounded();
+		let (_, rx) = tokio::sync::mpsc::channel(1);
 		assert!(super::parse_rpc_result(
 			r#"{
 				"jsonrpc": "2.0",
@@ -409,7 +409,7 @@ mod tests {
 		)
 		.is_ok());
 
-		let (_, rx) = futures::channel::mpsc::unbounded();
+		let (_, rx) = tokio::sync::mpsc::channel(1);
 		let error = super::parse_rpc_result(
 			r#"{
 				"jsonrpc": "2.0",
@@ -427,7 +427,7 @@ mod tests {
 		assert_eq!(error.message, "Method not found");
 		assert!(error.data.is_none());
 
-		let (_, rx) = futures::channel::mpsc::unbounded();
+		let (_, rx) = tokio::sync::mpsc::channel(1);
 		let error = super::parse_rpc_result(
 			r#"{
 				"jsonrpc": "2.0",

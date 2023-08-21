@@ -23,7 +23,7 @@ use codec::{self, Codec, Decode, Encode};
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
 	proc_macros::rpc,
-	types::error::{CallError, ErrorObject},
+	types::error::ErrorObject,
 };
 
 use sc_rpc_api::DenyUnsafe;
@@ -103,11 +103,11 @@ where
 		let best = self.client.info().best_hash;
 
 		let nonce = api.account_nonce(best, account.clone()).map_err(|e| {
-			CallError::Custom(ErrorObject::owned(
+			ErrorObject::owned(
 				Error::RuntimeError.into(),
 				"Unable to query nonce.",
 				Some(e.to_string()),
-			))
+			)
 		})?;
 		Ok(adjust_nonce(&*self.pool, account, nonce))
 	}
@@ -125,28 +125,28 @@ where
 
 		let uxt: <Block as traits::Block>::Extrinsic =
 			Decode::decode(&mut &*extrinsic).map_err(|e| {
-				CallError::Custom(ErrorObject::owned(
+				ErrorObject::owned(
 					Error::DecodeError.into(),
 					"Unable to dry run extrinsic",
 					Some(e.to_string()),
-				))
+				)
 			})?;
 
 		let api_version = api
 			.api_version::<dyn BlockBuilder<Block>>(best_hash)
 			.map_err(|e| {
-				CallError::Custom(ErrorObject::owned(
+				ErrorObject::owned(
 					Error::RuntimeError.into(),
 					"Unable to dry run extrinsic.",
 					Some(e.to_string()),
-				))
+				)
 			})?
 			.ok_or_else(|| {
-				CallError::Custom(ErrorObject::owned(
+				ErrorObject::owned(
 					Error::RuntimeError.into(),
 					"Unable to dry run extrinsic.",
 					Some(format!("Could not find `BlockBuilder` api for block `{:?}`.", best_hash)),
-				))
+				)
 			})?;
 
 		let result = if api_version < 6 {
@@ -154,19 +154,19 @@ where
 			api.apply_extrinsic_before_version_6(best_hash, uxt)
 				.map(legacy::byte_sized_error::convert_to_latest)
 				.map_err(|e| {
-					CallError::Custom(ErrorObject::owned(
+					ErrorObject::owned(
 						Error::RuntimeError.into(),
 						"Unable to dry run extrinsic.",
 						Some(e.to_string()),
-					))
+					)
 				})?
 		} else {
 			api.apply_extrinsic(best_hash, uxt).map_err(|e| {
-				CallError::Custom(ErrorObject::owned(
+				ErrorObject::owned(
 					Error::RuntimeError.into(),
 					"Unable to dry run extrinsic.",
 					Some(e.to_string()),
-				))
+				)
 			})?
 		};
 
@@ -216,7 +216,6 @@ mod tests {
 
 	use assert_matches::assert_matches;
 	use futures::executor::block_on;
-	use jsonrpsee::{core::Error as JsonRpseeError, types::error::CallError};
 	use sc_transaction_pool::BasicPool;
 	use sp_runtime::{
 		generic::BlockId,
@@ -274,7 +273,7 @@ mod tests {
 
 		// when
 		let res = accounts.dry_run(vec![].into(), None).await;
-		assert_matches!(res, Err(JsonRpseeError::Call(CallError::Custom(e))) => {
+		assert_matches!(res, Err(e) => {
 			assert!(e.message().contains("RPC call is unsafe to be called externally"));
 		});
 	}

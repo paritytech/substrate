@@ -25,13 +25,13 @@ use super::{
 	error::{Error, Result},
 	ChildStateBackend, StateBackend,
 };
-use crate::{DenyUnsafe, SubscriptionTaskExecutor};
-
-use futures::{future, stream, FutureExt, StreamExt};
-use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError},
-	SubscriptionSink,
+use crate::{
+	utils::{accept_and_pipe_from_stream, spawn_subscription_task},
+	DenyUnsafe, SubscriptionTaskExecutor,
 };
+
+use futures::{future, stream, StreamExt};
+use jsonrpsee::{core::async_trait, types::ErrorObject, PendingSubscriptionSink};
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
 	StorageProvider,
@@ -371,9 +371,7 @@ where
 			.map_err(client_err)
 	}
 
-	fn subscribe_runtime_version(&self, mut sink: SubscriptionSink) {
-		let client = self.client.clone();
-
+	fn subscribe_runtime_version(&self, pending: PendingSubscriptionSink) {
 		let initial = match self
 			.block_or_best(None)
 			.and_then(|block| self.client.runtime_version_at(block).map_err(Into::into))
@@ -381,12 +379,13 @@ where
 		{
 			Ok(initial) => initial,
 			Err(e) => {
-				let _ = sink.reject(JsonRpseeError::from(e));
+				spawn_subscription_task(&self.executor, pending.reject(e));
 				return
 			},
 		};
 
 		let mut previous_version = initial.clone();
+		let client = self.client.clone();
 
 		// A stream of new versions
 		let version_stream = client
@@ -406,24 +405,33 @@ where
 			});
 
 		let stream = futures::stream::once(future::ready(initial)).chain(version_stream);
-
-		let fut = async move {
-			sink.pipe_from_stream(stream).await;
-		};
-
-		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+		spawn_subscription_task(&self.executor, accept_and_pipe_from_stream(pending, stream));
 	}
 
-	fn subscribe_storage(&self, mut sink: SubscriptionSink, keys: Option<Vec<StorageKey>>) {
+	fn subscribe_storage(
+		&self,
+		pending: PendingSubscriptionSink,
+		keys: Option<Vec<StorageKey>>,
+		deny_unsafe: DenyUnsafe,
+	) {
+		if keys.is_none() {
+			if let Err(err) = deny_unsafe.check_if_safe() {
+				spawn_subscription_task(&self.executor, pending.reject(ErrorObject::from(err)));
+				return
+			}
+		}
+
 		let stream = match self.client.storage_changes_notification_stream(keys.as_deref(), None) {
 			Ok(stream) => stream,
 			Err(blockchain_err) => {
-				let _ = sink.reject(JsonRpseeError::from(Error::Client(Box::new(blockchain_err))));
+				spawn_subscription_task(
+					&self.executor,
+					pending.reject(Error::Client(Box::new(blockchain_err))),
+				);
 				return
 			},
 		};
 
-		// initial values
 		let initial = stream::iter(keys.map(|keys| {
 			let block = self.client.info().best_hash;
 			let changes = keys
@@ -436,7 +444,6 @@ where
 			StorageChangeSet { block, changes }
 		}));
 
-		// let storage_stream = stream.map(|(block, changes)| StorageChangeSet {
 		let storage_stream = stream.map(|storage_notif| StorageChangeSet {
 			block: storage_notif.block,
 			changes: storage_notif
@@ -450,11 +457,7 @@ where
 			.chain(storage_stream)
 			.filter(|storage| future::ready(!storage.changes.is_empty()));
 
-		let fut = async move {
-			sink.pipe_from_stream(stream).await;
-		};
-
-		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+		spawn_subscription_task(&self.executor, accept_and_pipe_from_stream(pending, stream));
 	}
 
 	fn trace_block(

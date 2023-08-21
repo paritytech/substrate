@@ -52,8 +52,11 @@ pub const RPC_DEFAULT_MAX_SUBS_PER_CONN: u32 = 1024;
 pub const RPC_DEFAULT_MAX_REQUEST_SIZE_MB: u32 = 15;
 /// The default max response size in MB.
 pub const RPC_DEFAULT_MAX_RESPONSE_SIZE_MB: u32 = 15;
-/// The default number of connection..
+/// The default concurrent connection limit.
 pub const RPC_DEFAULT_MAX_CONNECTIONS: u32 = 100;
+/// The default number of messages the RPC server
+/// is allowed to keep in memory per connection.
+pub const RPC_DEFAULT_MESSAGE_CAPACITY_PER_CONN: u32 = 64;
 
 /// Default configuration values used by Substrate
 ///
@@ -330,6 +333,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(RPC_DEFAULT_MAX_SUBS_PER_CONN)
 	}
 
+	/// The number of messages the RPC server is allowed to keep in memory per connection.
+	fn rpc_buffer_capacity_per_connection(&self) -> Result<u32> {
+		Ok(RPC_DEFAULT_MESSAGE_CAPACITY_PER_CONN)
+	}
+
 	/// Get the prometheus configuration (`None` if disabled)
 	///
 	/// By default this is `None`.
@@ -501,6 +509,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_id_provider: None,
 			rpc_max_subs_per_conn: self.rpc_max_subscriptions_per_connection()?,
 			rpc_port: DCV::rpc_listen_port(),
+			rpc_message_buffer_capacity: self.rpc_buffer_capacity_per_connection()?,
 			prometheus_config: self
 				.prometheus_config(DCV::prometheus_listen_port(), &chain_spec)?,
 			telemetry_endpoints,

@@ -190,7 +190,8 @@ impl Transport {
 				uri.clone()
 			};
 			let http_client = HttpClientBuilder::default()
-				.max_request_body_size(u32::MAX)
+				.max_request_size(u32::MAX)
+				.max_response_size(u32::MAX)
 				.request_timeout(std::time::Duration::from_secs(60 * 5))
 				.build(uri)
 				.map_err(|e| {

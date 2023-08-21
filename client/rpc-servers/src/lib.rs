@@ -24,10 +24,7 @@ pub mod middleware;
 
 use http::header::HeaderValue;
 use jsonrpsee::{
-	server::{
-		middleware::proxy_get_request::ProxyGetRequestLayer, AllowHosts, ServerBuilder,
-		ServerHandle,
-	},
+	server::middleware::{Authority, HostFilterLayer, ProxyGetRequestLayer},
 	RpcModule,
 };
 use std::{error::Error as StdError, net::SocketAddr};
@@ -42,7 +39,7 @@ pub use jsonrpsee::core::{
 const MEGABYTE: u32 = 1024 * 1024;
 
 /// Type alias for the JSON-RPC server.
-pub type Server = ServerHandle;
+pub type Server = jsonrpsee::server::ServerHandle;
 
 /// RPC server configuration.
 #[derive(Debug)]
@@ -61,6 +58,8 @@ pub struct Config<'a, M: Send + Sync + 'static> {
 	pub max_payload_out_mb: u32,
 	/// Metrics.
 	pub metrics: Option<RpcMetrics>,
+	/// Message buffer size
+	pub message_buffer_capacity: u32,
 	/// RPC API.
 	pub rpc_api: RpcModule<M>,
 	/// Subscription ID provider.
@@ -72,7 +71,7 @@ pub struct Config<'a, M: Send + Sync + 'static> {
 /// Start RPC server listening on given address.
 pub async fn start_server<M: Send + Sync + 'static>(
 	config: Config<'_, M>,
-) -> Result<ServerHandle, Box<dyn StdError + Send + Sync>> {
+) -> Result<Server, Box<dyn StdError + Send + Sync>> {
 	let Config {
 		addrs,
 		cors,
@@ -81,26 +80,27 @@ pub async fn start_server<M: Send + Sync + 'static>(
 		max_connections,
 		max_subs_per_conn,
 		metrics,
+		message_buffer_capacity,
 		id_provider,
 		tokio_handle,
 		rpc_api,
 	} = config;
 
-	let host_filter = hosts_filtering(cors.is_some(), &addrs);
+	//let host_filter = hosts_filtering(cors.is_some(), &addrs);
 
 	let middleware = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
 		.layer(ProxyGetRequestLayer::new("/health", "system_health")?)
 		.layer(try_into_cors(cors)?);
 
-	let mut builder = ServerBuilder::new()
+	let mut builder = jsonrpsee::server::Server::builder()
 		.max_request_body_size(max_payload_in_mb.saturating_mul(MEGABYTE))
 		.max_response_body_size(max_payload_out_mb.saturating_mul(MEGABYTE))
 		.max_connections(max_connections)
 		.max_subscriptions_per_connection(max_subs_per_conn)
 		.ping_interval(std::time::Duration::from_secs(30))
-		.set_host_filtering(host_filter)
 		.set_middleware(middleware)
+		.set_message_buffer_capacity(message_buffer_capacity)
 		.custom_tokio_runtime(tokio_handle);
 
 	if let Some(provider) = id_provider {
@@ -113,11 +113,11 @@ pub async fn start_server<M: Send + Sync + 'static>(
 	let (handle, addr) = if let Some(metrics) = metrics {
 		let server = builder.set_logger(metrics).build(&addrs[..]).await?;
 		let addr = server.local_addr();
-		(server.start(rpc_api)?, addr)
+		(server.start(rpc_api), addr)
 	} else {
 		let server = builder.build(&addrs[..]).await?;
 		let addr = server.local_addr();
-		(server.start(rpc_api)?, addr)
+		(server.start(rpc_api), addr)
 	};
 
 	log::info!(
@@ -129,17 +129,17 @@ pub async fn start_server<M: Send + Sync + 'static>(
 	Ok(handle)
 }
 
-fn hosts_filtering(enabled: bool, addrs: &[SocketAddr]) -> AllowHosts {
+fn hosts_filtering(enabled: bool, addrs: &[SocketAddr]) -> Vec<Authority> {
 	if enabled {
 		// NOTE The listening addresses are whitelisted by default.
 		let mut hosts = Vec::with_capacity(addrs.len() * 2);
 		for addr in addrs {
-			hosts.push(format!("localhost:{}", addr.port()).into());
-			hosts.push(format!("127.0.0.1:{}", addr.port()).into());
+			hosts.push(Authority { host: "localhost".to_string(), port: addr.port().into() });
+			hosts.push(Authority { host: "127.0.0.1".to_string(), port: addr.port().into() });
 		}
-		AllowHosts::Only(hosts)
+		hosts
 	} else {
-		AllowHosts::Any
+		Vec::new()
 	}
 }
 
@@ -149,9 +149,9 @@ fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModu
 
 	rpc_api
 		.register_method("rpc_methods", move |_, _| {
-			Ok(serde_json::json!({
+			serde_json::json!({
 				"methods": available_methods,
-			}))
+			})
 		})
 		.expect("infallible all other methods have their own address space; qed");
 

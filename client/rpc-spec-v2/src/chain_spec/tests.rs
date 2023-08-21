@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
-use jsonrpsee::{types::EmptyServerParams as EmptyParams, RpcModule};
+use jsonrpsee::{core::EmptyServerParams as EmptyParams, RpcModule};
 use sc_chain_spec::Properties;
 
 const CHAIN_NAME: &'static str = "TEST_CHAIN_NAME";

@@ -25,7 +25,7 @@ use crate::{
 	},
 	CliConfiguration, PrometheusParams, RuntimeParams, TelemetryParams,
 	RPC_DEFAULT_MAX_CONNECTIONS, RPC_DEFAULT_MAX_REQUEST_SIZE_MB, RPC_DEFAULT_MAX_RESPONSE_SIZE_MB,
-	RPC_DEFAULT_MAX_SUBS_PER_CONN,
+	RPC_DEFAULT_MAX_SUBS_PER_CONN, RPC_DEFAULT_MESSAGE_CAPACITY_PER_CONN,
 };
 use clap::Parser;
 use regex::Regex;
@@ -87,7 +87,7 @@ pub struct RunCmd {
 	#[arg(long, default_value_t = RPC_DEFAULT_MAX_RESPONSE_SIZE_MB)]
 	pub rpc_max_response_size: u32,
 
-	/// Set the the maximum concurrent subscriptions per connection.
+	/// Set the maximum concurrent subscriptions per connection.
 	#[arg(long, default_value_t = RPC_DEFAULT_MAX_SUBS_PER_CONN)]
 	pub rpc_max_subscriptions_per_connection: u32,
 
@@ -106,6 +106,17 @@ pub struct RunCmd {
 	/// --dev mode the default is to allow all origins.
 	#[arg(long, value_name = "ORIGINS", value_parser = parse_cors)]
 	pub rpc_cors: Option<Cors>,
+
+	/// The number of messages the RPC server is allowed to keep in memory.
+	///
+	/// If the buffer becomes full then the server will not process
+	/// new messages until the connected client start reading the
+	/// underlying messages.
+	///
+	/// This applies per connection which includes both
+	/// JSON-RPC methods calls and subscriptions.
+	#[arg(long, default_value_t = RPC_DEFAULT_MESSAGE_CAPACITY_PER_CONN)]
+	pub rpc_message_buffer_capacity_per_connection: u32,
 
 	/// The human-readable name for this node.
 	/// It's used as network node name.
@@ -363,6 +374,10 @@ impl CliConfiguration for RunCmd {
 
 	fn rpc_max_subscriptions_per_connection(&self) -> Result<u32> {
 		Ok(self.rpc_max_subscriptions_per_connection)
+	}
+
+	fn rpc_buffer_capacity_per_connection(&self) -> Result<u32> {
+		Ok(self.rpc_message_buffer_capacity_per_connection)
 	}
 
 	fn transaction_pool(&self, is_dev: bool) -> Result<TransactionPoolOptions> {

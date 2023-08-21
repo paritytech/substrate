@@ -44,9 +44,9 @@
 use std::sync::Arc;
 
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	core::async_trait,
 	proc_macros::rpc,
-	types::{error::CallError, ErrorObject},
+	types::{ErrorObject, ErrorObjectOwned},
 };
 
 use sc_client_api::StorageData;
@@ -80,13 +80,13 @@ pub enum Error<Block: BlockT> {
 	LightSyncStateExtensionNotFound,
 }
 
-impl<Block: BlockT> From<Error<Block>> for JsonRpseeError {
+impl<Block: BlockT> From<Error<Block>> for ErrorObjectOwned {
 	fn from(error: Error<Block>) -> Self {
 		let message = match error {
 			Error::JsonRpc(s) => s,
 			_ => error.to_string(),
 		};
-		CallError::Custom(ErrorObject::owned(1, message, None::<()>)).into()
+		ErrorObject::owned(1, message, None::<()>)
 	}
 }
 
@@ -126,10 +126,10 @@ pub struct LightSyncState<Block: BlockT> {
 
 /// An api for sync state RPC calls.
 #[rpc(client, server)]
-pub trait SyncStateApi {
+pub trait SyncStateApi<B: BlockT> {
 	/// Returns the JSON serialized chainspec running the node, with a sync state.
 	#[method(name = "sync_state_genSyncSpec")]
-	async fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<serde_json::Value>;
+	async fn system_gen_sync_spec(&self, raw: bool) -> Result<serde_json::Value, Error<B>>;
 }
 
 /// An api for sync state RPC calls.
@@ -188,12 +188,12 @@ where
 }
 
 #[async_trait]
-impl<Block, Backend> SyncStateApiServer for SyncState<Block, Backend>
+impl<Block, Backend> SyncStateApiServer<Block> for SyncState<Block, Backend>
 where
 	Block: BlockT,
 	Backend: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
 {
-	async fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<serde_json::Value> {
+	async fn system_gen_sync_spec(&self, raw: bool) -> Result<serde_json::Value, Error<Block>> {
 		let current_sync_state = self.build_sync_state().await?;
 		let mut chain_spec = self.chain_spec.cloned_box();
 
@@ -202,10 +202,11 @@ where
 		)
 		.ok_or(Error::<Block>::LightSyncStateExtensionNotFound)?;
 
-		let val = serde_json::to_value(&current_sync_state)?;
+		let val = serde_json::to_value(&current_sync_state)
+			.map_err(|e| Error::<Block>::JsonRpc(e.to_string()))?;
 		*extension = Some(val);
 
 		let json_str = chain_spec.as_json(raw).map_err(|e| Error::<Block>::JsonRpc(e))?;
-		serde_json::from_str(&json_str).map_err(Into::into)
+		serde_json::from_str(&json_str).map_err(|e| Error::<Block>::JsonRpc(e.to_string()))
 	}
 }

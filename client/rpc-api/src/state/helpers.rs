@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use sp_core::Bytes;
 
 /// ReadProof struct returned by the RPC
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadProof<Hash> {
 	/// Block hash used to generate the proof
