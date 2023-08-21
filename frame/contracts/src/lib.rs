@@ -356,6 +356,11 @@ pub mod pallet {
 		type Migrations: MigrateSequence;
 
 		/// Type that provides debug handling for the contract execution process.
+		///
+		/// # Note
+		/// For most production chains, it's recommended to use the `()` implementation of this
+		/// trait. This implementation offers additional logging when the log target
+		/// "runtime::contracts" is set to trace.
 		type Debug: Debugging<Self>;
 	}
 
