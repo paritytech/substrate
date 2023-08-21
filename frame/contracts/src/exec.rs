@@ -907,7 +907,8 @@ where
 			// Every non delegate call or instantiate also optionally transfers the balance.
 			self.initial_transfer()?;
 
-			let call_span = T::Tracing::call_span(executable.code_hash(), entry_point, &input_data);
+			let call_span =
+				T::Tracing::new_call_span(executable.code_hash(), entry_point, &input_data);
 
 			// Call into the Wasm blob.
 			let output = executable

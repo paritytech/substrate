@@ -17,7 +17,7 @@ pub trait Tracing<T: Config> {
 	/// * `code_hash` - The code hash of the contract being called.
 	/// * `entry_point` - Describes whether the call is the constructor or a regular call.
 	/// * `input_data` - The raw input data of the call.
-	fn call_span(
+	fn new_call_span(
 		code_hash: &CodeHash<T>,
 		entry_point: ExportedFunction,
 		input_data: &[u8],
@@ -36,7 +36,7 @@ pub trait CallSpan {
 impl<T: Config> Tracing<T> for () {
 	type CallSpan = ();
 
-	fn call_span(code_hash: &CodeHash<T>, entry_point: ExportedFunction, input_data: &[u8]) {
+	fn new_call_span(code_hash: &CodeHash<T>, entry_point: ExportedFunction, input_data: &[u8]) {
 		log::trace!(target: LOG_TARGET, "call {entry_point:?} hash: {code_hash:?}, input_data: {input_data:?}")
 	}
 }

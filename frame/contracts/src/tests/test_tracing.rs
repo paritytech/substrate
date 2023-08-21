@@ -27,7 +27,7 @@ pub struct TestCallSpan {
 impl Tracing<Test> for TestTracing {
 	type CallSpan = TestCallSpan;
 
-	fn call_span(
+	fn new_call_span(
 		code_hash: &CodeHash<Test>,
 		entry_point: ExportedFunction,
 		input_data: &[u8],
