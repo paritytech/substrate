@@ -316,7 +316,7 @@ cargo-frame-test-ui:
     - .docker-env
     - .test-refs
   script:
-    - test -q --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml --test construct_runtime_ui
+    - cargo test -q --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml --test construct_runtime_ui
 
 test-frame-support:
   stage: test
