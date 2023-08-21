@@ -150,6 +150,20 @@ pub trait Swap<AccountId, Balance, MultiAssetId> {
 	) -> Result<Balance, DispatchError>;
 }
 
+pub trait SwapCredit<AccountId, Balance, MultiAssetId> {
+	fn swap_exact_tokens_for_tokens_credit(
+		path: Vec<MultiAssetId>,
+		credit_in: Credit<AccountId, Balance>,
+		amount_out_min: Option<Balance>,
+	) -> Result<Credit<AccountId, Balance>, DispatchError>;
+
+	fn swap_tokens_for_exact_tokens_credit(
+		path: Vec<MultiAssetId>,
+		amount_out: Balance,
+		credit_in: Credit<AccountId, Balance>,
+	) -> Result<(Credit<AccountId, Balance>, Credit<AccountId, Balance>), DispatchError>;
+}
+
 /// An implementation of MultiAssetId that can be either Native or an asset.
 #[derive(Decode, Encode, Default, MaxEncodedLen, TypeInfo, Clone, Copy, Debug)]
 pub enum NativeOrAssetId<AssetId>
