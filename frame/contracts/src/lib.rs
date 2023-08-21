@@ -355,7 +355,7 @@ pub mod pallet {
 		/// ```
 		type Migrations: MigrateSequence;
 
-		/// Defines methods to capture and trace contract calls for improved observability.
+		/// Type that provides debug handling for the contract execution process.
 		type Debug: Debugging<Self>;
 	}
 
