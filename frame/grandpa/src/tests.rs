@@ -333,7 +333,7 @@ fn report_equivocation_current_set_works() {
 			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(1, validator),
+				Staking::eras_stakers(1, &validator),
 				pallet_staking::Exposure { total: 10_000, own: 10_000, others: vec![] },
 			);
 		}
@@ -371,7 +371,7 @@ fn report_equivocation_current_set_works() {
 		assert_eq!(Balances::total_balance(&equivocation_validator_id), 10_000_000 - 10_000);
 		assert_eq!(Staking::slashable_balance_of(&equivocation_validator_id), 0);
 		assert_eq!(
-			Staking::eras_stakers(2, equivocation_validator_id),
+			Staking::eras_stakers(2, &equivocation_validator_id),
 			pallet_staking::Exposure { total: 0, own: 0, others: vec![] },
 		);
 
@@ -385,7 +385,7 @@ fn report_equivocation_current_set_works() {
 			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(2, validator),
+				Staking::eras_stakers(2, &validator),
 				pallet_staking::Exposure { total: 10_000, own: 10_000, others: vec![] },
 			);
 		}
@@ -417,7 +417,7 @@ fn report_equivocation_old_set_works() {
 			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(2, validator),
+				Staking::eras_stakers(2, &validator),
 				pallet_staking::Exposure { total: 10_000, own: 10_000, others: vec![] },
 			);
 		}
@@ -450,7 +450,7 @@ fn report_equivocation_old_set_works() {
 		assert_eq!(Staking::slashable_balance_of(&equivocation_validator_id), 0);
 
 		assert_eq!(
-			Staking::eras_stakers(3, equivocation_validator_id),
+			Staking::eras_stakers(3, &equivocation_validator_id),
 			pallet_staking::Exposure { total: 0, own: 0, others: vec![] },
 		);
 
@@ -464,7 +464,7 @@ fn report_equivocation_old_set_works() {
 			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(3, validator),
+				Staking::eras_stakers(3, &validator),
 				pallet_staking::Exposure { total: 10_000, own: 10_000, others: vec![] },
 			);
 		}

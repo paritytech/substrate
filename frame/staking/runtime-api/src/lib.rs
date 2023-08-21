@@ -22,11 +22,15 @@
 use codec::Codec;
 
 sp_api::decl_runtime_apis! {
-	pub trait StakingApi<Balance>
+	pub trait StakingApi<Balance, AccountId>
 		where
 			Balance: Codec,
+			AccountId: Codec,
 	{
 		/// Returns the nominations quota for a nominator with a given balance.
 		fn nominations_quota(balance: Balance) -> u32;
+
+		/// Returns the page count of exposures for a validator in a given era.
+		fn eras_stakers_page_count(era: sp_staking::EraIndex, account: AccountId) -> sp_staking::PageIndex;
 	}
 }

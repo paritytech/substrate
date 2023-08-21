@@ -14,7 +14,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 
-//! Storage migrations for the Staking pallet.
+//! Storage migrations for the Staking pallet. The changelog for this is maintained at
+//! [CHANGELOG.md](https://github.com/paritytech/substrate/blob/master/frame/staking/CHANGELOG.md).
 
 use super::*;
 use frame_election_provider_support::SortedListProvider;
@@ -56,6 +57,49 @@ impl Default for ObsoleteReleases {
 /// Alias to the old storage item used for release versioning. Obsolete since v13.
 #[storage_alias]
 type StorageVersion<T: Config> = StorageValue<Pallet<T>, ObsoleteReleases, ValueQuery>;
+
+/// Migration of era exposure storage items to paged exposures.
+/// Changelog: [v14.](https://github.com/paritytech/substrate/blob/ankan/paged-rewards-rebased2/frame/staking/CHANGELOG.md#14)
+pub mod v14 {
+	use super::*;
+
+	pub struct MigrateToV14<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> OnRuntimeUpgrade for MigrateToV14<T> {
+		fn on_runtime_upgrade() -> Weight {
+			let current = Pallet::<T>::current_storage_version();
+			let on_chain = Pallet::<T>::on_chain_storage_version();
+
+			if current == 14 && on_chain == 13 {
+				current.put::<Pallet<T>>();
+
+				log!(info, "v14 applied successfully.");
+				T::DbWeight::get().reads_writes(1, 1)
+			} else {
+				log!(warn, "v14 not applied.");
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
+			frame_support::ensure!(
+				Pallet::<T>::on_chain_storage_version() == 13,
+				"Required v13 before upgrading to v14."
+			);
+
+			Ok(Default::default())
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
+			frame_support::ensure!(
+				Pallet::<T>::on_chain_storage_version() == 14,
+				"v14 not applied"
+			);
+			Ok(())
+		}
+	}
+}
 
 pub mod v13 {
 	use super::*;
@@ -112,9 +156,9 @@ pub mod v12 {
 	#[storage_alias]
 	type HistoryDepth<T: Config> = StorageValue<Pallet<T>, u32, ValueQuery>;
 
-	/// Clean up `HistoryDepth` from storage.
+	/// Clean up `T::HistoryDepth` from storage.
 	///
-	/// We will be depending on the configurable value of `HistoryDepth` post
+	/// We will be depending on the configurable value of `T::HistoryDepth` post
 	/// this release.
 	pub struct MigrateToV12<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV12<T> {

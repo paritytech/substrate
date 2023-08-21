@@ -21,11 +21,13 @@
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
 
 use crate::currency_to_vote::CurrencyToVote;
-use codec::{FullCodec, MaxEncodedLen};
+use codec::{Decode, Encode, FullCodec, HasCompact, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_core::RuntimeDebug;
-use sp_runtime::{DispatchError, DispatchResult, Saturating};
-use sp_std::{collections::btree_map::BTreeMap, ops::Sub, vec::Vec};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, Zero},
+	DispatchError, DispatchResult, RuntimeDebug, Saturating,
+};
+use sp_std::{collections::btree_map::BTreeMap, ops::Sub, vec, vec::Vec};
 
 pub mod offence;
 
@@ -36,6 +38,9 @@ pub type SessionIndex = u32;
 
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
+
+/// Counter for paged storage items.
+pub type PageIndex = u32;
 
 /// Representation of the status of a staker.
 #[derive(RuntimeDebug, TypeInfo)]
@@ -262,6 +267,9 @@ pub trait StakingInterface {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
+	fn max_exposure_page_size() -> PageIndex;
+
+	#[cfg(feature = "runtime-benchmarks")]
 	fn add_era_stakers(
 		current_era: &EraIndex,
 		stash: &Self::AccountId,
@@ -270,6 +278,124 @@ pub trait StakingInterface {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_current_era(era: EraIndex);
+}
+
+/// The amount of exposure for an era that an individual nominator has (susceptible to slashing).
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct IndividualExposure<AccountId, Balance: HasCompact> {
+	/// The stash account of the nominator in question.
+	pub who: AccountId,
+	/// Amount of funds exposed.
+	#[codec(compact)]
+	pub value: Balance,
+}
+
+/// A snapshot of the stake backing a single validator in the system.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct Exposure<AccountId, Balance: HasCompact> {
+	/// The total balance backing this validator.
+	#[codec(compact)]
+	pub total: Balance,
+	/// The validator's own stash that is exposed.
+	#[codec(compact)]
+	pub own: Balance,
+	/// The portions of nominators stashes that are exposed.
+	pub others: Vec<IndividualExposure<AccountId, Balance>>,
+}
+
+impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, Balance> {
+	fn default() -> Self {
+		Self { total: Default::default(), own: Default::default(), others: vec![] }
+	}
+}
+
+impl<
+		AccountId: Clone,
+		Balance: HasCompact + AtLeast32BitUnsigned + Copy + codec::MaxEncodedLen,
+	> Exposure<AccountId, Balance>
+{
+	/// Splits an `Exposure` into `PagedExposureMetadata` and multiple chunks of
+	/// `IndividualExposure` with each chunk having maximum of `page_size` elements.
+	pub fn into_pages(
+		self,
+		page_size: PageIndex,
+	) -> (PagedExposureMetadata<Balance>, Vec<ExposurePage<AccountId, Balance>>) {
+		let individual_chunks = self.others.chunks(page_size as usize);
+		let mut exposure_pages: Vec<ExposurePage<AccountId, Balance>> =
+			Vec::with_capacity(individual_chunks.len());
+
+		for chunk in individual_chunks {
+			let mut page_total: Balance = Zero::zero();
+			let mut others: Vec<IndividualExposure<AccountId, Balance>> =
+				Vec::with_capacity(chunk.len());
+			for individual in chunk.iter() {
+				page_total.saturating_accrue(individual.value);
+				others.push(IndividualExposure {
+					who: individual.who.clone(),
+					value: individual.value,
+				})
+			}
+
+			exposure_pages.push(ExposurePage { page_total, others });
+		}
+
+		(
+			PagedExposureMetadata {
+				total: self.total,
+				own: self.own,
+				nominator_count: self.others.len() as u32,
+				page_count: exposure_pages.len() as PageIndex,
+			},
+			exposure_pages,
+		)
+	}
+}
+
+/// A snapshot of the stake backing a single validator in the system.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct ExposurePage<AccountId, Balance: HasCompact> {
+	/// The total balance of this chunk/page.
+	#[codec(compact)]
+	pub page_total: Balance,
+	/// The portions of nominators stashes that are exposed.
+	pub others: Vec<IndividualExposure<AccountId, Balance>>,
+}
+
+impl<A, B: Default + HasCompact> Default for ExposurePage<A, B> {
+	fn default() -> Self {
+		ExposurePage { page_total: Default::default(), others: vec![] }
+	}
+}
+
+/// Metadata for Paged Exposure of a validator such as total stake across pages and page count.
+///
+/// In combination with the associated `ExposurePage`s, it can be used to reconstruct a full
+/// `Exposure` set of a validator. This is useful for cases where we want to query full set of
+/// `Exposure` as one page (for backward compatibility).
+#[derive(
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Clone,
+	Encode,
+	Decode,
+	RuntimeDebug,
+	TypeInfo,
+	Default,
+	MaxEncodedLen,
+)]
+pub struct PagedExposureMetadata<Balance: HasCompact + codec::MaxEncodedLen> {
+	/// The total balance backing this validator.
+	#[codec(compact)]
+	pub total: Balance,
+	/// The validator's own stash that is exposed.
+	#[codec(compact)]
+	pub own: Balance,
+	/// Number of nominators backing this validator.
+	pub nominator_count: u32,
+	/// Number of pages of nominators.
+	pub page_count: PageIndex,
 }
 
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);

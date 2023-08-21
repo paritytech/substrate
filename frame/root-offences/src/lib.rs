@@ -111,7 +111,7 @@ pub mod pallet {
 				.clone()
 				.into_iter()
 				.map(|(o, _)| OffenceDetails::<T> {
-					offender: (o.clone(), Staking::<T>::eras_stakers(now, o)),
+					offender: (o.clone(), Staking::<T>::eras_stakers(now, &o)),
 					reporters: vec![],
 				})
 				.collect())

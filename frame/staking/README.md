@@ -52,7 +52,7 @@ An account pair can become bonded using the [`bond`](https://docs.rs/pallet-stak
 
 Stash accounts can update their associated controller back to their stash account using the
 [`set_controller`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.set_controller)
-call. 
+call.
 
 Note: Controller accounts are being deprecated in favor of proxy accounts, so it is no longer
 possible to set a unique address for a stash's controller.
@@ -92,11 +92,13 @@ An account can become a nominator via the [`nominate`](https://docs.rs/pallet-st
 The **reward and slashing** procedure is the core of the Staking module, attempting to _embrace
 valid behavior_ while _punishing any misbehavior or lack of availability_.
 
-Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
-`payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to the
-validator as well as its nominators. Only the [`Config::MaxNominatorRewardedPerValidator`]
-biggest stakers can claim their reward. This is to limit the i/o cost to mutate storage for each
-nominator's account.
+Rewards must be claimed on a per-era basis via the `payout_stakers` call, and must be claimed before
+[`HistoryDepth`] eras have passed since the reward's inclusion, after which any unclaimed rewards
+will expire and be removed from storage. Any account can call `payout_stakers`, which pays the reward
+to the validator as well as its nominators. Rewards are paged to maximum of
+[`Config::MaxExposurePageSize`] nominators per page. Each page of staker payout needs to be called
+separately to ensure all nominators are paid. This is to limit the i/o cost to mutate storage for
+each nominator's account.
 
 Slashing can occur at any point in time, once misbehavior is reported. Once slashing is
 determined, a value is deducted from the balance of the validator and all the nominators who

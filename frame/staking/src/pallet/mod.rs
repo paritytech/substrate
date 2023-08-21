@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,9 +24,8 @@ use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
 	traits::{
-		Currency, Defensive, DefensiveResult, DefensiveSaturating, EnsureOrigin,
-		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, TryCollect,
-		UnixTime,
+		Currency, Defensive, DefensiveSaturating, EnsureOrigin, EstimateNextNewSession, Get,
+		LockIdentifier, LockableCurrency, OnUnbalanced, UnixTime,
 	},
 	weights::Weight,
 	BoundedVec,
@@ -36,7 +35,7 @@ use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
 	ArithmeticError, Perbill, Percent,
 };
-use sp_staking::{EraIndex, SessionIndex};
+use sp_staking::{EraIndex, PageIndex, SessionIndex};
 use sp_std::prelude::*;
 
 mod impls;
@@ -45,9 +44,9 @@ pub use impls::*;
 
 use crate::{
 	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
-	EraRewardPoints, Exposure, Forcing, MaxNominationsOf, NegativeImbalanceOf, Nominations,
-	NominationsQuota, PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger,
-	UnappliedSlash, UnlockChunk, ValidatorPrefs,
+	EraRewardPoints, Exposure, ExposurePage, Forcing, MaxNominationsOf, NegativeImbalanceOf,
+	Nominations, NominationsQuota, PositiveImbalanceOf, RewardDestination, SessionInterface,
+	StakingLedger, UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -60,12 +59,12 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 pub mod pallet {
 	use frame_election_provider_support::ElectionDataProvider;
 
-	use crate::BenchmarkingConfig;
+	use crate::{BenchmarkingConfig, PagedExposureMetadata};
 
 	use super::*;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(13);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(14);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -137,8 +136,8 @@ pub mod pallet {
 		/// Following information is kept for eras in `[current_era -
 		/// HistoryDepth, current_era]`: `ErasStakers`, `ErasStakersClipped`,
 		/// `ErasValidatorPrefs`, `ErasValidatorReward`, `ErasRewardPoints`,
-		/// `ErasTotalStake`, `ErasStartSessionIndex`,
-		/// `StakingLedger.claimed_rewards`.
+		/// `ErasTotalStake`, `ErasStartSessionIndex`, `ClaimedRewards`, `ErasStakersPaged`,
+		/// `ErasStakersOverview`.
 		///
 		/// Must be more than the number of eras delayed by session.
 		/// I.e. active era must always be in history. I.e. `active_era >
@@ -148,7 +147,7 @@ pub mod pallet {
 		/// this should be set to same value or greater as in storage.
 		///
 		/// Note: `HistoryDepth` is used as the upper bound for the `BoundedVec`
-		/// item `StakingLedger.claimed_rewards`. Setting this value lower than
+		/// item `StakingLedger.legacy_claimed_rewards`. Setting this value lower than
 		/// the existing value can lead to inconsistencies in the
 		/// `StakingLedger` and will need to be handled properly in a migration.
 		/// The test `reducing_history_depth_abrupt` shows this effect.
@@ -201,12 +200,19 @@ pub mod pallet {
 		/// guess.
 		type NextNewSession: EstimateNextNewSession<BlockNumberFor<Self>>;
 
-		/// The maximum number of nominators rewarded for each validator.
+		/// The maximum size of each `T::ExposurePage`.
 		///
-		/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can
-		/// claim their reward. This used to limit the i/o cost for the nominator payout.
+		/// An `ExposurePage` is weakly bounded to a maximum of `MaxExposurePageSize`
+		/// nominators.
+		///
+		/// For older non-paged exposure, a reward payout was restricted to the top
+		/// `MaxExposurePageSize` nominators. This is to limit the i/o cost for the
+		/// nominator payout.
+		///
+		/// Note: `MaxExposurePageSize` is used to bound `ClaimedRewards` and is unsafe to reduce
+		/// without handling it in a migration.
 		#[pallet::constant]
-		type MaxNominatorRewardedPerValidator: Get<u32>;
+		type MaxExposurePageSize: Get<u32>;
 
 		/// The fraction of the validator set that is safe to be offending.
 		/// After the threshold is reached a new era will be forced.
@@ -389,7 +395,7 @@ pub mod pallet {
 	#[pallet::getter(fn active_era)]
 	pub type ActiveEra<T> = StorageValue<_, ActiveEraInfo>;
 
-	/// The session index at which the era start for the last `HISTORY_DEPTH` eras.
+	/// The session index at which the era start for the last [`Config::HistoryDepth`] eras.
 	///
 	/// Note: This tracks the starting session (i.e. session index when era start being active)
 	/// for the eras in `[CurrentEra - HISTORY_DEPTH, CurrentEra]`.
@@ -401,10 +407,11 @@ pub mod pallet {
 	///
 	/// This is keyed first by the era index to allow bulk deletion and then the stash account.
 	///
-	/// Is it removed after `HISTORY_DEPTH` eras.
+	/// Is it removed after [`Config::HistoryDepth`] eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
+	///
+	/// Note: Deprecated since v14. Use `EraInfo` instead to work with exposures.
 	#[pallet::storage]
-	#[pallet::getter(fn eras_stakers)]
 	#[pallet::unbounded]
 	pub type ErasStakers<T: Config> = StorageDoubleMap<
 		_,
@@ -416,17 +423,45 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	/// Summary of validator exposure at a given era.
+	///
+	/// This contains the total stake in support of the validator and their own stake. In addition,
+	/// it can also be used to get the number of nominators backing this validator and the number of
+	/// exposure pages they are divided into. The page count is useful to determine the number of
+	/// pages of rewards that needs to be claimed.
+	///
+	/// This is keyed first by the era index to allow bulk deletion and then the stash account.
+	/// Should only be accessed through `EraInfo`.
+	///
+	/// Is it removed after [`Config::HistoryDepth`] eras.
+	/// If stakers hasn't been set or has been removed then empty overview is returned.
+	#[pallet::storage]
+	pub type ErasStakersOverview<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		EraIndex,
+		Twox64Concat,
+		T::AccountId,
+		PagedExposureMetadata<BalanceOf<T>>,
+		OptionQuery,
+	>;
+
 	/// Clipped Exposure of validator at era.
 	///
+	/// Note: This is deprecated, should be used as read-only and will be removed in the future.
+	/// New `Exposure`s are stored in a paged manner in `ErasStakersPaged` instead.
+	///
 	/// This is similar to [`ErasStakers`] but number of nominators exposed is reduced to the
-	/// `T::MaxNominatorRewardedPerValidator` biggest stakers.
+	/// `T::MaxExposurePageSize` biggest stakers.
 	/// (Note: the field `total` and `own` of the exposure remains unchanged).
 	/// This is used to limit the i/o cost for the nominator payout.
 	///
 	/// This is keyed fist by the era index to allow bulk deletion and then the stash account.
 	///
-	/// Is it removed after `HISTORY_DEPTH` eras.
+	/// It is removed after [`Config::HistoryDepth`] eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
+	///
+	/// Note: Deprecated since v14. Use `EraInfo` instead to work with exposures.
 	#[pallet::storage]
 	#[pallet::unbounded]
 	#[pallet::getter(fn eras_stakers_clipped)]
@@ -440,11 +475,49 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	/// Paginated exposure of a validator at given era.
+	///
+	/// This is keyed first by the era index to allow bulk deletion, then stash account and finally
+	/// the page. Should only be accessed through `EraInfo`.
+	///
+	/// This is cleared after [`Config::HistoryDepth`] eras.
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub type ErasStakersPaged<T: Config> = StorageNMap<
+		_,
+		(
+			NMapKey<Twox64Concat, EraIndex>,
+			NMapKey<Twox64Concat, T::AccountId>,
+			NMapKey<Twox64Concat, PageIndex>,
+		),
+		ExposurePage<T::AccountId, BalanceOf<T>>,
+		OptionQuery,
+	>;
+
+	/// History of claimed paged rewards by era and validator.
+	///
+	/// This is keyed by era and validator stash which maps to the set of page indexes which have
+	/// been claimed.
+	///
+	/// It is removed after [`Config::HistoryDepth`] eras.
+	#[pallet::storage]
+	#[pallet::getter(fn claimed_rewards)]
+	#[pallet::unbounded]
+	pub type ClaimedRewards<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		EraIndex,
+		Twox64Concat,
+		T::AccountId,
+		Vec<PageIndex>,
+		ValueQuery,
+	>;
+
 	/// Similar to `ErasStakers`, this holds the preferences of validators.
 	///
 	/// This is keyed first by the era index to allow bulk deletion and then the stash account.
 	///
-	/// Is it removed after `HISTORY_DEPTH` eras.
+	/// Is it removed after [`Config::HistoryDepth`] eras.
 	// If prefs hasn't been set or has been removed then 0 commission is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_validator_prefs)]
@@ -458,14 +531,14 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// The total validator era payout for the last `HISTORY_DEPTH` eras.
+	/// The total validator era payout for the last [`Config::HistoryDepth`] eras.
 	///
 	/// Eras that haven't finished yet or has been removed doesn't have reward.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_validator_reward)]
 	pub type ErasValidatorReward<T: Config> = StorageMap<_, Twox64Concat, EraIndex, BalanceOf<T>>;
 
-	/// Rewards for the last `HISTORY_DEPTH` eras.
+	/// Rewards for the last [`Config::HistoryDepth`] eras.
 	/// If reward hasn't been set or has been removed then 0 reward is returned.
 	#[pallet::storage]
 	#[pallet::unbounded]
@@ -473,7 +546,7 @@ pub mod pallet {
 	pub type ErasRewardPoints<T: Config> =
 		StorageMap<_, Twox64Concat, EraIndex, EraRewardPoints<T::AccountId>, ValueQuery>;
 
-	/// The total amount staked for the last `HISTORY_DEPTH` eras.
+	/// The total amount staked for the last [`Config::HistoryDepth`] eras.
 	/// If total hasn't been set or has been removed then 0 stake is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_total_stake)]
@@ -738,6 +811,8 @@ pub mod pallet {
 		NotSortedAndUnique,
 		/// Rewards for this era have already been claimed for this validator.
 		AlreadyClaimed,
+		/// No nominators exist on this page.
+		InvalidPage,
 		/// Incorrect previous history depth input provided.
 		IncorrectHistoryDepth,
 		/// Incorrect number of slashing spans provided.
@@ -859,10 +934,6 @@ pub mod pallet {
 			<Bonded<T>>::insert(&stash, &stash);
 			<Payee<T>>::insert(&stash, payee);
 
-			let current_era = CurrentEra::<T>::get().unwrap_or(0);
-			let history_depth = T::HistoryDepth::get();
-			let last_reward_era = current_era.saturating_sub(history_depth);
-
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
 			Self::deposit_event(Event::<T>::Bonded { stash: stash.clone(), amount: value });
@@ -871,12 +942,7 @@ pub mod pallet {
 				total: value,
 				active: value,
 				unlocking: Default::default(),
-				claimed_rewards: (last_reward_era..current_era)
-					.try_collect()
-					// Since last_reward_era is calculated as `current_era -
-					// HistoryDepth`, following bound is always expected to be
-					// satisfied.
-					.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
+				legacy_claimed_rewards: Default::default(),
 			};
 			Self::update_ledger(&controller_to_be_deprecated, &item);
 			Ok(())
@@ -1460,21 +1526,21 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Pay out all the stakers behind a single validator for a single era.
+		/// Pay out next page of the stakers behind a validator for the given era.
 		///
-		/// - `validator_stash` is the stash account of the validator. Their nominators, up to
-		///   `T::MaxNominatorRewardedPerValidator`, will also receive their rewards.
+		/// - `validator_stash` is the stash account of the validator.
 		/// - `era` may be any era between `[current_era - history_depth; current_era]`.
 		///
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
 		///
-		/// ## Complexity
-		/// - At most O(MaxNominatorRewardedPerValidator).
+		/// The reward payout could be paged in case there are too many nominators backing the
+		/// `validator_stash`. This call will payout unpaid pages in an ascending order. To claim a
+		/// specific page, use `payout_stakers_by_page`.`
+		///
+		/// If all pages are claimed, it returns an error `InvalidPage`.
 		#[pallet::call_index(18)]
-		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(
-			T::MaxNominatorRewardedPerValidator::get()
-		))]
+		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(T::MaxExposurePageSize::get()))]
 		pub fn payout_stakers(
 			origin: OriginFor<T>,
 			validator_stash: T::AccountId,
@@ -1775,6 +1841,35 @@ pub mod pallet {
 			T::AdminOrigin::ensure_origin(origin)?;
 			MinCommission::<T>::put(new);
 			Ok(())
+		}
+
+		/// Pay out a page of the stakers behind a validator for the given era and page.
+		///
+		/// - `validator_stash` is the stash account of the validator.
+		/// - `era` may be any era between `[current_era - history_depth; current_era]`.
+		/// - `page` is the page index of nominators to pay out with value between 0 and
+		///   `num_nominators / T::MaxExposurePageSize`.
+		///
+		/// The origin of this call must be _Signed_. Any account can call this function, even if
+		/// it is not one of the stakers.
+		///
+		/// If a validator has more than [`Config::MaxExposurePageSize`] nominators backing
+		/// them, then the list of nominators is paged, with each page being capped at
+		/// [`Config::MaxExposurePageSize`.] If a validator has more than one page of nominators,
+		/// the call needs to be made for each page separately in order for all the nominators
+		/// backing a validator to receive the reward. The nominators are not sorted across pages
+		/// and so it should not be assumed the highest staker would be on the topmost page and vice
+		/// versa. If rewards are not claimed in [`Config::HistoryDepth`] eras, they are lost.
+		#[pallet::call_index(26)]
+		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(T::MaxExposurePageSize::get()))]
+		pub fn payout_stakers_by_page(
+			origin: OriginFor<T>,
+			validator_stash: T::AccountId,
+			era: EraIndex,
+			page: PageIndex,
+		) -> DispatchResultWithPostInfo {
+			ensure_signed(origin)?;
+			Self::do_payout_stakers_by_page(validator_stash, era, page)
 		}
 	}
 }
