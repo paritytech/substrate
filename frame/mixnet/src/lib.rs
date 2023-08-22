@@ -206,25 +206,25 @@ pub mod pallet {
 		/// transactions and the longevity of these transactions.
 		type NextSessionRotation: EstimateNextSessionRotation<BlockNumberFor<Self>>;
 
-		/// Length of the `CoverToCurrent` phase of each session, in blocks.
+		/// Length of the first phase of each session (`CoverToCurrent`), in blocks.
 		#[pallet::constant]
 		type NumCoverToCurrentBlocks: Get<BlockNumberFor<Self>>;
 
-		/// Length of the `RequestsToCurrent` phase of each session, in blocks.
+		/// Length of the second phase of each session (`RequestsToCurrent`), in blocks.
 		#[pallet::constant]
 		type NumRequestsToCurrentBlocks: Get<BlockNumberFor<Self>>;
 
-		/// Length of the `CoverToPrev` phase of each session, in blocks.
+		/// Length of the third phase of each session (`CoverToPrev`), in blocks.
 		#[pallet::constant]
 		type NumCoverToPrevBlocks: Get<BlockNumberFor<Self>>;
 
-		/// The number of "slack" blocks at the start of the register phase (`DisconnectFromPrev`).
+		/// The number of "slack" blocks at the start of the last phase (`DisconnectFromPrev`).
 		/// [`maybe_register`](Pallet::maybe_register) will not attempt to post registration
 		/// transactions during this slack period.
 		#[pallet::constant]
 		type NumRegisterStartSlackBlocks: Get<BlockNumberFor<Self>>;
 
-		/// The number of "slack" blocks at the end of the register phase (`DisconnectFromPrev`).
+		/// The number of "slack" blocks at the end of the last phase (`DisconnectFromPrev`).
 		/// [`maybe_register`](Pallet::maybe_register) will try to register before this slack
 		/// period, but may post registration transactions during the slack period as a last
 		/// resort.
@@ -257,10 +257,9 @@ pub mod pallet {
 	/// Mixnode set. Which mixnode set depends on the current session index and phase:
 	///
 	/// - Current session index is even (0, 2, ...): this is the current mixnode set.
-	/// - Current session index is odd, before register phase (`DisconnectFromPrev`): this is the
-	///   previous mixnode set.
-	/// - Current session index is odd, register phase (`DisconnectFromPrev`): this is the next
+	/// - Current session index is odd, before `DisconnectFromPrev` phase: this is the previous
 	///   mixnode set.
+	/// - Current session index is odd, `DisconnectFromPrev` phase: this is the next mixnode set.
 	///
 	/// The mixnodes are keyed by authority index so we can easily check if an authority has
 	/// already registered a mixnode. The authority indices should only be used during
@@ -273,10 +272,9 @@ pub mod pallet {
 	/// Mixnode set. Which mixnode set depends on the current session index and phase:
 	///
 	/// - Current session index is odd (1, 3, ...): this is the current mixnode set.
-	/// - Current session index is even, before register phase (`DisconnectFromPrev`): this is the
-	///   previous mixnode set.
-	/// - Current session index is even, register phase (`DisconnectFromPrev`): this is the next
+	/// - Current session index is even, before `DisconnectFromPrev` phase: this is the previous
 	///   mixnode set.
+	/// - Current session index is even, `DisconnectFromPrev` phase: this is the next mixnode set.
 	///
 	/// The mixnodes are keyed by authority index so we can easily check if an authority has
 	/// already registered a mixnode. The authority indices should only be used during
@@ -355,7 +353,7 @@ pub mod pallet {
 				Ordering::Equal => (),
 			}
 
-			// Check registrations are open
+			// It is only possible to register in the DisconnectFromPrev phase (the last phase)
 			let block_number = frame_system::Pallet::<T>::block_number();
 			if Self::session_phase(block_number).0 != SessionPhase::DisconnectFromPrev {
 				return InvalidTransaction::Future.into()
@@ -408,8 +406,8 @@ pub mod pallet {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
 			if Self::session_phase(block_number) == (SessionPhase::DisconnectFromPrev, Zero::zero())
 			{
-				// Right at the start of the register phase. Drop the previous mixnode set. From
-				// this point forward, the storage will be used for the next mixnode set.
+				// Right at the start of the DisconnectFromPrev phase. Drop the previous mixnode
+				// set. From this point forward, the storage will be used for the next mixnode set.
 				Self::clear_prev_next_mixnodes();
 			}
 			Weight::zero() // TODO
@@ -498,6 +496,8 @@ impl<T: Config> Pallet<T> {
 		block_number: BlockNumberFor<T>,
 		mixnode: &Mixnode,
 	) -> bool {
+		// It is only possible to register in the DisconnectFromPrev phase (the last phase). At the
+		// start of this phase there are some "slack" blocks during which we avoid registering.
 		let (phase, block_in_phase) = Self::session_phase(block_number);
 		if (phase != SessionPhase::DisconnectFromPrev) ||
 			(block_in_phase < T::NumRegisterStartSlackBlocks::get())
@@ -509,7 +509,7 @@ impl<T: Config> Pallet<T> {
 			T::NextSessionRotation::estimate_next_session_rotation(block_number)
 		else {
 			// Things aren't going to work terribly well in this case as all the authorities will
-			// just pile in at the start of each register phase...
+			// just pile in at the start of each DisconnectFromPrev phase...
 			return true
 		};
 
@@ -540,8 +540,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// `session_index` must be the index of the current session. `authority_index` is the
-	/// authority index in the _next_ session. Should only be called during the register phase
-	/// (`DisconnectFromPrev`).
+	/// authority index in the _next_ session. Should only be called during the
+	/// `DisconnectFromPrev` phase.
 	fn already_registered(session_index: SessionIndex, authority_index: AuthorityIndex) -> bool {
 		with_mixnodes!(
 			session_index,
@@ -633,10 +633,10 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	{
 		let block_number = frame_system::Pallet::<T>::block_number();
 
-		// It is possible for the ending session to have never entered the register phase
-		// (DisconnectFromPrev). Handle this case. Note that this should work whether
-		// on_new_session() is called before or after our on_initialize() function; in the latter
-		// case we may end up clearing the mixnode set twice, but this is harmless.
+		// It is possible for the ending session to have never entered the DisconnectFromPrev
+		// phase. Handle this case. Note that this should work whether on_new_session() is called
+		// before or after our on_initialize() function; in the latter case we may end up clearing
+		// the mixnode set twice, but this is harmless.
 		let (phase, block_in_phase) = Self::session_phase(block_number);
 		if (phase != SessionPhase::DisconnectFromPrev) || block_in_phase.is_zero() {
 			Self::clear_prev_next_mixnodes();
