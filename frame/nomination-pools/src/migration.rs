@@ -812,11 +812,11 @@ pub mod v5 {
 	/// [`frame_support::migrations::VersionedRuntimeUpgrade`], ensuring the migration is only
 	/// performed when on-chain version is 5.
 	#[cfg(feature = "experimental")]
-	pub type VersionCheckedMigrateV5ToV6<T, I> = frame_support::migrations::VersionedRuntimeUpgrade<
+	pub type VersionCheckedMigrateV5ToV6<T> = frame_support::migrations::VersionedRuntimeUpgrade<
 		5,
 		6,
-		VersionUncheckedMigrateV5ToV6<T, I>,
-		crate::pallet::Pallet<T, I>,
+		VersionUncheckedMigrateV5ToV6<T>,
+		crate::pallet::Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>;
 }

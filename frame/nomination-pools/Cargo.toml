@@ -36,6 +36,10 @@ sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
 
 [features]
 default = ["std"]
+# Enable `VersionedRuntimeUpgrade` for the migrations that is currently still experimental.
+experimental = [
+	"frame-support/experimental"
+]
 fuzzing = ["pallet-balances", "sp-tracing"]
 std = [
 	"codec/std",
