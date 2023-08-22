@@ -105,32 +105,32 @@ pub trait Swap<AccountId, Balance, MultiAssetId> {
 		keep_alive: bool,
 	) -> Result<Balance, DispatchError>;
 
-	/// Swap `amount_in_max` of asset `path[0]` for asset `path[1]` declared in `amount_out`.
-	/// It will return an error if acquiring `amount_out` would be too costly.
-	///
-	/// Thus it is on the RPC side to ensure that `amount_in` is enough to acquire `amount_out`.
-	///
-	/// Uses the `amount_in` imbalance to offset into the pool account.
-	///
-	/// If successful, returns the amount of `path[1]` acquired for the `amount_in`
-	/// along with the leftovers from `amount_in` as an imbalance.
-	/// They could be credited somewhere as the type implies, but can also be dropped.
-	///
-	/// Note: This method effectively prevents overswapping, so that the
-	/// returned `CreditPair::in_leftover` can then be directly refunded in the initial asset
-	/// without swapping back from the `path[1]` asset.
-	///
-	/// `amount_in` is not optional due to the fact that it is a balance to be offset
-	/// (credited to the pool), and not an amount to be acquired from a sender.
-	///
-	/// If this function returns an error, no credit will be taken from amount_in, like a no-op.
-	fn swap_tokens_for_exact_tokens_credit(
-		path: Vec<MultiAssetId>,
-		amount_out: Balance,
-		credit_in: Credit<AccountId, Balance>,
-	) -> Result<CreditPair<AccountId, Balance>, DispatchError>
-	where
-		Balance: Balanced<AccountId>;
+	// /// Swap `amount_in_max` of asset `path[0]` for asset `path[1]` declared in `amount_out`.
+	// /// It will return an error if acquiring `amount_out` would be too costly.
+	// ///
+	// /// Thus it is on the RPC side to ensure that `amount_in` is enough to acquire `amount_out`.
+	// ///
+	// /// Uses the `amount_in` imbalance to offset into the pool account.
+	// ///
+	// /// If successful, returns the amount of `path[1]` acquired for the `amount_in`
+	// /// along with the leftovers from `amount_in` as an imbalance.
+	// /// They could be credited somewhere as the type implies, but can also be dropped.
+	// ///
+	// /// Note: This method effectively prevents overswapping, so that the
+	// /// returned `CreditPair::in_leftover` can then be directly refunded in the initial asset
+	// /// without swapping back from the `path[1]` asset.
+	// ///
+	// /// `amount_in` is not optional due to the fact that it is a balance to be offset
+	// /// (credited to the pool), and not an amount to be acquired from a sender.
+	// ///
+	// /// If this function returns an error, no credit will be taken from amount_in, like a no-op.
+	// fn swap_tokens_for_exact_tokens_credit(
+	// 	path: Vec<MultiAssetId>,
+	// 	amount_out: Balance,
+	// 	credit_in: Credit<AccountId, Balance>,
+	// ) -> Result<CreditPair<AccountId, Balance>, DispatchError>
+	// where
+	// 	Balance: Balanced<AccountId>;
 
 	/// Take the `path[0]` asset and swap some amount for `amount_out` of the `path[1]`. If an
 	/// `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
@@ -150,12 +150,12 @@ pub trait Swap<AccountId, Balance, MultiAssetId> {
 	) -> Result<Balance, DispatchError>;
 }
 
-pub trait SwapCredit<AccountId, Balance, MultiAssetId> {
-	fn swap_exact_tokens_for_tokens_credit(
-		path: Vec<MultiAssetId>,
-		credit_in: Credit<AccountId, Balance>,
-		amount_out_min: Option<Balance>,
-	) -> Result<Credit<AccountId, Balance>, DispatchError>;
+pub trait SwapCredit<AccountId, Balance: Balanced<AccountId>, MultiAssetId> {
+	// fn swap_exact_tokens_for_tokens_credit(
+	// 	path: Vec<MultiAssetId>,
+	// 	credit_in: Credit<AccountId, Balance>,
+	// 	amount_out_min: Option<Balance>,
+	// ) -> Result<Credit<AccountId, Balance>, DispatchError>;
 
 	fn swap_tokens_for_exact_tokens_credit(
 		path: Vec<MultiAssetId>,
