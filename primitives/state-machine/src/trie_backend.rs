@@ -406,7 +406,7 @@ where
 	}
 
 	fn closest_merkle_value(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
-		Ok(None)
+		self.essence.closest_merkle_value(key)
 	}
 
 	fn child_closest_merkle_value(
@@ -414,7 +414,7 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<H::Out>, Self::Error> {
-		Ok(None)
+		self.essence.child_closest_merkle_value(child_info, key)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
