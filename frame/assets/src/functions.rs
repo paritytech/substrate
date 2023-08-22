@@ -64,6 +64,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub(super) fn new_account(
+		what: T::AssetId,
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>,
 		maybe_deposit: Option<(&T::AccountId, DepositBalanceOf<T, I>)>,
@@ -91,6 +92,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ExistenceReason::Consumer
 		};
 		d.accounts = accounts;
+		T::OnAccountCreated::on_new_account(what, who);
 		Ok(reason)
 	}
 
@@ -112,6 +114,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			DepositHeld(_) | DepositFrom(..) => {},
 		}
 		d.accounts = d.accounts.saturating_sub(1);
+		T::OnAccountKilled::on_killed_account(what, who);
 		Remove
 	}
 
@@ -461,7 +464,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						ensure!(amount >= details.min_balance, TokenError::BelowMinimum);
 						*maybe_account = Some(AssetAccountOf::<T, I> {
 							balance: amount,
-							reason: Self::new_account(beneficiary, details, None)?,
+							reason: Self::new_account(id, beneficiary, details, None)?,
 							status: AccountStatus::Liquid,
 							extra: T::Extra::default(),
 						});
@@ -657,7 +660,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						*maybe_account = Some(AssetAccountOf::<T, I> {
 							balance: credit,
 							status: AccountStatus::Liquid,
-							reason: Self::new_account(dest, details, None)?,
+							reason: Self::new_account(id, dest, details, None)?,
 							extra: T::Extra::default(),
 						});
 					},

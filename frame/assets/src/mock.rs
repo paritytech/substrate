@@ -131,10 +131,41 @@ impl AssetsCallbackHandle {
 	}
 }
 
+thread_local! {
+	static NEW_ACCOUNT: RefCell<Option<(AssetId, AccountId)>> = RefCell::new(Default::default());
+	static KILLED_ACCOUNT: RefCell<Option<(AssetId, AccountId)>> = RefCell::new(Default::default());
+}
+
+pub struct NewAccount;
+impl NewAccount {
+	pub fn get() -> Option<(AssetId, AccountId)> {
+		NEW_ACCOUNT.with(|a| a.borrow().clone())
+	}
+}
+
+impl OnAccountCreated<AccountId, AssetId> for NewAccount {
+	fn on_new_account(asset: AssetId, who: &AccountId) {
+		NEW_ACCOUNT.with(|a| *a.borrow_mut() = Some((asset, *who)));
+	}
+}
+
+pub struct KilledAccount;
+impl KilledAccount {
+	pub fn get() -> Option<(AssetId, AccountId)> {
+		KILLED_ACCOUNT.with(|a| a.borrow().clone())
+	}
+}
+
+impl OnAccountKilled<AccountId, AssetId> for KilledAccount {
+	fn on_killed_account(asset: AssetId, who: &AccountId) {
+		KILLED_ACCOUNT.with(|a| *a.borrow_mut() = Some((asset, *who)));
+	}
+}
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u64;
-	type AssetId = u32;
+	type AssetId = AssetId;
 	type AssetIdParameter = u32;
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
@@ -149,6 +180,8 @@ impl Config for Test {
 	type WeightInfo = ();
 	type CallbackHandle = AssetsCallbackHandle;
 	type Extra = ();
+	type OnAccountCreated = NewAccount;
+	type OnAccountKilled = KilledAccount;
 	type RemoveItemsLimit = ConstU32<5>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();

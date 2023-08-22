@@ -1491,6 +1491,25 @@ fn force_asset_status_should_work() {
 }
 
 #[test]
+fn account_lifecycle_callbacks_should_work() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+
+		assert_eq!(NewAccount::get(), None);
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		assert_eq!(NewAccount::get(), Some((0, 1)));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 100));
+		assert_eq!(NewAccount::get(), Some((0, 2)));
+
+		assert_eq!(KilledAccount::get(), None);
+		assert_ok!(Assets::burn(Origin::signed(1), 0, 1, 100));
+		assert_eq!(KilledAccount::get(), Some((0, 1)));
+		assert_ok!(Assets::burn(Origin::signed(1), 0, 2, 100));
+		assert_eq!(KilledAccount::get(), Some((0, 2)));
+	});
+}
+
+#[test]
 fn set_min_balance_should_work() {
 	new_test_ext().execute_with(|| {
 		let id = 42;

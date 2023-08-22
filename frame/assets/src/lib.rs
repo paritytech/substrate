@@ -319,6 +319,12 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 
+		/// Lifecycle callback for when a new account is created.
+		type OnAccountCreated: OnAccountCreated<Self::AccountId, Self::AssetId>;
+
+		/// Lifecycle callback for when an account is reaped.
+		type OnAccountKilled: OnAccountKilled<Self::AccountId, Self::AssetId>;
+		
 		/// Helper trait for benchmarks.
 		#[cfg(feature = "runtime-benchmarks")]
 		type BenchmarkHelper: BenchmarkHelper<Self::AssetIdParameter>;
