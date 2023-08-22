@@ -29,6 +29,7 @@ pub trait Tracing<T: Config> {
 	) -> Self::CallSpan;
 }
 
+/// Defines a span of execution for a contract call.
 pub trait CallSpan {
 	/// Called just after the execution of a contract.
 	///
