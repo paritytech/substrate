@@ -406,7 +406,7 @@ pub mod pallet {
 
 		/// DEPRECATED: Use the `approve_as_multi` extrinsic instead.
 		///
-		/// This extrinsic sets the expiry to `None`, while the `approve_as_multi` will allow you 
+		/// This extrinsic sets the expiry to `None`, while the `approve_as_multi` will allow you
 		/// to set it to a certain block number.
 		///
 		/// Register approval for a dispatch to be made from a deterministic composite account if
