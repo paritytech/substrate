@@ -405,6 +405,18 @@ where
 		self.essence.child_storage(child_info, key)
 	}
 
+	fn closest_merkle_value(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
+		Ok(None)
+	}
+
+	fn child_closest_merkle_value(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<Option<H::Out>, Self::Error> {
+		Ok(None)
+	}
+
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
 		let (is_cached, mut cache) = access_cache(&self.next_storage_key_cache, Option::take)
 			.map(|cache| (cache.last_key == key, cache))
