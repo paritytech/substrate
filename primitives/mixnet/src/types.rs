@@ -88,8 +88,6 @@ pub enum MixnodesErr {
 		/// The minimum number of mixnodes that must be registered for the mixnet to operate.
 		min: u32,
 	},
-	/// The mixnode set for the session has been discarded.
-	Discarded,
 }
 
 impl sp_std::fmt::Display for MixnodesErr {
@@ -97,7 +95,6 @@ impl sp_std::fmt::Display for MixnodesErr {
 		match self {
 			MixnodesErr::InsufficientRegistrations { num, min } =>
 				write!(fmt, "{num} mixnode(s) registered; {min} is the minimum"),
-			MixnodesErr::Discarded => write!(fmt, "The mixnode set has been discarded"),
 		}
 	}
 }

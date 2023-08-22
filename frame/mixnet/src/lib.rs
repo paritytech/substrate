@@ -163,22 +163,6 @@ fn twox<BlockNumber: UniqueSaturatedInto<u64>>(
 // The pallet
 ////////////////////////////////////////////////////////////////////////////////
 
-/// `$session_index` must be the index of the current session. If `$current` is `true`, evaluates
-/// `$expr` with `$mixnodes<T>` aliased to the current mixnode set. Otherwise, evaluates `$expr`
-/// with `$mixnodes<T>` aliased to the other mixnode set (which is either the next or previous
-/// mixnode set, depending on the session phase).
-macro_rules! with_mixnodes {
-	($session_index:expr, $current:expr, $mixnodes:ident, $expr:expr) => {
-		if (($session_index & 1) != 0) == $current {
-			type $mixnodes<T> = OddSessionMixnodes<T>;
-			$expr
-		} else {
-			type $mixnodes<T> = EvenSessionMixnodes<T>;
-			$expr
-		}
-	};
-}
-
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
@@ -218,13 +202,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type NumCoverToPrevBlocks: Get<BlockNumberFor<Self>>;
 
-		/// The number of "slack" blocks at the start of the last phase (`DisconnectFromPrev`).
+		/// The number of "slack" blocks at the start of each session, during which
 		/// [`maybe_register`](Pallet::maybe_register) will not attempt to post registration
-		/// transactions during this slack period.
+		/// transactions.
 		#[pallet::constant]
 		type NumRegisterStartSlackBlocks: Get<BlockNumberFor<Self>>;
 
-		/// The number of "slack" blocks at the end of the last phase (`DisconnectFromPrev`).
+		/// The number of "slack" blocks at the end of each session.
 		/// [`maybe_register`](Pallet::maybe_register) will try to register before this slack
 		/// period, but may post registration transactions during the slack period as a last
 		/// resort.
@@ -254,35 +238,15 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type NextAuthorityIds<T> = StorageMap<_, Identity, AuthorityIndex, AuthorityId>;
 
-	/// Mixnode set. Which mixnode set depends on the current session index and phase:
+	/// Mixnode sets by session index. Only the mixnode sets for the previous, current, and next
+	/// sessions are kept; older sets are discarded.
 	///
-	/// - Current session index is even (0, 2, ...): this is the current mixnode set.
-	/// - Current session index is odd, before `DisconnectFromPrev` phase: this is the previous
-	///   mixnode set.
-	/// - Current session index is odd, `DisconnectFromPrev` phase: this is the next mixnode set.
-	///
-	/// The mixnodes are keyed by authority index so we can easily check if an authority has
-	/// already registered a mixnode. The authority indices should only be used during
-	/// registration; in the very first session the authority indices for the current mixnode set
-	/// are made up.
+	/// The mixnodes in each set are keyed by authority index so we can easily check if an
+	/// authority has registered a mixnode. The authority indices should only be used during
+	/// registration; the authority indices for the very first session are made up.
 	#[pallet::storage]
-	pub(crate) type EvenSessionMixnodes<T> =
-		StorageMap<_, Identity, AuthorityIndex, BoundedMixnodeFor<T>>;
-
-	/// Mixnode set. Which mixnode set depends on the current session index and phase:
-	///
-	/// - Current session index is odd (1, 3, ...): this is the current mixnode set.
-	/// - Current session index is even, before `DisconnectFromPrev` phase: this is the previous
-	///   mixnode set.
-	/// - Current session index is even, `DisconnectFromPrev` phase: this is the next mixnode set.
-	///
-	/// The mixnodes are keyed by authority index so we can easily check if an authority has
-	/// already registered a mixnode. The authority indices should only be used during
-	/// registration; in the very first session the authority indices for the previous mixnode set
-	/// are made up.
-	#[pallet::storage]
-	pub(crate) type OddSessionMixnodes<T> =
-		StorageMap<_, Identity, AuthorityIndex, BoundedMixnodeFor<T>>;
+	pub(crate) type Mixnodes<T> =
+		StorageDoubleMap<_, Identity, SessionIndex, Identity, AuthorityIndex, BoundedMixnodeFor<T>>;
 
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
@@ -295,13 +259,13 @@ pub mod pallet {
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			assert!(
-				EvenSessionMixnodes::<T>::iter().next().is_none(),
+				Mixnodes::<T>::iter_prefix_values(0).next().is_none(),
 				"Initial mixnodes already set"
 			);
 			for (i, mixnode) in self.mixnodes.iter().enumerate() {
 				// We just make up authority indices here. This doesn't matter as authority indices
 				// are only used during registration to check an authority doesn't register twice.
-				EvenSessionMixnodes::<T>::insert(i as AuthorityIndex, mixnode);
+				Mixnodes::<T>::insert(0, i as AuthorityIndex, mixnode);
 			}
 		}
 	}
@@ -320,17 +284,13 @@ pub mod pallet {
 
 			// Checked by ValidateUnsigned
 			debug_assert_eq!(registration.session_index, CurrentSessionIndex::<T>::get());
-			debug_assert!(
-				Self::session_phase(frame_system::Pallet::<T>::block_number()).0 ==
-					SessionPhase::DisconnectFromPrev
-			);
 			debug_assert!(registration.authority_index < T::MaxAuthorities::get());
 
-			with_mixnodes!(
-				registration.session_index,
-				false, // Registering for the _following_ session
-				Mixnodes,
-				Mixnodes::<T>::insert(registration.authority_index, registration.mixnode)
+			Mixnodes::<T>::insert(
+				// Registering for the _following_ session
+				registration.session_index.wrapping_add(1),
+				registration.authority_index,
+				registration.mixnode,
 			);
 
 			Ok(())
@@ -351,12 +311,6 @@ pub mod pallet {
 				Ordering::Greater => return InvalidTransaction::Future.into(),
 				Ordering::Less => return InvalidTransaction::Stale.into(),
 				Ordering::Equal => (),
-			}
-
-			// It is only possible to register in the DisconnectFromPrev phase (the last phase)
-			let block_number = frame_system::Pallet::<T>::block_number();
-			if Self::session_phase(block_number).0 != SessionPhase::DisconnectFromPrev {
-				return InvalidTransaction::Future.into()
 			}
 
 			// Check authority index is valid
@@ -400,60 +354,42 @@ pub mod pallet {
 				.build()
 		}
 	}
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
-			if Self::session_phase(block_number) == (SessionPhase::DisconnectFromPrev, Zero::zero())
-			{
-				// Right at the start of the DisconnectFromPrev phase. Drop the previous mixnode
-				// set. From this point forward, the storage will be used for the next mixnode set.
-				Self::clear_prev_next_mixnodes();
-			}
-			Weight::zero() // TODO
-		}
-	}
 }
 
 impl<T: Config> Pallet<T> {
-	/// Returns the session phase and the number of blocks we have spent in this phase so far.
-	fn session_phase(block_number: BlockNumberFor<T>) -> (SessionPhase, BlockNumberFor<T>) {
-		let block_in_phase = block_number.saturating_sub(CurrentSessionStartBlock::<T>::get());
+	/// Returns the phase of the current session.
+	fn session_phase() -> SessionPhase {
+		let block_in_phase = frame_system::Pallet::<T>::block_number()
+			.saturating_sub(CurrentSessionStartBlock::<T>::get());
 		let Some(block_in_phase) = block_in_phase.checked_sub(&T::NumCoverToCurrentBlocks::get())
 		else {
-			return (SessionPhase::CoverToCurrent, block_in_phase)
+			return SessionPhase::CoverToCurrent
 		};
 		let Some(block_in_phase) =
 			block_in_phase.checked_sub(&T::NumRequestsToCurrentBlocks::get())
 		else {
-			return (SessionPhase::RequestsToCurrent, block_in_phase)
+			return SessionPhase::RequestsToCurrent
 		};
-		let Some(block_in_phase) = block_in_phase.checked_sub(&T::NumCoverToPrevBlocks::get())
-		else {
-			return (SessionPhase::CoverToPrev, block_in_phase)
-		};
-		(SessionPhase::DisconnectFromPrev, block_in_phase)
+		if block_in_phase < T::NumCoverToPrevBlocks::get() {
+			SessionPhase::CoverToPrev
+		} else {
+			SessionPhase::DisconnectFromPrev
+		}
 	}
 
 	/// Returns the index and phase of the current session.
 	pub fn session_status() -> SessionStatus {
 		SessionStatus {
 			current_index: CurrentSessionIndex::<T>::get(),
-			phase: Self::session_phase(frame_system::Pallet::<T>::block_number()).0,
+			phase: Self::session_phase(),
 		}
 	}
 
-	/// If `current` is `true`, returns the current mixnode set. Otherwise, returns the
-	/// previous/next mixnode set (depending on the session phase).
-	fn mixnodes(current: bool) -> Result<Vec<Mixnode>, MixnodesErr> {
-		let mixnodes: Vec<_> = with_mixnodes!(
-			CurrentSessionIndex::<T>::get(),
-			current,
-			Mixnodes,
-			Mixnodes::<T>::iter_values()
-		)
-		.map(Into::into)
-		.collect();
+	/// Returns the mixnode set for the given session (which should be either the previous or the
+	/// current session).
+	fn mixnodes(session_index: SessionIndex) -> Result<Vec<Mixnode>, MixnodesErr> {
+		let mixnodes: Vec<_> =
+			Mixnodes::<T>::iter_prefix_values(session_index).map(Into::into).collect();
 		if mixnodes.len() < T::MinMixnodes::get() as usize {
 			Err(MixnodesErr::InsufficientRegistrations {
 				num: mixnodes.len() as u32,
@@ -466,29 +402,12 @@ impl<T: Config> Pallet<T> {
 
 	/// Returns the mixnode set for the previous session.
 	pub fn prev_mixnodes() -> Result<Vec<Mixnode>, MixnodesErr> {
-		if Self::session_phase(frame_system::Pallet::<T>::block_number()).0 ==
-			SessionPhase::DisconnectFromPrev
-		{
-			// Non-current mixnodes are for next session now, not previous session
-			Err(MixnodesErr::Discarded)
-		} else {
-			Self::mixnodes(false)
-		}
+		Self::mixnodes(CurrentSessionIndex::<T>::get().wrapping_sub(1))
 	}
 
 	/// Returns the mixnode set for the current session.
 	pub fn current_mixnodes() -> Result<Vec<Mixnode>, MixnodesErr> {
-		Self::mixnodes(true)
-	}
-
-	/// Clear the previous/next mixnode set (depending on the session phase).
-	fn clear_prev_next_mixnodes() {
-		with_mixnodes!(
-			CurrentSessionIndex::<T>::get(),
-			false, // Want to clear the previous/next mixnode set
-			Mixnodes,
-			check_removed_all(Mixnodes::<T>::clear(T::MaxAuthorities::get(), None))
-		);
+		Self::mixnodes(CurrentSessionIndex::<T>::get())
 	}
 
 	/// Is now a good time to register, considering only session progress?
@@ -496,12 +415,10 @@ impl<T: Config> Pallet<T> {
 		block_number: BlockNumberFor<T>,
 		mixnode: &Mixnode,
 	) -> bool {
-		// It is only possible to register in the DisconnectFromPrev phase (the last phase). At the
-		// start of this phase there are some "slack" blocks during which we avoid registering.
-		let (phase, block_in_phase) = Self::session_phase(block_number);
-		if (phase != SessionPhase::DisconnectFromPrev) ||
-			(block_in_phase < T::NumRegisterStartSlackBlocks::get())
-		{
+		// At the start of each session there are some "slack" blocks during which we avoid
+		// registering
+		let block_in_session = block_number.saturating_sub(CurrentSessionStartBlock::<T>::get());
+		if block_in_session < T::NumRegisterStartSlackBlocks::get() {
 			return false
 		}
 
@@ -509,7 +426,7 @@ impl<T: Config> Pallet<T> {
 			T::NextSessionRotation::estimate_next_session_rotation(block_number)
 		else {
 			// Things aren't going to work terribly well in this case as all the authorities will
-			// just pile in at the start of each DisconnectFromPrev phase...
+			// just pile in after the slack period...
 			return true
 		};
 
@@ -539,16 +456,10 @@ impl<T: Config> Pallet<T> {
 		NextAuthorityIds::<T>::iter().find(|(_index, id)| local_ids.binary_search(id).is_ok())
 	}
 
-	/// `session_index` must be the index of the current session. `authority_index` is the
-	/// authority index in the _next_ session. Should only be called during the
-	/// `DisconnectFromPrev` phase.
+	/// `session_index` should be the index of the current session. `authority_index` is the
+	/// authority index in the _next_ session.
 	fn already_registered(session_index: SessionIndex, authority_index: AuthorityIndex) -> bool {
-		with_mixnodes!(
-			session_index,
-			false, // Registration is for the _following_ session
-			Mixnodes,
-			Mixnodes::<T>::contains_key(authority_index)
-		)
+		Mixnodes::<T>::contains_key(session_index.wrapping_add(1), authority_index)
 	}
 
 	/// Try to register a mixnode for the next session.
@@ -641,24 +552,23 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	where
 		I: Iterator<Item = (&'a T::AccountId, Self::Key)>,
 	{
-		let block_number = frame_system::Pallet::<T>::block_number();
+		let session_index = CurrentSessionIndex::<T>::mutate(|index| {
+			*index += 1;
+			*index
+		});
+		CurrentSessionStartBlock::<T>::put(frame_system::Pallet::<T>::block_number());
 
-		// It is possible for the ending session to have never entered the DisconnectFromPrev
-		// phase. Handle this case. Note that this should work whether on_new_session() is called
-		// before or after our on_initialize() function; in the latter case we may end up clearing
-		// the mixnode set twice, but this is harmless.
-		let (phase, block_in_phase) = Self::session_phase(block_number);
-		if (phase != SessionPhase::DisconnectFromPrev) || block_in_phase.is_zero() {
-			Self::clear_prev_next_mixnodes();
-		}
-
-		CurrentSessionIndex::<T>::mutate(|index| *index += 1);
-		CurrentSessionStartBlock::<T>::put(block_number);
+		// Discard the previous previous mixnode set, which we don't need any more
+		check_removed_all(Mixnodes::<T>::clear_prefix(
+			session_index.wrapping_sub(2),
+			T::MaxAuthorities::get(),
+			None,
+		));
 
 		if changed {
 			// Save authority set for the next session. Note that we don't care about the authority
 			// set for the current session; we just care about the key-exchange public keys that
-			// were registered and are stored in Odd/EvenSessionMixnodes.
+			// were registered and are stored in Mixnodes.
 			check_removed_all(NextAuthorityIds::<T>::clear(T::MaxAuthorities::get(), None));
 			for (i, (_, authority_id)) in queued_validators.enumerate() {
 				NextAuthorityIds::<T>::insert(i as AuthorityIndex, authority_id);
