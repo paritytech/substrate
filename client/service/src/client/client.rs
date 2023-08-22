@@ -1561,15 +1561,20 @@ where
 		hash: <Block as BlockT>::Hash,
 		key: &StorageKey,
 	) -> blockchain::Result<Option<<Block as BlockT>::Hash>> {
-		Ok(None)
+		self.state_at(hash)?
+			.closest_merkle_value(&key.0)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 
 	fn child_closest_merkle_value(
 		&self,
 		hash: <Block as BlockT>::Hash,
+		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> blockchain::Result<Option<<Block as BlockT>::Hash>> {
-		Ok(None)
+		self.state_at(hash)?
+			.child_closest_merkle_value(child_info, &key.0)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 }
 

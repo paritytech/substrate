@@ -488,6 +488,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	fn child_closest_merkle_value(
 		&self,
 		hash: Block::Hash,
+		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>>;
 }
