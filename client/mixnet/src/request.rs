@@ -51,10 +51,13 @@ fn send_reply<T: Decode>(reply_sender: oneshot::Sender<Result<T, Error>>, mut da
 	}
 }
 
+/// First byte of a submit extrinsic request, identifying it as such.
 pub const SUBMIT_EXTRINSIC: u8 = 1;
 
 const EXTRINSIC_DELAY_PERSONA: &[u8; 16] = b"submit-extrn-dly";
 
+/// Returns the artificial delay that should be inserted between receipt of a submit extrinsic
+/// request with the given message ID and import of the extrinsic into the local transaction pool.
 pub fn extrinsic_delay(message_id: &MessageId, config: &SubstrateConfig) -> Duration {
 	let h = Blake2bMac::<U16>::new_with_salt_and_personal(message_id, b"", EXTRINSIC_DELAY_PERSONA)
 		.expect("Key, salt, and persona sizes are fixed and small enough");
@@ -62,17 +65,21 @@ pub fn extrinsic_delay(message_id: &MessageId, config: &SubstrateConfig) -> Dura
 	delay.to_duration(config.mean_extrinsic_delay)
 }
 
+/// Request parameters and local reply channel. Stored by the
+/// [`RequestManager`](mixnet::request_manager::RequestManager).
 pub enum Request {
 	SubmitExtrinsic { extrinsic: Bytes, reply_sender: oneshot::Sender<Result<(), Error>> },
 }
 
 impl Request {
+	/// Forward an error to the user of the mixnet service.
 	fn send_err(self, err: Error) {
 		match self {
 			Request::SubmitExtrinsic { reply_sender, .. } => send_err(reply_sender, err),
 		}
 	}
 
+	/// Forward a reply to the user of the mixnet service.
 	pub fn send_reply(self, data: &[u8]) {
 		match self {
 			Request::SubmitExtrinsic { reply_sender, .. } => send_reply(reply_sender, data),
