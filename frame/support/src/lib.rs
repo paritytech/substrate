@@ -821,9 +821,10 @@ pub mod pallet_prelude {
 			bounded_vec::BoundedVec,
 			types::{
 				CountedStorageMap, CountedStorageNMap, Key as NMapKey, OptionQuery, ResultQuery,
-				StorageDoubleMap, StorageMap, StorageNMap, StorageValue, ValueQuery,
+				StorageDoubleMap, StorageMap, StorageNMap, StoragePagedList, StoragePagedNMap,
+				StorageValue, ValueQuery,
 			},
-			StorageList,
+			StorageKeyedList, StorageList,
 		},
 		traits::{
 			BuildGenesisConfig, ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks,

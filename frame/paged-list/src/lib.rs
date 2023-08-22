@@ -66,15 +66,14 @@
 pub use pallet::*;
 
 pub mod mock;
-mod paged_list;
 mod tests;
 
 use codec::FullCodec;
 use frame_support::{
 	pallet_prelude::StorageList,
+	storage::types::StoragePagedList,
 	traits::{PalletInfoAccess, StorageInstance},
 };
-pub use paged_list::StoragePagedList;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -110,6 +109,10 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> StorageList<T::Value> for Pallet<T, I> {
 	type Iterator = <List<T, I> as StorageList<T::Value>>::Iterator;
 	type Appender = <List<T, I> as StorageList<T::Value>>::Appender;
+
+	fn len() -> u64 {
+		List::<T, I>::len()
+	}
 
 	fn iter() -> Self::Iterator {
 		List::<T, I>::iter()

@@ -111,6 +111,9 @@ pub mod pallet {
 	pub(crate) type UnboundedMapTwox<T: Config> =
 		StorageMap<Hasher = Twox64Concat, Key = u32, Value = Vec<u32>, QueryKind = OptionQuery>;
 
+	#[pallet::storage]
+	pub(super) type PagedList64k<T: Config> = StoragePagedList<_, u32>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {

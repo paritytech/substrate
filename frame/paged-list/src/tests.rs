@@ -46,7 +46,7 @@ fn append_many_works() {
 #[docify::export]
 #[test]
 fn appender_works() {
-	use frame_support::storage::StorageAppender;
+	use frame_support::storage::StorageListAppender;
 	test_closure(|| {
 		let mut appender = PagedList::appender();
 
@@ -86,23 +86,24 @@ fn drain_works() {
 #[test]
 fn iter_independent_works() {
 	test_closure(|| {
-		PagedList::append_many(0..1000);
-		PagedList2::append_many(0..1000);
+		PagedList::append_many(0..100);
+		PagedList2::append_many(0..200);
 
-		assert_eq!(PagedList::iter().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
-		assert_eq!(PagedList::iter().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
+		assert_eq!(PagedList::iter().collect::<Vec<_>>(), (0..100).collect::<Vec<_>>());
+		assert_eq!(PagedList2::iter().collect::<Vec<_>>(), (0..200).collect::<Vec<_>>());
 
 		// drain
-		assert_eq!(PagedList::drain().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
-		assert_eq!(PagedList2::iter().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
+		assert_eq!(PagedList::drain().collect::<Vec<_>>(), (0..100).collect::<Vec<_>>());
+		assert_eq!(PagedList2::drain().collect::<Vec<_>>(), (0..200).collect::<Vec<_>>());
 
 		assert_eq!(PagedList::iter().count(), 0);
+		assert_eq!(PagedList2::iter().count(), 0);
 	});
 }
 
 #[test]
 fn prefix_distinct() {
-	let p1 = List::<Test, ()>::final_prefix();
-	let p2 = List::<Test, crate::Instance2>::final_prefix();
+	let p1 = MetaOf::<Test, ()>::storage_key(((),));
+	let p2 = MetaOf::<Test, crate::Instance2>::storage_key(((),));
 	assert_ne!(p1, p2);
 }

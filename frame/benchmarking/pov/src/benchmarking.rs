@@ -21,7 +21,7 @@
 
 use super::*;
 
-use frame_support::traits::UnfilteredDispatchable;
+use frame_support::{pallet_prelude::*, traits::UnfilteredDispatchable};
 use frame_system::{Pallet as System, RawOrigin};
 use sp_runtime::traits::Hash;
 
@@ -327,6 +327,16 @@ frame_benchmarking::benchmarks! {
 				core::ptr::read_volatile(&key);
 				core::ptr::read_volatile(value.as_ptr());
 			}
+		}
+	}
+
+	paged_list_iter_pages {
+		let n in 0 .. 20;
+		PagedList64k::<T>::append_many(0u32..((1<<14) * 20));
+	}: {
+		let mut iter = PagedList64k::<T>::iter();
+		for i in 0 .. ((1<<14) * n) {
+			assert_eq!(iter.next(), Some(i));
 		}
 	}
 

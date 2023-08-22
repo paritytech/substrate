@@ -21,6 +21,7 @@ use crate::*;
 use frame_support::{
 	assert_ok,
 	dispatch::{DispatchInfo, GetDispatchInfo},
+	pallet_prelude::*,
 	traits::{ConstU64, OnInitialize},
 };
 use sp_core::H256;
@@ -194,4 +195,23 @@ fn weights_work() {
 	let info2 = custom_call.get_dispatch_info();
 	// TODO: account for proof size weight
 	assert!(info1.weight.ref_time() > info2.weight.ref_time());
+}
+
+#[test]
+fn paged_nmap_works() {
+	new_test_ext().execute_with(|| {
+		use frame_support::storage::StorageKeyedList;
+
+		for x in 0..10 {
+			for y in 0..10 {
+				PagedNMap::<Test>::append_many((x, y), 0..3);
+			}
+		}
+
+		for x in 0..10 {
+			for y in 0..10 {
+				assert_eq!(PagedNMap::<Test>::iter((x, y)).collect::<Vec<_>>(), vec![0, 1, 2]);
+			}
+		}
+	});
 }

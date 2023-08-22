@@ -2931,8 +2931,7 @@ dependencies = [
 [[package]]
 name = "frame-metadata"
 version = "16.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87cf1549fba25a6fcac22785b61698317d958e96cac72a59102ea45b9ae64692"
+source = "git+https://github.com/ggwpez/frame-metadata?branch=main#a53a427c9f93bf0acb42092d5782c78550940eee"
 dependencies = [
  "cfg-if",
  "parity-scale-codec",
@@ -3038,6 +3037,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.18",
+]
+
+[[package]]
+name = "frame-support-storage-fuzzer"
+version = "0.1.0"
+dependencies = [
+ "arbitrary",
+ "frame-support",
+ "honggfuzz",
+ "sp-io",
 ]
 
 [[package]]

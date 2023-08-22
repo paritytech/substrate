@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 serde = { version = "1.0.163", default-features = false, features = ["alloc", "derive"] }
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-frame-metadata = { version = "16.0.0", default-features = false, features = ["current"] }
+frame-metadata = { version = "16.0.0", default-features = false, features = ["current"], git = "https://github.com/ggwpez/frame-metadata", branch = "main" } # FAIL-CI
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api", features = [ "frame-metadata" ] }
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
@@ -54,40 +54,9 @@ array-bytes = "6.1"
 
 [features]
 default = ["std"]
-std = [
-	"sp-core/std",
-	"k256/std",
-	"serde/std",
-	"sp-api/std",
-	"sp-io/std",
-	"codec/std",
-	"scale-info/std",
-	"sp-std/std",
-	"sp-runtime/std",
-	"sp-tracing/std",
-	"sp-arithmetic/std",
-	"frame-metadata/std",
-	"sp-inherents/std",
-	"sp-staking/std",
-	"sp-state-machine/std",
-	"sp-weights/std",
-	"frame-support-procedural/std",
-	"log/std",
-	"environmental/std",
-	"sp-genesis-builder/std",
-	"frame-system/std",
-	"sp-debug-derive/std"
-]
-runtime-benchmarks = [
-	"frame-system/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks",
-	"sp-staking/runtime-benchmarks"
-]
-try-runtime = [
-	"sp-debug-derive/force-debug",
-	"frame-system/try-runtime",
-	"sp-runtime/try-runtime"
-]
+std = ["sp-core/std", "k256/std", "serde/std", "sp-api/std", "sp-io/std", "codec/std", "scale-info/std", "sp-std/std", "sp-runtime/std", "sp-tracing/std", "sp-arithmetic/std", "frame-metadata/std", "sp-inherents/std", "sp-staking/std", "sp-state-machine/std", "sp-weights/std", "frame-support-procedural/std", "log/std", "environmental/std", "sp-genesis-builder/std", "frame-system/std", "sp-debug-derive/std"]
+runtime-benchmarks = ["frame-system/runtime-benchmarks", "sp-runtime/runtime-benchmarks", "sp-staking/runtime-benchmarks"]
+try-runtime = ["sp-debug-derive/force-debug", "frame-system/try-runtime", "sp-runtime/try-runtime"]
 experimental = []
 # By default some types have documentation, `no-metadata-docs` allows to reduce the documentation
 # in the metadata.

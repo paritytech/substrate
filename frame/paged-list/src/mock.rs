@@ -19,8 +19,11 @@
 
 #![cfg(feature = "std")]
 
-use crate::{paged_list::StoragePagedListMeta, Config, ListPrefix};
-use frame_support::traits::{ConstU16, ConstU64};
+use crate::{Config, ListPrefix};
+use frame_support::{
+	storage::types::StoragePagedListMeta,
+	traits::{ConstU16, ConstU64},
+};
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
