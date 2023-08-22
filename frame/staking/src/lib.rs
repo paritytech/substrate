@@ -791,6 +791,9 @@ pub trait SessionInterface<AccountId> {
 	/// Disable the validator at the given index, returns `false` if the validator was already
 	/// disabled or the index is out of bounds.
 	fn disable_validator(validator_index: u32) -> bool;
+	/// Clear disabled validators and set new ones. If the input `Vec` is empty the disabled
+	/// validators list still will be cleared. Get the validators from session.
+	fn reset_disabled_validators(new_disabled_validator_indecies: Vec<u32>);
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
@@ -822,6 +825,10 @@ where
 	fn prune_historical_up_to(up_to: SessionIndex) {
 		<pallet_session::historical::Pallet<T>>::prune_up_to(up_to);
 	}
+
+	fn reset_disabled_validators(new_disabled_validator_indecies: Vec<u32>) {
+		<pallet_session::Pallet<T>>::reset_disabled(new_disabled_validator_indecies);
+	}
 }
 
 impl<AccountId> SessionInterface<AccountId> for () {
@@ -834,6 +841,8 @@ impl<AccountId> SessionInterface<AccountId> for () {
 	fn prune_historical_up_to(_: SessionIndex) {
 		()
 	}
+
+	fn reset_disabled_validators(_: Vec<u32>) {}
 }
 
 /// Handler for determining how much of a balance should be paid out on the current era.

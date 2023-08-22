@@ -731,6 +731,15 @@ impl<T: Config> Pallet<T> {
 			.unwrap_or(false)
 	}
 
+	/// Clears all disabled validators and add a new set. Input vector should be sorted!
+	pub fn reset_disabled(new_disabled_indecies: Vec<u32>) {
+		// Should we trust the caller that the vector is sorted?!
+		// new_disabled_indecies.sort();
+		<DisabledValidators<T>>::set(new_disabled_indecies);
+		// TODO call `T::SessionHandler::on_disabled(i);` for the newly disabled validators
+		// TODO: should we do something with the reenabled ones?
+	}
+
 	/// Upgrade the key type from some old type to a new type. Supports adding
 	/// and removing key types.
 	///

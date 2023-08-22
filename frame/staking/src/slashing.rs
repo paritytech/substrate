@@ -50,22 +50,23 @@
 //! Based on research at <https://research.web3.foundation/en/latest/polkadot/slashing/npos.html>
 
 use crate::{
-	BalanceOf, Config, Error, Exposure, NegativeImbalanceOf, NominatorSlashInEra,
-	OffendingValidators, Pallet, Perbill, SessionInterface, SpanSlash, UnappliedSlash,
-	ValidatorSlashInEra,
+	BalanceOf, Config, DisabledOffenders, Error, Exposure, NegativeImbalanceOf,
+	NominatorSlashInEra, OffendingValidators, Pallet, Perbill, SessionInterface, SpanSlash,
+	UnappliedSlash, ValidatorSlashInEra,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ensure,
 	traits::{Currency, Defensive, Get, Imbalance, OnUnbalanced},
 };
+use rand_chacha::rand_core::{RngCore, SeedableRng};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	DispatchResult, RuntimeDebug,
 };
 use sp_staking::{offence::DisableStrategy, EraIndex};
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 /// The proportion of the slashing reward to be paid out on the first slashing detection.
 /// This is f_1 in the paper.
@@ -286,7 +287,7 @@ pub(crate) fn compute_slash<T: Config>(
 	}
 
 	let disable_when_slashed = params.disable_strategy != DisableStrategy::Never;
-	add_offending_validator::<T>(params.stash, disable_when_slashed);
+	add_offending_validator::<T>(params.stash, params.slash, disable_when_slashed);
 
 	let mut nominators_slashed = Vec::new();
 	reward_payout += slash_nominators::<T>(params.clone(), prior_slash_p, &mut nominators_slashed);
@@ -320,13 +321,17 @@ fn kick_out_if_recent<T: Config>(params: SlashParams<T>) {
 	}
 
 	let disable_without_slash = params.disable_strategy == DisableStrategy::Always;
-	add_offending_validator::<T>(params.stash, disable_without_slash);
+	add_offending_validator::<T>(params.stash, params.slash, disable_without_slash);
 }
 
 /// Add the given validator to the offenders list and optionally disable it.
 /// If after adding the validator `OffendingValidatorsThreshold` is reached
 /// a new era will be forced.
-fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
+fn add_offending_validator<T: Config>(
+	stash: &T::AccountId,
+	slash_proportion: Perbill,
+	disable: bool,
+) {
 	OffendingValidators::<T>::mutate(|offending| {
 		let validators = T::SessionInterface::validators();
 		let validator_index = match validators.iter().position(|i| i == stash) {
@@ -338,31 +343,134 @@ fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
 
 		match offending.binary_search_by_key(&validator_index_u32, |(index, _)| *index) {
 			// this is a new offending validator
-			Err(index) => {
-				offending.insert(index, (validator_index_u32, disable));
+			Err(pos) => {
+				offending.insert(pos, (validator_index_u32, slash_proportion));
 
 				let offending_threshold =
 					T::OffendingValidatorsThreshold::get() * validators.len() as u32;
 
 				if offending.len() >= offending_threshold as usize {
-					// force a new era, to select a new validator set
+					// force a new era, to select a new validator set. The era will be forced on the
+					// next session
 					<Pallet<T>>::ensure_new_era()
 				}
 
 				if disable {
-					T::SessionInterface::disable_validator(validator_index_u32);
+					disable_new_offender::<T>(offending, validator_index_u32);
 				}
 			},
-			Ok(index) => {
-				if disable && !offending[index].1 {
+			Ok(pos) => {
+				// Keep the biggest offence
+				if slash_proportion > offending[pos].1 {
+					offending[pos].1 = slash_proportion;
+				}
+				if disable && !is_disabled::<T>(validator_index_u32) {
 					// the validator had previously offended without being disabled,
-					// let's make sure we disable it now
-					offending[index].1 = true;
-					T::SessionInterface::disable_validator(validator_index_u32);
+					// let's disable it now
+					disable_new_offender::<T>(offending, validator_index_u32);
 				}
 			},
 		}
 	});
+}
+
+// TODO: copy-pasted from polkadot: https://github.com/paritytech/polkadot/blob/0b56bcdb07752f3c2f369963d2c47eced549320d/runtime/parachains/src/paras_inherent/mod.rs#L875
+/// Derive entropy from babe provided per block randomness.
+///
+/// In the odd case none is available, uses the `parent_hash` and
+/// a const value, while emitting a warning.
+fn compute_entropy<T: Config>(parent_hash: T::Hash) -> [u8; 32] {
+	use frame_support::traits::Randomness;
+	const CANDIDATE_SEED_SUBJECT: [u8; 32] = *b"candidate-seed-selection-subject";
+	// NOTE: this is slightly gameable since this randomness was already public
+	// by the previous block, while for the block author this randomness was
+	// known 2 epochs ago. it is marginally better than using the parent block
+	// hash since it's harder to influence the VRF output than the block hash.
+	let vrf_random = T::Randomness::random(&CANDIDATE_SEED_SUBJECT[..]).0;
+	let mut entropy: [u8; 32] = CANDIDATE_SEED_SUBJECT;
+	if let Some(vrf_random) = vrf_random {
+		entropy.as_mut().copy_from_slice(vrf_random.as_ref());
+	} else {
+		// in case there is no VRF randomness present, we utilize the relay parent
+		// as seed, it's better than a static value.
+		entropy.as_mut().copy_from_slice(parent_hash.as_ref());
+	}
+	entropy
+}
+
+// Decides if a validator should be disabled or not based on its offence. The bigger the offence -
+// the higher chance to disable the validator in question.
+fn disable_rand<T: Config>(offence: &Perbill) -> bool {
+	let entropy = compute_entropy::<T>(<frame_system::Pallet<T>>::parent_hash());
+	let mut rng = rand_chacha::ChaChaRng::from_seed(entropy.into());
+	let r = rng.next_u32() % 100;
+
+	Perbill::from_percent(r) <= *offence
+}
+
+// Gets a Vec and its desired length as an input. Randomly removes values from the Vec until its
+// length matches the desired length. The validator length should be bigger than the desired one.
+fn remove_random_validators<T: Config>(validators: Vec<u32>, desired_len: usize) -> Vec<u32> {
+	debug_assert!(validators.len() > desired_len);
+
+	let entropy = compute_entropy::<T>(<frame_system::Pallet<T>>::parent_hash());
+	let mut rng = rand_chacha::ChaChaRng::from_seed(entropy.into());
+
+	let mut indecies_to_remove = BTreeSet::new();
+	for _ in 0..=desired_len.saturating_sub(validators.len()) {
+		indecies_to_remove.insert(rng.next_u32() as usize % validators.len());
+	}
+
+	validators
+		.into_iter()
+		.enumerate()
+		.filter(|(pos, _)| !indecies_to_remove.contains(pos))
+		.map(|(_, val)| val)
+		.collect::<Vec<_>>()
+}
+
+/// Disable the validator with the id in `new_offender`. There are two possible cases:
+/// 1. The total number of disabled validators is below the threshold. Then disable the new one and
+///    finish.
+/// 2. The total number of disabled validators is equal or above the threshold. In this case add the
+///    disabled validators list is reshuffled. The reshuffling works by disabling the validator with
+///    a probability equal to its offence. If the disabled validators list ends up bigger than the
+///    threshold - validators are randomly removed from the list until the desired length is
+///    achieved.
+/// In both cases Session is notified for the change via the `SessionInterface.
+///
+/// NOTE: in case 2 the new offender might not be disabled.
+fn disable_new_offender<T: Config>(current_offenders: &Vec<(u32, Perbill)>, new_offender: u32) {
+	const LIMIT: usize = 42; // TODO: extract this as a parameter
+
+	let currently_disabled = DisabledOffenders::<T>::get();
+
+	if currently_disabled.len() < LIMIT {
+		// we are below the limit - just disable
+		T::SessionInterface::disable_validator(new_offender);
+		add_to_disabled_offenders::<T>(new_offender);
+
+		return
+	}
+
+	// Now selectively disable based on the offence
+	let mut disabled = Vec::new();
+	for (v, o) in current_offenders {
+		if disable_rand::<T>(o) {
+			disabled.push(*v);
+		}
+	}
+
+	let disabled = if disabled.len() > LIMIT {
+		// remove `disabled.len() - LIMIT` random elements from `disabled`
+		remove_random_validators::<T>(disabled, LIMIT)
+	} else {
+		disabled
+	};
+
+	// update disabled list
+	DisabledOffenders::<T>::set(disabled.clone());
+	T::SessionInterface::reset_disabled_validators(disabled);
 }
 
 /// Slash nominators. Accepts general parameters and the prior slash percentage of the validator.
@@ -687,6 +795,23 @@ fn pay_reporters<T: Config>(
 	// the rest goes to the on-slash imbalance handler (e.g. treasury)
 	value_slashed.subsume(reward_payout); // remainder of reward division remains.
 	T::Slash::on_unbalanced(value_slashed);
+}
+
+// Storage helper: adds a validator to `DisabledOffenders` by maintaining order. Does nothing if the
+// offender is already added.
+fn add_to_disabled_offenders<T: Config>(validator_id: u32) {
+	DisabledOffenders::<T>::mutate(|offenders| {
+		if let Err(o) = offenders.binary_search_by_key(&validator_id, |k| *k) {
+			offenders.insert(o, validator_id);
+		}
+	});
+}
+
+// Storage helper: returns true if a validator is in `DisabledOffenders`
+fn is_disabled<T: Config>(validator_id: u32) -> bool {
+	DisabledOffenders::<T>::get()
+		.binary_search_by_key(&validator_id, |k| *k)
+		.is_ok()
 }
 
 #[cfg(test)]

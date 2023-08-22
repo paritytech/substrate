@@ -25,8 +25,8 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		Currency, Defensive, DefensiveResult, DefensiveSaturating, EnsureOrigin,
-		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, TryCollect,
-		UnixTime,
+		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, Randomness,
+		TryCollect, UnixTime,
 	},
 	weights::Weight,
 	BoundedVec,
@@ -271,6 +271,12 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Source of randomness used for reshuffling in the validator disabling logic.
+		///
+		/// `<Option<Self::Hash>` because `ParentBlockRandomness` is intended to be used here.
+		/// `Randomness<Option<T::Hash>, T::BlockNumber>` is implemented for `ParentBlockRandomness`
+		type Randomness: Randomness<Option<Self::Hash>, BlockNumberFor<Self>>;
 	}
 
 	/// The ideal number of active validators.
@@ -560,8 +566,8 @@ pub mod pallet {
 	#[pallet::getter(fn current_planned_session)]
 	pub type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
 
-	/// Indices of validators that have offended in the active era and whether they are currently
-	/// disabled.
+	/// Indices of validators that have offended in the active era and their corresponding offence
+	/// (slash percentage).
 	///
 	/// This value should be a superset of disabled validators since not all offences lead to the
 	/// validator being disabled (if there was no slash). This is needed to track the percentage of
@@ -569,10 +575,20 @@ pub mod pallet {
 	/// `OffendingValidatorsThreshold` is reached. The vec is always kept sorted so that we can find
 	/// whether a given validator has previously offended using binary search. It gets cleared when
 	/// the era ends.
+	///
+	/// Values of the Vec:
+	/// * u32 - The stash account of the offender
+	/// * Perbill - slash proportion
 	#[pallet::storage]
 	#[pallet::unbounded]
 	#[pallet::getter(fn offending_validators)]
-	pub type OffendingValidators<T: Config> = StorageValue<_, Vec<(u32, bool)>, ValueQuery>;
+	pub type OffendingValidators<T: Config> = StorageValue<_, Vec<(u32, Perbill)>, ValueQuery>;
+
+	/// Keep track which validators are disabled because on new session start they should be
+	/// disabled again. The disabled list in `SessionInterface` is cleared on each new session.
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub type DisabledOffenders<T: Config> = StorageValue<_, Vec<u32>, ValueQuery>;
 
 	/// The threshold for when users can start calling `chill_other` for other validators /
 	/// nominators. The threshold is compared to the actual number of validators / nominators
@@ -765,6 +781,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
+			// TODO: new block is created - if offenders are above threshold -> reshuffle
 			// just return the weight of the on_finalize.
 			T::DbWeight::get().reads(1)
 		}
