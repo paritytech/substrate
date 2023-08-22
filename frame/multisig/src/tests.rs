@@ -108,16 +108,33 @@ impl Config for Test {
 
 use pallet_balances::Call as BalancesCall;
 
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
-	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2)],
+pub struct ExtBuilder {}
+
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self {}
 	}
-	.assimilate_storage(&mut t)
-	.unwrap();
-	let mut ext = sp_io::TestExternalities::new(t);
-	ext.execute_with(|| System::set_block_number(1));
-	ext
+}
+
+impl ExtBuilder {
+	pub fn build(self) -> sp_io::TestExternalities {
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		pallet_balances::GenesisConfig::<Test> {
+			balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2)],
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
+		let mut ext = sp_io::TestExternalities::new(t);
+		ext.execute_with(|| System::set_block_number(1));
+		ext
+	}
+
+	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		self.build().execute_with(|| {
+			test();
+			Multisig::do_try_state().unwrap();
+		})
+	}
 }
 
 fn now() -> Timepoint<u64> {
@@ -130,7 +147,7 @@ fn call_transfer(dest: u64, value: u64) -> Box<RuntimeCall> {
 
 #[test]
 fn multisig_deposit_is_taken_and_returned() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -164,7 +181,7 @@ fn multisig_deposit_is_taken_and_returned() {
 
 #[test]
 fn cancel_multisig_returns_deposit() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let call = call_transfer(6, 15).encode();
 		let hash = blake2_256(&call);
 		assert_ok!(Multisig::approve_as_multi(
@@ -195,7 +212,7 @@ fn cancel_multisig_returns_deposit() {
 
 #[test]
 fn timepoint_checking_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -255,7 +272,7 @@ fn timepoint_checking_works() {
 
 #[test]
 fn mutlisig_with_expiry_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -319,7 +336,7 @@ fn mutlisig_with_expiry_works() {
 
 #[test]
 fn mutlisig_wont_get_executed_when_expired() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -394,7 +411,7 @@ fn mutlisig_wont_get_executed_when_expired() {
 
 #[test]
 fn multisig_2_of_3_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -428,7 +445,7 @@ fn multisig_2_of_3_works() {
 
 #[test]
 fn multisig_3_of_3_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 3);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -471,7 +488,7 @@ fn multisig_3_of_3_works() {
 
 #[test]
 fn cancel_multisig_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let call = call_transfer(6, 15).encode();
 		let hash = blake2_256(&call);
 		assert_ok!(Multisig::approve_as_multi(
@@ -502,7 +519,7 @@ fn cancel_multisig_works() {
 
 #[test]
 fn multisig_2_of_3_as_multi_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -534,7 +551,7 @@ fn multisig_2_of_3_as_multi_works() {
 
 #[test]
 fn multisig_2_of_3_as_multi_with_many_calls_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -585,7 +602,7 @@ fn multisig_2_of_3_as_multi_with_many_calls_works() {
 
 #[test]
 fn multisig_2_of_3_cannot_reissue_same_call() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -644,7 +661,7 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 
 #[test]
 fn minimum_threshold_check_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let call = call_transfer(6, 15);
 		assert_noop!(
 			Multisig::as_multi(
@@ -673,7 +690,7 @@ fn minimum_threshold_check_works() {
 
 #[test]
 fn too_many_signatories_fails() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let call = call_transfer(6, 15);
 		assert_noop!(
 			Multisig::as_multi(
@@ -691,7 +708,7 @@ fn too_many_signatories_fails() {
 
 #[test]
 fn duplicate_approvals_are_ignored() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let call = call_transfer(6, 15).encode();
 		let hash = blake2_256(&call);
 		assert_ok!(Multisig::approve_as_multi(
@@ -741,7 +758,7 @@ fn duplicate_approvals_are_ignored() {
 
 #[test]
 fn multisig_1_of_3_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 1);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -784,7 +801,7 @@ fn multisig_1_of_3_works() {
 
 #[test]
 fn multisig_filters() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let call = Box::new(RuntimeCall::System(frame_system::Call::set_code { code: vec![] }));
 		assert_noop!(
 			Multisig::as_multi_threshold_1(RuntimeOrigin::signed(1), vec![2], call.clone()),
@@ -795,7 +812,7 @@ fn multisig_filters() {
 
 #[test]
 fn weight_check_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -831,7 +848,7 @@ fn multisig_handles_no_preimage_after_all_approve() {
 	// This test checks the situation where everyone approves a multi-sig, but no-one provides the
 	// call data. In the end, any of the multisig callers can approve again with the call data and
 	// the call will go through.
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 3);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));

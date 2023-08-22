@@ -270,7 +270,12 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), sp_runtime::TryRuntimeError> {
+			Self::do_try_state()
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -849,6 +854,25 @@ impl<T: Config> Pallet<T> {
 		}
 		signatories.insert(index, who);
 		Ok(signatories)
+	}
+
+	/// Ensure the correctness of the state of this pallet.
+	///
+	/// This should be valid before or after each state transition of this pallet.
+	///
+	/// ## Invariants:
+	///
+	/// * Each multisig expiry in `MultisigExpiries` must have an entry inside the `Multisigs`
+	///   storage map.
+	#[cfg(any(feature = "try-runtime", test))]
+	fn do_try_state() -> Result<(), sp_runtime::TryRuntimeError> {
+		<MultisigExpiries<T>>::iter_keys().try_for_each(|(id, call_hash)| {
+			ensure!(<Multisigs<T>>::get(id, call_hash).is_some(), Error::<T>::NotFound);
+
+			Ok(())
+		})
+
+		// TODO: Come up with more invariants: https://github.com/paritytech/substrate/issues/12831
 	}
 }
 
