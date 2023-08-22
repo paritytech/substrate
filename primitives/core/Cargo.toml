@@ -21,7 +21,7 @@ serde = { version = "1.0.163", optional = true,  default-features = false, featu
 bounded-collections = { version = "0.1.8", default-features = false }
 primitive-types = { version = "0.12.0", default-features = false, features = ["codec", "scale-info"] }
 impl-serde = { version = "0.4.0", default-features = false, optional = true }
-hash-db = { version = "0.16.0", default-features = false }
+hash-db = {  git = "https://github.com/paritytech/trie.git", branch = "lexnv/expose_merkle_value", default-features = false }
 hash256-std-hasher = { version = "0.15.2", default-features = false }
 bs58 = { version = "0.4.0", default-features = false, optional = true }
 rand = { version = "0.8.5", features = ["small_rng"],  optional = true }

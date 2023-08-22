@@ -11,7 +11,7 @@ homepage = "https://substrate.io"
 [dependencies]
 array-bytes = { version = "6.1", optional = true }
 log = { version = "0.4", default-features = false, optional = true }
-hash-db = { version = "0.16.0", default-features = false }
+hash-db = { git = "https://github.com/paritytech/trie.git", branch = "lexnv/expose_merkle_value", default-features = false }
 
 [dev-dependencies]
 array-bytes = "6.1"
