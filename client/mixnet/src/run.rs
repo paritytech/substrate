@@ -281,7 +281,8 @@ pub async fn run<B, C, S, N, P>(
 					}
 				} else {
 					error!(target: LOG_TARGET,
-						"Next forward packet deadline reached, but no packet in queue");
+						"Next forward packet deadline reached, but no packet in queue; \
+						this is a bug");
 				}
 			}
 
@@ -306,7 +307,8 @@ pub async fn run<B, C, S, N, P>(
 			_ = next_retry_delay => {
 				if !request_manager.pop_next_retry(&mut mixnet, &packet_dispatcher, &config.substrate) {
 					error!(target: LOG_TARGET,
-						"Next retry deadline reached, but no request in retry queue");
+						"Next retry deadline reached, but no request in retry queue; \
+						this is a bug");
 				}
 			}
 
@@ -329,7 +331,8 @@ pub async fn run<B, C, S, N, P>(
 					}
 				} else {
 					error!(target: LOG_TARGET,
-						"Next extrinsic deadline reached, but no extrinsic in queue");
+						"Next extrinsic deadline reached, but no extrinsic in queue; \
+						this is a bug");
 				}
 			}
 
