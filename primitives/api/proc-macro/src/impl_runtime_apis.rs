@@ -942,8 +942,8 @@ fn filter_cfg_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
 	attrs.iter().filter(|a| a.path().is_ident("cfg")).cloned().collect()
 }
 
-// Parse feature flagged api_version.
-// E.g. `#[cfg_attr(feature = "enable-staging-api", api_version(99))]`
+/// Parse feature flagged api_version.
+/// E.g. `#[cfg_attr(feature = "enable-staging-api", api_version(99))]`
 fn extract_cfg_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<(String, u64)>> {
 	let cfg_attrs = attrs.iter().filter(|a| a.path().is_ident("cfg_attr")).collect::<Vec<_>>();
 

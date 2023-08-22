@@ -372,7 +372,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// }
 /// ```
 ///
-/// `decl_runtime_apis!` declares two version of the api - 1 (the default one, which is
+/// [`decl_runtime_apis!`] declares two version of the api - 1 (the default one, which is
 /// considered stable in our example) and 99 (which is considered staging). In
 /// `impl_runtime_apis!` a `cfg_attr` attribute is attached to the `ApiWithStagingMethod`
 /// implementation. If the code is compiled with  `enable-staging-api` feature a version 99 of
