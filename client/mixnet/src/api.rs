@@ -42,8 +42,16 @@ impl Api {
 		(Self { request_sender }, ApiBackend { request_receiver })
 	}
 
-	/// Submit an extrinsic via the mixnet. Returns a [`Future`] which returns another [`Future`].
-	/// The second [`Future`] does not borrow `self`.
+	/// Submit an extrinsic via the mixnet.
+	///
+	/// Returns a [`Future`] which returns another `Future`.
+	///
+	/// The first `Future` resolves as soon as there is space in the mixnet service queue. The
+	/// second `Future` resolves once a reply is received over the mixnet (or sooner if there is an
+	/// error).
+	///
+	/// The first `Future` references `self`, but the second does not. This makes it possible to
+	/// submit concurrent mixnet requests using a single `Api` instance.
 	pub async fn submit_extrinsic(
 		&mut self,
 		extrinsic: Bytes,
