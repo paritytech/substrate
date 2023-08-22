@@ -33,9 +33,7 @@ tracing = { version = "0.1.29", default-features = false }
 tracing-core = { version = "0.1.28", default-features = false}
 
 # Required for backwards compatibility reason, but only used for verifying when `UseDalekExt` is set.
-ed25519-dalek = { version = "1.0.1", default-features = false, optional = true }
-# Force the usage of ed25519, this is being used in `ed25519-dalek`.
-ed25519 = { version = "1.5.2", optional = true }
+ed25519-dalek = { version = "2.0.0", default-features = false, optional = true }
 
 [build-dependencies]
 rustversion = "1.0.6"
@@ -46,7 +44,6 @@ std = [
 	"bytes/std",
 	"sp-externalities/std",
 	"sp-core/std",
-	"sp-keystore",
 	"codec/std",
 	"sp-std/std",
 	"sp-trie/std",
@@ -59,7 +56,7 @@ std = [
 	"tracing-core/std",
 	"log",
 	"ed25519-dalek",
-	"ed25519",
+	"sp-keystore/std"
 ]
 
 with-tracing = [
@@ -92,3 +89,17 @@ disable_allocator = []
 #          host function to be supported by the host. Do *not* enable it for your
 #          runtime without first upgrading your host client!
 improved_panic_error_reporting = []
+
+# This feature adds BLS crypto primitives.
+# It should not be used in production since the implementation and interface may still
+# be subject to significant changes.
+bls-experimental = [
+	 "sp-keystore/bls-experimental",
+]
+
+# This feature adds Bandersnatch crypto primitives.
+# It should not be used in production since the implementation and interface may still
+# be subject to significant changes.
+bandersnatch-experimental = [
+	"sp-keystore/bandersnatch-experimental",
+]

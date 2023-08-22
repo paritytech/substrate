@@ -234,7 +234,7 @@ impl Serialize for Signature {
 	where
 		S: Serializer,
 	{
-		serializer.serialize_str(&array_bytes::bytes2hex("", self.as_ref()))
+		serializer.serialize_str(&array_bytes::bytes2hex("", self))
 	}
 }
 
@@ -421,13 +421,9 @@ impl TraitPair for Pair {
 	/// Verify a signature on a message.
 	///
 	/// Returns true if the signature is good.
-	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, public: &Self::Public) -> bool {
-		let Ok(public) = VerificationKey::try_from(public.as_slice()) else {
-			return false
-		};
-		let Ok(signature) = ed25519_zebra::Signature::try_from(sig.as_ref()) else {
-			return false
-		};
+	fn verify<M: AsRef<[u8]>>(sig: &Signature, message: M, public: &Public) -> bool {
+		let Ok(public) = VerificationKey::try_from(public.as_slice()) else { return false };
+		let Ok(signature) = ed25519_zebra::Signature::try_from(sig.as_ref()) else { return false };
 		public.verify(&signature, message.as_ref()).is_ok()
 	}
 
@@ -499,7 +495,7 @@ mod test {
 		let derived = pair.derive(path.into_iter(), None).ok().unwrap().0;
 		assert_eq!(
 			derived.seed(),
-			array_bytes::hex2array_unchecked::<32>(
+			array_bytes::hex2array_unchecked::<_, 32>(
 				"ede3354e133f9c8e337ddd6ee5415ed4b4ffe5fc7d21e933f4930a3730e5b21c"
 			)
 		);

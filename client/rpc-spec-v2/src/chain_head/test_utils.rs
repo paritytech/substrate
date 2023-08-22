@@ -203,10 +203,7 @@ impl<
 impl<Block: BlockT, Client: CallApiAt<Block>> CallApiAt<Block> for ChainHeadMockClient<Client> {
 	type StateBackend = <Client as CallApiAt<Block>>::StateBackend;
 
-	fn call_api_at(
-		&self,
-		params: CallApiAtParams<Block, <Client as CallApiAt<Block>>::StateBackend>,
-	) -> Result<Vec<u8>, sp_api::ApiError> {
+	fn call_api_at(&self, params: CallApiAtParams<Block>) -> Result<Vec<u8>, sp_api::ApiError> {
 		self.client.call_api_at(params)
 	}
 
@@ -216,6 +213,14 @@ impl<Block: BlockT, Client: CallApiAt<Block>> CallApiAt<Block> for ChainHeadMock
 
 	fn state_at(&self, at: Block::Hash) -> Result<Self::StateBackend, sp_api::ApiError> {
 		self.client.state_at(at)
+	}
+
+	fn initialize_extensions(
+		&self,
+		at: <Block as BlockT>::Hash,
+		extensions: &mut sp_api::Extensions,
+	) -> Result<(), sp_api::ApiError> {
+		self.client.initialize_extensions(at, extensions)
 	}
 }
 

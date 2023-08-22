@@ -33,7 +33,7 @@
 use std::borrow::Cow;
 
 use node_primitives::Block;
-use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes, Profile};
+use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes};
 use sc_client_api::backend::Backend;
 use sp_state_machine::InspectState;
 
@@ -43,7 +43,6 @@ use crate::{
 };
 
 pub struct ImportBenchmarkDescription {
-	pub profile: Profile,
 	pub key_types: KeyTypes,
 	pub block_type: BlockType,
 	pub size: SizeType,
@@ -51,7 +50,6 @@ pub struct ImportBenchmarkDescription {
 }
 
 pub struct ImportBenchmark {
-	profile: Profile,
 	database: BenchDb,
 	block: Block,
 	block_type: BlockType,
@@ -60,11 +58,6 @@ pub struct ImportBenchmark {
 impl core::BenchmarkDescription for ImportBenchmarkDescription {
 	fn path(&self) -> Path {
 		let mut path = Path::new(&["node", "import"]);
-
-		match self.profile {
-			Profile::Wasm => path.push("wasm"),
-			Profile::Native => path.push("native"),
-		}
 
 		match self.key_types {
 			KeyTypes::Sr25519 => path.push("sr25519"),
@@ -88,21 +81,15 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 	}
 
 	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
-		let profile = self.profile;
 		let mut bench_db = BenchDb::with_key_types(self.database_type, 50_000, self.key_types);
 		let block = bench_db.generate_block(self.block_type.to_content(self.size.transactions()));
-		Box::new(ImportBenchmark {
-			database: bench_db,
-			block_type: self.block_type,
-			block,
-			profile,
-		})
+		Box::new(ImportBenchmark { database: bench_db, block_type: self.block_type, block })
 	}
 
 	fn name(&self) -> Cow<'static, str> {
 		format!(
-			"Block import ({:?}/{}, {:?}, {:?} backend)",
-			self.block_type, self.size, self.profile, self.database_type,
+			"Block import ({:?}/{}, {:?} backend)",
+			self.block_type, self.size, self.database_type,
 		)
 		.into()
 	}
@@ -110,7 +97,7 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 
 impl core::Benchmark for ImportBenchmark {
 	fn run(&mut self, mode: Mode) -> std::time::Duration {
-		let mut context = self.database.create_context(self.profile);
+		let mut context = self.database.create_context();
 
 		let _ = context
 			.client

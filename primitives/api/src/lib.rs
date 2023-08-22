@@ -78,11 +78,17 @@ pub use hash_db::Hasher;
 #[doc(hidden)]
 pub use scale_info;
 #[doc(hidden)]
+pub use sp_core::offchain;
+#[doc(hidden)]
 #[cfg(not(feature = "std"))]
 pub use sp_core::to_substrate_wasm_fn_return_value;
+#[doc(hidden)]
+#[cfg(feature = "std")]
+pub use sp_core::traits::CallContext;
 use sp_core::OpaqueMetadata;
 #[doc(hidden)]
-pub use sp_core::{offchain, ExecutionContext};
+#[cfg(feature = "std")]
+pub use sp_externalities::{Extension, Extensions};
 #[doc(hidden)]
 #[cfg(feature = "frame-metadata")]
 pub use sp_metadata_ir::{self as metadata_ir, frame_metadata as metadata};
@@ -92,7 +98,7 @@ pub use sp_runtime::StateVersion;
 #[doc(hidden)]
 pub use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Hash as HashT, HashFor, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, Hash as HashT, HashingFor, Header as HeaderT, NumberFor},
 	transaction_validity::TransactionValidity,
 	RuntimeString, TransactionOutcome,
 };
@@ -448,30 +454,10 @@ pub use sp_api_proc_macro::mock_impl_runtime_apis;
 
 /// A type that records all accessed trie nodes and generates a proof out of it.
 #[cfg(feature = "std")]
-pub type ProofRecorder<B> = sp_trie::recorder::Recorder<HashFor<B>>;
-
-/// A type that is used as cache for the storage transactions.
-#[cfg(feature = "std")]
-pub type StorageTransactionCache<Block, Backend> = sp_state_machine::StorageTransactionCache<
-	<Backend as StateBackend<HashFor<Block>>>::Transaction,
-	HashFor<Block>,
->;
+pub type ProofRecorder<B> = sp_trie::recorder::Recorder<HashingFor<B>>;
 
 #[cfg(feature = "std")]
-pub type StorageChanges<SBackend, Block> = sp_state_machine::StorageChanges<
-	<SBackend as StateBackend<HashFor<Block>>>::Transaction,
-	HashFor<Block>,
->;
-
-/// Extract the state backend type for a type that implements `ProvideRuntimeApi`.
-#[cfg(feature = "std")]
-pub type StateBackendFor<P, Block> =
-	<<P as ProvideRuntimeApi<Block>>::Api as ApiExt<Block>>::StateBackend;
-
-/// Extract the state backend transaction type for a type that implements `ProvideRuntimeApi`.
-#[cfg(feature = "std")]
-pub type TransactionFor<P, Block> =
-	<StateBackendFor<P, Block> as StateBackend<HashFor<Block>>>::Transaction;
+pub type StorageChanges<Block> = sp_state_machine::StorageChanges<HashingFor<Block>>;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
@@ -518,14 +504,13 @@ pub enum ApiError {
 	Application(#[from] Box<dyn std::error::Error + Send + Sync>),
 	#[error("Api called for an unknown Block: {0}")]
 	UnknownBlock(String),
+	#[error("Using the same api instance to call into multiple independent blocks.")]
+	UsingSameInstanceForDifferentBlocks,
 }
 
 /// Extends the runtime api implementation with some common functionality.
 #[cfg(feature = "std")]
 pub trait ApiExt<Block: BlockT> {
-	/// The state backend that is used to store the block states.
-	type StateBackend: StateBackend<HashFor<Block>>;
-
 	/// Execute the given closure inside a new transaction.
 	///
 	/// Depending on the outcome of the closure, the transaction is committed or rolled-back.
@@ -574,18 +559,24 @@ pub trait ApiExt<Block: BlockT> {
 	/// api functions.
 	///
 	/// After executing this function, all collected changes are reset.
-	fn into_storage_changes(
+	fn into_storage_changes<B: StateBackend<HashingFor<Block>>>(
 		&self,
-		backend: &Self::StateBackend,
+		backend: &B,
 		parent_hash: Block::Hash,
-	) -> Result<StorageChanges<Self::StateBackend, Block>, String>
+	) -> Result<StorageChanges<Block>, String>
 	where
 		Self: Sized;
+
+	/// Set the [`CallContext`] to be used by the runtime api calls done by this instance.
+	fn set_call_context(&mut self, call_context: CallContext);
+
+	/// Register an [`Extension`] that will be accessible while executing a runtime api call.
+	fn register_extension<E: Extension>(&mut self, extension: E);
 }
 
 /// Parameters for [`CallApiAt::call_api_at`].
 #[cfg(feature = "std")]
-pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashFor<Block>>> {
+pub struct CallApiAtParams<'a, Block: BlockT> {
 	/// The block id that determines the state that should be setup when calling the function.
 	pub at: Block::Hash,
 	/// The name of the function that should be called.
@@ -593,33 +584,37 @@ pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashFor<Bloc
 	/// The encoded arguments of the function.
 	pub arguments: Vec<u8>,
 	/// The overlayed changes that are on top of the state.
-	pub overlayed_changes: &'a RefCell<OverlayedChanges>,
-	/// The cache for storage transactions.
-	pub storage_transaction_cache: &'a RefCell<StorageTransactionCache<Block, Backend>>,
-	/// The context this function is executed in.
-	pub context: ExecutionContext,
+	pub overlayed_changes: &'a RefCell<OverlayedChanges<HashingFor<Block>>>,
+	/// The call context of this call.
+	pub call_context: CallContext,
 	/// The optional proof recorder for recording storage accesses.
 	pub recorder: &'a Option<ProofRecorder<Block>>,
+	/// The extensions that should be used for this call.
+	pub extensions: &'a RefCell<Extensions>,
 }
 
 /// Something that can call into the an api at a given block.
 #[cfg(feature = "std")]
 pub trait CallApiAt<Block: BlockT> {
 	/// The state backend that is used to store the block states.
-	type StateBackend: StateBackend<HashFor<Block>> + AsTrieBackend<HashFor<Block>>;
+	type StateBackend: StateBackend<HashingFor<Block>> + AsTrieBackend<HashingFor<Block>>;
 
 	/// Calls the given api function with the given encoded arguments at the given block and returns
 	/// the encoded result.
-	fn call_api_at(
-		&self,
-		params: CallApiAtParams<Block, Self::StateBackend>,
-	) -> Result<Vec<u8>, ApiError>;
+	fn call_api_at(&self, params: CallApiAtParams<Block>) -> Result<Vec<u8>, ApiError>;
 
 	/// Returns the runtime version at the given block.
 	fn runtime_version_at(&self, at_hash: Block::Hash) -> Result<RuntimeVersion, ApiError>;
 
 	/// Get the state `at` the given block.
 	fn state_at(&self, at: Block::Hash) -> Result<Self::StateBackend, ApiError>;
+
+	/// Initialize the `extensions` for the given block `at` by using the global extensions factory.
+	fn initialize_extensions(
+		&self,
+		at: Block::Hash,
+		extensions: &mut Extensions,
+	) -> Result<(), ApiError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

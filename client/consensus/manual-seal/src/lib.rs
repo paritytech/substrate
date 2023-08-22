@@ -52,7 +52,7 @@ pub use self::{
 	seal_block::{seal_block, SealBlockParams, MAX_PROPOSAL_DURATION},
 };
 use sc_transaction_pool_api::TransactionPool;
-use sp_api::{ProvideRuntimeApi, TransactionFor};
+use sp_api::ProvideRuntimeApi;
 
 const LOG_TARGET: &str = "manual-seal";
 
@@ -66,8 +66,8 @@ struct ManualSealVerifier;
 impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 	async fn verify(
 		&mut self,
-		mut block: BlockImportParams<B, ()>,
-	) -> Result<BlockImportParams<B, ()>, String> {
+		mut block: BlockImportParams<B>,
+	) -> Result<BlockImportParams<B>, String> {
 		block.finalized = false;
 		block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 		Ok(block)
@@ -75,14 +75,13 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 }
 
 /// Instantiate the import queue for the manual seal consensus engine.
-pub fn import_queue<Block, Transaction>(
-	block_import: BoxBlockImport<Block, Transaction>,
+pub fn import_queue<Block>(
+	block_import: BoxBlockImport<Block>,
 	spawner: &impl sp_core::traits::SpawnEssentialNamed,
 	registry: Option<&Registry>,
-) -> BasicQueue<Block, Transaction>
+) -> BasicQueue<Block>
 where
 	Block: BlockT,
-	Transaction: Send + Sync + 'static,
 {
 	BasicQueue::new(ManualSealVerifier, block_import, None, spawner, registry)
 }
@@ -109,8 +108,7 @@ pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, TP, SC, C
 	pub select_chain: SC,
 
 	/// Digest provider for inclusion in blocks.
-	pub consensus_data_provider:
-		Option<Box<dyn ConsensusDataProvider<B, Proof = P, Transaction = TransactionFor<C, B>>>>,
+	pub consensus_data_provider: Option<Box<dyn ConsensusDataProvider<B, Proof = P>>>,
 
 	/// Something that can create the inherent data providers.
 	pub create_inherent_data_providers: CIDP,
@@ -134,8 +132,7 @@ pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, TP, SC, 
 	pub select_chain: SC,
 
 	/// Digest provider for inclusion in blocks.
-	pub consensus_data_provider:
-		Option<Box<dyn ConsensusDataProvider<B, Proof = P, Transaction = TransactionFor<C, B>>>>,
+	pub consensus_data_provider: Option<Box<dyn ConsensusDataProvider<B, Proof = P>>>,
 
 	/// Something that can create the inherent data providers.
 	pub create_inherent_data_providers: CIDP,
@@ -167,17 +164,13 @@ pub async fn run_manual_seal<B, BI, CB, E, C, TP, SC, CS, CIDP, P>(
 	}: ManualSealParams<B, BI, E, C, TP, SC, CS, CIDP, P>,
 ) where
 	B: BlockT + 'static,
-	BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
-		+ Send
-		+ Sync
-		+ 'static,
+	BI: BlockImport<B, Error = sp_consensus::Error> + Send + Sync + 'static,
 	C: HeaderBackend<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + 'static,
 	CB: ClientBackend<B> + 'static,
 	E: Environment<B> + 'static,
-	E::Proposer: Proposer<B, Proof = P, Transaction = TransactionFor<C, B>>,
+	E::Proposer: Proposer<B, Proof = P>,
 	CS: Stream<Item = EngineCommand<<B as BlockT>::Hash>> + Unpin + 'static,
 	SC: SelectChain<B> + 'static,
-	TransactionFor<C, B>: 'static,
 	TP: TransactionPool<Block = B>,
 	CIDP: CreateInherentDataProviders<B, ()>,
 	P: Send + Sync + 'static,
@@ -230,16 +223,12 @@ pub async fn run_instant_seal<B, BI, CB, E, C, TP, SC, CIDP, P>(
 	}: InstantSealParams<B, BI, E, C, TP, SC, CIDP, P>,
 ) where
 	B: BlockT + 'static,
-	BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
-		+ Send
-		+ Sync
-		+ 'static,
+	BI: BlockImport<B, Error = sp_consensus::Error> + Send + Sync + 'static,
 	C: HeaderBackend<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + 'static,
 	CB: ClientBackend<B> + 'static,
 	E: Environment<B> + 'static,
-	E::Proposer: Proposer<B, Proof = P, Transaction = TransactionFor<C, B>>,
+	E::Proposer: Proposer<B, Proof = P>,
 	SC: SelectChain<B> + 'static,
-	TransactionFor<C, B>: 'static,
 	TP: TransactionPool<Block = B>,
 	CIDP: CreateInherentDataProviders<B, ()>,
 	P: Send + Sync + 'static,
@@ -284,16 +273,12 @@ pub async fn run_instant_seal_and_finalize<B, BI, CB, E, C, TP, SC, CIDP, P>(
 	}: InstantSealParams<B, BI, E, C, TP, SC, CIDP, P>,
 ) where
 	B: BlockT + 'static,
-	BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
-		+ Send
-		+ Sync
-		+ 'static,
+	BI: BlockImport<B, Error = sp_consensus::Error> + Send + Sync + 'static,
 	C: HeaderBackend<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + 'static,
 	CB: ClientBackend<B> + 'static,
 	E: Environment<B> + 'static,
-	E::Proposer: Proposer<B, Proof = P, Transaction = TransactionFor<C, B>>,
+	E::Proposer: Proposer<B, Proof = P>,
 	SC: SelectChain<B> + 'static,
-	TransactionFor<C, B>: 'static,
 	TP: TransactionPool<Block = B>,
 	CIDP: CreateInherentDataProviders<B, ()>,
 	P: Send + Sync + 'static,
@@ -386,7 +371,6 @@ mod tests {
 		B: BlockT,
 		C: ProvideRuntimeApi<B> + Send + Sync,
 	{
-		type Transaction = TransactionFor<C, B>;
 		type Proof = ();
 
 		fn create_digest(
@@ -400,7 +384,7 @@ mod tests {
 		fn append_block_import(
 			&self,
 			_parent: &B::Header,
-			params: &mut BlockImportParams<B, Self::Transaction>,
+			params: &mut BlockImportParams<B>,
 			_inherents: &InherentData,
 			_proof: Self::Proof,
 		) -> Result<(), Error> {

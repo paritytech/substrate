@@ -224,23 +224,21 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 
 	Ok(quote!(
 		pub struct RuntimeApi {}
-		/// Implements all runtime apis for the client side.
 		#crate_::std_enabled! {
+			/// Implements all runtime apis for the client side.
 			pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block> + 'static> {
 				call: &'static C,
 				transaction_depth: std::cell::RefCell<u16>,
-				changes: std::cell::RefCell<#crate_::OverlayedChanges>,
-				storage_transaction_cache: std::cell::RefCell<
-					#crate_::StorageTransactionCache<Block, C::StateBackend>
-				>,
+				changes: std::cell::RefCell<#crate_::OverlayedChanges<#crate_::HashingFor<Block>>>,
 				recorder: std::option::Option<#crate_::ProofRecorder<Block>>,
+				call_context: #crate_::CallContext,
+				extensions: std::cell::RefCell<#crate_::Extensions>,
+				extensions_generated_for: std::cell::RefCell<std::option::Option<Block::Hash>>,
 			}
 
 			impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> #crate_::ApiExt<Block> for
 				RuntimeApiImpl<Block, C>
 			{
-				type StateBackend = C::StateBackend;
-
 				fn execute_in_transaction<F: FnOnce(&Self) -> #crate_::TransactionOutcome<R>, R>(
 					&self,
 					call: F,
@@ -302,25 +300,32 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					})
 				}
 
-				fn into_storage_changes(
+				fn into_storage_changes<B: #crate_::StateBackend<#crate_::HashingFor<Block>>>(
 					&self,
-					backend: &Self::StateBackend,
+					backend: &B,
 					parent_hash: Block::Hash,
 				) -> core::result::Result<
-					#crate_::StorageChanges<C::StateBackend, Block>,
+					#crate_::StorageChanges<Block>,
 				String
 					> where Self: Sized {
 						let state_version = #crate_::CallApiAt::<Block>::runtime_version_at(self.call, std::clone::Clone::clone(&parent_hash))
 							.map(|v| #crate_::RuntimeVersion::state_version(&v))
 							.map_err(|e| format!("Failed to get state version: {}", e))?;
 
-						#crate_::OverlayedChanges::into_storage_changes(
-							std::cell::RefCell::take(&self.changes),
+						#crate_::OverlayedChanges::drain_storage_changes(
+							&mut std::cell::RefCell::borrow_mut(&self.changes),
 							backend,
-							core::cell::RefCell::take(&self.storage_transaction_cache),
 							state_version,
 						)
 					}
+
+				fn set_call_context(&mut self, call_context: #crate_::CallContext) {
+					self.call_context = call_context;
+				}
+
+				fn register_extension<E: #crate_::Extension>(&mut self, extension: E) {
+					std::cell::RefCell::borrow_mut(&self.extensions).register(extension);
+				}
 			}
 
 			impl<Block: #crate_::BlockT, C> #crate_::ConstructRuntimeApi<Block, C>
@@ -338,7 +343,9 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 						transaction_depth: 0.into(),
 						changes: std::default::Default::default(),
 						recorder: std::default::Default::default(),
-						storage_transaction_cache: std::default::Default::default(),
+						call_context: #crate_::CallContext::Offchain,
+						extensions: std::default::Default::default(),
+						extensions_generated_for: std::default::Default::default(),
 					}.into()
 				}
 			}
@@ -480,7 +487,6 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			fn __runtime_api_internal_call_api_at(
 				&self,
 				at: <__SrApiBlock__ as #crate_::BlockT>::Hash,
-				context: #crate_::ExecutionContext,
 				params: std::vec::Vec<u8>,
 				fn_name: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
 			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
@@ -498,14 +504,33 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 						at,
 					)?;
 
+					match &mut *std::cell::RefCell::borrow_mut(&self.extensions_generated_for) {
+						Some(generated_for) => {
+							if *generated_for != at {
+								return std::result::Result::Err(
+									#crate_::ApiError::UsingSameInstanceForDifferentBlocks
+								)
+							}
+						},
+						generated_for @ None => {
+							#crate_::CallApiAt::<__SrApiBlock__>::initialize_extensions(
+								self.call,
+								at,
+								&mut std::cell::RefCell::borrow_mut(&self.extensions),
+							)?;
+
+							*generated_for = Some(at);
+						}
+					}
+
 					let params = #crate_::CallApiAtParams {
 						at,
 						function: (*fn_name)(version),
 						arguments: params,
 						overlayed_changes: &self.changes,
-						storage_transaction_cache: &self.storage_transaction_cache,
-						context,
+						call_context: self.call_context,
 						recorder: &self.recorder,
+						extensions: &self.extensions,
 					};
 
 					#crate_::CallApiAt::<__SrApiBlock__>::call_api_at(
@@ -559,7 +584,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 
 		where_clause.predicates.push(parse_quote! {
 			RuntimeApiImplCall::StateBackend:
-				#crate_::StateBackend<#crate_::HashFor<__SrApiBlock__>>
+				#crate_::StateBackend<#crate_::HashingFor<__SrApiBlock__>>
 		});
 
 		where_clause.predicates.push(parse_quote! { &'static RuntimeApiImplCall: Send });

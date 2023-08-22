@@ -30,7 +30,7 @@ use pallet_balances::Error as BalancesError;
 
 #[test]
 fn params_should_work() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		assert_eq!(ReferendumCount::<Test>::get(), 0);
 		assert_eq!(Balances::free_balance(42), 0);
 		assert_eq!(Balances::total_issuance(), 600);
@@ -39,7 +39,7 @@ fn params_should_work() {
 
 #[test]
 fn basic_happy_path_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		// #1: submit
 		assert_ok!(Referenda::submit(
 			RuntimeOrigin::signed(1),
@@ -75,7 +75,7 @@ fn basic_happy_path_works() {
 
 #[test]
 fn insta_confirm_then_kill_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let r = Confirming { immediate: true }.create();
 		run_to(6);
 		assert_ok!(Referenda::kill(RuntimeOrigin::root(), r));
@@ -85,7 +85,7 @@ fn insta_confirm_then_kill_works() {
 
 #[test]
 fn confirm_then_reconfirm_with_elapsed_trigger_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let r = Confirming { immediate: false }.create();
 		assert_eq!(confirming_until(r), 8);
 		run_to(7);
@@ -99,7 +99,7 @@ fn confirm_then_reconfirm_with_elapsed_trigger_works() {
 
 #[test]
 fn instaconfirm_then_reconfirm_with_elapsed_trigger_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let r = Confirming { immediate: true }.create();
 		run_to(6);
 		assert_eq!(confirming_until(r), 7);
@@ -113,7 +113,7 @@ fn instaconfirm_then_reconfirm_with_elapsed_trigger_works() {
 
 #[test]
 fn instaconfirm_then_reconfirm_with_voting_trigger_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let r = Confirming { immediate: true }.create();
 		run_to(6);
 		assert_eq!(confirming_until(r), 7);
@@ -131,7 +131,7 @@ fn instaconfirm_then_reconfirm_with_voting_trigger_works() {
 
 #[test]
 fn voting_should_extend_for_late_confirmation() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let r = Passing.create();
 		run_to(10);
 		assert_eq!(confirming_until(r), 11);
@@ -142,7 +142,7 @@ fn voting_should_extend_for_late_confirmation() {
 
 #[test]
 fn should_instafail_during_extension_confirmation() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let r = Passing.create();
 		run_to(10);
 		assert_eq!(confirming_until(r), 11);
@@ -155,7 +155,7 @@ fn should_instafail_during_extension_confirmation() {
 
 #[test]
 fn confirming_then_fail_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let r = Failing.create();
 		// Normally ends at 5 + 4 (voting period) = 9.
 		assert_eq!(deciding_and_failing_since(r), 5);
@@ -170,7 +170,7 @@ fn confirming_then_fail_works() {
 
 #[test]
 fn queueing_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		// Submit a proposal into a track with a queue len of 1.
 		assert_ok!(Referenda::submit(
 			RuntimeOrigin::signed(5),
@@ -269,7 +269,7 @@ fn queueing_works() {
 
 #[test]
 fn alarm_interval_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let call =
 			<Test as Config>::Preimages::bound(CallOf::<Test, ()>::from(Call::nudge_referendum {
 				index: 0,
@@ -290,7 +290,7 @@ fn alarm_interval_works() {
 
 #[test]
 fn decision_time_is_correct() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let decision_time = |since: u64| {
 			Pallet::<Test>::decision_time(
 				&DecidingStatus { since: since.into(), confirming: None },
@@ -308,7 +308,7 @@ fn decision_time_is_correct() {
 
 #[test]
 fn auto_timeout_should_happen_with_nothing_but_submit() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		// #1: submit
 		assert_ok!(Referenda::submit(
 			RuntimeOrigin::signed(1),
@@ -329,7 +329,7 @@ fn auto_timeout_should_happen_with_nothing_but_submit() {
 
 #[test]
 fn tracks_are_distinguished() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		assert_ok!(Referenda::submit(
 			RuntimeOrigin::signed(1),
 			Box::new(RawOrigin::Root.into()),
@@ -390,7 +390,7 @@ fn tracks_are_distinguished() {
 
 #[test]
 fn submit_errors_work() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let h = set_balance_proposal_bounded(1);
 		// No track for Signed origins.
 		assert_noop!(
@@ -418,7 +418,7 @@ fn submit_errors_work() {
 
 #[test]
 fn decision_deposit_errors_work() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let e = Error::<Test>::NotOngoing;
 		assert_noop!(Referenda::place_decision_deposit(RuntimeOrigin::signed(2), 0), e);
 
@@ -440,7 +440,7 @@ fn decision_deposit_errors_work() {
 
 #[test]
 fn refund_deposit_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let e = Error::<Test>::BadReferendum;
 		assert_noop!(Referenda::refund_decision_deposit(RuntimeOrigin::signed(1), 0), e);
 
@@ -465,7 +465,7 @@ fn refund_deposit_works() {
 
 #[test]
 fn refund_submission_deposit_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		// refund of non existing referendum fails.
 		let e = Error::<Test>::BadReferendum;
 		assert_noop!(Referenda::refund_submission_deposit(RuntimeOrigin::signed(1), 0), e);
@@ -503,7 +503,7 @@ fn refund_submission_deposit_works() {
 
 #[test]
 fn cancel_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let h = set_balance_proposal_bounded(1);
 		assert_ok!(Referenda::submit(
 			RuntimeOrigin::signed(1),
@@ -522,7 +522,7 @@ fn cancel_works() {
 
 #[test]
 fn cancel_errors_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let h = set_balance_proposal_bounded(1);
 		assert_ok!(Referenda::submit(
 			RuntimeOrigin::signed(1),
@@ -540,7 +540,7 @@ fn cancel_errors_works() {
 
 #[test]
 fn kill_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let h = set_balance_proposal_bounded(1);
 		assert_ok!(Referenda::submit(
 			RuntimeOrigin::signed(1),
@@ -560,7 +560,7 @@ fn kill_works() {
 
 #[test]
 fn kill_errors_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let h = set_balance_proposal_bounded(1);
 		assert_ok!(Referenda::submit(
 			RuntimeOrigin::signed(1),
@@ -601,7 +601,7 @@ fn curve_handles_all_inputs() {
 
 #[test]
 fn set_metadata_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		use frame_support::traits::Hash as PreimageHash;
 		// invalid preimage hash.
 		let invalid_hash: PreimageHash = [1u8; 32].into();
@@ -649,7 +649,7 @@ fn set_metadata_works() {
 
 #[test]
 fn clear_metadata_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let hash = note_preimage(1);
 		assert_ok!(Referenda::submit(
 			RuntimeOrigin::signed(1),

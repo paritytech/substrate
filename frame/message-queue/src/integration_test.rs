@@ -22,8 +22,8 @@
 
 use crate::{
 	mock::{
-		new_test_ext, CountingMessageProcessor, IntoWeight, MockedWeightInfo, NumMessagesProcessed,
-		YieldingQueues,
+		build_and_execute, CountingMessageProcessor, IntoWeight, MockedWeightInfo,
+		NumMessagesProcessed, YieldingQueues,
 	},
 	mock_helpers::MessageOrigin,
 	*,
@@ -37,22 +37,15 @@ use frame_support::{
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rand_distr::Pareto;
 use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 use std::collections::{BTreeMap, BTreeSet};
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		MessageQueue: pallet_message_queue::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -63,14 +56,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -131,7 +123,7 @@ fn stress_test_enqueue_and_service() {
 	let max_msg_len = MaxMessageLenOf::<Test>::get();
 	let mut rng = StdRng::seed_from_u64(42);
 
-	new_test_ext::<Test>().execute_with(|| {
+	build_and_execute::<Test>(|| {
 		let mut msgs_remaining = 0;
 		for _ in 0..blocks {
 			// Start by enqueuing a large number of messages.
@@ -179,7 +171,7 @@ fn stress_test_queue_suspension() {
 	let max_msg_len = MaxMessageLenOf::<Test>::get();
 	let mut rng = StdRng::seed_from_u64(41);
 
-	new_test_ext::<Test>().execute_with(|| {
+	build_and_execute::<Test>(|| {
 		let mut suspended = BTreeSet::<u32>::new();
 		let mut msgs_remaining = 0;
 

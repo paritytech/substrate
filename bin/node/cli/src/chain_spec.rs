@@ -20,11 +20,10 @@
 
 use grandpa_primitives::AuthorityId as GrandpaId;
 use kitchensink_runtime::{
-	constants::currency::*, wasm_binary_unwrap, AuthorityDiscoveryConfig, BabeConfig,
-	BalancesConfig, Block, CouncilConfig, DemocracyConfig, ElectionsConfig, GluttonConfig,
-	GrandpaConfig, ImOnlineConfig, IndicesConfig, MaxNominations, NominationPoolsConfig,
-	SessionConfig, SessionKeys, SocietyConfig, StakerStatus, StakingConfig, SudoConfig,
-	SystemConfig, TechnicalCommitteeConfig,
+	constants::currency::*, wasm_binary_unwrap, BabeConfig, BalancesConfig, Block, CouncilConfig,
+	DemocracyConfig, ElectionsConfig, ImOnlineConfig, IndicesConfig, MaxNominations,
+	NominationPoolsConfig, SessionConfig, SessionKeys, SocietyConfig, StakerStatus, StakingConfig,
+	SudoConfig, SystemConfig, TechnicalCommitteeConfig,
 };
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sc_chain_spec::ChainSpecExtension;
@@ -200,14 +199,14 @@ pub fn staging_testnet_config() -> ChainSpec {
 	)
 }
 
-/// Helper function to generate a crypto pair from seed
+/// Helper function to generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
 	TPublic::Pair::from_string(&format!("//{}", seed), None)
 		.expect("static values are valid; qed")
 		.public()
 }
 
-/// Helper function to generate an account ID from seed
+/// Helper function to generate an account ID from seed.
 pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
 where
 	AccountPublic: From<<TPublic::Pair as Pair>::Public>,
@@ -215,7 +214,7 @@ where
 	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
 }
 
-/// Helper function to generate stash, controller and session key from seed
+/// Helper function to generate stash, controller and session key from seed.
 pub fn authority_keys_from_seed(
 	seed: &str,
 ) -> (AccountId, AccountId, GrandpaId, BabeId, ImOnlineId, AuthorityDiscoveryId) {
@@ -229,7 +228,7 @@ pub fn authority_keys_from_seed(
 	)
 }
 
-/// Helper function to create RuntimeGenesisConfig for testing
+/// Helper function to create RuntimeGenesisConfig for testing.
 pub fn testnet_genesis(
 	initial_authorities: Vec<(
 		AccountId,
@@ -295,7 +294,7 @@ pub fn testnet_genesis(
 	const STASH: Balance = ENDOWMENT / 1000;
 
 	RuntimeGenesisConfig {
-		system: SystemConfig { code: wasm_binary_unwrap().to_vec() },
+		system: SystemConfig { code: wasm_binary_unwrap().to_vec(), ..Default::default() },
 		balances: BalancesConfig {
 			balances: endowed_accounts.iter().cloned().map(|x| (x, ENDOWMENT)).collect(),
 		},
@@ -340,12 +339,12 @@ pub fn testnet_genesis(
 		},
 		sudo: SudoConfig { key: Some(root_key) },
 		babe: BabeConfig {
-			authorities: vec![],
 			epoch_config: Some(kitchensink_runtime::BABE_GENESIS_EPOCH_CONFIG),
+			..Default::default()
 		},
 		im_online: ImOnlineConfig { keys: vec![] },
-		authority_discovery: AuthorityDiscoveryConfig { keys: vec![] },
-		grandpa: GrandpaConfig { authorities: vec![] },
+		authority_discovery: Default::default(),
+		grandpa: Default::default(),
 		technical_membership: Default::default(),
 		treasury: Default::default(),
 		society: SocietyConfig { pot: 0 },
@@ -365,11 +364,7 @@ pub fn testnet_genesis(
 			min_join_bond: 1 * DOLLARS,
 			..Default::default()
 		},
-		glutton: GluttonConfig {
-			compute: Default::default(),
-			storage: Default::default(),
-			trash_data_count: Default::default(),
-		},
+		glutton: Default::default(),
 	}
 }
 
@@ -382,7 +377,7 @@ fn development_config_genesis() -> RuntimeGenesisConfig {
 	)
 }
 
-/// Development config (single validator Alice)
+/// Development config (single validator Alice).
 pub fn development_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Development",
@@ -407,7 +402,7 @@ fn local_testnet_genesis() -> RuntimeGenesisConfig {
 	)
 }
 
-/// Local testnet config (multivalidator Alice + Bob)
+/// Local testnet config (multivalidator Alice + Bob).
 pub fn local_testnet_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Local Testnet",
@@ -439,7 +434,7 @@ pub(crate) mod tests {
 		)
 	}
 
-	/// Local testnet config (single validator - Alice)
+	/// Local testnet config (single validator - Alice).
 	pub fn integration_test_config_with_single_authority() -> ChainSpec {
 		ChainSpec::from_genesis(
 			"Integration Test",
@@ -455,7 +450,7 @@ pub(crate) mod tests {
 		)
 	}
 
-	/// Local testnet config (multivalidator Alice + Bob)
+	/// Local testnet config (multivalidator Alice + Bob).
 	pub fn integration_test_config_with_two_authorities() -> ChainSpec {
 		ChainSpec::from_genesis(
 			"Integration Test",

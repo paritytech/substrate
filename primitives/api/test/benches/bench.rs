@@ -17,7 +17,6 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use sp_api::ProvideRuntimeApi;
-use sp_state_machine::ExecutionStrategy;
 use substrate_test_runtime_client::{
 	runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
 };
@@ -56,17 +55,13 @@ fn sp_api_benchmark(c: &mut Criterion) {
 	});
 
 	c.bench_function("calling function by function pointer in wasm", |b| {
-		let client = TestClientBuilder::new()
-			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
-			.build();
+		let client = TestClientBuilder::new().build();
 		let best_hash = client.chain_info().best_hash;
 		b.iter(|| client.runtime_api().benchmark_indirect_call(best_hash).unwrap())
 	});
 
-	c.bench_function("calling function in wasm", |b| {
-		let client = TestClientBuilder::new()
-			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
-			.build();
+	c.bench_function("calling function", |b| {
+		let client = TestClientBuilder::new().build();
 		let best_hash = client.chain_info().best_hash;
 		b.iter(|| client.runtime_api().benchmark_direct_call(best_hash).unwrap())
 	});

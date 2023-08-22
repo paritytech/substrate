@@ -19,7 +19,7 @@ hash-db = { version = "0.16.0", default-features = false }
 log = { version = "0.4.17", default-features = false }
 parking_lot = { version = "0.12.1", optional = true }
 rand = { version = "0.8.5", optional = true }
-smallvec = "1.8.0"
+smallvec = "1.11.0"
 thiserror = { version = "1.0.30", optional = true }
 tracing = { version = "0.1.29", optional = true }
 sp-core = { version = "21.0.0", default-features = false, path = "../core" }
@@ -30,7 +30,7 @@ sp-trie = { version = "22.0.0", default-features = false, path = "../trie" }
 trie-db = { version = "0.27.1", default-features = false }
 
 [dev-dependencies]
-array-bytes = "4.1"
+array-bytes = "6.1"
 pretty_assertions = "1.2.1"
 rand = "0.8.5"
 sp-runtime = { version = "24.0.0", path = "../runtime" }
@@ -52,4 +52,5 @@ std = [
 	"trie-db/std",
 	"thiserror",
 	"tracing",
+	"sp-runtime/std"
 ]

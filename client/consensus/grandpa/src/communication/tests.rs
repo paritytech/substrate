@@ -114,7 +114,13 @@ impl NetworkPeers for TestNetwork {
 		unimplemented!();
 	}
 
-	fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {}
+	fn remove_peers_from_reserved_set(
+		&self,
+		_protocol: ProtocolName,
+		_peers: Vec<PeerId>,
+	) -> Result<(), String> {
+		unimplemented!();
+	}
 
 	fn sync_num_connected(&self) -> usize {
 		unimplemented!();
@@ -244,7 +250,7 @@ impl Tester {
 fn config() -> crate::Config {
 	crate::Config {
 		gossip_duration: std::time::Duration::from_millis(10),
-		justification_period: 256,
+		justification_generation_period: 256,
 		keystore: None,
 		name: None,
 		local_role: Role::Authority,
@@ -669,7 +675,7 @@ fn grandpa_protocol_name() {
 
 	// Create protocol name using random genesis hash.
 	let genesis_hash = sp_core::H256::random();
-	let expected = format!("/{}/grandpa/1", array_bytes::bytes2hex("", genesis_hash.as_ref()));
+	let expected = format!("/{}/grandpa/1", array_bytes::bytes2hex("", genesis_hash));
 	let proto_name = grandpa_protocol_name::standard_name(&genesis_hash, &chain_spec);
 	assert_eq!(proto_name.to_string(), expected);
 

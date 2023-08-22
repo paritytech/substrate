@@ -24,7 +24,7 @@ use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, Defensive, DefensiveResult, DefensiveSaturating, EnsureOrigin,
+		Currency, Defensive, DefensiveResult, DefensiveSaturating, EnsureOrigin,
 		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, TryCollect,
 		UnixTime,
 	},
@@ -45,9 +45,9 @@ pub use impls::*;
 
 use crate::{
 	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
-	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
-	ValidatorPrefs,
+	EraRewardPoints, Exposure, Forcing, MaxNominationsOf, NegativeImbalanceOf, Nominations,
+	NominationsQuota, PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger,
+	UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -87,7 +87,7 @@ pub mod pallet {
 		/// The staking balance.
 		type Currency: LockableCurrency<
 			Self::AccountId,
-			Moment = Self::BlockNumber,
+			Moment = BlockNumberFor<Self>,
 			Balance = Self::CurrencyBalance,
 		>;
 		/// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
@@ -113,25 +113,24 @@ pub mod pallet {
 		/// in 128.
 		/// Consequently, the backward convert is used convert the u128s from sp-elections back to a
 		/// [`BalanceOf`].
-		type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
+		type CurrencyToVote: sp_staking::currency_to_vote::CurrencyToVote<BalanceOf<Self>>;
 
 		/// Something that provides the election functionality.
 		type ElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = BlockNumberFor<Self>,
 			// we only accept an election provider that has staking as data provider.
 			DataProvider = Pallet<Self>,
 		>;
 		/// Something that provides the election functionality at genesis.
 		type GenesisElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = BlockNumberFor<Self>,
 			DataProvider = Pallet<Self>,
 		>;
 
-		/// Maximum number of nominations per nominator.
-		#[pallet::constant]
-		type MaxNominations: Get<u32>;
+		/// Something that defines the maximum number of nominations per nominator.
+		type NominationsQuota: NominationsQuota<BalanceOf<Self>>;
 
 		/// Number of eras to keep in history.
 		///
@@ -200,7 +199,7 @@ pub mod pallet {
 
 		/// Something that can estimate the next session change, accurately or as a best effort
 		/// guess.
-		type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
+		type NextNewSession: EstimateNextNewSession<BlockNumberFor<Self>>;
 
 		/// The maximum number of nominators rewarded for each validator.
 		///
@@ -261,9 +260,11 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxUnlockingChunks: Get<u32>;
 
-		/// A hook called when any staker is slashed. Mostly likely this can be a no-op unless
-		/// other pallets exist that are affected by slashing per-staker.
-		type OnStakerSlash: sp_staking::OnStakerSlash<Self::AccountId, BalanceOf<Self>>;
+		/// Something that listens to staking updates and performs actions based on the data it
+		/// receives.
+		///
+		/// WARNING: this only reports slashing events for the time being.
+		type EventListeners: sp_staking::OnStakingUpdate<Self::AccountId, BalanceOf<Self>>;
 
 		/// Some parameters of the benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;
@@ -346,7 +347,8 @@ pub mod pallet {
 	/// they wish to support.
 	///
 	/// Note that the keys of this storage map might become non-decodable in case the
-	/// [`Config::MaxNominations`] configuration is decreased. In this rare case, these nominators
+	/// account's [`NominationsQuota::MaxNominations`] configuration is decreased.
+	/// In this rare case, these nominators
 	/// are still existent in storage, their key is correct and retrievable (i.e. `contains_key`
 	/// indicates that they exist), but their value cannot be decoded. Therefore, the non-decodable
 	/// nominators will effectively not-exist, until they re-submit their preferences such that it
@@ -596,7 +598,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			ValidatorCount::<T>::put(self.validator_count);
 			MinimumValidatorCount::<T>::put(self.minimum_validator_count);
@@ -694,6 +696,10 @@ pub mod pallet {
 		PayoutStarted { era_index: EraIndex, validator_stash: T::AccountId },
 		/// A validator has set their preferences.
 		ValidatorPrefsSet { stash: T::AccountId, prefs: ValidatorPrefs },
+		/// Voters size limit reached.
+		SnapshotVotersSizeExceeded { size: u32 },
+		/// Targets size limit reached.
+		SnapshotTargetsSizeExceeded { size: u32 },
 		/// A new force era mode was set.
 		ForceEra { mode: Forcing },
 	}
@@ -780,11 +786,11 @@ pub mod pallet {
 		fn integrity_test() {
 			// ensure that we funnel the correct value to the `DataProvider::MaxVotesPerVoter`;
 			assert_eq!(
-				T::MaxNominations::get(),
+				MaxNominationsOf::<T>::get(),
 				<Self as ElectionDataProvider>::MaxVotesPerVoter::get()
 			);
 			// and that MaxNominations is always greater than 1, since we count on this.
-			assert!(!T::MaxNominations::get().is_zero());
+			assert!(!MaxNominationsOf::<T>::get().is_zero());
 
 			// ensure election results are always bounded with the same value
 			assert!(
@@ -792,16 +798,12 @@ pub mod pallet {
 					<T::GenesisElectionProvider as ElectionProviderBase>::MaxWinners::get()
 			);
 
-			sp_std::if_std! {
-				sp_io::TestExternalities::new_empty().execute_with(||
-					assert!(
-						T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
-						"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
-						T::SlashDeferDuration::get(),
-						T::BondingDuration::get(),
-					)
-				);
-			}
+			assert!(
+				T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
+				"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
+				T::SlashDeferDuration::get(),
+				T::BondingDuration::get(),
+			)
 		}
 
 		#[cfg(feature = "try-runtime")]
@@ -1147,7 +1149,10 @@ pub mod pallet {
 			}
 
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
-			ensure!(targets.len() <= T::MaxNominations::get() as usize, Error::<T>::TooManyTargets);
+			ensure!(
+				targets.len() <= T::NominationsQuota::get_quota(ledger.active) as usize,
+				Error::<T>::TooManyTargets
+			);
 
 			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets.into_inner());
 

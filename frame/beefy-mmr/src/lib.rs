@@ -43,6 +43,7 @@ use sp_consensus_beefy::{
 };
 
 use frame_support::{crypto::ecdsa::ECDSAExt, traits::Get};
+use frame_system::pallet_prelude::BlockNumberFor;
 
 pub use pallet::*;
 
@@ -72,8 +73,8 @@ where
 
 /// Convert BEEFY secp256k1 public keys into Ethereum addresses
 pub struct BeefyEcdsaToEthereum;
-impl Convert<sp_consensus_beefy::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEthereum {
-	fn convert(beefy_id: sp_consensus_beefy::crypto::AuthorityId) -> Vec<u8> {
+impl Convert<sp_consensus_beefy::ecdsa_crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEthereum {
+	fn convert(beefy_id: sp_consensus_beefy::ecdsa_crypto::AuthorityId) -> Vec<u8> {
 		sp_core::ecdsa::Public::from(beefy_id)
 			.to_eth_address()
 			.map(|v| v.to_vec())
@@ -139,7 +140,7 @@ pub mod pallet {
 
 impl<T: Config> LeafDataProvider for Pallet<T> {
 	type LeafData = MmrLeaf<
-		<T as frame_system::Config>::BlockNumber,
+		BlockNumberFor<T>,
 		<T as frame_system::Config>::Hash,
 		MerkleRootOf<T>,
 		T::LeafExtra,
@@ -199,11 +200,12 @@ impl<T: Config> Pallet<T> {
 			.map(T::BeefyAuthorityToMerkleLeaf::convert)
 			.collect::<Vec<_>>();
 		let len = beefy_addresses.len() as u32;
-		let root = binary_merkle_tree::merkle_root::<<T as pallet_mmr::Config>::Hashing, _>(
-			beefy_addresses,
-		)
+		let keyset_commitment = binary_merkle_tree::merkle_root::<
+			<T as pallet_mmr::Config>::Hashing,
+			_,
+		>(beefy_addresses)
 		.into();
-		BeefyAuthoritySet { id, len, root }
+		BeefyAuthoritySet { id, len, keyset_commitment }
 	}
 }
 
