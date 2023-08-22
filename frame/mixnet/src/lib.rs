@@ -551,11 +551,21 @@ impl<T: Config> Pallet<T> {
 		)
 	}
 
-	/// Try to register a mixnode for the next session. Returns `true` if a registration extrinsic
-	/// is submitted. `session_index` should match `session_status().current_index`; if it does
-	/// not, `false` is returned immediately. This should be called every block during the session,
-	/// except, after `true` is returned, this should not be called for a few blocks, to give the
-	/// submitted extrinsic a chance to get included.
+	/// Try to register a mixnode for the next session.
+	///
+	/// If a registration extrinsic is submitted, `true` is returned. The caller should avoid
+	/// calling `maybe_register` again for a few blocks, to give the submitted extrinsic a chance
+	/// to get included.
+	///
+	/// With the above exception, `maybe_register` is designed to be called every block. Most of
+	/// the time it will not do anything, for example:
+	///
+	/// - If it is not an appropriate time to submit a registration extrinsic.
+	/// - If the local node has already registered a mixnode for the next session.
+	/// - If the local node is not permitted to register a mixnode for the next session.
+	///
+	/// `session_index` should match `session_status().current_index`; if it does not, `false` is
+	/// returned immediately.
 	pub fn maybe_register(session_index: SessionIndex, mixnode: Mixnode) -> bool {
 		let current_session_index = CurrentSessionIndex::<T>::get();
 		if session_index != current_session_index {
