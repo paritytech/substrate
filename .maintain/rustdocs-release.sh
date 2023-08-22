@@ -91,6 +91,22 @@ build_rustdocs() {
     && echo "<meta http-equiv=refresh content=0;url=${DOC_INDEX_PAGE}>" > "${2}/index.html"
 }
 
+inject_analytics_script() {
+    local path="$1"
+    local script_content="<script async defer src=\"https://apisa.parity.io/latest.js\"></script><noscript><img src=\"https://apisa.parity.io/latest.js\" alt=\"\" referrerpolicy=\"no-referrer-when-downgrade\" /></noscript>"
+
+    # Define a function that injects our script into the head of an html file.
+    process_file() {
+        local file="$1"
+        echo "Adding Simple Analytics script to $file"
+        sed -i "s|</head>|$script_content</head>|" "$file"
+    }
+    export -f process_file
+
+    # Locate all .html files under the documentation root and use xargs to process in parallel.
+    find "$path" -name '*.html' | xargs -I {} -P "$(nproc)" bash -c 'process_file "$@"' _ {}
+}
+
 upsert_index_page() {
   # Check if `index-tpl-crud` exists
   which index-tpl-crud &> /dev/null || yarn global add @substrate/index-tpl-crud
@@ -139,6 +155,7 @@ deploy_main() {
   git fetch --all
   git checkout -f ${BUILD_RUSTDOC_REF} || { echo "Checkout \`${BUILD_RUSTDOC_REF}\` error." && exit 1; }
   build_rustdocs "${BUILD_RUSTDOC_REF}" "${DOC_PATH}"
+  inject_analytic_script "${DOC_PATH}"
 
   # git checkout `gh-pages` branch
   git fetch "${GIT_REMOTE}" gh-pages
