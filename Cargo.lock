@@ -6602,7 +6602,6 @@ dependencies = [
 name = "pallet-mixnet"
 version = "0.1.0-dev"
 dependencies = [
- "arrayref",
  "frame-benchmarking",
  "frame-support",
  "frame-system",

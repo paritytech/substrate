@@ -21,7 +21,6 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use arrayref::array_mut_ref;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	traits::{EstimateNextSessionRotation, Get, OneSessionHandler},
@@ -155,8 +154,8 @@ fn twox<BlockNumber: UniqueSaturatedInto<u64>>(
 ) -> u64 {
 	let block_number: u64 = block_number.unique_saturated_into();
 	let mut data = [0; 8 + KX_PUBLIC_SIZE];
-	*array_mut_ref![data, 0, 8] = block_number.to_le_bytes();
-	*array_mut_ref![data, 8, KX_PUBLIC_SIZE] = *kx_public;
+	data[..8].copy_from_slice(&block_number.to_le_bytes());
+	data[8..].copy_from_slice(kx_public);
 	u64::from_le_bytes(sp_io::hashing::twox_64(&data))
 }
 
