@@ -10,6 +10,7 @@ impl<T: Config, V> Debugging<T> for V where V: Tracing<T> {}
 /// Defines methods to capture contract calls, enabling external observers to
 /// measure, trace, and react to contract interactions.
 pub trait Tracing<T: Config> {
+	/// The type of [`CallSpan`] that is created by this trait.
 	type CallSpan: CallSpan;
 
 	/// Creates a new call span to encompass the upcoming contract execution.
