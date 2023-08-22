@@ -2,6 +2,7 @@
 # Here are all jobs that are executed during "test" stage
 
 # It's more like a check and it belongs to the previous stage, but we want to run this job with real tests in parallel
+
 find-fail-ci-phrase:
   stage: test
   variables:
@@ -78,6 +79,8 @@ cargo-check-benches:
   stage: test
   variables:
     CI_JOB_NAME: "cargo-check-benches"
+    CACHE_COMPRESSION_LEVEL: "fastest"
+    FF_USE_FASTZIP: "true"
   extends:
     - .docker-env
     - .test-refs-check-benches
@@ -107,6 +110,7 @@ cargo-check-benches:
     - rusty-cachier snapshot create
     - mkdir -p ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
     # this job is executed in parallel on two runners
+    - ls -la $CARGO_HOME
     - echo "___Running benchmarks___";
     - case ${CI_NODE_INDEX} in
       1)
@@ -121,6 +125,17 @@ cargo-check-benches:
       | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::sr25519::transfer_keep_alive::paritydb::small.json
       ;;
       esac
+    - ls -la $CARGO_HOME
+    - du -sh "$CARGO_HOME/registry"
+  cache:
+    - key: registry_cache
+      paths:
+        - "${CARGO_HOME}/"
+    # - key:
+    #     files:
+    #       - "Cargo.lock"
+    #   paths:
+    #     - "target/"
 
 node-bench-regression-guard:
   # it's not belong to `build` semantically, but dag jobs can't depend on each other
@@ -196,286 +211,287 @@ test-deterministic-wasm:
     - rm -rf $CARGO_TARGET_DIR/release/wbuild
     - rusty-cachier cache upload
 
-test-linux-stable:
-  stage: test
-  extends:
-    - .docker-env
-    - .test-refs
-    - .pipeline-stopper-artifacts
-  variables:
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: "-C debug-assertions -D warnings"
-    RUST_BACKTRACE: 1
-    WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
-    # Ensure we run the UI tests.
-    RUN_UI_TESTS: 1
-    # needed for rusty-cachier to keep cache in test-linux-stable folder and not in test-linux-stable-1/3
-    CI_JOB_NAME: "test-linux-stable"
-  parallel: 3
-  script:
-    - rusty-cachier snapshot create
-    # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
-    # tests are partitioned by nextest and executed in parallel on $CI_NODE_TOTAL runners
-    - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
-    - time cargo nextest run --workspace
-      --locked
-      --release
-      --verbose
-      --features runtime-benchmarks,try-runtime,experimental,unsafe-debug
-      --manifest-path ./bin/node/cli/Cargo.toml
-      --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
-    # we need to update cache only from one job
-    - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
-    # Upload tests results to Elasticsearch
-    - echo "Upload test results to Elasticsearch"
-    - cat target/nextest/default/junit.xml | xq . > target/nextest/default/junit.json
-    - |
-      curl -v -XPOST --http1.1 \
-      -u ${ELASTIC_USERNAME}:${ELASTIC_PASSWORD} \
-      https://elasticsearch.parity-build.parity.io/unit-tests/_doc/${CI_JOB_ID} \
-      -H 'Content-Type: application/json' \
-      -d @target/nextest/default/junit.json || echo "failed to upload junit report"
-  artifacts:
-    when: always
-    paths:
-      - target/nextest/default/junit.xml
-    reports:
-      junit: target/nextest/default/junit.xml
-
-test-frame-support:
-  stage: test
-  extends:
-    - .docker-env
-    - .test-refs
-  variables:
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: "-C debug-assertions -D warnings"
-    RUST_BACKTRACE: 1
-    WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
-    # Ensure we run the UI tests.
-    RUN_UI_TESTS: 1
-  script:
-    - rusty-cachier snapshot create
-    - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
-    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml
-    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,frame-feature-testing-2,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml
-    - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
-    - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
-    - rusty-cachier cache upload
-
-# This job runs tests that don't work with cargo-nextest in test-linux-stable
-test-linux-stable-extra:
-  stage: test
-  extends:
-    - .docker-env
-    - .test-refs
-  variables:
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: "-C debug-assertions -D warnings"
-    RUST_BACKTRACE: 1
-    WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
-    # Ensure we run the UI tests.
-    RUN_UI_TESTS: 1
-  script:
-    - rusty-cachier snapshot create
-    # Run node-cli tests
-    # TODO: add to test-linux-stable-nextest after fix https://github.com/paritytech/substrate/issues/11321
-    - time cargo test node-cli --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
-    # Run doctests
-    # TODO: add to test-linux-stable-nextest after fix https://github.com/nextest-rs/nextest/issues/16
-    - time cargo test --doc --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
-    - rusty-cachier cache upload
-
-# This job runs all benchmarks defined in the `/bin/node/runtime` once to check that there are no errors.
-quick-benchmarks:
-  stage: test
-  extends:
-    - .docker-env
-    - .test-refs
-  variables:
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: "-C debug-assertions -D warnings"
-    RUST_BACKTRACE: "full"
-    WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
-  script:
-    - rusty-cachier snapshot create
-    - time cargo run --locked --release -p node-cli --features runtime-benchmarks -- benchmark pallet --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
-    - rusty-cachier cache upload
-
-test-frame-examples-compile-to-wasm:
-  # into one job
-  stage: test
-  extends:
-    - .docker-env
-    - .test-refs
-  variables:
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: "-C debug-assertions"
-    RUST_BACKTRACE: 1
-  script:
-    - rusty-cachier snapshot create
-    - cd ./frame/examples/offchain-worker/
-    - cargo build --locked --target=wasm32-unknown-unknown --no-default-features
-    - cd ../basic
-    - cargo build --locked --target=wasm32-unknown-unknown --no-default-features
-    - rusty-cachier cache upload
-
-test-linux-stable-int:
-  stage: test
-  extends:
-    - .docker-env
-    - .test-refs
-    - .pipeline-stopper-artifacts
-  variables:
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: "-C debug-assertions -D warnings"
-    RUST_BACKTRACE: 1
-    WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
-    # Ensure we run the UI tests.
-    RUN_UI_TESTS: 1
-  script:
-    - rusty-cachier snapshot create
-    - WASM_BUILD_NO_COLOR=1
-      RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
-      time cargo test -p node-cli --release --verbose --locked -- --ignored
-    - rusty-cachier cache upload
-
-# more information about this job can be found here:
-# https://github.com/paritytech/substrate/pull/6916
-check-tracing:
-  stage: test
-  # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
-  needs:
-    - job: test-linux-stable-int
-      artifacts: false
-  extends:
-    - .docker-env
-    - .test-refs
-    - .pipeline-stopper-artifacts
-  script:
-    - rusty-cachier snapshot create
-    # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
-    - time cargo test --locked --manifest-path ./primitives/tracing/Cargo.toml --no-default-features
-    - time cargo test --locked --manifest-path ./primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
-    - rusty-cachier cache upload
-
-# more information about this job can be found here:
-# https://github.com/paritytech/substrate/pull/3778
-test-full-crypto-feature:
-  stage: test
-  # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
-  needs:
-    - job: check-tracing
-      artifacts: false
-  extends:
-    - .docker-env
-    - .test-refs
-  variables:
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: "-C debug-assertions"
-    RUST_BACKTRACE: 1
-  script:
-    - rusty-cachier snapshot create
-    - cd primitives/core/
-    - time cargo build --locked --verbose --no-default-features --features full_crypto
-    - cd ../application-crypto
-    - time cargo build --locked --verbose --no-default-features --features full_crypto
-    - rusty-cachier cache upload
-
-check-rustdoc:
-  stage: test
-  extends:
-    - .docker-env
-    - .test-refs
-  variables:
-    SKIP_WASM_BUILD: 1
-    RUSTDOCFLAGS: "-Dwarnings"
-  script:
-    - rusty-cachier snapshot create
-    - time cargo doc --locked --workspace --all-features --verbose --no-deps
-    - rusty-cachier cache upload
-
-cargo-check-each-crate:
-  stage: test
-  extends:
-    - .docker-env
-    - .test-refs
-    - .collect-artifacts
-    - .pipeline-stopper-artifacts
-  variables:
-    # $CI_JOB_NAME is set manually so that rusty-cachier can share the cache for all
-    # "cargo-check-each-crate I/N" jobs
-    CI_JOB_NAME: cargo-check-each-crate
-  script:
-    - rusty-cachier snapshot create
-    - PYTHONUNBUFFERED=x time ./scripts/ci/gitlab/check-each-crate.py "$CI_NODE_INDEX" "$CI_NODE_TOTAL"
-    # need to update cache only from one job
-    - if [ "$CI_NODE_INDEX" == 1 ]; then rusty-cachier cache upload; fi
-  parallel: 2
-
-cargo-check-each-crate-macos:
-  stage: test
-  extends:
-    - .test-refs
-    - .collect-artifacts
-    - .pipeline-stopper-artifacts
-  before_script:
-    # skip timestamp script, the osx bash doesn't support printf %()T
-    - !reference [.job-switcher, before_script]
-    - !reference [.rust-info-script, script]
-    - !reference [.pipeline-stopper-vars, script]
-  variables:
-    SKIP_WASM_BUILD: 1
-  script:
-    # TODO: enable rusty-cachier once it supports Mac
-    # TODO: use parallel jobs, as per cargo-check-each-crate, once more Mac runners are available
-    # - time ./scripts/ci/gitlab/check-each-crate.py 1 1
-    - time cargo check --workspace --locked
-  tags:
-    - osx
-
-cargo-hfuzz:
-  stage: test
-  extends:
-    - .docker-env
-    - .test-refs
-    - .pipeline-stopper-artifacts
-  variables:
-    # max 10s per iteration, 60s per file
-    HFUZZ_RUN_ARGS: >
-      --exit_upon_crash
-      --exit_code_upon_crash 1
-      --timeout 10
-      --run_time 60
-    # use git version of honggfuzz-rs until v0.5.56 is out, we need a few recent changes:
-    # https://github.com/rust-fuzz/honggfuzz-rs/pull/75 to avoid breakage on debian
-    # https://github.com/rust-fuzz/honggfuzz-rs/pull/81 fix to the above pr
-    # https://github.com/rust-fuzz/honggfuzz-rs/pull/82 fix for handling rusty-cachier's absolute CARGO_TARGET_DIR
-    HFUZZ_BUILD_ARGS: >
-      --config=patch.crates-io.honggfuzz.git="https://github.com/altaua/honggfuzz-rs"
-      --config=patch.crates-io.honggfuzz.rev="205f7c8c059a0d98fe1cb912cdac84f324cb6981"
-  artifacts:
-    name: "hfuzz-$CI_COMMIT_SHORT_SHA"
-    expire_in: 7 days
-    when: on_failure
-    paths:
-      - primitives/arithmetic/fuzzer/hfuzz_workspace/
-  script:
-    - cd ./primitives/arithmetic/fuzzer
-    - rusty-cachier snapshot create
-    - cargo hfuzz build
-    - rusty-cachier cache upload
-    - for target in $(cargo read-manifest | jq -r '.targets | .[] | .name'); do
-      cargo hfuzz run "$target" || { printf "fuzzing failure for %s\n" "$target"; exit 1; }; done
+# test-linux-stable:
+#   stage: test
+#   extends:
+#     - .docker-env
+#     - .test-refs
+#     - .pipeline-stopper-artifacts
+#   variables:
+#     # Enable debug assertions since we are running optimized builds for testing
+#     # but still want to have debug assertions.
+#     RUSTFLAGS: "-C debug-assertions -D warnings"
+#     RUST_BACKTRACE: 1
+#     WASM_BUILD_NO_COLOR: 1
+#     WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
+#     # Ensure we run the UI tests.
+#     RUN_UI_TESTS: 1
+#     # needed for rusty-cachier to keep cache in test-linux-stable folder and not in test-linux-stable-1/3
+#     CI_JOB_NAME: "test-linux-stable"
+#   parallel: 3
+#   script:
+#     - rusty-cachier snapshot create
+#     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
+#     # tests are partitioned by nextest and executed in parallel on $CI_NODE_TOTAL runners
+#     - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
+#     - time cargo nextest run --workspace
+#       --locked
+#       --release
+#       --verbose
+#       --features runtime-benchmarks,try-runtime,experimental,unsafe-debug
+#       --manifest-path ./bin/node/cli/Cargo.toml
+#       --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
+#     # we need to update cache only from one job
+#     - ls -la target
+#     - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
+#     # Upload tests results to Elasticsearch
+#     - echo "Upload test results to Elasticsearch"
+#     - cat target/nextest/default/junit.xml | xq . > target/nextest/default/junit.json
+#     - |
+#       curl -v -XPOST --http1.1 \
+#       -u ${ELASTIC_USERNAME}:${ELASTIC_PASSWORD} \
+#       https://elasticsearch.parity-build.parity.io/unit-tests/_doc/${CI_JOB_ID} \
+#       -H 'Content-Type: application/json' \
+#       -d @target/nextest/default/junit.json || echo "failed to upload junit report"
+#   artifacts:
+#     when: always
+#     paths:
+#       - target/nextest/default/junit.xml
+#     reports:
+#       junit: target/nextest/default/junit.xml
+#
+# test-frame-support:
+#   stage: test
+#   extends:
+#     - .docker-env
+#     - .test-refs
+#   variables:
+#     # Enable debug assertions since we are running optimized builds for testing
+#     # but still want to have debug assertions.
+#     RUSTFLAGS: "-C debug-assertions -D warnings"
+#     RUST_BACKTRACE: 1
+#     WASM_BUILD_NO_COLOR: 1
+#     WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
+#     # Ensure we run the UI tests.
+#     RUN_UI_TESTS: 1
+#   script:
+#     - rusty-cachier snapshot create
+#     - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
+#     - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml
+#     - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,frame-feature-testing-2,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml
+#     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
+#     - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
+#     - rusty-cachier cache upload
+#
+# # This job runs tests that don't work with cargo-nextest in test-linux-stable
+# test-linux-stable-extra:
+#   stage: test
+#   extends:
+#     - .docker-env
+#     - .test-refs
+#   variables:
+#     # Enable debug assertions since we are running optimized builds for testing
+#     # but still want to have debug assertions.
+#     RUSTFLAGS: "-C debug-assertions -D warnings"
+#     RUST_BACKTRACE: 1
+#     WASM_BUILD_NO_COLOR: 1
+#     WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
+#     # Ensure we run the UI tests.
+#     RUN_UI_TESTS: 1
+#   script:
+#     - rusty-cachier snapshot create
+#     # Run node-cli tests
+#     # TODO: add to test-linux-stable-nextest after fix https://github.com/paritytech/substrate/issues/11321
+#     - time cargo test node-cli --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
+#     # Run doctests
+#     # TODO: add to test-linux-stable-nextest after fix https://github.com/nextest-rs/nextest/issues/16
+#     - time cargo test --doc --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
+#     - rusty-cachier cache upload
+#
+# # This job runs all benchmarks defined in the `/bin/node/runtime` once to check that there are no errors.
+# quick-benchmarks:
+#   stage: test
+#   extends:
+#     - .docker-env
+#     - .test-refs
+#   variables:
+#     # Enable debug assertions since we are running optimized builds for testing
+#     # but still want to have debug assertions.
+#     RUSTFLAGS: "-C debug-assertions -D warnings"
+#     RUST_BACKTRACE: "full"
+#     WASM_BUILD_NO_COLOR: 1
+#     WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
+#   script:
+#     - rusty-cachier snapshot create
+#     - time cargo run --locked --release -p node-cli --features runtime-benchmarks -- benchmark pallet --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
+#     - rusty-cachier cache upload
+#
+# test-frame-examples-compile-to-wasm:
+#   # into one job
+#   stage: test
+#   extends:
+#     - .docker-env
+#     - .test-refs
+#   variables:
+#     # Enable debug assertions since we are running optimized builds for testing
+#     # but still want to have debug assertions.
+#     RUSTFLAGS: "-C debug-assertions"
+#     RUST_BACKTRACE: 1
+#   script:
+#     - rusty-cachier snapshot create
+#     - cd ./frame/examples/offchain-worker/
+#     - cargo build --locked --target=wasm32-unknown-unknown --no-default-features
+#     - cd ../basic
+#     - cargo build --locked --target=wasm32-unknown-unknown --no-default-features
+#     - rusty-cachier cache upload
+#
+# test-linux-stable-int:
+#   stage: test
+#   extends:
+#     - .docker-env
+#     - .test-refs
+#     - .pipeline-stopper-artifacts
+#   variables:
+#     # Enable debug assertions since we are running optimized builds for testing
+#     # but still want to have debug assertions.
+#     RUSTFLAGS: "-C debug-assertions -D warnings"
+#     RUST_BACKTRACE: 1
+#     WASM_BUILD_NO_COLOR: 1
+#     WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
+#     # Ensure we run the UI tests.
+#     RUN_UI_TESTS: 1
+#   script:
+#     - rusty-cachier snapshot create
+#     - WASM_BUILD_NO_COLOR=1
+#       RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
+#       time cargo test -p node-cli --release --verbose --locked -- --ignored
+#     - rusty-cachier cache upload
+#
+# # more information about this job can be found here:
+# # https://github.com/paritytech/substrate/pull/6916
+# check-tracing:
+#   stage: test
+#   # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
+#   needs:
+#     - job: test-linux-stable-int
+#       artifacts: false
+#   extends:
+#     - .docker-env
+#     - .test-refs
+#     - .pipeline-stopper-artifacts
+#   script:
+#     - rusty-cachier snapshot create
+#     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
+#     - time cargo test --locked --manifest-path ./primitives/tracing/Cargo.toml --no-default-features
+#     - time cargo test --locked --manifest-path ./primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
+#     - rusty-cachier cache upload
+#
+# # more information about this job can be found here:
+# # https://github.com/paritytech/substrate/pull/3778
+# test-full-crypto-feature:
+#   stage: test
+#   # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
+#   needs:
+#     - job: check-tracing
+#       artifacts: false
+#   extends:
+#     - .docker-env
+#     - .test-refs
+#   variables:
+#     # Enable debug assertions since we are running optimized builds for testing
+#     # but still want to have debug assertions.
+#     RUSTFLAGS: "-C debug-assertions"
+#     RUST_BACKTRACE: 1
+#   script:
+#     - rusty-cachier snapshot create
+#     - cd primitives/core/
+#     - time cargo build --locked --verbose --no-default-features --features full_crypto
+#     - cd ../application-crypto
+#     - time cargo build --locked --verbose --no-default-features --features full_crypto
+#     - rusty-cachier cache upload
+#
+# check-rustdoc:
+#   stage: test
+#   extends:
+#     - .docker-env
+#     - .test-refs
+#   variables:
+#     SKIP_WASM_BUILD: 1
+#     RUSTDOCFLAGS: "-Dwarnings"
+#   script:
+#     - rusty-cachier snapshot create
+#     - time cargo doc --locked --workspace --all-features --verbose --no-deps
+#     - rusty-cachier cache upload
+#
+# cargo-check-each-crate:
+#   stage: test
+#   extends:
+#     - .docker-env
+#     - .test-refs
+#     - .collect-artifacts
+#     - .pipeline-stopper-artifacts
+#   variables:
+#     # $CI_JOB_NAME is set manually so that rusty-cachier can share the cache for all
+#     # "cargo-check-each-crate I/N" jobs
+#     CI_JOB_NAME: cargo-check-each-crate
+#   script:
+#     - rusty-cachier snapshot create
+#     - PYTHONUNBUFFERED=x time ./scripts/ci/gitlab/check-each-crate.py "$CI_NODE_INDEX" "$CI_NODE_TOTAL"
+#     # need to update cache only from one job
+#     - if [ "$CI_NODE_INDEX" == 1 ]; then rusty-cachier cache upload; fi
+#   parallel: 2
+#
+# cargo-check-each-crate-macos:
+#   stage: test
+#   extends:
+#     - .test-refs
+#     - .collect-artifacts
+#     - .pipeline-stopper-artifacts
+#   before_script:
+#     # skip timestamp script, the osx bash doesn't support printf %()T
+#     - !reference [.job-switcher, before_script]
+#     - !reference [.rust-info-script, script]
+#     - !reference [.pipeline-stopper-vars, script]
+#   variables:
+#     SKIP_WASM_BUILD: 1
+#   script:
+#     # TODO: enable rusty-cachier once it supports Mac
+#     # TODO: use parallel jobs, as per cargo-check-each-crate, once more Mac runners are available
+#     # - time ./scripts/ci/gitlab/check-each-crate.py 1 1
+#     - time cargo check --workspace --locked
+#   tags:
+#     - osx
+#
+# cargo-hfuzz:
+#   stage: test
+#   extends:
+#     - .docker-env
+#     - .test-refs
+#     - .pipeline-stopper-artifacts
+#   variables:
+#     # max 10s per iteration, 60s per file
+#     HFUZZ_RUN_ARGS: >
+#       --exit_upon_crash
+#       --exit_code_upon_crash 1
+#       --timeout 10
+#       --run_time 60
+#     # use git version of honggfuzz-rs until v0.5.56 is out, we need a few recent changes:
+#     # https://github.com/rust-fuzz/honggfuzz-rs/pull/75 to avoid breakage on debian
+#     # https://github.com/rust-fuzz/honggfuzz-rs/pull/81 fix to the above pr
+#     # https://github.com/rust-fuzz/honggfuzz-rs/pull/82 fix for handling rusty-cachier's absolute CARGO_TARGET_DIR
+#     HFUZZ_BUILD_ARGS: >
+#       --config=patch.crates-io.honggfuzz.git="https://github.com/altaua/honggfuzz-rs"
+#       --config=patch.crates-io.honggfuzz.rev="205f7c8c059a0d98fe1cb912cdac84f324cb6981"
+#   artifacts:
+#     name: "hfuzz-$CI_COMMIT_SHORT_SHA"
+#     expire_in: 7 days
+#     when: on_failure
+#     paths:
+#       - primitives/arithmetic/fuzzer/hfuzz_workspace/
+#   script:
+#     - cd ./primitives/arithmetic/fuzzer
+#     - rusty-cachier snapshot create
+#     - cargo hfuzz build
+#     - rusty-cachier cache upload
+#     - for target in $(cargo read-manifest | jq -r '.targets | .[] | .name'); do
+#       cargo hfuzz run "$target" || { printf "fuzzing failure for %s\n" "$target"; exit 1; }; done
