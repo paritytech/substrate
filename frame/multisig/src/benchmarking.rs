@@ -237,5 +237,5 @@ benchmarks! {
 		assert!(!MultisigExpiries::<T>::contains_key(multi_account_id, call_hash));
 	}
 
-	impl_benchmark_test_suite!(Multisig, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Multisig, crate::tests::ExtBuilder::default().build(), crate::tests::Test);
 }
