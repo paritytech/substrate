@@ -45,12 +45,17 @@ pub mod ecdsa_n_bls377 {
 
 	/// BLS12-377 key pair.
 	#[cfg(feature = "full_crypto")]
-	//pub type Pair = super::Pair<ecdsa:Pair, bls377:Pair>;
+	pub type Pair = super::Pair<ecdsa::Pair, ed25519::Pair>;
 	/// BLS12-377 public key.
 	pub type Public = super::Public<ecdsa::Public, ed25519::Public, 64>;
 	// /// BLS12-377 signature.
 	//pub type Signature = super::Signature<ecdsa:Signature, bls377:Signature>;
 
+    // impl super::CryptoType for Public
+    // {
+    // 	#[cfg(feature = "full_crypto")]
+    // 	type Pair = Pair;
+    // }
 	// impl super::HardJunctionId for TinyBLS377 {
 	// 	const ID: &'static str = "BLS12377HDKD";
 	// }
@@ -65,7 +70,10 @@ pub mod ecdsa_n_bls377 {
 //type Seed = [u8; SECRET_KEY_SERIALIZED_SIZE];
 
 //pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {}
-pub trait PublicKeyBound: TraitPublic + sp_std::hash::Hash + ByteArray + for<'a> TryFrom<&'a[u8]> {}
+pub trait PublicKeyBound: TraitPublic + Sized + Derive + sp_std::hash::Hash + ByteArray + for<'a> TryFrom<&'a[u8]> + AsMut<[u8]> + CryptoType {}
+
+impl<PublicKeyTrait:  TraitPublic + Sized + Derive + sp_std::hash::Hash + ByteArray + for<'a> TryFrom<&'a[u8]> + AsMut<[u8]> + CryptoType> PublicKeyBound for PublicKeyTrait {}
+
 /// A public key.
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, PartialEq, Eq, PartialOrd, Ord)]
 #[scale_info(skip_type_params(T))]
@@ -107,7 +115,7 @@ impl<'a,LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS
   		if data.len() != 	LEFT_PLUS_RIGHT_LEN {
  			return Err(())
  		}
- 	 let mut left : LeftPublic = data[0..LeftPublic::LEN].try_into().unwrap();
+         	 let mut left : LeftPublic = data[0..LeftPublic::LEN].try_into().unwrap();
 	 let mut right : RightPublic = data[LeftPublic::LEN..LEFT_PLUS_RIGHT_LEN].try_into().unwrap();
 
 	 let mut inner = [0u8; LEFT_PLUS_RIGHT_LEN];
@@ -155,13 +163,150 @@ impl<LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RI
 
 #[cfg(feature = "full_crypto")]
 impl<LeftPair: TraitPair, RightPair: TraitPair, LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RIGHT_PUBLIC_LEN: usize,> From<Pair<LeftPair, RightPair>> for Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_PUBLIC_LEN> where Pair<LeftPair, RightPair> : TraitPair<Public = Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_PUBLIC_LEN>>,
-{
+    {
 	fn from(x: Pair<LeftPair, RightPair>) -> Self {
 		x.public()
 	}
 }
 
+impl<LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RIGHT_LEN: usize,> UncheckedFrom<[u8; LEFT_PLUS_RIGHT_LEN]> for Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN> {
+	fn unchecked_from(data: [u8; LEFT_PLUS_RIGHT_LEN]) -> Self {
+ 	 let mut left : LeftPublic = data[0..LeftPublic::LEN].try_into().unwrap();
+	 let mut right : RightPublic = data[LeftPublic::LEN..LEFT_PLUS_RIGHT_LEN].try_into().unwrap();
+
+	 let mut inner = [0u8; LEFT_PLUS_RIGHT_LEN];
+	 Public { left, right, inner }
+
+	}
+}
+
+#[cfg(feature = "std")]
+impl<LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RIGHT_LEN: usize,> std::str::FromStr for Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN> where Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN> : CryptoType {
+	type Err = crate::crypto::PublicError;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		<Self as Ss58Codec>::from_ss58check(s)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RIGHT_LEN: usize,> std::fmt::Display for Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN> where Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN> : CryptoType {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "{}", self.to_ss58check())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RIGHT_LEN: usize,> sp_std::fmt::Debug for Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN> where Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN> : CryptoType, [u8;LEFT_PLUS_RIGHT_LEN]: crate::hexdisplay::AsBytesRef {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		let s = self.to_ss58check();
+		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.inner), &s[0..8])
+	}
+}
+
+#[cfg(not(feature = "std"))]
+impl<LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RIGHT_LEN: usize,>_sp_std::fmt::Debug for Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN>  {
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+
+	    Ok(())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RIGHT_LEN: usize,> Serialize for Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN> where  Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN> : CryptoType {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+    {
+	    		serializer.serialize_str(&self.to_ss58check())
+
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'de, LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RIGHT_LEN: usize> Deserialize<'de> for Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN> where Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN> : CryptoType {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+    {
+	    		Public::from_ss58check(&String::deserialize(deserializer)?)
+			.map_err(|e| de::Error::custom(format!("{:?}", e)))
+
+	}
+}
+
+impl<LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RIGHT_LEN: usize,> TraitPublic for Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN> where Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN> : CryptoType {}
+
+impl<LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RIGHT_LEN: usize,> Derive for Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_LEN> {}
+
+#[cfg(not(feature = "full_crypto"))]
+impl<LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RIGHT_PUBLIC_LEN: usize,> CryptoType for Public<LeftPublic, RightPublic, LEFT_PLUS_RIGHT_PUBLIC_LEN> 
+{}
+
+//pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {}
+pub trait SignatureBound: sp_std::hash::Hash + for<'a> TryFrom<&'a[u8]> {}
+
+/// A pair of signatures of different types
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, PartialEq, Eq)]
+#[scale_info(skip_type_params(T))]
+pub struct Signature<LeftSignature: SignatureBound, RightSignature: SignatureBound, const LEFT_LEN: usize, const RIGHT_LEN: usize, const LEFT_PLUS_RIGHT_LEN: usize,> {
+    left: LeftSignature,
+    right: RightSignature,
+    inner: [u8; LEFT_PLUS_RIGHT_LEN],
+}
+
+#[cfg(feature = "full_crypto")]
+impl<LeftSignature: SignatureBound, RightSignature: SignatureBound, const LEFT_LEN: usize, const RIGHT_LEN: usize, const LEFT_PLUS_RIGHT_LEN: usize> sp_std::hash::Hash for Signature<LeftSignature, RightSignature, LEFT_LEN, RIGHT_LEN, LEFT_PLUS_RIGHT_LEN> {
+    fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
+ 	    self.left.hash(state);
+	    self.right.hash(state);
+	}
+}
+
+impl<'a,LeftSignature: SignatureBound, RightSignature: SignatureBound, const LEFT_LEN: usize, const RIGHT_LEN: usize, const LEFT_PLUS_RIGHT_LEN: usize>  TryFrom<&'a[u8]> for Signature<LeftSignature, RightSignature, LEFT_LEN, RIGHT_LEN, LEFT_PLUS_RIGHT_LEN> {
+     type Error = ();
+
+     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+  		if data.len() != 	LEFT_PLUS_RIGHT_LEN {
+ 			return Err(())
+ 		}
+         	 let Ok(mut left)  = data[0..LEFT_LEN].try_into() else { panic!("invalid signature") };
+	 let Ok(mut right) = data[LEFT_LEN..LEFT_PLUS_RIGHT_LEN].try_into() else { panic!("invalid signature") };
+
+	 let mut inner = [0u8; LEFT_PLUS_RIGHT_LEN];
+	 Ok(Signature { left, right, inner })
+
+     }
+}
+	
+impl<LeftSignature: SignatureBound, RightSignature: SignatureBound, const LEFT_LEN: usize, const RIGHT_LEN: usize, const LEFT_PLUS_RIGHT_LEN: usize> AsMut<[u8]> for Signature<LeftSignature, RightSignature, LEFT_LEN, RIGHT_LEN, LEFT_PLUS_RIGHT_LEN> {
+    fn as_mut(&mut self) -> &mut [u8] {
+	&mut self.inner[..]
+    }
+}
+
+impl<LeftSignature: SignatureBound, RightSignature: SignatureBound, const LEFT_LEN: usize, const RIGHT_LEN: usize, const LEFT_PLUS_RIGHT_LEN: usize> AsRef<[u8; LEFT_PLUS_RIGHT_LEN]> for Signature<LeftSignature, RightSignature, LEFT_LEN, RIGHT_LEN, LEFT_PLUS_RIGHT_LEN>  {
+    fn as_ref(&self) -> &[u8; LEFT_PLUS_RIGHT_LEN] {
+		&self.inner
+    }
+}
+
+impl<LeftSignature: SignatureBound, RightSignature: SignatureBound, const LEFT_LEN: usize, const RIGHT_LEN: usize, const LEFT_PLUS_RIGHT_LEN: usize,> AsRef<[u8]> for Signature<LeftSignature, RightSignature, LEFT_LEN, RIGHT_LEN, LEFT_PLUS_RIGHT_LEN> {
+    fn as_ref(&self) -> &[u8] {
+	&self.inner[..]
+    }
+}
+		// serializer.serialize_str(&array_bytes::bytes2hex("", self))
+
+		// let signature_hex = array_bytes::hex2bytes(&String::deserialize(deserializer)?)
+		// 	.map_err(|e| de::Error::custom(format!("{:?}", e)))?;
+		// Signature::try_from(signature_hex.as_ref())
+		// 	.map_err(|e| de::Error::custom(format!("{:?}", e)))
+
 /// A key pair.
 #[cfg(feature = "full_crypto")]
 #[derive(Clone)]
 pub struct Pair<LeftPair: TraitPair, RightPair: TraitPair>(LeftPair, RightPair);
+
+
+
