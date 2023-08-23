@@ -17,6 +17,8 @@
 
 //! The signed phase implementation.
 
+use core::marker::PhantomData;
+
 use crate::{
 	unsigned::MinerConfig, Config, ElectionCompute, Pallet, QueuedSolution, RawSolution,
 	ReadySolution, SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap,
@@ -32,8 +34,8 @@ use sp_arithmetic::traits::SaturatedConversion;
 use sp_core::bounded::BoundedVec;
 use sp_npos_elections::ElectionScore;
 use sp_runtime::{
-	traits::{Saturating, Zero},
-	RuntimeDebug,
+	traits::{Convert, Saturating, Zero},
+	FixedPointNumber, FixedPointOperand, FixedU128, Percent, RuntimeDebug,
 };
 use sp_std::{
 	cmp::Ordering,
@@ -348,6 +350,32 @@ impl<T: Config> SignedSubmissions<T> {
 	}
 }
 
+/// Type that can be used to calculate the deposit base for signed submissions.
+///
+/// The deposit base is calculated as a geometric progression based on the number of signed
+/// submissions in the queue. The size of the queue represents the progression term.
+pub struct GeometricDepositBase<Balance, Fixed, Inc> {
+	_marker: (PhantomData<Balance>, PhantomData<Fixed>, PhantomData<Inc>),
+}
+
+impl<Balance, Fixed, Inc> Convert<usize, Balance> for GeometricDepositBase<Balance, Fixed, Inc>
+where
+	Balance: FixedPointOperand,
+	Fixed: Get<Balance>,
+	Inc: Get<Percent>,
+{
+	// Calculates the base deposit as a geometric progression based on the number of signed
+	// submissions.
+	//
+	// The nth term is obtained by calculating `base * (1 + increase_factor)^nth`. Example: factor
+	// 5, with initial deposit of 1000 and 10% of increase factor is 1000 * (1 + 0.1)^5.
+	fn convert(queue_len: usize) -> Balance {
+		let increase_factor: FixedU128 = FixedU128::from_u32(1) + Inc::get().into();
+
+		increase_factor.saturating_pow(queue_len).saturating_mul_int(Fixed::get())
+	}
+}
+
 impl<T: Config> Pallet<T> {
 	/// `Self` accessor for `SignedSubmission<T>`.
 	pub fn signed_submissions() -> SignedSubmissions<T> {
@@ -520,14 +548,14 @@ impl<T: Config> Pallet<T> {
 		size: SolutionOrSnapshotSize,
 	) -> BalanceOf<T> {
 		let encoded_len: u32 = raw_solution.encoded_size().saturated_into();
-		let encoded_len: BalanceOf<T> = encoded_len.into();
+		let encoded_len_balance: BalanceOf<T> = encoded_len.into();
 		let feasibility_weight = Self::solution_weight_of(raw_solution, size);
 
-		let len_deposit = T::SignedDepositByte::get().saturating_mul(encoded_len);
+		let len_deposit = T::SignedDepositByte::get().saturating_mul(encoded_len_balance);
 		let weight_deposit = T::SignedDepositWeight::get()
 			.saturating_mul(feasibility_weight.ref_time().saturated_into());
 
-		T::SignedDepositBase::get()
+		T::SignedDepositBase::convert(Self::signed_submissions().len())
 			.saturating_add(len_deposit)
 			.saturating_add(weight_deposit)
 	}
@@ -541,6 +569,7 @@ mod tests {
 		Phase,
 	};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
+	use sp_runtime::Percent;
 
 	#[test]
 	fn cannot_submit_too_early() {
@@ -777,6 +806,56 @@ mod tests {
 				Error::<Runtime>::SignedQueueFull,
 			);
 		})
+	}
+
+	#[test]
+	fn geometric_deposit_queue_size_works() {
+		let constant = vec![1000; 10];
+		// geometric progression with 10% increase in each iteration for 10 terms.
+		let progression_10 = vec![1000, 1100, 1210, 1331, 1464, 1610, 1771, 1948, 2143, 2357];
+		let progression_40 = vec![1000, 1400, 1960, 2744, 3841, 5378, 7529, 10541, 14757, 20661];
+
+		let check_progressive_base_fee = |expected: &Vec<u64>| {
+			for s in 0..SignedMaxSubmissions::get() {
+				let account = 99 + s as u64;
+				Balances::make_free_balance_be(&account, 10000000);
+				let mut solution = raw_solution();
+				solution.score.minimal_stake -= s as u128;
+
+				assert_ok!(MultiPhase::submit(RuntimeOrigin::signed(account), Box::new(solution)));
+				assert_eq!(balances(&account).1, expected[s as usize])
+			}
+		};
+
+		ExtBuilder::default()
+			.signed_max_submission(10)
+			.signed_base_deposit(1000, true, Percent::from_percent(0))
+			.build_and_execute(|| {
+				roll_to_signed();
+				assert!(MultiPhase::current_phase().is_signed());
+
+				check_progressive_base_fee(&constant);
+			});
+
+		ExtBuilder::default()
+			.signed_max_submission(10)
+			.signed_base_deposit(1000, true, Percent::from_percent(10))
+			.build_and_execute(|| {
+				roll_to_signed();
+				assert!(MultiPhase::current_phase().is_signed());
+
+				check_progressive_base_fee(&progression_10);
+			});
+
+		ExtBuilder::default()
+			.signed_max_submission(10)
+			.signed_base_deposit(1000, true, Percent::from_percent(40))
+			.build_and_execute(|| {
+				roll_to_signed();
+				assert!(MultiPhase::current_phase().is_signed());
+
+				check_progressive_base_fee(&progression_40);
+			});
 	}
 
 	#[test]
