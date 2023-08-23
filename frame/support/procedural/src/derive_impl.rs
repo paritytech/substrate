@@ -50,12 +50,7 @@ fn get_first_item_pallet_attr<Attr>(item: &syn::ImplItemType) -> syn::Result<Opt
 where
 	Attr: syn::parse::Parse,
 {
-	let attrs = &mut item.attrs;
-	if let Some(pallet_attr) = attrs.get(0) {
-		Ok(Some(syn::parse2(pallet_attr.into_token_stream())?))
-	} else {
-		Ok(None)
-	}
+	item.attrs.get(0).map(|a| syn::parse2(a.into_token_stream()).transpose()
 }
 
 #[derive(Parse, Debug)]
