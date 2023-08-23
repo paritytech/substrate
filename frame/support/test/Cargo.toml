@@ -54,7 +54,6 @@ std = [
 	"sp-metadata-ir/std",
 	"sp-runtime/std",
 	"sp-state-machine/std",
-	"sp-state-machine/std",
 	"sp-std/std",
 	"sp-version/std",
 	"test-pallet/std",
