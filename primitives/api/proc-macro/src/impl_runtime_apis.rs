@@ -35,8 +35,7 @@ use syn::{
 	parse::{Error, Parse, ParseStream, Result},
 	parse_macro_input, parse_quote,
 	spanned::Spanned,
-	Attribute, Ident, ImplItem, ImplItemFn, ItemImpl, LitInt, LitStr, Path, Signature, Type,
-	TypePath,
+	Attribute, Ident, ImplItem, ItemImpl, LitInt, LitStr, Path, Signature, Type, TypePath,
 };
 
 use std::collections::HashSet;
@@ -179,12 +178,15 @@ fn generate_impl_calls(
 				)?;
 				let mut attrs = filter_cfg_attrs(&impl_.attrs);
 
-				let method_api_version = extract_api_version(&method.attrs, method.span())?;
-				if method_api_version.custom.is_some() {
-					return Err(Error::new(method.span(), "`api_version` attribute is not allowed `decl_runtime_api` method implementations"))
-				}
-				if let Some(feature_gated) = method_api_version.feature_gated {
-					add_feature_guard(&mut attrs, &feature_gated.0, true)
+				// If the method has got a `#[cfg(feature = X)]` attribute match it against the impl
+				// block `cfg_attr` add a feature flag for this impl call. Note that the feature
+				// guard is added to `Vec<Attribute>` which is returned as a result and not to the
+				// method itself.
+				if let Some((feature_name, _)) = &trait_api_ver.feature_gated {
+					if method_feature_flag_matches_trait_feature_gate(&method.attrs, &feature_name)?
+					{
+						add_feature_guard(&mut attrs, &feature_name, true)
+					}
 				}
 
 				impl_calls.push((
@@ -498,89 +500,6 @@ fn add_feature_guard(attrs: &mut Vec<Attribute>, feature_name: &str, enable: boo
 	attrs.push(attr);
 }
 
-// Fold implementation which processes function implementations in impl block for a trait. It is
-// used to process `cfg_attr`s related to staging methods (e.g. `#[cfg_attr(feature =
-// "enable-staging-api", api_version(99))]`). Replaces the `cfg_attr` attribute with a feature guard
-// so that staging methods are added only for staging api implementations.
-struct ApiImplItem<'a> {
-	// Version of the trait where the `ImplItemFn` is located. Used for error reporting.
-	trait_api_ver: &'a Option<(String, u64)>,
-	// Span of the trait where the `ImplItemFn` is located. Used for error reporting.
-	trait_span: Span,
-	// All errors which occurred during folding
-	errors: Vec<Error>,
-}
-
-impl<'a> ApiImplItem<'a> {
-	pub fn new(trait_api_ver: &Option<(String, u64)>, trait_span: Span) -> ApiImplItem {
-		ApiImplItem { trait_api_ver, trait_span, errors: Vec::new() }
-	}
-
-	pub fn process(&mut self, item: ItemImpl) -> Result<ItemImpl> {
-		let res = self.fold_item_impl(item);
-		if let Some(mut err) = self.errors.pop() {
-			// combine all errors and return them
-			for e in self.errors.drain(..) {
-				err.combine(e);
-			}
-			return Err(err)
-		}
-
-		Ok(res)
-	}
-}
-
-impl<'a> Fold for ApiImplItem<'a> {
-	fn fold_impl_item_fn(&mut self, mut i: ImplItemFn) -> ImplItemFn {
-		let v = extract_api_version(&i.attrs, i.span());
-
-		let v = match v {
-			Ok(ver) => ver,
-			Err(e) => {
-				// `api_version` attribute seems to be malformed
-				self.errors.push(e);
-				return fold::fold_impl_item_fn(self, i)
-			},
-		};
-
-		if v.custom.is_some() {
-			self.errors.push(Error::new(
-				i.span(),
-				"`api_version` attribute is not allowed on method implementations",
-			));
-			return fold::fold_impl_item_fn(self, i)
-		}
-
-		if let Some(v) = v.feature_gated {
-			// Check for a mismatch between the trait and the function implementation
-			match self.trait_api_ver {
-				None => {
-					let mut e = Error::new(i.span(), "Found `cfg_attr` for implementation function but the trait is not versioned");
-					e.combine(Error::new(self.trait_span, "Put a `cfg_attr` here"));
-					self.errors.push(e);
-					return fold::fold_impl_item_fn(self, i)
-				},
-				Some(trait_ver) if v != *trait_ver => {
-					let mut e = Error::new(
-						i.span(),
-						"Different `cfg_attr` for the trait and the implementation function",
-					);
-					e.combine(Error::new(self.trait_span, "Trait `cfg_attr` is here"));
-					self.errors.push(e);
-					return fold::fold_impl_item_fn(self, i)
-				},
-				_ => {},
-			}
-
-			add_feature_guard(&mut i.attrs, &v.0, true);
-		}
-
-		i.attrs = filter_cfg_attrs(&i.attrs);
-
-		fold::fold_impl_item_fn(self, i)
-	}
-}
-
 /// Generates the implementations of the apis for the runtime.
 fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let mut impls_prepared = Vec::new();
@@ -593,8 +512,6 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 		let mut impl_ = impl_.clone();
 		impl_.attrs = filter_cfg_attrs(&impl_.attrs);
 		// Process all method implementations add add feature gates where necessary
-		let mut impl_ =
-			ApiImplItem::new(&trait_api_ver.feature_gated, impl_.span()).process(impl_)?;
 
 		let trait_ = extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?.clone();
 		let trait_ = extend_with_runtime_decl_path(trait_);
@@ -1020,6 +937,37 @@ fn extract_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<ApiVersion>
 		custom: api_ver.first().map(|v| parse_runtime_api_version(v)).transpose()?,
 		feature_gated: extract_cfg_api_version(attrs, span)?,
 	})
+}
+
+/// This function looks for a matching trait `cfg_attr` and method feature flag.
+/// It looks for a `#[feature = X]` attribute in `attrs`. Returns `true` if X matches
+/// `trait_feature_gate`.
+fn method_feature_flag_matches_trait_feature_gate(
+	attrs: &Vec<Attribute>,
+	trait_feature_gate: &String,
+) -> Result<bool> {
+	let cfg_attrs = attrs.iter().filter(|a| a.path().is_ident("cfg")).collect::<Vec<_>>();
+
+	for cfg_attr in cfg_attrs {
+		let mut feature_name = None;
+		cfg_attr.parse_nested_meta(|m| {
+			if m.path.is_ident("feature") {
+				let a = m.value()?;
+				let b: LitStr = a.parse()?;
+				feature_name = Some(b.value());
+			}
+			Ok(())
+		})?;
+
+		// If there is a cfg attribute containing api_version - save if for processing
+		if let Some(feature_name) = feature_name {
+			if feature_name == *trait_feature_gate {
+				return Ok(true)
+			}
+		}
+	}
+
+	Ok(false)
 }
 
 #[cfg(test)]

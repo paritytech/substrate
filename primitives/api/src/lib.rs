@@ -366,7 +366,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 ///     impl self::ApiWithStagingMethod<Block> for Runtime {
 ///         fn stable_one(_: u64) {}
 ///
-///         #[cfg_attr(feature = "enable-staging-api", api_version(99))]
+///         #[cfg(feature = "enable-staging-api")]
 ///         fn staging_one() {}
 ///     }
 /// }
@@ -377,7 +377,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// `impl_runtime_apis!` a `cfg_attr` attribute is attached to the `ApiWithStagingMethod`
 /// implementation. If the code is compiled with  `enable-staging-api` feature a version 99 of
 /// the runtime api will be built which will include `staging_one`. Note that `staging_one`
-/// also has got the same `cfg_attr` attached.
+/// implementation is feature gated by `#[cfg(feature = ... )]` attribute.
 ///
 /// If the code is compiled without `enable-staging-api` version 1 (the default one) will be
 /// built which doesn't include `staging_one`.

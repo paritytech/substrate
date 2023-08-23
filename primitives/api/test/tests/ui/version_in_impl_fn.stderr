@@ -1,5 +1,0 @@
-error: `api_version` attribute is not allowed `decl_runtime_api` method implementations
-  --> tests/ui/version_in_impl_fn.rs:13:3
-   |
-13 |         #[api_version(2)]
-   |         ^

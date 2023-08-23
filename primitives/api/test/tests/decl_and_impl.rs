@@ -109,8 +109,8 @@ impl_runtime_apis! {
 	impl self::ApiWithStagingMethod<Block> for Runtime {
 		fn stable_one(_: u64) {}
 
-		#[cfg_attr(feature = "enable-staging-api", api_version(99))]
-		fn staging_one() {}
+		#[cfg(feature = "enable-staging-api")]
+		fn staging_one() { }
 	}
 
 	#[cfg_attr(feature = "enable-staging-api", api_version(99))]
@@ -119,7 +119,7 @@ impl_runtime_apis! {
 		fn stable_one(_: u64) {}
 		fn new_one() {}
 
-		#[cfg_attr(feature = "enable-staging-api", api_version(99))]
+		#[cfg(feature = "enable-staging-api")]
 		fn staging_one() {}
 	}
 
@@ -128,7 +128,7 @@ impl_runtime_apis! {
 		fn stable_one(_: u64) {}
 		fn new_one() {}
 
-		#[cfg_attr(feature = "enable-staging-api", api_version(99))]
+		#[cfg(feature = "enable-staging-api")]
 		fn staging_one() {}
 	}
 
