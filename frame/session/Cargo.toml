@@ -44,9 +44,9 @@ std = [
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-staking/std",
+	"sp-state-machine/std",
 	"sp-std/std",
 	"sp-trie/std",
-	"sp-state-machine/std",
 ]
 try-runtime = [
 	"frame-support/try-runtime",

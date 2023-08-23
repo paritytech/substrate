@@ -47,15 +47,15 @@ std = [
 	"scale-info/std",
 	"serde",
 	"sp-api/std",
+	"sp-api/std",
 	"sp-consensus-beefy/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-staking/std",
-	"sp-std/std",
-	"sp-api/std",
 	"sp-staking/std",
-	"sp-state-machine/std"
+	"sp-state-machine/std",
+	"sp-std/std",
 ]
 try-runtime = [
 	"frame-support/try-runtime",

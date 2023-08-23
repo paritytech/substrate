@@ -32,9 +32,9 @@ sp-io = { version = "23.0.0", path = "../../primitives/io" }
 default = [ "std" ]
 std = [
 	"codec/std",
-	"log/std",
 	"frame-support/std",
 	"frame-system/std",
+	"log/std",
 	"pallet-timestamp/std",
 	"scale-info/std",
 	"sp-application-crypto/std",

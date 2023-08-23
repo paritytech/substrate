@@ -37,9 +37,9 @@ std = [
 	"scale-info/std",
 	"sp-core/std",
 	"sp-io/std",
+	"sp-metadata-ir/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"sp-metadata-ir/std"
 ]
 
 runtime-benchmarks = [
@@ -55,6 +55,4 @@ try-runtime = [
 	"sp-runtime/try-runtime",
 ]
 
-frame-metadata = [
-	"sp-metadata-ir"
-]
+frame-metadata = [ "sp-metadata-ir" ]

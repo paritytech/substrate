@@ -42,22 +42,22 @@ std = [
 	"codec/std",
 	"frame-benchmarking/std",
 	"frame-executive/std",
+	"frame-metadata/std",
 	"frame-support/std",
 	"frame-system/std",
 	"scale-info/std",
 	"serde/std",
 	"sp-api/std",
 	"sp-arithmetic/std",
-	"frame-metadata/std",
 	"sp-core/std",
 	"sp-io/std",
+	"sp-metadata-ir/std",
 	"sp-runtime/std",
+	"sp-state-machine/std",
 	"sp-state-machine/std",
 	"sp-std/std",
 	"sp-version/std",
 	"test-pallet/std",
-	"sp-state-machine/std",
-	"sp-metadata-ir/std"
 ]
 experimental = [ "frame-support/experimental" ]
 try-runtime = [

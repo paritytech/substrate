@@ -41,10 +41,10 @@ default = [ "std" ]
 with-tracing = [ "sp-tracing/with-tracing" ]
 std = [
 	"codec/std",
-	"log/std",
 	"frame-support/std",
 	"frame-system/std",
 	"frame-try-runtime/std",
+	"log/std",
 	"pallet-balances/std",
 	"pallet-transaction-payment/std",
 	"scale-info/std",
