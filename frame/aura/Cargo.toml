@@ -28,9 +28,7 @@ sp-core = { version = "21.0.0", default-features = false, path = "../../primitiv
 sp-io = { version = "23.0.0", path = "../../primitives/io" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-support/std",

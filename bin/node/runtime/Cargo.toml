@@ -132,12 +132,8 @@ pallet-whitelist = { version = "4.0.0-dev", default-features = false, path = "..
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder", optional = true }
 
 [features]
-default = [
-	"std",
-]
-with-tracing = [
-	"frame-executive/with-tracing",
-]
+default = [ "std" ]
+with-tracing = [ "frame-executive/with-tracing" ]
 std = [
 	"codec/std",
 	"frame-benchmarking-pallet-pov/std",
@@ -377,6 +373,4 @@ try-runtime = [
 	"pallet-whitelist/try-runtime",
 	"sp-runtime/try-runtime",
 ]
-unsafe-debug = [
-	"pallet-contracts/unsafe-debug",
-]
+unsafe-debug = [ "pallet-contracts/unsafe-debug" ]

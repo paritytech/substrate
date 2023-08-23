@@ -19,12 +19,5 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../runtime"
 sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 
 [features]
-default = [
-	"std",
-]
-std = [
-	"sp-api/std",
-	"sp-inherents/std",
-	"sp-runtime/std",
-	"sp-std/std",
-]
+default = [ "std" ]
+std = [ "sp-api/std", "sp-inherents/std", "sp-runtime/std", "sp-std/std" ]

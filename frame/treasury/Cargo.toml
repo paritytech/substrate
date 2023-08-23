@@ -33,9 +33,7 @@ sp-io = { version = "23.0.0", path = "../../primitives/io" }
 pallet-utility = { version = "4.0.0-dev", path = "../utility" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",

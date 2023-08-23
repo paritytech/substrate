@@ -34,9 +34,7 @@ sp-io = { version = "23.0.0", path = "../../primitives/io" }
 sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-election-provider-support/std",

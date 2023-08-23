@@ -35,9 +35,7 @@ rustversion = "1.0.6"
 trybuild = "1.0.74"
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"bytes/std",
 	"codec/std",

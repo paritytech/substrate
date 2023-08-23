@@ -32,9 +32,7 @@ sp-core = { version = "21.0.0", features = ["full_crypto"], path = "../core" }
 rand = "0.8.5"
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"num-traits/std",
@@ -44,10 +42,7 @@ std = [
 	"sp-std/std",
 ]
 # Serde support without relying on std features.
-serde = [
-	"dep:serde",
-	"scale-info/serde",
-]
+serde = [ "dep:serde", "scale-info/serde" ]
 
 [[bench]]
 name = "bench"

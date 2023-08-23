@@ -37,9 +37,7 @@ sp-runtime = { version = "24.0.0", path = "../runtime" }
 assert_matches = "1.5"
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"hash-db/std",

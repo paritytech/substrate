@@ -27,9 +27,7 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 sp-core = { version = "21.0.0", path = "../../primitives/core" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 runtime-benchmarks = [
 	'frame-benchmarking',
 	"frame-benchmarking/runtime-benchmarks",

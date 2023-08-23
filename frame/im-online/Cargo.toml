@@ -31,9 +31,7 @@ sp-std = { version = "8.0.0", default-features = false, path = "../../primitives
 pallet-session = { version = "4.0.0-dev", path = "../session" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",

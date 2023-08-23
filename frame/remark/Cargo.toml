@@ -28,9 +28,7 @@ sp-std = { version = "8.0.0", default-features = false, path = "../../primitives
 sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",

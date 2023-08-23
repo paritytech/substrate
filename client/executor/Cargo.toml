@@ -55,9 +55,7 @@ name = "bench"
 harness = false
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 # This crate does not have `no_std` support, we just require this for tests
 std = [
 	"sc-runtime-test/std",

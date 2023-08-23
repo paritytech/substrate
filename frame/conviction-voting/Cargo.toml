@@ -33,9 +33,7 @@ pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }
 sp-core = { version = "21.0.0", path = "../../primitives/core" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",

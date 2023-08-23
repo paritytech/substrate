@@ -23,9 +23,7 @@ sp-runtime = { default-features = false, path = "../runtime" }
 sp-std = { default-features = false, path = "../std" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"scale-info/std",
@@ -34,6 +32,4 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 ]
-runtime-benchmarks = [
-	"sp-runtime/runtime-benchmarks",
-]
+runtime-benchmarks = [ "sp-runtime/runtime-benchmarks" ]

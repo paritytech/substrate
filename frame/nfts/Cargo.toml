@@ -30,9 +30,7 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 sp-keystore = { version = "0.27.0", path = "../../primitives/keystore" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",

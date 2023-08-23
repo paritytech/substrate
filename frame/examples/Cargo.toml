@@ -20,9 +20,7 @@ pallet-dev-mode = { default-features = false, path = "./dev-mode" }
 pallet-example-split = { default-features = false, path = "./split" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"pallet-default-config-example/std",
 	"pallet-dev-mode/std",

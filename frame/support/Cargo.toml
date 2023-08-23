@@ -53,9 +53,7 @@ frame-system = { version = "4.0.0-dev", path = "../system" }
 array-bytes = "6.1"
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"environmental/std",
@@ -99,14 +97,8 @@ no-metadata-docs = [
 ]
 # By default some types have documentation, `full-metadata-docs` allows to add documentation to
 # more types in the metadata.
-full-metadata-docs = [
-	"scale-info/docs",
-]
+full-metadata-docs = [ "scale-info/docs" ]
 # Generate impl-trait for tuples with the given number of tuples. Will be needed as the number of
 # pallets in a runtime grows. Does increase the compile time!
-tuples-96 = [
-	"frame-support-procedural/tuples-96",
-]
-tuples-128 = [
-	"frame-support-procedural/tuples-128",
-]
+tuples-96 = [ "frame-support-procedural/tuples-96" ]
+tuples-128 = [ "frame-support-procedural/tuples-128" ]

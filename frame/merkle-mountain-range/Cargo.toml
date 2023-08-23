@@ -29,9 +29,7 @@ env_logger = "0.9"
 itertools = "0.10.3"
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",

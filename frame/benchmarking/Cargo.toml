@@ -38,9 +38,7 @@ rusty-fork = { version = "0.3.0", default-features = false }
 sp-keystore = { version = "0.27.0", path = "../../primitives/keystore" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-support-procedural/std",

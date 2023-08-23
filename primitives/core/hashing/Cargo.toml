@@ -21,9 +21,7 @@ sha3 = { version = "0.10.0", default-features = false }
 twox-hash = { version = "1.6.3", default-features = false, features = ["digest_0_10"] }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"blake2b_simd/std",
 	"byteorder/std",

@@ -54,9 +54,7 @@ pallet-template = { version = "4.0.0-dev", default-features = false, path = "../
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder", optional = true }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",
@@ -116,6 +114,4 @@ try-runtime = [
 	"pallet-transaction-payment/try-runtime",
 	"sp-runtime/try-runtime",
 ]
-experimental = [
-	"pallet-aura/experimental",
-]
+experimental = [ "pallet-aura/experimental" ]

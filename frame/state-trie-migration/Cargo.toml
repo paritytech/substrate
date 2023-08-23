@@ -35,9 +35,7 @@ pallet-balances = { path = "../balances" }
 sp-tracing = { path = "../../primitives/tracing" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",

@@ -23,9 +23,7 @@ sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 sp-keystore = { version = "0.27.0", path = "../keystore", optional = true }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"scale-info/std",

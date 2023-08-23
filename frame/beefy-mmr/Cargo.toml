@@ -32,9 +32,7 @@ array-bytes = "6.1"
 sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"array-bytes",
 	"binary-merkle-tree/std",

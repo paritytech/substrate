@@ -39,9 +39,7 @@ pallet-authorship = { version = "4.0.0-dev", path = "../../authorship" }
 pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",

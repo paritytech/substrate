@@ -29,13 +29,8 @@ sp-std = { version = "8.0.0", default-features = false, path = "../../primitives
 sp-trie = { version = "22.0.0", default-features = false, optional = true, path = "../../primitives/trie" }
 
 [features]
-default = [
-	"historical",
-	"std",
-]
-historical = [
-	"sp-trie",
-]
+default = [ "historical", "std" ]
+historical = [ "sp-trie" ]
 std = [
 	"codec/std",
 	"frame-support/std",

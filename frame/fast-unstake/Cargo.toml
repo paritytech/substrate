@@ -39,9 +39,7 @@ pallet-balances = { path = "../balances" }
 pallet-timestamp = { path = "../timestamp" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking/std",

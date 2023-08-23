@@ -50,9 +50,7 @@ frame-election-provider-support = { version = "4.0.0-dev", path = "../election-p
 rand_chacha = { version = "0.2" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",

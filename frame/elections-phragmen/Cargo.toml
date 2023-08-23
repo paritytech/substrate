@@ -35,9 +35,7 @@ sp-tracing = { path = "../../primitives/tracing" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",

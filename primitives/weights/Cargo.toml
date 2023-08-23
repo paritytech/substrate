@@ -23,9 +23,7 @@ sp-debug-derive = { version = "8.0.0", default-features = false, path = "../debu
 sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"scale-info/std",
@@ -37,9 +35,7 @@ std = [
 ]
 # By default some types have documentation, `full-metadata-docs` allows to add documentation to
 # more types in the metadata.
-full-metadata-docs = [
-	"scale-info/docs",
-]
+full-metadata-docs = [ "scale-info/docs" ]
 
 # Serde support without relying on std features.
 serde = [

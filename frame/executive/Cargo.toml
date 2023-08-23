@@ -36,12 +36,8 @@ sp-io = { version = "23.0.0", path = "../../primitives/io" }
 sp-version = { version = "22.0.0", path = "../../primitives/version" }
 
 [features]
-default = [
-	"std",
-]
-with-tracing = [
-	"sp-tracing/with-tracing",
-]
+default = [ "std" ]
+with-tracing = [ "sp-tracing/with-tracing" ]
 std = [
 	"codec/std",
 	"frame-support/std",

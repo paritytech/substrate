@@ -35,13 +35,8 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
 
 [features]
-default = [
-	"std",
-]
-fuzzing = [
-	"pallet-balances",
-	"sp-tracing",
-]
+default = [ "std" ]
+fuzzing = [ "pallet-balances", "sp-tracing" ]
 std = [
 	"codec/std",
 	"frame-support/std",

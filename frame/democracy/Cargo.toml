@@ -33,9 +33,7 @@ pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }
 pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",

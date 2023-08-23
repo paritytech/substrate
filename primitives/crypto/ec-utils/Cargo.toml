@@ -37,9 +37,7 @@ sp-ark-ed-on-bls12-377 = { version = "0.4.0-beta", default-features = false }
 sp-ark-ed-on-bls12-381-bandersnatch = { version = "0.4.0-beta", default-features = false }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"ark-algebra-test-templates/std",
 	"ark-bls12-377/std",

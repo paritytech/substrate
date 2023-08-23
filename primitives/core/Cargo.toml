@@ -73,9 +73,7 @@ harness = false
 bench = false
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"array-bytes",
 	"arrayvec/std",
@@ -154,13 +152,9 @@ full_crypto = [
 # This feature adds BLS crypto primitives.
 # It should not be used in production since the implementation and interface may still
 # be subject to significant changes.
-bls-experimental = [
-	"w3f-bls",
-]
+bls-experimental = [ "w3f-bls" ]
 
 # This feature adds Bandersnatch crypto primitives.
 # It should not be used in production since the implementation and interface may still
 # be subject to significant changes.
-bandersnatch-experimental = [
-	"bandersnatch_vrfs",
-]
+bandersnatch-experimental = [ "bandersnatch_vrfs" ]

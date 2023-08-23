@@ -29,12 +29,8 @@ sp-io = { version = "23.0.0", path = "../../primitives/io" }
 sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 
 [features]
-default = [
-	"std",
-]
-fuzz = [
-	"default",
-]
+default = [ "std" ]
+fuzz = [ "default" ]
 std = [
 	"codec/std",
 	"frame-support/std",

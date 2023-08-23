@@ -43,9 +43,7 @@ trie-standardmap = "0.16.0"
 sp-runtime = { version = "24.0.0", path = "../runtime" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"ahash",
 	"codec/std",

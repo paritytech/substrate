@@ -23,9 +23,7 @@ sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 sp-trie = { version = "22.0.0", optional = true, path = "../trie" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"async-trait",
 	"codec/std",

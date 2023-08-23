@@ -34,9 +34,7 @@ sha2 = { version = "0.10.7", optional = true }
 rand = { version = "0.8.5", features = ["small_rng"],  optional = true }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"aes-gcm",
 	"codec/std",

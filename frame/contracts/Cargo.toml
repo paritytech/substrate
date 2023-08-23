@@ -64,9 +64,7 @@ pallet-proxy = { version = "4.0.0-dev", path = "../proxy" }
 sp-keystore = { version = "0.27.0", path = "../../primitives/keystore" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"environmental/std",

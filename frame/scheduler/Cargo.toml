@@ -28,9 +28,7 @@ sp-core = { version = "21.0.0", default-features = false, path = "../../primitiv
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 runtime-benchmarks = [
 	"frame-benchmarking",
 	"frame-benchmarking/runtime-benchmarks",

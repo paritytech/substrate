@@ -23,9 +23,7 @@ sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 sp-io = { version = "23.0.0", default-features = false, path = "../io" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"full_crypto",
@@ -37,11 +35,7 @@ std = [
 ]
 
 # Serde support without relying on std features.
-serde = [
-	"dep:serde",
-	"scale-info/serde",
-	"sp-core/serde",
-]
+serde = [ "dep:serde", "scale-info/serde", "sp-core/serde" ]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers
 # or Intel SGX.
@@ -57,10 +51,7 @@ full_crypto = [
 # This feature adds BLS crypto primitives.
 # It should not be used in production since the implementation and interface may still
 # be subject to significant changes.
-bls-experimental = [
-	"sp-core/bls-experimental",
-	"sp-io/bls-experimental",
-]
+bls-experimental = [ "sp-core/bls-experimental", "sp-io/bls-experimental" ]
 
 # This feature adds Bandersnatch crypto primitives.
 # It should not be used in production since the implementation and interface may still

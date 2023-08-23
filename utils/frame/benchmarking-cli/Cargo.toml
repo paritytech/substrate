@@ -56,9 +56,7 @@ sp-wasm-interface = { version = "14.0.0", path = "../../../primitives/wasm-inter
 gethostname = "0.2.3"
 
 [features]
-default = [
-	"rocksdb",
-]
+default = [ "rocksdb" ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
@@ -67,7 +65,4 @@ runtime-benchmarks = [
 	"sc-service/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 ]
-rocksdb = [
-	"sc-cli/rocksdb",
-	"sc-client-db/rocksdb",
-]
+rocksdb = [ "sc-cli/rocksdb", "sc-client-db/rocksdb" ]

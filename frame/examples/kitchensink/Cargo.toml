@@ -31,9 +31,7 @@ pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../
 sp-core = { version = "21.0.0", default-features = false, path = "../../../primitives/core" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",

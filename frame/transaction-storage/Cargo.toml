@@ -33,9 +33,7 @@ sp-core = { version = "21.0.0", default-features = false, path = "../../primitiv
 sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = true, path = "../../primitives/transaction-storage-proof" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 runtime-benchmarks = [
 	"array-bytes",
 	"frame-benchmarking/runtime-benchmarks",

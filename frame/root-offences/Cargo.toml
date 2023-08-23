@@ -56,9 +56,7 @@ try-runtime = [
 	"pallet-timestamp/try-runtime",
 	"sp-runtime/try-runtime",
 ]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-election-provider-support/std",

@@ -42,9 +42,7 @@ substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/ru
 [features]
 runtime-benchmarks = []
 try-runtime = []
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"either/use_std",

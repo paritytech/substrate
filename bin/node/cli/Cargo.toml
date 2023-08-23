@@ -147,9 +147,7 @@ pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
 sc-storage-monitor = { version = "0.1.0", path = "../../../client/storage-monitor" }
 
 [features]
-default = [
-	"cli",
-]
+default = [ "cli" ]
 cli = [
 	"clap",
 	"clap_complete",
