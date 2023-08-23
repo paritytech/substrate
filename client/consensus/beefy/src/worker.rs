@@ -447,11 +447,7 @@ where
 			.ok()
 			.flatten()
 			.filter(|genesis| *genesis == self.persisted_state.pallet_genesis)
-			.ok_or_else(|| {
-				let err = Error::ConsensusReset;
-				error!(target: LOG_TARGET, "🥩 Error: {}", err);
-				err
-			})?;
+			.ok_or(Error::ConsensusReset)?;
 
 		if *header.number() > self.best_grandpa_block() {
 			// update best GRANDPA finalized block we have seen
@@ -795,11 +791,12 @@ where
 	/// Main loop for BEEFY worker.
 	///
 	/// Run the main async loop which is driven by finality notifications and gossiped votes.
+	/// Should never end, returns `Error` otherwise.
 	pub(crate) async fn run(
 		mut self,
-		mut block_import_justif: Fuse<NotificationReceiver<BeefyVersionedFinalityProof<B>>>,
-		mut finality_notifications: Fuse<FinalityNotifications<B>>,
-	) {
+		block_import_justif: &mut Fuse<NotificationReceiver<BeefyVersionedFinalityProof<B>>>,
+		finality_notifications: &mut Fuse<FinalityNotifications<B>>,
+	) -> Error {
 		info!(
 			target: LOG_TARGET,
 			"🥩 run BEEFY worker, best grandpa: #{:?}.",
@@ -848,17 +845,17 @@ where
 				// Use `select_biased!` to prioritize order below.
 				// Process finality notifications first since these drive the voter.
 				notification = finality_notifications.next() => {
-					if notification.and_then(|notif| {
-						self.handle_finality_notification(&notif).ok()
-					}).is_none() {
-						error!(target: LOG_TARGET, "🥩 Finality stream terminated, closing worker.");
-						return;
+					if let Some(notif) = notification {
+						if let Err(err) = self.handle_finality_notification(&notif) {
+							return err;
+						}
+					} else {
+						return Error::FinalityStreamTerminated;
 					}
 				},
 				// Make sure to pump gossip engine.
 				_ = gossip_engine => {
-					error!(target: LOG_TARGET, "🥩 Gossip engine has terminated, closing worker.");
-					return;
+					return Error::GossipEngineTerminated;
 				},
 				// Process incoming justifications as these can make some in-flight votes obsolete.
 				response_info = self.on_demand_justifications.next().fuse() => {
@@ -881,8 +878,7 @@ where
 							debug!(target: LOG_TARGET, "🥩 {}", err);
 						}
 					} else {
-						error!(target: LOG_TARGET, "🥩 Block import stream terminated, closing worker.");
-						return;
+						return Error::BlockImportStreamTerminated;
 					}
 				},
 				justif = gossip_proofs.next() => {
@@ -892,11 +888,7 @@ where
 							debug!(target: LOG_TARGET, "🥩 {}", err);
 						}
 					} else {
-						error!(
-							target: LOG_TARGET,
-							"🥩 Finality proofs gossiping stream terminated, closing worker."
-						);
-						return;
+						return Error::FinalityProofGossipStreamTerminated;
 					}
 				},
 				// Finally process incoming votes.
@@ -907,11 +899,7 @@ where
 							debug!(target: LOG_TARGET, "🥩 {}", err);
 						}
 					} else {
-						error!(
-							target: LOG_TARGET,
-							"🥩 Votes gossiping stream terminated, closing worker."
-						);
-						return;
+						return Error::VotesGossipStreamTerminated;
 					}
 				},
 				// Process peer reports.

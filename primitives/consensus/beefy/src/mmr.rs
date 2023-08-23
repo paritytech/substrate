@@ -162,6 +162,12 @@ mod mmr_root_provider {
 		_phantom: PhantomData<B>,
 	}
 
+	impl<B, R> Clone for MmrRootProvider<B, R> {
+		fn clone(&self) -> Self {
+			Self { runtime: self.runtime.clone(), _phantom: PhantomData }
+		}
+	}
+
 	impl<B, R> MmrRootProvider<B, R>
 	where
 		B: Block,
