@@ -41,7 +41,7 @@ pub trait KeyGenerator {
 	type HashFn: FnOnce(&[u8]) -> Vec<u8>;
 	type HArg;
 
-	const HASHER_METADATA: &'static [crate::metadata_ir::StorageHasherIR];
+	const HASHER_METADATA: &'static [sp_metadata_ir::StorageHasherIR];
 
 	/// Given a `key` tuple, calculate the final key by encoding each element individually and
 	/// hashing them using the corresponding hasher in the `KeyGenerator`.
@@ -74,7 +74,7 @@ impl<H: StorageHasher, K: FullCodec + StaticTypeInfo> KeyGenerator for Key<H, K>
 	type HashFn = Box<dyn FnOnce(&[u8]) -> Vec<u8>>;
 	type HArg = (Self::HashFn,);
 
-	const HASHER_METADATA: &'static [crate::metadata_ir::StorageHasherIR] = &[H::METADATA];
+	const HASHER_METADATA: &'static [sp_metadata_ir::StorageHasherIR] = &[H::METADATA];
 
 	fn final_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
 		H::hash(&key.to_encoded_iter().next().expect("should have at least one element!"))
@@ -114,7 +114,7 @@ impl KeyGenerator for Tuple {
 	for_tuples!( type HArg = ( #(Tuple::HashFn),* ); );
 	type HashFn = Box<dyn FnOnce(&[u8]) -> Vec<u8>>;
 
-	const HASHER_METADATA: &'static [crate::metadata_ir::StorageHasherIR] =
+	const HASHER_METADATA: &'static [sp_metadata_ir::StorageHasherIR] =
 		&[for_tuples!( #(Tuple::Hasher::METADATA),* )];
 
 	fn final_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {

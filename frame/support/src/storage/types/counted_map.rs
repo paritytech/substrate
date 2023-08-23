@@ -18,7 +18,6 @@
 //! Storage counted map type.
 
 use crate::{
-	metadata_ir::StorageEntryMetadataIR,
 	storage::{
 		generator::StorageMap as _,
 		types::{
@@ -32,6 +31,7 @@ use crate::{
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
 use sp_io::MultiRemovalResults;
+use sp_metadata_ir::StorageEntryMetadataIR;
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
@@ -512,11 +512,11 @@ mod test {
 	use super::*;
 	use crate::{
 		hash::*,
-		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
 		storage::{bounded_vec::BoundedVec, types::ValueQuery},
 		traits::ConstU32,
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
+	use sp_metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
 
 	struct Prefix;
 	impl StorageInstance for Prefix {

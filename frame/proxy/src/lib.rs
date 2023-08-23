@@ -38,7 +38,6 @@ use frame_support::{
 	dispatch::{DispatchError, GetDispatchInfo},
 	ensure,
 	traits::{Currency, Get, InstanceFilter, IsSubType, IsType, OriginTrait, ReservableCurrency},
-	RuntimeDebug,
 };
 use frame_system::{self as system, ensure_signed, pallet_prelude::BlockNumberFor};
 pub use pallet::*;
@@ -46,7 +45,7 @@ use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
 	traits::{Dispatchable, Hash, Saturating, StaticLookup, TrailingZeroInput, Zero},
-	DispatchResult,
+	DispatchResult, RuntimeDebug,
 };
 use sp_std::prelude::*;
 pub use weights::WeightInfo;

@@ -421,7 +421,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			#(#cfg_attrs)*
 			{
 				<#full_ident as #frame_support::storage::StorageEntryMetadataBuilder>::build_metadata(
-					#frame_support::sp_std::vec![
+					#frame_support::__private::sp_std::vec![
 						#( #docs, )*
 					],
 					&mut entries,
@@ -492,7 +492,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
 							#[doc = #getter_doc_line]
 							pub fn #getter<KArg>(k: KArg) -> #query where
-								KArg: #frame_support::codec::EncodeLike<#key>,
+								KArg: #frame_support::__private::codec::EncodeLike<#key>,
 							{
 								<
 									#full_ident as #frame_support::storage::StorageMap<#key, #value>
@@ -518,7 +518,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
 							#[doc = #getter_doc_line]
 							pub fn #getter<KArg>(k: KArg) -> #query where
-								KArg: #frame_support::codec::EncodeLike<#key>,
+								KArg: #frame_support::__private::codec::EncodeLike<#key>,
 							{
 								// NOTE: we can't use any trait here because CountedStorageMap
 								// doesn't implement any.
@@ -544,8 +544,8 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
 							#[doc = #getter_doc_line]
 							pub fn #getter<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> #query where
-								KArg1: #frame_support::codec::EncodeLike<#key1>,
-								KArg2: #frame_support::codec::EncodeLike<#key2>,
+								KArg1: #frame_support::__private::codec::EncodeLike<#key1>,
+								KArg2: #frame_support::__private::codec::EncodeLike<#key2>,
 							{
 								<
 									#full_ident as
@@ -791,8 +791,8 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			#completed_where_clause
 		{
 			#[doc(hidden)]
-			pub fn storage_metadata() -> #frame_support::metadata_ir::PalletStorageMetadataIR {
-				#frame_support::metadata_ir::PalletStorageMetadataIR {
+			pub fn storage_metadata() -> #frame_support::__private::metadata_ir::PalletStorageMetadataIR {
+				#frame_support::__private::metadata_ir::PalletStorageMetadataIR {
 					prefix: <
 						<T as #frame_system::Config>::PalletInfo as
 						#frame_support::traits::PalletInfo
@@ -800,7 +800,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						.expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`."),
 					entries: {
 						#[allow(unused_mut)]
-						let mut entries = #frame_support::sp_std::vec![];
+						let mut entries = #frame_support::__private::sp_std::vec![];
 						#( #entries_builder )*
 						entries
 					},

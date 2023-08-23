@@ -24,6 +24,7 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../../primi
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-core = { version = "21.0.0", path = "../../primitives/core", default-features = false }
 sp-io = { version = "23.0.0", path = "../../primitives/io", default-features = false }
+sp-metadata-ir = { version = "0.1.0", default-features = false, optional = true, path = "../../primitives/metadata-ir" }
 
 [features]
 default = [ "std" ]
@@ -38,6 +39,7 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-metadata-ir/std"
 ]
 
 runtime-benchmarks = [
@@ -51,4 +53,8 @@ try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"sp-runtime/try-runtime",
+]
+
+frame-metadata = [
+	"sp-metadata-ir"
 ]

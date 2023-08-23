@@ -19,14 +19,14 @@
 
 mod mock;
 
-use frame_support::{assert_noop, assert_ok, bounded_btree_map, traits::Currency};
+use frame_support::{assert_noop, assert_ok, traits::Currency};
 use mock::*;
 use pallet_nomination_pools::{
 	BondedPools, Error as PoolsError, Event as PoolsEvent, LastPoolId, PoolMember, PoolMembers,
 	PoolState,
 };
 use pallet_staking::{CurrentEra, Event as StakingEvent, Payee, RewardDestination};
-use sp_runtime::traits::Zero;
+use sp_runtime::{bounded_btree_map, traits::Zero};
 
 #[test]
 fn pool_lifecycle_e2e() {

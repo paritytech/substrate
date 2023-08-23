@@ -275,9 +275,9 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::CloneNoBound,
 			#frame_support::EqNoBound,
 			#frame_support::PartialEqNoBound,
-			#frame_support::codec::Encode,
-			#frame_support::codec::Decode,
-			#frame_support::scale_info::TypeInfo,
+			#frame_support::__private::codec::Encode,
+			#frame_support::__private::codec::Decode,
+			#frame_support::__private::scale_info::TypeInfo,
 		)]
 		#[codec(encode_bound())]
 		#[codec(decode_bound())]
@@ -287,7 +287,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			#[doc(hidden)]
 			#[codec(skip)]
 			__Ignore(
-				#frame_support::sp_std::marker::PhantomData<(#type_use_gen,)>,
+				#frame_support::__private::sp_std::marker::PhantomData<(#type_use_gen,)>,
 				#frame_support::Never,
 			),
 			#(
@@ -394,8 +394,8 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 					match self {
 						#(
 							Self::#fn_name { #( #args_name_pattern, )* } => {
-								#frame_support::sp_tracing::enter_span!(
-									#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
+								#frame_support::__private::sp_tracing::enter_span!(
+									#frame_support::__private::sp_tracing::trace_span!(stringify!(#fn_name))
 								);
 								#maybe_allow_attrs
 								<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
@@ -419,8 +419,8 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clause {
 			#[doc(hidden)]
-			pub fn call_functions() -> #frame_support::metadata_ir::PalletCallMetadataIR {
-				#frame_support::scale_info::meta_type::<#call_ident<#type_use_gen>>().into()
+			pub fn call_functions() -> #frame_support::__private::metadata_ir::PalletCallMetadataIR {
+				#frame_support::__private::scale_info::meta_type::<#call_ident<#type_use_gen>>().into()
 			}
 		}
 	)
