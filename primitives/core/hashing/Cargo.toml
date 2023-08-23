@@ -21,11 +21,11 @@ sha3 = { version = "0.10.0", default-features = false }
 twox-hash = { version = "1.6.3", default-features = false, features = ["digest_0_10"] }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
-	"digest/std",
 	"blake2b_simd/std",
 	"byteorder/std",
+	"digest/std",
 	"sha2/std",
 	"sha3/std",
 	"twox-hash/std",

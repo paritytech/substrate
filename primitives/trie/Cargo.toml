@@ -43,23 +43,23 @@ trie-standardmap = "0.16.0"
 sp-runtime = { version = "24.0.0", path = "../runtime" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"ahash",
 	"codec/std",
-	"hashbrown",
 	"hash-db/std",
+	"hashbrown",
 	"lazy_static",
-	"schnellru",
 	"memory-db/std",
 	"nohash-hasher",
 	"parking_lot",
 	"scale-info/std",
+	"schnellru",
 	"sp-core/std",
+	"sp-runtime/std",
 	"sp-std/std",
 	"thiserror",
 	"tracing",
 	"trie-db/std",
 	"trie-root/std",
-	"sp-runtime/std"
 ]

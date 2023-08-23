@@ -29,13 +29,13 @@ tracing-subscriber = { version = "0.2.25", optional = true, features = [
 ] }
 
 [features]
-default = ["std"]
-with-tracing = ["codec/derive", "codec/full"]
+default = [ "std" ]
+with-tracing = [ "codec/derive", "codec/full" ]
 std = [
-	"with-tracing",
-	"tracing/std",
-	"tracing-core/std",
 	"codec/std",
 	"sp-std/std",
+	"tracing-core/std",
 	"tracing-subscriber",
+	"tracing/std",
+	"with-tracing",
 ]

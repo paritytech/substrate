@@ -39,29 +39,27 @@ ed25519-dalek = { version = "2.0.0", default-features = false, optional = true }
 rustversion = "1.0.6"
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"bytes/std",
-	"sp-externalities/std",
-	"sp-core/std",
 	"codec/std",
-	"sp-std/std",
-	"sp-trie/std",
-	"sp-state-machine/std",
-	"libsecp256k1",
-	"secp256k1",
-	"sp-runtime-interface/std",
-	"sp-tracing/std",
-	"tracing/std",
-	"tracing-core/std",
-	"log",
 	"ed25519-dalek",
-	"sp-keystore/std"
+	"libsecp256k1",
+	"log",
+	"secp256k1",
+	"sp-core/std",
+	"sp-externalities/std",
+	"sp-keystore/std",
+	"sp-runtime-interface/std",
+	"sp-state-machine/std",
+	"sp-std/std",
+	"sp-tracing/std",
+	"sp-trie/std",
+	"tracing-core/std",
+	"tracing/std",
 ]
 
-with-tracing = [
-	"sp-tracing/with-tracing"
-]
+with-tracing = [ "sp-tracing/with-tracing" ]
 
 # These two features are used for `no_std` builds for the environments which already provides
 # `#[panic_handler]`, `#[alloc_error_handler]` and `#[global_allocator]`.
@@ -93,13 +91,9 @@ improved_panic_error_reporting = []
 # This feature adds BLS crypto primitives.
 # It should not be used in production since the implementation and interface may still
 # be subject to significant changes.
-bls-experimental = [
-	 "sp-keystore/bls-experimental",
-]
+bls-experimental = [ "sp-keystore/bls-experimental" ]
 
 # This feature adds Bandersnatch crypto primitives.
 # It should not be used in production since the implementation and interface may still
 # be subject to significant changes.
-bandersnatch-experimental = [
-	"sp-keystore/bandersnatch-experimental",
-]
+bandersnatch-experimental = [ "sp-keystore/bandersnatch-experimental" ]

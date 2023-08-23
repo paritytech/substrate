@@ -38,13 +38,14 @@ sp-core = { version = "21.0.0", path = "../../../primitives/core" }
 sp-io = { version = "23.0.0", path = "../../../primitives/io" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking/std",
 	"frame-election-provider-support/std",
 	"frame-support/std",
 	"frame-system/std",
+	"log/std",
 	"pallet-babe/std",
 	"pallet-balances/std",
 	"pallet-grandpa/std",
@@ -52,18 +53,16 @@ std = [
 	"pallet-offences/std",
 	"pallet-session/std",
 	"pallet-staking/std",
+	"pallet-timestamp/std",
 	"scale-info/std",
+	"sp-core/std",
+	"sp-io/std",
 	"sp-runtime/std",
 	"sp-staking/std",
 	"sp-std/std",
-	"log/std",
-	"pallet-timestamp/std",
-	"sp-core/std",
-	"sp-io/std"
 ]
 
 runtime-benchmarks = [
-	"pallet-staking/runtime-benchmarks",
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-election-provider-support/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
@@ -73,7 +72,8 @@ runtime-benchmarks = [
 	"pallet-grandpa/runtime-benchmarks",
 	"pallet-im-online/runtime-benchmarks",
 	"pallet-offences/runtime-benchmarks",
+	"pallet-staking/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
-	"sp-staking/runtime-benchmarks"
+	"sp-staking/runtime-benchmarks",
 ]

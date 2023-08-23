@@ -28,7 +28,7 @@ thiserror = "1.0"
 array-bytes = "6.1"
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"log/std",
@@ -42,9 +42,4 @@ std = [
 ]
 
 # Serde support without relying on std features.
-serde = [
-	"dep:serde",
-	"scale-info/serde",
-	"sp-core/serde",
-	"sp-runtime/serde",
-]
+serde = [ "dep:serde", "scale-info/serde", "sp-core/serde", "sp-runtime/serde" ]
