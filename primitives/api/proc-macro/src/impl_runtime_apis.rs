@@ -178,16 +178,8 @@ fn generate_impl_calls(
 				)?;
 				let mut attrs = filter_cfg_attrs(&impl_.attrs);
 
-				// If the method has got a `#[cfg(feature = X)]` attribute match it against the impl
-				// block `cfg_attr` add a feature flag for this impl call. Note that the feature
-				// guard is added to `Vec<Attribute>` which is returned as a result and not to the
-				// method itself.
-				if let Some((feature_name, _)) = &trait_api_ver.feature_gated {
-					if method_feature_flag_matches_trait_feature_gate(&method.attrs, &feature_name)?
-					{
-						add_feature_guard(&mut attrs, &feature_name, true)
-					}
-				}
+				// Add any `#[cfg(feature = X)]` attributes of the method to result
+				attrs.extend(filter_cfg_attrs(&method.attrs));
 
 				impl_calls.push((
 					impl_trait_ident.clone(),
@@ -936,37 +928,6 @@ fn extract_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<ApiVersion>
 		custom: api_ver.first().map(|v| parse_runtime_api_version(v)).transpose()?,
 		feature_gated: extract_cfg_api_version(attrs, span)?,
 	})
-}
-
-/// This function looks for a matching trait `cfg_attr` and method feature flag.
-/// It looks for a `#[feature = X]` attribute in `attrs`. Returns `true` if X matches
-/// `trait_feature_gate`.
-fn method_feature_flag_matches_trait_feature_gate(
-	attrs: &Vec<Attribute>,
-	trait_feature_gate: &String,
-) -> Result<bool> {
-	let cfg_attrs = attrs.iter().filter(|a| a.path().is_ident("cfg")).collect::<Vec<_>>();
-
-	for cfg_attr in cfg_attrs {
-		let mut feature_name = None;
-		cfg_attr.parse_nested_meta(|m| {
-			if m.path.is_ident("feature") {
-				let a = m.value()?;
-				let b: LitStr = a.parse()?;
-				feature_name = Some(b.value());
-			}
-			Ok(())
-		})?;
-
-		// If there is a cfg attribute containing api_version - save if for processing
-		if let Some(feature_name) = feature_name {
-			if feature_name == *trait_feature_gate {
-				return Ok(true)
-			}
-		}
-	}
-
-	Ok(false)
 }
 
 #[cfg(test)]
