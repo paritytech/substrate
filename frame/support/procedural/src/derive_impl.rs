@@ -46,7 +46,7 @@ pub struct PalletAttr {
 	typ: PalletAttrType,
 }
 
-fn take_first_item_pallet_attr<Attr>(item: &mut syn::ImplItemType) -> syn::Result<Option<Attr>>
+fn get_first_item_pallet_attr<Attr>(item: &syn::ImplItemType) -> syn::Result<Option<Attr>>
 where
 	Attr: syn::parse::Parse,
 {
