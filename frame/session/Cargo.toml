@@ -27,6 +27,7 @@ sp-session = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking", features = ["serde"] }
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-trie = { version = "22.0.0", default-features = false, optional = true, path = "../../primitives/trie" }
+sp-state-machine = { version = "0.28.0", default-features = false, path = "../../primitives/state-machine" }
 
 [features]
 default = ["historical", "std"]
@@ -45,6 +46,7 @@ std = [
 	"sp-staking/std",
 	"sp-std/std",
 	"sp-trie/std",
+	"sp-state-machine/std",
 ]
 try-runtime = [
 	"frame-support/try-runtime",

@@ -28,6 +28,7 @@ sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 sp-weights = { version = "20.0.0", default-features = false, path = "../../primitives/weights" }
 sp-debug-derive = { default-features = false, path = "../../primitives/debug-derive" }
+sp-metadata-ir = { version = "0.1.0", default-features = false, path = "../../primitives/metadata-ir" }
 tt-call = "1.0.8"
 macro_magic = "0.4.2"
 frame-support-procedural = { version = "4.0.0-dev", default-features = false, path = "./procedural" }
@@ -76,7 +77,8 @@ std = [
 	"environmental/std",
 	"sp-genesis-builder/std",
 	"frame-system/std",
-	"sp-debug-derive/std"
+	"sp-debug-derive/std",
+	"sp-metadata-ir/std"
 ]
 runtime-benchmarks = [
 	"frame-system/runtime-benchmarks",

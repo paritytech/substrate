@@ -32,11 +32,11 @@ use sp_runtime::{
 	BuildStorage,
 };
 use sp_staking::SessionIndex;
+use sp_state_machine::BasicExternalities;
 
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
-	BasicExternalities,
 };
 
 impl_opaque_keys! {

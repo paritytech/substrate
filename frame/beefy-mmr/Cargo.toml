@@ -26,6 +26,7 @@ sp-io = { version = "23.0.0", default-features = false, path = "../../primitives
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
+sp-state-machine = { version = "0.28.0", default-features = false, path = "../../primitives/state-machine" }
 
 [dev-dependencies]
 array-bytes = "6.1"
@@ -51,7 +52,8 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-api/std",
-	"sp-staking/std"
+	"sp-staking/std",
+	"sp-state-machine/std"
 ]
 try-runtime = [
 	"frame-support/try-runtime",

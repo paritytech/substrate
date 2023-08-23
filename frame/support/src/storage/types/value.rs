@@ -18,7 +18,6 @@
 //! Storage value type. Implements StorageValue trait and its method directly.
 
 use crate::{
-	metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR},
 	storage::{
 		generator::StorageValue as StorageValueT,
 		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
@@ -28,6 +27,7 @@ use crate::{
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::SaturatedConversion;
+use sp_metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR};
 use sp_std::prelude::*;
 
 /// A type that allow to store a value.
@@ -278,8 +278,9 @@ where
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{metadata_ir::StorageEntryModifierIR, storage::types::ValueQuery};
+	use crate::storage::types::ValueQuery;
 	use sp_io::{hashing::twox_128, TestExternalities};
+	use sp_metadata_ir::StorageEntryModifierIR;
 
 	struct Prefix;
 	impl StorageInstance for Prefix {

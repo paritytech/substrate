@@ -724,7 +724,7 @@ fn expand_benchmark(
 		Ok(ident) => ident,
 		Err(err) => return err.to_compile_error().into(),
 	};
-	let codec = quote!(#krate::frame_support::codec);
+	let codec = quote!(#krate::frame_support::__private::codec);
 	let traits = quote!(#krate::frame_support::traits);
 	let setup_stmts = benchmark_def.setup_stmts;
 	let verify_stmts = benchmark_def.verify_stmts;
