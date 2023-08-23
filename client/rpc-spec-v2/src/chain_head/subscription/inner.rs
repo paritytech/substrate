@@ -249,6 +249,9 @@ impl RegisteredOperation {
 			.requested_continue
 			.store(true, std::sync::atomic::Ordering::Release);
 
+		// The sender part of this channel is around for as long as this object exists,
+		// because it is stored in the `OperationState` of the `operations` field.
+		// The sender part is removed from tracking when this object is dropped.
 		let _ = self.recv_continue.recv().await;
 
 		self.shared_state
