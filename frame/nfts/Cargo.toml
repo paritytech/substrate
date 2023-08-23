@@ -30,31 +30,31 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 sp-keystore = { version = "0.27.0", path = "../../primitives/keystore" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
 	"log/std",
+	"pallet-balances/std",
 	"scale-info/std",
 	"sp-core/std",
 	"sp-io/std",
+	"sp-keystore/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"pallet-balances/std",
-	"sp-keystore/std"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
-	"frame-system/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
-	"pallet-balances/runtime-benchmarks"
+	"frame-system/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"pallet-balances/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

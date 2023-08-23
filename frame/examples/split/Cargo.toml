@@ -29,27 +29,21 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional
 sp-core = { version = "21.0.0", default-features = false, path = "../../../primitives/core" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
-	"log/std",
-	"scale-info/std",
-
+	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
-
+	"log/std",
+	"scale-info/std",
+	"sp-core/std",
 	"sp-io/std",
 	"sp-std/std",
-
-	"frame-benchmarking?/std",
-	"sp-core/std"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
-	"frame-system/runtime-benchmarks"
+	"frame-system/runtime-benchmarks",
 ]
-try-runtime = [
-	"frame-support/try-runtime",
-	"frame-system/try-runtime"
-]
+try-runtime = [ "frame-support/try-runtime", "frame-system/try-runtime" ]

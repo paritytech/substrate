@@ -721,7 +721,7 @@ fn pallet_on_genesis() {
 
 #[test]
 fn metadata() {
-	use frame_support::metadata::{v14::*, *};
+	use frame_metadata::{v14::*, *};
 
 	let system_pallet_metadata = PalletMetadata {
 		index: 0,

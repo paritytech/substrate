@@ -31,20 +31,20 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 default = [ "std" ]
 std = [
 	"codec/std",
-	"scale-info/std",
 	"frame-support/std",
 	"frame-system/std",
+	"pallet-balances/std",
+	"scale-info/std",
 	"sp-api/std",
-	"sp-runtime/std",
-	"sp-std/std",
-	"sp-io/std",
 	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime/std",
 	"sp-statement-store/std",
-	"pallet-balances/std"
+	"sp-std/std",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"pallet-balances/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

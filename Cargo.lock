@@ -2915,6 +2915,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "frame-try-runtime",
+ "log",
  "pallet-balances",
  "pallet-transaction-payment",
  "parity-scale-codec",
@@ -2994,6 +2995,7 @@ dependencies = [
  "sp-genesis-builder",
  "sp-inherents",
  "sp-io",
+ "sp-metadata-ir",
  "sp-runtime",
  "sp-staking",
  "sp-state-machine",
@@ -3046,6 +3048,7 @@ version = "3.0.0"
 dependencies = [
  "frame-benchmarking",
  "frame-executive",
+ "frame-metadata",
  "frame-support",
  "frame-support-test-pallet",
  "frame-system",
@@ -3058,6 +3061,7 @@ dependencies = [
  "sp-arithmetic",
  "sp-core",
  "sp-io",
+ "sp-metadata-ir",
  "sp-runtime",
  "sp-state-machine",
  "sp-std",
@@ -6203,6 +6207,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log",
  "pallet-balances",
  "parity-scale-codec",
  "scale-info",
@@ -6233,6 +6238,7 @@ version = "4.0.0-dev"
 dependencies = [
  "frame-support",
  "frame-system",
+ "log",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
@@ -6378,6 +6384,7 @@ dependencies = [
  "frame-election-provider-support",
  "frame-support",
  "frame-system",
+ "log",
  "pallet-authorship",
  "pallet-balances",
  "pallet-offences",
@@ -6394,6 +6401,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-staking",
+ "sp-state-machine",
  "sp-std",
 ]
 
@@ -6418,6 +6426,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-staking",
+ "sp-state-machine",
  "sp-std",
 ]
 
@@ -6989,6 +6998,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "itertools",
+ "log",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -7257,6 +7267,7 @@ dependencies = [
  "scale-info",
  "sp-core",
  "sp-io",
+ "sp-metadata-ir",
  "sp-runtime",
  "sp-std",
 ]
@@ -7480,6 +7491,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-staking",
+ "sp-state-machine",
  "sp-std",
  "sp-trie",
 ]

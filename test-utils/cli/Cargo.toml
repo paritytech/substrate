@@ -26,4 +26,4 @@ sc-service = { path = "../../client/service" }
 futures = "0.3.28"
 
 [features]
-try-runtime = ["node-cli/try-runtime"]
+try-runtime = [ "node-cli/try-runtime" ]

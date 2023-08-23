@@ -28,7 +28,7 @@ macro_magic = { version = "0.4.2", features = ["proc_support"] }
 expander = "2.0.0"
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = []
 no-metadata-docs = []
 # Generate impl-trait for tuples with the given number of tuples. Will be needed as the number of

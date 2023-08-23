@@ -19,7 +19,6 @@
 //! StoragePrefixedDoubleMap traits and their methods directly.
 
 use crate::{
-	metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR},
 	storage::{
 		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
 		KeyLenOf, StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
@@ -29,6 +28,7 @@ use crate::{
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::SaturatedConversion;
+use sp_metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR};
 use sp_std::prelude::*;
 
 /// A type that allow to store values for `(key1, key2)` couple. Similar to `StorageMap` but allow
@@ -734,12 +734,9 @@ where
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{
-		hash::*,
-		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
-		storage::types::ValueQuery,
-	};
+	use crate::{hash::*, storage::types::ValueQuery};
 	use sp_io::{hashing::twox_128, TestExternalities};
+	use sp_metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
 
 	struct Prefix;
 	impl StorageInstance for Prefix {

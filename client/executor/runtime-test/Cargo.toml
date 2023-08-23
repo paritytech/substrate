@@ -23,12 +23,12 @@ sp-std = { version = "8.0.0", default-features = false, path = "../../../primiti
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder", optional = true }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"sp-core/std",
 	"sp-io/std",
+	"sp-runtime-interface/std",
 	"sp-runtime/std",
 	"sp-std/std",
 	"substrate-wasm-builder",
-	"sp-runtime-interface/std"
 ]
