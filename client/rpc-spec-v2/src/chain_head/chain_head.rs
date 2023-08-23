@@ -244,7 +244,7 @@ where
 		follow_subscription: String,
 		hash: Block::Hash,
 	) -> RpcResult<MethodResponse> {
-		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash, 1) {
+		let mut block_guard = match self.subscriptions.lock_block(&follow_subscription, hash, 1) {
 			Ok(block) => block,
 			Err(SubscriptionManagementError::SubscriptionAbsent) |
 			Err(SubscriptionManagementError::ExceededLimits) => return Ok(MethodResponse::LimitReached),
@@ -255,7 +255,8 @@ where
 			Err(_) => return Err(ChainHeadRpcError::InvalidBlock.into()),
 		};
 
-		let operation = block_guard.operation();
+		let operation_id = block_guard.operation().operation_id();
+
 		let event = match self.client.block(hash) {
 			Ok(Some(signed_block)) => {
 				let extrinsics = signed_block
@@ -265,7 +266,7 @@ where
 					.map(|extrinsic| hex_string(&extrinsic.encode()))
 					.collect();
 				FollowEvent::<Block::Hash>::OperationBodyDone(OperationBodyDone {
-					operation_id: operation.operation_id(),
+					operation_id: operation_id.clone(),
 					value: extrinsics,
 				})
 			},
@@ -281,16 +282,13 @@ where
 				return Err(ChainHeadRpcError::InvalidBlock.into())
 			},
 			Err(error) => FollowEvent::<Block::Hash>::OperationError(OperationError {
-				operation_id: operation.operation_id(),
+				operation_id: operation_id.clone(),
 				error: error.to_string(),
 			}),
 		};
 
 		let _ = block_guard.response_sender().unbounded_send(event);
-		Ok(MethodResponse::Started(MethodResponseStarted {
-			operation_id: operation.operation_id(),
-			discarded_items: None,
-		}))
+		Ok(MethodResponse::Started(MethodResponseStarted { operation_id, discarded_items: None }))
 	}
 
 	fn chain_head_unstable_header(
@@ -350,7 +348,7 @@ where
 			.transpose()?
 			.map(ChildInfo::new_default_from_vec);
 
-		let block_guard =
+		let mut block_guard =
 			match self.subscriptions.lock_block(&follow_subscription, hash, items.len()) {
 				Ok(block) => block,
 				Err(SubscriptionManagementError::SubscriptionAbsent) |
@@ -396,7 +394,7 @@ where
 	) -> RpcResult<MethodResponse> {
 		let call_parameters = Bytes::from(parse_hex_param(call_parameters)?);
 
-		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash, 1) {
+		let mut block_guard = match self.subscriptions.lock_block(&follow_subscription, hash, 1) {
 			Ok(block) => block,
 			Err(SubscriptionManagementError::SubscriptionAbsent) |
 			Err(SubscriptionManagementError::ExceededLimits) => {
@@ -418,29 +416,26 @@ where
 			.into())
 		}
 
-		let operation = block_guard.operation();
+		let operation_id = block_guard.operation().operation_id();
 		let event = self
 			.client
 			.executor()
 			.call(hash, &function, &call_parameters, CallContext::Offchain)
 			.map(|result| {
 				FollowEvent::<Block::Hash>::OperationCallDone(OperationCallDone {
-					operation_id: operation.operation_id(),
+					operation_id: operation_id.clone(),
 					output: hex_string(&result),
 				})
 			})
 			.unwrap_or_else(|error| {
 				FollowEvent::<Block::Hash>::OperationError(OperationError {
-					operation_id: operation.operation_id(),
+					operation_id: operation_id.clone(),
 					error: error.to_string(),
 				})
 			});
 
 		let _ = block_guard.response_sender().unbounded_send(event);
-		Ok(MethodResponse::Started(MethodResponseStarted {
-			operation_id: operation.operation_id(),
-			discarded_items: None,
-		}))
+		Ok(MethodResponse::Started(MethodResponseStarted { operation_id, discarded_items: None }))
 	}
 
 	fn chain_head_unstable_unpin(

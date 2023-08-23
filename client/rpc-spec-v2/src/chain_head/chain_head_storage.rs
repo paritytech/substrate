@@ -189,7 +189,7 @@ where
 	/// necessary.
 	async fn generate_storage_iter_events(
 		&mut self,
-		block_guard: BlockGuard<Block, BE>,
+		mut block_guard: BlockGuard<Block, BE>,
 		hash: Block::Hash,
 		child_key: Option<ChildInfo>,
 	) {
@@ -245,7 +245,7 @@ where
 	/// Generate the block events for the `chainHead_storage` method.
 	pub async fn generate_events(
 		&mut self,
-		block_guard: BlockGuard<Block, BE>,
+		mut block_guard: BlockGuard<Block, BE>,
 		hash: Block::Hash,
 		items: Vec<StorageQuery<StorageKey>>,
 		child_key: Option<ChildInfo>,

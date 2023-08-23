@@ -165,7 +165,7 @@ pub struct OperationState {
 	/// `waitingForContinue` event and cancellation.
 	shared_state: Arc<SharedOperationState>,
 	/// Send notifications when the user calls `chainHead_continue` method.
-	send_continue: async_channel::Sender<()>,
+	send_continue: tokio::sync::mpsc::Sender<()>,
 }
 
 impl OperationState {
@@ -232,7 +232,7 @@ pub struct RegisteredOperation {
 	/// `waitingForContinue` event and cancellation.
 	shared_state: Arc<SharedOperationState>,
 	/// Receive notifications when the user calls `chainHead_continue` method.
-	recv_continue: async_channel::Receiver<()>,
+	recv_continue: tokio::sync::mpsc::Receiver<()>,
 	/// The operation ID of the request.
 	operation_id: String,
 	/// Track the operations ID of this subscription.
@@ -244,7 +244,7 @@ pub struct RegisteredOperation {
 impl RegisteredOperation {
 	/// Wait until the user calls `chainHead_continue` or the operation
 	/// is cancelled via `chainHead_stopOperation`.
-	pub async fn wait_for_continue(&self) {
+	pub async fn wait_for_continue(&mut self) {
 		self.shared_state
 			.requested_continue
 			.store(true, std::sync::atomic::Ordering::Release);
@@ -308,7 +308,7 @@ impl Operations {
 		let operation_id = self.next_operation_id();
 
 		// At most one message can be sent.
-		let (send_continue, recv_continue) = async_channel::bounded(1);
+		let (send_continue, recv_continue) = tokio::sync::mpsc::channel(1);
 		let shared_state = SharedOperationState::new();
 
 		let state = OperationState { send_continue, shared_state: shared_state.clone() };
@@ -523,8 +523,8 @@ impl<Block: BlockT, BE: Backend<Block>> BlockGuard<Block, BE> {
 	}
 
 	/// Get the details of the registered operation.
-	pub fn operation(&self) -> &RegisteredOperation {
-		&self.operation
+	pub fn operation(&mut self) -> &mut RegisteredOperation {
+		&mut self.operation
 	}
 }
 
