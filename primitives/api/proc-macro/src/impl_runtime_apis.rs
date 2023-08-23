@@ -896,7 +896,8 @@ fn extract_cfg_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<
 		return Err(err)
 	}
 
-	Ok(cfg_api_version_attr.drain(..).next().map(|(feature, name, _)| (feature, name)))
+	let result = cfg_api_version_attr.drain(..).next().map(|(feature, name, _)| (feature, name));
+	Ok(result)
 }
 
 /// Represents an API version.
