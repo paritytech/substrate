@@ -50,7 +50,7 @@ fn get_first_item_pallet_attr<Attr>(item: &syn::ImplItemType) -> syn::Result<Opt
 where
 	Attr: syn::parse::Parse,
 {
-	item.attrs.get(0).map(|a| syn::parse2(a.into_token_stream()).transpose()
+	item.attrs.get(0).map(|a| syn::parse2(a.into_token_stream())).transpose()
 }
 
 #[derive(Parse, Debug)]
@@ -134,7 +134,7 @@ fn combine_impls(
 			if let ImplItem::Type(typ) = item.clone() {
 				let mut typ = typ.clone();
 				if let Ok(Some(PalletAttr { typ: PalletAttrType::RuntimeType(_), .. })) =
-					take_first_item_pallet_attr::<PalletAttr>(&mut typ)
+					get_first_item_pallet_attr::<PalletAttr>(&mut typ)
 				{
 					let item: ImplItem = if inject_runtime_types {
 						parse_quote! {
