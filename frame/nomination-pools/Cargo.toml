@@ -35,32 +35,32 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
 
 [features]
-default = ["std"]
-fuzzing = ["pallet-balances", "sp-tracing"]
+default = [ "std" ]
+fuzzing = [ "pallet-balances", "sp-tracing" ]
 std = [
 	"codec/std",
-	"scale-info/std",
 	"frame-support/std",
 	"frame-system/std",
-	"sp-runtime/std",
-	"sp-std/std",
-	"sp-io/std",
-	"sp-staking/std",
-	"sp-core/std",
 	"log/std",
 	"pallet-balances?/std",
-	"sp-tracing?/std"
+	"scale-info/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-staking/std",
+	"sp-std/std",
+	"sp-tracing?/std",
 ]
 runtime-benchmarks = [
-	"sp-staking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"pallet-balances?/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks"
+	"sp-runtime/runtime-benchmarks",
+	"sp-staking/runtime-benchmarks",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"pallet-balances?/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

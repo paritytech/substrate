@@ -37,33 +37,33 @@ frame-executive = { version = "4.0.0-dev", default-features = false, path = "../
 test-pallet = { package = "frame-support-test-pallet", default-features = false, path = "pallet" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking/std",
 	"frame-executive/std",
+	"frame-metadata/std",
 	"frame-support/std",
 	"frame-system/std",
 	"scale-info/std",
 	"serde/std",
 	"sp-api/std",
 	"sp-arithmetic/std",
-	"frame-metadata/std",
 	"sp-core/std",
 	"sp-io/std",
+	"sp-metadata-ir/std",
 	"sp-runtime/std",
+	"sp-state-machine/std",
 	"sp-std/std",
 	"sp-version/std",
 	"test-pallet/std",
-	"sp-state-machine/std",
-	"sp-metadata-ir/std"
 ]
-experimental = ["frame-support/experimental"]
+experimental = [ "frame-support/experimental" ]
 try-runtime = [
+	"frame-executive/try-runtime",
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
-	"frame-executive/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]
 # WARNING:
 # Only CI runs with this feature enabled. This feature is for testing stuff related to the FRAME macros
@@ -72,4 +72,4 @@ frame-feature-testing = []
 frame-feature-testing-2 = []
 # Disable ui tests
 disable-ui-tests = []
-no-metadata-docs = ["frame-support/no-metadata-docs"]
+no-metadata-docs = [ "frame-support/no-metadata-docs" ]

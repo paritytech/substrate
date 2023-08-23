@@ -54,50 +54,53 @@ frame-system = { version = "4.0.0-dev", path = "../system" }
 array-bytes = "6.1"
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
-	"sp-core/std",
+	"codec/std",
+	"environmental/std",
+	"frame-metadata/std",
+	"frame-support-procedural/std",
+	"frame-system/std",
 	"k256/std",
+	"log/std",
+	"scale-info/std",
 	"serde/std",
 	"sp-api/std",
-	"sp-io/std",
-	"codec/std",
-	"scale-info/std",
-	"sp-std/std",
-	"sp-runtime/std",
-	"sp-tracing/std",
 	"sp-arithmetic/std",
-	"frame-metadata/std",
+	"sp-core/std",
+	"sp-debug-derive/std",
+	"sp-genesis-builder/std",
 	"sp-inherents/std",
+	"sp-io/std",
+	"sp-metadata-ir/std",
+	"sp-runtime/std",
 	"sp-staking/std",
 	"sp-state-machine/std",
+	"sp-std/std",
+	"sp-tracing/std",
 	"sp-weights/std",
-	"frame-support-procedural/std",
-	"log/std",
-	"environmental/std",
-	"sp-genesis-builder/std",
-	"frame-system/std",
-	"sp-debug-derive/std",
-	"sp-metadata-ir/std"
 ]
 runtime-benchmarks = [
 	"frame-system/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
-	"sp-staking/runtime-benchmarks"
+	"sp-staking/runtime-benchmarks",
 ]
 try-runtime = [
-	"sp-debug-derive/force-debug",
 	"frame-system/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-debug-derive/force-debug",
+	"sp-runtime/try-runtime",
 ]
 experimental = []
 # By default some types have documentation, `no-metadata-docs` allows to reduce the documentation
 # in the metadata.
-no-metadata-docs = ["frame-support-procedural/no-metadata-docs", "sp-api/no-metadata-docs"]
+no-metadata-docs = [
+	"frame-support-procedural/no-metadata-docs",
+	"sp-api/no-metadata-docs",
+]
 # By default some types have documentation, `full-metadata-docs` allows to add documentation to
 # more types in the metadata.
-full-metadata-docs = ["scale-info/docs"]
+full-metadata-docs = [ "scale-info/docs" ]
 # Generate impl-trait for tuples with the given number of tuples. Will be needed as the number of
 # pallets in a runtime grows. Does increase the compile time!
-tuples-96 = ["frame-support-procedural/tuples-96"]
-tuples-128 = ["frame-support-procedural/tuples-128"]
+tuples-96 = [ "frame-support-procedural/tuples-96" ]
+tuples-128 = [ "frame-support-procedural/tuples-128" ]

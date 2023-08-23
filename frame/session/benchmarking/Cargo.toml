@@ -35,31 +35,31 @@ sp-core = { version = "21.0.0", path = "../../../primitives/core" }
 sp-io = { version = "23.0.0", path = "../../../primitives/io" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"frame-benchmarking/std",
+	"frame-election-provider-support/std",
 	"frame-support/std",
 	"frame-system/std",
+	"pallet-balances/std",
 	"pallet-session/std",
 	"pallet-staking/std",
+	"pallet-timestamp/std",
 	"rand/std",
+	"sp-core/std",
+	"sp-io/std",
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-std/std",
-	"frame-election-provider-support/std",
-	"pallet-balances/std",
-	"pallet-timestamp/std",
-	"sp-core/std",
-	"sp-io/std"
 ]
 
 runtime-benchmarks = [
-	"pallet-staking/runtime-benchmarks",
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-election-provider-support/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
+	"pallet-staking/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks"
+	"sp-runtime/runtime-benchmarks",
 ]

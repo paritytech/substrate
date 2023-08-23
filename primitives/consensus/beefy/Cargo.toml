@@ -30,7 +30,7 @@ array-bytes = "6.1"
 w3f-bls = { version = "0.1.3", features = ["std"]} 
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"scale-info/std",
@@ -56,6 +56,6 @@ serde = [
 # This feature adds BLS crypto primitives. It should not be used in production since
 # the BLS implementation and interface may still be subject to significant change.
 bls-experimental = [
- 	 "sp-core/bls-experimental",
- 	 "sp-application-crypto/bls-experimental",	 
+	"sp-application-crypto/bls-experimental",
+	"sp-core/bls-experimental",
 ]

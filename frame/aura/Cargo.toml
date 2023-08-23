@@ -29,25 +29,25 @@ sp-core = { version = "21.0.0", default-features = false, path = "../../primitiv
 sp-io = { version = "23.0.0", path = "../../primitives/io" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
-	"log/std",
 	"frame-support/std",
 	"frame-system/std",
+	"log/std",
 	"pallet-timestamp/std",
 	"scale-info/std",
 	"sp-application-crypto/std",
 	"sp-consensus-aura/std",
+	"sp-core/std",
+	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"sp-core/std",
-	"sp-io/std"
 ]
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"pallet-timestamp/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]
 experimental = []

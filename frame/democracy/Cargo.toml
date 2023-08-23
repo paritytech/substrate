@@ -33,30 +33,30 @@ pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }
 pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
+	"pallet-balances/std",
+	"pallet-preimage/std",
+	"pallet-scheduler/std",
 	"scale-info/std",
 	"serde",
+	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"sp-core/std",
-	"pallet-balances/std",
-	"pallet-preimage/std",
-	"pallet-scheduler/std"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
 	"pallet-preimage/runtime-benchmarks",
-	"pallet-scheduler/runtime-benchmarks"
+	"pallet-scheduler/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
@@ -64,5 +64,5 @@ try-runtime = [
 	"pallet-balances/try-runtime",
 	"pallet-preimage/try-runtime",
 	"pallet-scheduler/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

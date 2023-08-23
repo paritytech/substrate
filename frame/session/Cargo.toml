@@ -30,8 +30,8 @@ sp-trie = { version = "22.0.0", default-features = false, optional = true, path 
 sp-state-machine = { version = "0.28.0", default-features = false, path = "../../primitives/state-machine" }
 
 [features]
-default = ["historical", "std"]
-historical = ["sp-trie"]
+default = [ "historical", "std" ]
+historical = [ "sp-trie" ]
 std = [
 	"codec/std",
 	"frame-support/std",
@@ -44,13 +44,13 @@ std = [
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-staking/std",
+	"sp-state-machine/std",
 	"sp-std/std",
 	"sp-trie/std",
-	"sp-state-machine/std",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"pallet-timestamp/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

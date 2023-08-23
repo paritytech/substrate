@@ -21,17 +21,15 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../runtime"
 sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 
 [features]
-default = [
-	"std",
-]
+default = [ "std" ]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"serde/std",
 	"sp-application-crypto/std",
 	"sp-core/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"scale-info/std",
 ]
 
 # Serde support without relying on std features.

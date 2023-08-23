@@ -22,6 +22,6 @@ anyhow = { version = "1.0.68", optional = true }
 sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 
 [features]
-default = ["std"]
-std = ["codec/std", "log", "sp-std/std", "wasmtime"]
-wasmtime = ["dep:wasmtime", "anyhow"]
+default = [ "std" ]
+std = [ "codec/std", "log", "sp-std/std", "wasmtime" ]
+wasmtime = [ "anyhow", "dep:wasmtime" ]

@@ -25,7 +25,7 @@ sp-std = { version = "8.0.0", default-features = false, path = "../../std" }
 sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../timestamp" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"async-trait",
 	"codec/std",
