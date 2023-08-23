@@ -511,7 +511,6 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 
 		let mut impl_ = impl_.clone();
 		impl_.attrs = filter_cfg_attrs(&impl_.attrs);
-		// Process all method implementations add add feature gates where necessary
 
 		let trait_ = extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?.clone();
 		let trait_ = extend_with_runtime_decl_path(trait_);
