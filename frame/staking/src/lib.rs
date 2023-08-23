@@ -312,10 +312,11 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Saturating, StaticLookup, Zero},
 	Perbill, Perquintill, Rounding, RuntimeDebug,
 };
+
 pub use sp_staking::StakerStatus;
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
-	EraIndex, OnStakingUpdate, SessionIndex,
+	EraIndex, OnStakingUpdate, PayoutDestinationAlias, PayoutSplitOpt, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
@@ -387,7 +388,76 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 	}
 }
 
+/// The payout destination for an account.
+///
+/// NOTE: Being lazily migrated to. Logic pertaining to this enum has been introduced to `set_payee`
+/// and payout logic, replacing `RewardDestination`.
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum PayoutDestination<AccountId> {
+	/// Payout goes into the stash account and is added to bond.
+	Stake,
+	/// Deposit the specified percentage of payout to the specified account as free balance, and
+	/// pay the rest into the stash account and add to bond. 0% and 100% should be disallowed and
+	/// handled as `Stake` and `Deposit` respectively.
+	Split((Perbill, AccountId)),
+	/// Deposit payout as free balance to an account.
+	Deposit(AccountId),
+	/// Receive no payout.
+	Forgo,
+}
+
+// Used for testing and benchmarking where stash and controller accounts are sometimes generated
+// after providing the desired `PayoutDestination`. In such scenarios the provided `Alias` variant
+// is used. If payout destination accounts are already known, `Direct` can be used.
+#[derive(PartialEq, Copy, Clone)]
+pub enum PayoutRoute<AccountId> {
+	Direct(PayoutDestination<AccountId>),
+	Alias(PayoutDestinationAlias),
+}
+
+impl<AccountId: Clone> PayoutDestination<AccountId> {
+	/// NOTE: This function can be removed once lazy migration to `PayoutDestination` is completed.
+	pub fn from_reward_destination(
+		v: RewardDestination<AccountId>,
+		stash: AccountId,
+		controller: AccountId,
+	) -> Self {
+		match v {
+			RewardDestination::Staked => Self::Stake,
+			RewardDestination::Stash => Self::Deposit(stash),
+			RewardDestination::Controller => Self::Deposit(controller),
+			RewardDestination::Account(a) => Self::Deposit(a.clone()),
+			RewardDestination::None => Self::Forgo,
+		}
+	}
+
+	// NOTE: the `ctlr` parameter can be discontinued after the lazy migration to
+	// `PayoutDestination` is completed.
+	pub fn from_route(v: PayoutRoute<AccountId>, stash: &AccountId, ctlr: &AccountId) -> Self {
+		match v {
+			PayoutRoute::Direct(destination) => destination,
+			PayoutRoute::Alias(alias) => match alias {
+				PayoutDestinationAlias::Controller => PayoutDestination::Deposit(ctlr.clone()),
+				PayoutDestinationAlias::Split((percent, dest)) =>
+					if dest == PayoutSplitOpt::Stash {
+						PayoutDestination::Split((percent, stash.clone()))
+					} else {
+						PayoutDestination::Split((percent, ctlr.clone()))
+					},
+			},
+		}
+	}
+}
+
+impl<AccountId> Default for PayoutDestination<AccountId> {
+	fn default() -> Self {
+		PayoutDestination::Stake
+	}
+}
+
 /// A destination account for payment.
+/// NOTE: Being lazily migrated and deprecated in favour of `PayoutDestination`.
+/// Tracking at <https://github.com/paritytech/substrate/issues/14438>
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum RewardDestination<AccountId> {
 	/// Pay into the stash account, increasing the amount at stake accordingly.
@@ -402,7 +472,7 @@ pub enum RewardDestination<AccountId> {
 	None,
 }
 
-impl<AccountId> Default for RewardDestination<AccountId> {
+impl<AccountId: Clone> Default for RewardDestination<AccountId> {
 	fn default() -> Self {
 		RewardDestination::Staked
 	}

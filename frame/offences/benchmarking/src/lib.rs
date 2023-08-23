@@ -51,7 +51,7 @@ use pallet_session::{
 use pallet_staking::Event as StakingEvent;
 use pallet_staking::{
 	Config as StakingConfig, Exposure, IndividualExposure, MaxNominationsOf, Pallet as Staking,
-	RewardDestination, ValidatorPrefs,
+	PayoutDestination, ValidatorPrefs,
 };
 
 const SEED: u32 = 0;
@@ -108,7 +108,7 @@ fn bond_amount<T: Config>() -> BalanceOf<T> {
 fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'static str> {
 	let stash: T::AccountId = account("stash", n, SEED);
 	let stash_lookup: LookupSourceOf<T> = T::Lookup::unlookup(stash.clone());
-	let reward_destination = RewardDestination::Staked;
+	let payout_destination = PayoutDestination::Stake;
 	let amount = bond_amount::<T>();
 	// add twice as much balance to prevent the account from being killed.
 	let free_amount = amount.saturating_mul(2u32.into());
@@ -116,7 +116,7 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
 		amount,
-		reward_destination.clone(),
+		payout_destination.clone(),
 	)?;
 
 	let validator_prefs =
@@ -134,7 +134,7 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 		Staking::<T>::bond(
 			RawOrigin::Signed(nominator_stash.clone()).into(),
 			amount,
-			reward_destination.clone(),
+			payout_destination.clone(),
 		)?;
 
 		let selected_validators: Vec<LookupSourceOf<T>> = vec![stash_lookup.clone()];

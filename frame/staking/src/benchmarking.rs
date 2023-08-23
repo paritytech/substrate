@@ -73,7 +73,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	upper_bound: u32,
 	dead_controller: bool,
 	unique_controller: bool,
-	destination: RewardDestination<T::AccountId>,
+	destination: PayoutRoute<T::AccountId>,
 ) -> Result<(T::AccountId, Vec<(T::AccountId, T::AccountId)>), &'static str> {
 	// Clean up any existing state.
 	clear_validators_and_nominators::<T>();
@@ -176,7 +176,7 @@ impl<T: Config> ListScenario<T> {
 		let (origin_stash1, origin_controller1) = create_stash_controller_with_balance::<T>(
 			USER_SEED + 2,
 			origin_weight,
-			Default::default(),
+			PayoutDestination::Stake,
 		)?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(origin_controller1.clone()).into(),
@@ -187,7 +187,7 @@ impl<T: Config> ListScenario<T> {
 		let (_origin_stash2, origin_controller2) = create_stash_controller_with_balance::<T>(
 			USER_SEED + 3,
 			origin_weight,
-			Default::default(),
+			PayoutDestination::Stake,
 		)?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(origin_controller2).into(),
@@ -207,7 +207,7 @@ impl<T: Config> ListScenario<T> {
 		let (_dest_stash1, dest_controller1) = create_stash_controller_with_balance::<T>(
 			USER_SEED + 1,
 			dest_weight,
-			Default::default(),
+			PayoutDestination::Stake,
 		)?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(dest_controller1).into(),
@@ -223,10 +223,10 @@ const USER_SEED: u32 = 999666;
 benchmarks! {
 	bond {
 		let stash = create_funded_user::<T>("stash", USER_SEED, 100);
-		let reward_destination = RewardDestination::Staked;
+		let payout_destination = PayoutDestination::Split((Perbill::from_percent(50), stash.clone()));
 		let amount = T::Currency::minimum_balance() * 10u32.into();
 		whitelist_account!(stash);
-	}: _(RawOrigin::Signed(stash.clone()), amount, reward_destination)
+	}: _(RawOrigin::Signed(stash.clone()), amount, payout_destination)
 	verify {
 		assert!(Bonded::<T>::contains_key(stash.clone()));
 		assert!(Ledger::<T>::contains_key(stash));
@@ -291,7 +291,9 @@ benchmarks! {
 	withdraw_unbonded_update {
 		// Slashing Spans
 		let s in 0 .. MAX_SPANS;
-		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
+		let (stash, controller) = create_stash_controller::<T>(
+			0, 100, PayoutRoute::Direct(PayoutDestination::Stake)
+		)?;
 		add_slashing_spans::<T>(&stash, s);
 		let amount = T::Currency::minimum_balance() * 5u32.into(); // Half of total
 		Staking::<T>::unbond(RawOrigin::Signed(controller.clone()).into(), amount)?;
@@ -340,7 +342,7 @@ benchmarks! {
 		let (stash, controller) = create_stash_controller::<T>(
 			MaxNominationsOf::<T>::get() - 1,
 			100,
-			Default::default(),
+			PayoutRoute::Direct(PayoutDestination::Stake),
 		)?;
 		// because it is chilled.
 		assert!(!T::VoterList::contains(&stash));
@@ -368,7 +370,7 @@ benchmarks! {
 		let (stash, controller) = create_stash_controller::<T>(
 			MaxNominationsOf::<T>::get() - 1,
 			100,
-			Default::default(),
+			PayoutRoute::Direct(PayoutDestination::Stake),
 		)?;
 		let stash_lookup = T::Lookup::unlookup(stash.clone());
 
@@ -383,7 +385,7 @@ benchmarks! {
 			let (n_stash, n_controller) = create_stash_controller::<T>(
 				MaxNominationsOf::<T>::get() + i,
 				100,
-				Default::default(),
+				PayoutRoute::Direct(PayoutDestination::Stake),
 			)?;
 
 			// bake the nominations; we first clone them from the rest of the validators.
@@ -431,7 +433,7 @@ benchmarks! {
 		let (stash, controller) = create_stash_controller_with_balance::<T>(
 			SEED + MaxNominationsOf::<T>::get() + 1, // make sure the account does not conflict with others
 			origin_weight,
-			Default::default(),
+			PayoutDestination::Stake,
 		).unwrap();
 
 		assert!(!Nominators::<T>::contains_key(&stash));
@@ -465,16 +467,39 @@ benchmarks! {
 	}
 
 	set_payee {
-		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
-		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Staked);
+		let (stash, controller) = create_stash_controller::<T>(
+			USER_SEED, 100, PayoutRoute::Direct(PayoutDestination::Stake)
+		)?;
+		assert_eq!(Payees::<T>::get(&stash), PayoutDestination::Stake);
+
+		// Payee should exist to be migrated on `update_payee`.
+		Payee::<T>::insert(&stash,RewardDestination::Staked);
+
 		whitelist_account!(controller);
-	}: _(RawOrigin::Signed(controller), RewardDestination::Controller)
+	}: _(RawOrigin::Signed(controller.clone()), PayoutDestination::Split((Perbill::from_percent(50), controller.clone())))
 	verify {
-		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Controller);
+		assert!(!Payee::<T>::contains_key(&stash));
+		assert_eq!(Payees::<T>::get(&stash), PayoutDestination::Split((Perbill::from_percent(50), controller.clone())));
+	}
+
+	update_payee {
+		let (stash, controller) = create_stash_controller::<T>(
+			USER_SEED, 100, PayoutRoute::Direct(PayoutDestination::Stake)
+		)?;
+		// Payee should exist to be migrated on `update_payee`.
+		Payee::<T>::insert(&stash,RewardDestination::Staked);
+		Payees::<T>::remove(&stash);
+		assert!(!Payees::<T>::contains_key(&stash));
+		whitelist_account!(controller);
+	}: _(RawOrigin::Signed(stash.clone()), controller)
+	verify {
+		assert_eq!(Payees::<T>::get(&stash), PayoutDestination::Stake);
 	}
 
 	set_controller {
-		let (stash, ctlr) = create_unique_stash_controller::<T>(9000, 100, Default::default(), false)?;
+		let (stash, ctlr) = create_unique_stash_controller::<T>(
+			9000, 100, PayoutRoute::Direct(PayoutDestination::Stake), false
+		)?;
 		// ensure `ctlr` is the currently stored controller.
 		assert!(!Ledger::<T>::contains_key(&stash));
 		assert!(Ledger::<T>::contains_key(&ctlr));
@@ -559,9 +584,12 @@ benchmarks! {
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			true,
 			true,
-			RewardDestination::Controller,
+			PayoutRoute::Alias(
+				PayoutDestinationAlias::Split((Perbill::from_percent(50), PayoutSplitOpt::Controller))
+			),
 		)?;
 
+		let validator_controller = <Bonded<T>>::get(&validator).unwrap();
 		let current_era = CurrentEra::<T>::get().unwrap();
 		// set the commission for this particular era as well.
 		<ErasValidatorPrefs<T>>::insert(current_era, validator.clone(), <Staking<T>>::validators(&validator));
@@ -593,7 +621,9 @@ benchmarks! {
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			false,
 			true,
-			RewardDestination::Staked,
+			PayoutRoute::Alias(
+				PayoutDestinationAlias::Split((Perbill::from_percent(50), PayoutSplitOpt::Stash))
+			)
 		)?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
@@ -776,7 +806,9 @@ benchmarks! {
 	#[extra]
 	do_slash {
 		let l in 1 .. T::MaxUnlockingChunks::get() as u32;
-		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
+		let (stash, controller) = create_stash_controller::<T>(
+			0, 100, PayoutRoute::Direct(PayoutDestination::Stake)
+		)?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
 			value: 1u32.into(),
@@ -910,7 +942,7 @@ benchmarks! {
 
 		// Create a validator with a commission of 50%
 		let (stash, controller) =
-			create_stash_controller::<T>(1, 1, RewardDestination::Staked)?;
+			create_stash_controller::<T>(1, 1, PayoutRoute::Direct(PayoutDestination::Stake))?;
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;
@@ -990,7 +1022,7 @@ mod tests {
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
 				false,
 				false,
-				RewardDestination::Staked,
+				PayoutRoute::Direct(PayoutDestination::Stake),
 			)
 			.unwrap();
 
@@ -1020,7 +1052,7 @@ mod tests {
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
 				false,
 				false,
-				RewardDestination::Staked,
+				PayoutRoute::Direct(PayoutDestination::Stake),
 			)
 			.unwrap();
 

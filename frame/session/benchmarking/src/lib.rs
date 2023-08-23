@@ -35,7 +35,7 @@ use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::{historical::Pallet as Historical, Pallet as Session, *};
 use pallet_staking::{
 	benchmarking::create_validator_with_nominators, testing_utils::create_validators,
-	MaxNominationsOf, RewardDestination,
+	MaxNominationsOf, PayoutDestination, PayoutRoute,
 };
 
 const MAX_VALIDATORS: u32 = 1000;
@@ -60,7 +60,7 @@ benchmarks! {
 			MaxNominationsOf::<T>::get(),
 			false,
 			true,
-			RewardDestination::Staked,
+			PayoutRoute::Direct(PayoutDestination::Stake),
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
 
@@ -78,7 +78,7 @@ benchmarks! {
 			MaxNominationsOf::<T>::get(),
 			false,
 			true,
-			RewardDestination::Staked,
+			PayoutRoute::Direct(PayoutDestination::Stake),
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::decode(&mut TrailingZeroInput::zeroes()).unwrap();

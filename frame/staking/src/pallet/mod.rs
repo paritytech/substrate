@@ -46,8 +46,8 @@ pub use impls::*;
 use crate::{
 	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
 	EraRewardPoints, Exposure, Forcing, MaxNominationsOf, NegativeImbalanceOf, Nominations,
-	NominationsQuota, PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger,
-	UnappliedSlash, UnlockChunk, ValidatorPrefs,
+	NominationsQuota, PayoutDestination, PositiveImbalanceOf, RewardDestination, SessionInterface,
+	StakingLedger, UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -323,11 +323,26 @@ pub mod pallet {
 
 	/// Where the reward payment should be made. Keyed by stash.
 	///
+	/// NOTE: Being lazily migrated and deprecated in favour of `Payees`.
+	/// Tracking at <https://github.com/paritytech/substrate/issues/14438>
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
 	#[pallet::getter(fn payee)]
 	pub type Payee<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, RewardDestination<T::AccountId>, ValueQuery>;
+
+	/// Where the reward payment should be made. Keyed by stash.
+	///
+	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
+	#[pallet::storage]
+	#[pallet::getter(fn payees)]
+	pub type Payees<T: Config> = CountedStorageMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		PayoutDestination<T::AccountId>,
+		ValueQuery,
+	>;
 
 	/// The map from (wannabe) validator stash key to the preferences of that validator.
 	///
@@ -630,7 +645,7 @@ pub mod pallet {
 				frame_support::assert_ok!(<Pallet<T>>::bond(
 					T::RuntimeOrigin::from(Some(stash.clone()).into()),
 					balance,
-					RewardDestination::Staked,
+					PayoutDestination::Stake,
 				));
 				frame_support::assert_ok!(match status {
 					crate::StakerStatus::Validator => <Pallet<T>>::validate(
@@ -834,7 +849,7 @@ pub mod pallet {
 		pub fn bond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
-			payee: RewardDestination<T::AccountId>,
+			payee: PayoutDestination<T::AccountId>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 			let controller_to_be_deprecated = stash.clone();
@@ -857,7 +872,7 @@ pub mod pallet {
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
 			<Bonded<T>>::insert(&stash, &stash);
-			<Payee<T>>::insert(&stash, payee);
+			<Payees<T>>::insert(&stash, payee);
 
 			let current_era = CurrentEra::<T>::get().unwrap_or(0);
 			let history_depth = T::HistoryDepth::get();
@@ -1219,12 +1234,36 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_payee())]
 		pub fn set_payee(
 			origin: OriginFor<T>,
-			payee: RewardDestination<T::AccountId>,
+			payee: PayoutDestination<T::AccountId>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
-			<Payee<T>>::insert(stash, payee);
+
+			// Fall back to `Stake` or `Free` variants if a 0% or 100% perbill is provided for an
+			// account respectively.
+			let payee_final = match payee {
+				PayoutDestination::Split((share, deposit_to)) => {
+					if share == Perbill::from_percent(100) {
+						PayoutDestination::Deposit(deposit_to)
+					} else if share == Perbill::zero() {
+						PayoutDestination::Stake
+					} else {
+						PayoutDestination::Split((share, deposit_to))
+					}
+				},
+				PayoutDestination::Stake |
+				PayoutDestination::Deposit(_) |
+				PayoutDestination::Forgo => payee,
+			};
+
+			Payees::<T>::insert(stash.clone(), payee_final);
+
+			// In-progress lazy migration to `Payees` storage item.
+			// NOTE: To be removed in next runtime upgrade once migration is completed.
+			if Payee::<T>::contains_key(&stash) {
+				Payee::<T>::remove(stash);
+			}
 			Ok(())
 		}
 
@@ -1531,7 +1570,7 @@ pub mod pallet {
 		/// 2. or, the `ledger.total` of the stash is below existential deposit.
 		///
 		/// The former can happen in cases like a slash; the latter when a fully unbonded account
-		/// is still receiving staking rewards in `RewardDestination::Staked`.
+		/// is still receiving staking rewards in `PayoutDestination::Staked`.
 		///
 		/// It can be called by anyone, as long as `stash` meets the above requirements.
 		///
@@ -1775,6 +1814,46 @@ pub mod pallet {
 			T::AdminOrigin::ensure_origin(origin)?;
 			MinCommission::<T>::put(new);
 			Ok(())
+		}
+
+		/// Migrates an account's `RewardDestination` in `Payee` to `PayoutDestination` in `Payees`
+		/// if a record exists and if it has not already been migrated.
+		///
+		/// Effects will be felt instantly (as soon as this function is completed successfully).
+		///
+		/// This will waive the transaction fee if the payee is successfully migrated.
+		///
+		/// ## Complexity
+		/// - O(1)
+		/// - Independent of the arguments. Insignificant complexity.
+		/// - Contains a limited number of reads.
+		/// - Writes are limited to the `who` account key.
+		#[pallet::call_index(26)]
+		#[pallet::weight(T::WeightInfo::update_payee())]
+		pub fn update_payee(
+			origin: OriginFor<T>,
+			controller: T::AccountId,
+		) -> DispatchResultWithPostInfo {
+			let _ = ensure_signed(origin)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let stash = &ledger.stash;
+
+			// If this stash has already been migrated, return early and charge tx fees.
+			if Payees::<T>::contains_key(&stash) && !Payee::<T>::contains_key(&stash) {
+				return Ok(Pays::Yes.into())
+			}
+
+			Payees::<T>::insert(
+				stash.clone(),
+				PayoutDestination::from_reward_destination(
+					Payee::<T>::get(&stash),
+					stash.clone(),
+					controller,
+				),
+			);
+			Payee::<T>::remove(&stash);
+
+			Ok(Pays::No.into())
 		}
 	}
 }

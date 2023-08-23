@@ -74,11 +74,15 @@ pub fn create_funded_user_with_balance<T: Config>(
 pub fn create_stash_controller<T: Config>(
 	n: u32,
 	balance_factor: u32,
-	destination: RewardDestination<T::AccountId>,
+	destination: PayoutRoute<T::AccountId>,
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
 	let staker = create_funded_user::<T>("stash", n, balance_factor);
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
-	Staking::<T>::bond(RawOrigin::Signed(staker.clone()).into(), amount, destination)?;
+	Staking::<T>::bond(
+		RawOrigin::Signed(staker.clone()).into(),
+		amount,
+		PayoutDestination::from_route(destination, &staker, &staker),
+	)?;
 	Ok((staker.clone(), staker))
 }
 
@@ -86,7 +90,7 @@ pub fn create_stash_controller<T: Config>(
 pub fn create_unique_stash_controller<T: Config>(
 	n: u32,
 	balance_factor: u32,
-	destination: RewardDestination<T::AccountId>,
+	destination: PayoutRoute<T::AccountId>,
 	dead_controller: bool,
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
 	let stash = create_funded_user::<T>("stash", n, balance_factor);
@@ -97,7 +101,11 @@ pub fn create_unique_stash_controller<T: Config>(
 		create_funded_user::<T>("controller", n, balance_factor)
 	};
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
-	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), amount, destination)?;
+	Staking::<T>::bond(
+		RawOrigin::Signed(stash.clone()).into(),
+		amount,
+		PayoutDestination::from_route(destination, &stash, &controller),
+	)?;
 
 	// update ledger to be a *different* controller to stash
 	if let Some(l) = Ledger::<T>::take(&stash) {
@@ -113,7 +121,7 @@ pub fn create_unique_stash_controller<T: Config>(
 pub fn create_stash_controller_with_balance<T: Config>(
 	n: u32,
 	balance: crate::BalanceOf<T>,
-	destination: RewardDestination<T::AccountId>,
+	destination: PayoutDestination<T::AccountId>,
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
 	let staker = create_funded_user_with_balance::<T>("stash", n, balance);
 	Staking::<T>::bond(RawOrigin::Signed(staker.clone()).into(), balance, destination)?;
@@ -133,7 +141,7 @@ pub fn create_stash_and_dead_payee<T: Config>(
 	Staking::<T>::bond(
 		RawOrigin::Signed(staker.clone()).into(),
 		amount,
-		RewardDestination::Account(payee),
+		PayoutDestination::Deposit(payee),
 	)?;
 	Ok((staker.clone(), staker))
 }
@@ -154,8 +162,11 @@ pub fn create_validators_with_seed<T: Config>(
 ) -> Result<Vec<AccountIdLookupOf<T>>, &'static str> {
 	let mut validators: Vec<AccountIdLookupOf<T>> = Vec::with_capacity(max as usize);
 	for i in 0..max {
-		let (stash, controller) =
-			create_stash_controller::<T>(i + seed, balance_factor, RewardDestination::Staked)?;
+		let (stash, controller) = create_stash_controller::<T>(
+			i + seed,
+			balance_factor,
+			PayoutRoute::Direct(PayoutDestination::Stake),
+		)?;
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;
@@ -195,8 +206,11 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 	// Create validators
 	for i in 0..validators {
 		let balance_factor = if randomize_stake { rng.next_u32() % 255 + 10 } else { 100u32 };
-		let (v_stash, v_controller) =
-			create_stash_controller::<T>(i, balance_factor, RewardDestination::Staked)?;
+		let (v_stash, v_controller) = create_stash_controller::<T>(
+			i,
+			balance_factor,
+			PayoutRoute::Direct(PayoutDestination::Stake),
+		)?;
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
@@ -210,8 +224,11 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 	// Create nominators
 	for j in 0..nominators {
 		let balance_factor = if randomize_stake { rng.next_u32() % 255 + 10 } else { 100u32 };
-		let (_n_stash, n_controller) =
-			create_stash_controller::<T>(u32::MAX - j, balance_factor, RewardDestination::Staked)?;
+		let (_n_stash, n_controller) = create_stash_controller::<T>(
+			u32::MAX - j,
+			balance_factor,
+			PayoutRoute::Direct(PayoutDestination::Stake),
+		)?;
 
 		// Have them randomly validate
 		let mut available_validators = validator_chosen.clone();

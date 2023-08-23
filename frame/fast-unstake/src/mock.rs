@@ -25,7 +25,7 @@ use frame_support::{
 };
 use sp_runtime::{
 	traits::{Convert, IdentityLookup},
-	BuildStorage,
+	BuildStorage, Perbill,
 };
 
 use pallet_staking::{Exposure, IndividualExposure, StakerStatus};
@@ -369,7 +369,7 @@ pub fn create_exposed_nominator(exposed: AccountId, era: u32) {
 	assert_ok!(Staking::bond(
 		RuntimeOrigin::signed(exposed),
 		10,
-		pallet_staking::RewardDestination::Staked
+		pallet_staking::PayoutDestination::Split((Perbill::from_percent(50), exposed))
 	));
 	assert_ok!(Staking::nominate(RuntimeOrigin::signed(exposed), vec![exposed]));
 	// register the exposed one.

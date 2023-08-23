@@ -20,9 +20,9 @@
 use super::*;
 use crate::{mock::*, types::*, Event};
 use frame_support::{pallet_prelude::*, testing_prelude::*, traits::Currency};
-use pallet_staking::{CurrentEra, RewardDestination};
+use pallet_staking::{CurrentEra, PayoutDestination};
 
-use sp_runtime::traits::BadOrigin;
+use sp_runtime::{traits::BadOrigin, Perbill};
 use sp_staking::StakingInterface;
 
 #[test]
@@ -815,7 +815,11 @@ mod on_idle {
 
 			// create a new validator that 100% not exposed.
 			Balances::make_free_balance_be(&42, 100 + Deposit::get());
-			assert_ok!(Staking::bond(RuntimeOrigin::signed(42), 10, RewardDestination::Staked));
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(42),
+				10,
+				PayoutDestination::Split((Perbill::from_percent(50), 42))
+			));
 			assert_ok!(Staking::validate(RuntimeOrigin::signed(42), Default::default()));
 
 			// let them register:
