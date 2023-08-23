@@ -64,8 +64,8 @@ cargo-fmt-toml:
     - .docker-env
     - .test-refs
   script:
-    - cargo install zepter --locked --version 0.9.2 -q -f --no-default-features && zepter --version
-    - zepter format features --workspace --fix
+    - cargo install zepter --locked --version 0.10.0 -q -f --no-default-features && zepter --version
+    - zepter format features
     - echo "👉 Hello developer! If you see this CI check failing then it means that one of the your changes in a Cargo.toml file introduced ill-formatted or unsorted features. Please apply the following diff to them. This check check was introduced in <https://github.com/paritytech/substrate/pull/14803>"
     - git diff --exit-code
   allow_failure: true # Experimental
