@@ -483,6 +483,7 @@ impl Config for Test {
 	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
 	type MaxDelegateDependencies = MaxDelegateDependencies;
 	type Debug = TestDebug;
+	type Environment = ();
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);

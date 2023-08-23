@@ -1264,6 +1264,7 @@ impl pallet_contracts::Config for Runtime {
 	type MaxDelegateDependencies = ConstU32<32>;
 	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
 	type Debug = ();
+	type Environment = ();
 }
 
 impl pallet_sudo::Config for Runtime {
