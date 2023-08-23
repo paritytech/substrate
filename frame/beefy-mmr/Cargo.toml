@@ -33,7 +33,7 @@ array-bytes = "6.1"
 sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"array-bytes",
 	"binary-merkle-tree/std",
@@ -46,14 +46,14 @@ std = [
 	"pallet-session/std",
 	"scale-info/std",
 	"serde",
+	"sp-api/std",
 	"sp-consensus-beefy/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
-	"sp-std/std",
-	"sp-api/std",
 	"sp-staking/std",
-	"sp-state-machine/std"
+	"sp-state-machine/std",
+	"sp-std/std",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
@@ -61,5 +61,5 @@ try-runtime = [
 	"pallet-beefy/try-runtime",
 	"pallet-mmr/try-runtime",
 	"pallet-session/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

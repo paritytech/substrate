@@ -34,30 +34,29 @@ sha2 = { version = "0.10.7", optional = true }
 rand = { version = "0.8.5", features = ["small_rng"],  optional = true }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
+	"aes-gcm",
 	"codec/std",
+	"curve25519-dalek",
+	"ed25519-dalek",
+	"hkdf",
+	"rand",
 	"scale-info/std",
-	"sp-core/std",
-	"sp-runtime/std",
-	"sp-runtime-interface/std",
-	"sp-std/std",
+	"sha2",
 	"sp-api/std",
 	"sp-application-crypto/std",
+	"sp-core/std",
+	"sp-externalities/std",
+	"sp-runtime-interface/std",
+	"sp-runtime/std",
+	"sp-std/std",
 	"thiserror",
-
-	"ed25519-dalek",
 	"x25519-dalek",
-	"curve25519-dalek",
-	"aes-gcm",
-	"hkdf",
-	"sha2",
-	"rand",
-	"sp-externalities/std"
 ]
 serde = [
-        "scale-info/serde",
-        "sp-application-crypto/serde",
-        "sp-core/serde",
-        "sp-runtime/serde",
+	"scale-info/serde",
+	"sp-application-crypto/serde",
+	"sp-core/serde",
+	"sp-runtime/serde",
 ]

@@ -37,30 +37,30 @@ sp-io = { version = "23.0.0", path = "../../primitives/io" }
 sp-version = { version = "22.0.0", path = "../../primitives/version" }
 
 [features]
-default = ["std"]
-with-tracing = ["sp-tracing/with-tracing"]
+default = [ "std" ]
+with-tracing = [ "sp-tracing/with-tracing" ]
 std = [
 	"codec/std",
-	"log/std",
 	"frame-support/std",
 	"frame-system/std",
 	"frame-try-runtime/std",
+	"log/std",
+	"pallet-balances/std",
+	"pallet-transaction-payment/std",
 	"scale-info/std",
 	"sp-core/std",
+	"sp-inherents/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-tracing/std",
-	"pallet-balances/std",
-	"pallet-transaction-payment/std",
-	"sp-inherents/std",
-	"sp-version/std"
+	"sp-version/std",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
-	"frame-try-runtime/try-runtime",
-	"sp-runtime/try-runtime",
 	"frame-system/try-runtime",
+	"frame-try-runtime/try-runtime",
 	"pallet-balances/try-runtime",
-	"pallet-transaction-payment/try-runtime"
+	"pallet-transaction-payment/try-runtime",
+	"sp-runtime/try-runtime",
 ]

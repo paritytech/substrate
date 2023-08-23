@@ -24,19 +24,15 @@ rand = "0.7.2"
 rand_chacha = "0.2.2"
 
 [features]
-default = ["std"]
-std = [
-	"codec/std",
-	"sp-core/std",
-	"sp-externalities/std",
-]
+default = [ "std" ]
+std = [ "codec/std", "sp-core/std", "sp-externalities/std" ]
 
 # This feature adds BLS crypto primitives.
 # It should not be used in production since the implementation and interface may still
 # be subject to significant changes.
-bls-experimental = ["sp-core/bls-experimental"]
+bls-experimental = [ "sp-core/bls-experimental" ]
 
 # This feature adds Bandersnatch crypto primitives.
 # It should not be used in production since the implementation and interface may still
 # be subject to significant changes.
-bandersnatch-experimental = ["sp-core/bandersnatch-experimental"]
+bandersnatch-experimental = [ "sp-core/bandersnatch-experimental" ]

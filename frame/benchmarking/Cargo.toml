@@ -38,9 +38,10 @@ rusty-fork = { version = "0.3.0", default-features = false }
 sp-keystore = { version = "0.27.0", path = "../../primitives/keystore" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
+	"frame-support-procedural/std",
 	"frame-support/std",
 	"frame-system/std",
 	"linregress",
@@ -51,15 +52,14 @@ std = [
 	"sp-application-crypto/std",
 	"sp-core/std",
 	"sp-io/std",
+	"sp-keystore/std",
 	"sp-runtime-interface/std",
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-storage/std",
-	"frame-support-procedural/std",
-	"sp-keystore/std"
 ]
 runtime-benchmarks = [
-	"frame-system/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks"
+	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
 ]

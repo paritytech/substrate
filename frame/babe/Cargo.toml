@@ -40,15 +40,19 @@ pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward
 sp-core = { version = "21.0.0", path = "../../primitives/core" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",
+	"frame-election-provider-support/std",
 	"frame-support/std",
 	"frame-system/std",
 	"log/std",
 	"pallet-authorship/std",
+	"pallet-balances/std",
+	"pallet-offences/std",
 	"pallet-session/std",
+	"pallet-staking/std",
 	"pallet-timestamp/std",
 	"scale-info/std",
 	"sp-application-crypto/std",
@@ -59,10 +63,6 @@ std = [
 	"sp-session/std",
 	"sp-staking/std",
 	"sp-std/std",
-	"frame-election-provider-support/std",
-	"pallet-balances/std",
-	"pallet-offences/std",
-	"pallet-staking/std"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
@@ -74,11 +74,11 @@ runtime-benchmarks = [
 	"pallet-staking/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
-	"sp-staking/runtime-benchmarks"
+	"sp-staking/runtime-benchmarks",
 ]
 try-runtime = [
-	"frame-support/try-runtime",
 	"frame-election-provider-support/try-runtime",
+	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"pallet-authorship/try-runtime",
 	"pallet-balances/try-runtime",
@@ -86,5 +86,5 @@ try-runtime = [
 	"pallet-session/try-runtime",
 	"pallet-staking/try-runtime",
 	"pallet-timestamp/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

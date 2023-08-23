@@ -31,11 +31,11 @@ std = [
 	"sp-arithmetic/std",
 	"sp-core/std",
 	"sp-debug-derive/std",
-	"sp-std/std"
+	"sp-std/std",
 ]
 # By default some types have documentation, `full-metadata-docs` allows to add documentation to
 # more types in the metadata.
-full-metadata-docs = ["scale-info/docs"]
+full-metadata-docs = [ "scale-info/docs" ]
 
 # Serde support without relying on std features.
 serde = [

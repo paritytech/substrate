@@ -64,45 +64,45 @@ pallet-proxy = { version = "4.0.0-dev", path = "../proxy" }
 sp-keystore = { version = "0.27.0", path = "../../primitives/keystore" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
-	"serde",
 	"codec/std",
-	"scale-info/std",
-	"sp-core/std",
-	"sp-runtime/std",
-	"sp-io/std",
-	"sp-std/std",
+	"environmental/std",
 	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
-	"wasm-instrument/std",
-	"wasmi/std",
+	"log/std",
+	"pallet-balances?/std",
 	"pallet-contracts-primitives/std",
 	"pallet-contracts-proc-macro/full",
-	"log/std",
-	"rand/std",
-	"environmental/std",
-	"pallet-balances?/std",
 	"pallet-insecure-randomness-collective-flip/std",
 	"pallet-proxy/std",
 	"pallet-timestamp/std",
 	"pallet-utility/std",
+	"rand/std",
+	"scale-info/std",
+	"serde",
 	"sp-api/std",
-	"sp-keystore/std"
+	"sp-core/std",
+	"sp-io/std",
+	"sp-keystore/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"wasm-instrument/std",
+	"wasmi/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
-	"rand",
-	"rand_pcg",
-	"wasm-instrument",
-	"pallet-balances/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"pallet-utility/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks"
+	"rand",
+	"rand_pcg",
+	"sp-runtime/runtime-benchmarks",
+	"wasm-instrument",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
