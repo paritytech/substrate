@@ -383,6 +383,24 @@ impl<B: BlockT> StateBackend<HashingFor<B>> for BenchmarkingState<B> {
 			.child_storage_hash(child_info, key)
 	}
 
+	fn closest_merkle_value(&self, key: &[u8]) -> Result<Option<B::Hash>, Self::Error> {
+		self.add_read_key(None, key);
+		self.state.borrow().as_ref().ok_or_else(state_err)?.closest_merkle_value(key)
+	}
+
+	fn child_closest_merkle_value(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<Option<B::Hash>, Self::Error> {
+		self.add_read_key(None, key);
+		self.state
+			.borrow()
+			.as_ref()
+			.ok_or_else(state_err)?
+			.child_closest_merkle_value(child_info, key)
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		self.add_read_key(None, key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.exists_storage(key)

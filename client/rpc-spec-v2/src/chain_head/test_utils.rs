@@ -198,6 +198,23 @@ impl<
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.client.child_storage_hash(hash, child_info, key)
 	}
+
+	fn closest_merkle_value(
+		&self,
+		hash: <Block as BlockT>::Hash,
+		key: &StorageKey,
+	) -> sp_blockchain::Result<Option<<Block as BlockT>::Hash>> {
+		self.client.closest_merkle_value(hash, key)
+	}
+
+	fn child_closest_merkle_value(
+		&self,
+		hash: <Block as BlockT>::Hash,
+		child_info: &ChildInfo,
+		key: &StorageKey,
+	) -> sp_blockchain::Result<Option<<Block as BlockT>::Hash>> {
+		self.client.child_closest_merkle_value(hash, child_info, key)
+	}
 }
 
 impl<Block: BlockT, Client: CallApiAt<Block>> CallApiAt<Block> for ChainHeadMockClient<Client> {

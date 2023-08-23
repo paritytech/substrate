@@ -191,7 +191,17 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Get keyed storage value hash or None if there is nothing associated.
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error>;
 
-	/// Get keyed child storage or None if there is nothing associated.
+	/// Get the merkle value or None if there is nothing associated.
+	fn closest_merkle_value(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error>;
+
+	/// Get the child merkle value or None if there is nothing associated.
+	fn child_closest_merkle_value(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<Option<H::Out>, Self::Error>;
+
+	/// Get child keyed child storage or None if there is nothing associated.
 	fn child_storage(
 		&self,
 		child_info: &ChildInfo,

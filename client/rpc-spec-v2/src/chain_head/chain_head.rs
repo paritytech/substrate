@@ -27,7 +27,7 @@ use crate::{
 		api::ChainHeadApiServer,
 		chain_head_follow::ChainHeadFollower,
 		error::Error as ChainHeadRpcError,
-		event::{FollowEvent, MethodResponse, OperationError, StorageQuery, StorageQueryType},
+		event::{FollowEvent, MethodResponse, OperationError, StorageQuery},
 		hex_string,
 		subscription::{SubscriptionManagement, SubscriptionManagementError},
 	},
@@ -329,19 +329,12 @@ where
 		let items = items
 			.into_iter()
 			.map(|query| {
-				if query.query_type == StorageQueryType::ClosestDescendantMerkleValue {
-					// Note: remove this once all types are implemented.
-					return Err(ChainHeadRpcError::InvalidParam(
-						"Storage query type not supported".into(),
-					))
-				}
-
 				Ok(StorageQuery {
 					key: StorageKey(parse_hex_param(query.key)?),
 					query_type: query.query_type,
 				})
 			})
-			.collect::<Result<Vec<_>, _>>()?;
+			.collect::<Result<Vec<_>, ChainHeadRpcError>>()?;
 
 		let child_trie = child_trie
 			.map(|child_trie| parse_hex_param(child_trie))

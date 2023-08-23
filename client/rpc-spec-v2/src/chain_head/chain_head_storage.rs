@@ -145,6 +145,31 @@ where
 			.unwrap_or_else(|error| QueryResult::Err(error.to_string()))
 	}
 
+	/// Fetch the closest merkle value.
+	fn query_storage_merkle_value(
+		&self,
+		hash: Block::Hash,
+		key: &StorageKey,
+		child_key: Option<&ChildInfo>,
+	) -> QueryResult {
+		let result = if let Some(child_key) = child_key {
+			self.client.child_closest_merkle_value(hash, child_key, key)
+		} else {
+			self.client.closest_merkle_value(hash, key)
+		};
+
+		result
+			.map(|opt| {
+				QueryResult::Ok(opt.map(|storage_data| StorageResult {
+					key: hex_string(&key.0),
+					result: StorageResultType::ClosestDescendantMerkleValue(hex_string(
+						&storage_data.as_ref(),
+					)),
+				}))
+			})
+			.unwrap_or_else(|error| QueryResult::Err(error.to_string()))
+	}
+
 	/// Iterate over at most `operation_max_storage_items` keys.
 	///
 	/// Returns the storage result with a potential next key to resume iteration.
@@ -288,13 +313,21 @@ where
 							return
 						},
 					},
+				StorageQueryType::ClosestDescendantMerkleValue =>
+					match self.query_storage_merkle_value(hash, &item.key, child_key.as_ref()) {
+						Ok(Some(value)) => storage_results.push(value),
+						Ok(None) => continue,
+						Err(error) => {
+							send_error::<Block>(&sender, operation.operation_id(), error);
+							return
+						},
+					},
 				StorageQueryType::DescendantsValues => self
 					.iter_operations
 					.push_back(QueryIter { next_key: item.key, ty: IterQueryType::Value }),
 				StorageQueryType::DescendantsHashes => self
 					.iter_operations
 					.push_back(QueryIter { next_key: item.key, ty: IterQueryType::Hash }),
-				_ => continue,
 			};
 		}
 
