@@ -147,6 +147,9 @@ pub mod pallet {
 
 		/// Type that identifies either the native currency or a token class from `Assets`.
 		/// `Ord` is added because of `get_pool_id`.
+		///
+		/// The pool's `AccountId` is derived from this type. Any changes to the type may
+		/// necessitate a migration.
 		type MultiAssetId: AssetId + Ord + From<Self::AssetId>;
 
 		/// Type to convert an `AssetId` into `MultiAssetId`.
@@ -1193,7 +1196,9 @@ pub mod pallet {
 					()
 				);
 			} else {
-				let MultiAssetIdConversionResult::Converted(asset_id) = T::MultiAssetIdConverter::try_convert(asset) else {
+				let MultiAssetIdConversionResult::Converted(asset_id) =
+					T::MultiAssetIdConverter::try_convert(asset)
+				else {
 					return Err(())
 				};
 				let minimal = T::Assets::minimum_balance(asset_id);

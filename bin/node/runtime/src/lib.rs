@@ -1266,6 +1266,7 @@ impl pallet_contracts::Config for Runtime {
 	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
 	#[cfg(feature = "unsafe-debug")]
 	type Debug = ();
+	type Environment = ();
 }
 
 impl pallet_sudo::Config for Runtime {
