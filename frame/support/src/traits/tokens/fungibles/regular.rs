@@ -20,7 +20,6 @@
 use sp_std::marker::PhantomData;
 
 use crate::{
-	dispatch::DispatchError,
 	ensure,
 	traits::{
 		tokens::{
@@ -38,7 +37,7 @@ use crate::{
 	},
 };
 use sp_arithmetic::traits::{CheckedAdd, CheckedSub, One};
-use sp_runtime::{traits::Saturating, ArithmeticError, TokenError};
+use sp_runtime::{traits::Saturating, ArithmeticError, DispatchError, TokenError};
 
 use super::{Credit, Debt, HandleImbalanceDrop, Imbalance};
 

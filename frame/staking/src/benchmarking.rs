@@ -24,9 +24,8 @@ use testing_utils::*;
 use codec::Decode;
 use frame_election_provider_support::{bounds::DataProviderBounds, SortedListProvider};
 use frame_support::{
-	dispatch::UnfilteredDispatchable,
 	pallet_prelude::*,
-	traits::{Currency, Get, Imbalance},
+	traits::{Currency, Get, Imbalance, UnfilteredDispatchable},
 };
 use sp_runtime::{
 	traits::{Bounded, One, StaticLookup, TrailingZeroInput, Zero},

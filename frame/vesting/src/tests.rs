@@ -15,7 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{assert_noop, assert_ok, assert_storage_noop, dispatch::EncodeLike};
+use codec::EncodeLike;
+use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 use frame_system::RawOrigin;
 use sp_runtime::{
 	traits::{BadOrigin, Identity},

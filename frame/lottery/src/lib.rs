@@ -56,7 +56,7 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::{DispatchResult, Dispatchable, GetDispatchInfo},
+	dispatch::{DispatchResult, GetDispatchInfo},
 	ensure,
 	pallet_prelude::MaxEncodedLen,
 	storage::bounded_vec::BoundedVec,
@@ -65,7 +65,7 @@ use frame_support::{
 };
 pub use pallet::*;
 use sp_runtime::{
-	traits::{AccountIdConversion, Saturating, Zero},
+	traits::{AccountIdConversion, Dispatchable, Saturating, Zero},
 	ArithmeticError, DispatchError, RuntimeDebug,
 };
 use sp_std::prelude::*;

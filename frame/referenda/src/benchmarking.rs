@@ -25,8 +25,7 @@ use frame_benchmarking::v1::{
 };
 use frame_support::{
 	assert_ok,
-	dispatch::UnfilteredDispatchable,
-	traits::{Bounded, Currency, EnsureOrigin, EnsureOriginWithArg},
+	traits::{Bounded, Currency, EnsureOrigin, EnsureOriginWithArg, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded as ArithBounded;

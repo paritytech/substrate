@@ -24,8 +24,7 @@ use frame_benchmarking::v1::{
 	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller, BenchmarkError,
 };
 use frame_support::{
-	dispatch::UnfilteredDispatchable,
-	traits::{EnsureOrigin, Get},
+	traits::{EnsureOrigin, Get, UnfilteredDispatchable},
 	BoundedVec,
 };
 use frame_system::RawOrigin as SystemOrigin;

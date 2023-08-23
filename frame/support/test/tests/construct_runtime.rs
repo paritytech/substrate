@@ -578,14 +578,14 @@ fn call_weight_should_attach_to_call_enum() {
 
 #[test]
 fn call_name() {
-	use frame_support::dispatch::GetCallName;
+	use frame_support::traits::GetCallName;
 	let name = module3::Call::<Runtime>::aux_4 {}.get_call_name();
 	assert_eq!("aux_4", name);
 }
 
 #[test]
 fn call_metadata() {
-	use frame_support::dispatch::{CallMetadata, GetCallMetadata};
+	use frame_support::traits::{CallMetadata, GetCallMetadata};
 	let call = RuntimeCall::Module3(module3::Call::<Runtime>::aux_4 {});
 	let metadata = call.get_call_metadata();
 	let expected = CallMetadata { function_name: "aux_4".into(), pallet_name: "Module3".into() };
@@ -594,14 +594,14 @@ fn call_metadata() {
 
 #[test]
 fn get_call_names() {
-	use frame_support::dispatch::GetCallName;
+	use frame_support::traits::GetCallName;
 	let call_names = module3::Call::<Runtime>::get_call_names();
 	assert_eq!(["fail", "aux_1", "aux_2", "aux_3", "aux_4", "operational"], call_names);
 }
 
 #[test]
 fn get_module_names() {
-	use frame_support::dispatch::GetCallMetadata;
+	use frame_support::traits::GetCallMetadata;
 	let module_names = RuntimeCall::get_module_names();
 	assert_eq!(
 		[

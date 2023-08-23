@@ -19,8 +19,7 @@
 
 use super::*;
 use frame_support::{
-	dispatch::GetStorageVersion,
-	traits::{OnRuntimeUpgrade, WrapperKeepOpaque},
+	traits::{GetStorageVersion, OnRuntimeUpgrade, WrapperKeepOpaque},
 	Identity,
 };
 

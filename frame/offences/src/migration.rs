@@ -17,10 +17,9 @@
 
 use super::{Config, Kind, OffenceDetails, Pallet, Perbill, SessionIndex, LOG_TARGET};
 use frame_support::{
-	dispatch::GetStorageVersion,
 	pallet_prelude::ValueQuery,
 	storage_alias,
-	traits::{Get, OnRuntimeUpgrade},
+	traits::{Get, GetStorageVersion, OnRuntimeUpgrade},
 	weights::Weight,
 	Twox64Concat,
 };

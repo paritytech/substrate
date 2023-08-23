@@ -17,11 +17,11 @@
 
 //! Staking FRAME Pallet.
 
+use codec::Codec;
 use frame_election_provider_support::{
 	ElectionProvider, ElectionProviderBase, SortedListProvider, VoteWeight,
 };
 use frame_support::{
-	dispatch::Codec,
 	pallet_prelude::*,
 	traits::{
 		Currency, Defensive, DefensiveResult, DefensiveSaturating, EnsureOrigin,

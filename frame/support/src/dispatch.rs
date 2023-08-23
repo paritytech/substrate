@@ -18,30 +18,26 @@
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
 
-pub use crate::traits::{
-	CallMetadata, GetCallIndex, GetCallMetadata, GetCallName, GetStorageVersion,
-	UnfilteredDispatchable,
-};
-pub use codec::{
-	Codec, Decode, Encode, EncodeAsRef, EncodeLike, HasCompact, Input, MaxEncodedLen, Output,
-};
-pub use scale_info::TypeInfo;
-pub use sp_runtime::{
-	traits::Dispatchable, transaction_validity::TransactionPriority, DispatchError, RuntimeDebug,
-};
-pub use sp_std::{
-	fmt, marker,
-	prelude::{Clone, Eq, PartialEq, Vec},
-	result,
-};
-pub use sp_weights::Weight;
-
+use crate::traits::UnfilteredDispatchable;
+use codec::{Codec, Decode, Encode, EncodeLike, MaxEncodedLen};
+use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
 	traits::SignedExtension,
+	DispatchError, RuntimeDebug,
 };
+use sp_std::fmt;
+use sp_weights::Weight;
+
+/// Private exports that are being used by macros.
+///
+/// The exports are not stable and should not be relied on.
+#[doc(hidden)]
+pub mod __private {
+	pub use sp_runtime::traits::Dispatchable;
+}
 
 /// The return type of a `Dispatchable` in frame. When returned explicitly from
 /// a dispatchable function it allows overriding the default `PostDispatchInfo`

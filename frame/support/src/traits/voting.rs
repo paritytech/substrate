@@ -18,10 +18,10 @@
 //! Traits and associated data structures concerned with voting, and moving between tokens and
 //! votes.
 
-use crate::dispatch::{DispatchError, Parameter};
+use crate::dispatch::Parameter;
 use codec::{HasCompact, MaxEncodedLen};
 use sp_arithmetic::Perbill;
-use sp_runtime::traits::Member;
+use sp_runtime::{traits::Member, DispatchError};
 use sp_std::prelude::*;
 
 pub trait VoteTally<Votes, Class> {

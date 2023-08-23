@@ -21,11 +21,8 @@ use super::{
 	imbalance::{Imbalance, SignedImbalance},
 	misc::{Balance, ExistenceRequirement, WithdrawReasons},
 };
-use crate::{
-	dispatch::{DispatchError, DispatchResult},
-	traits::Get,
-};
-use sp_runtime::traits::MaybeSerializeDeserialize;
+use crate::{dispatch::DispatchResult, traits::Get};
+use sp_runtime::{traits::MaybeSerializeDeserialize, DispatchError};
 
 mod reservable;
 pub use reservable::{NamedReservableCurrency, ReservableCurrency};

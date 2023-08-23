@@ -26,8 +26,7 @@ use frame_benchmarking::v1::{
 };
 use frame_support::{
 	assert_ok,
-	dispatch::UnfilteredDispatchable,
-	traits::{EnsureOrigin, Get},
+	traits::{EnsureOrigin, Get, UnfilteredDispatchable},
 	BoundedVec,
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin as SystemOrigin};

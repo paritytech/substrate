@@ -42,12 +42,12 @@ use crate::{
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
+	dispatch::DispatchResult,
 	ensure,
 	traits::{fungible::MutateHold, tokens::Precision::BestEffort},
 };
 use sp_core::Get;
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 use wasmi::{Instance, Linker, Memory, MemoryType, StackLimits, Store};
 

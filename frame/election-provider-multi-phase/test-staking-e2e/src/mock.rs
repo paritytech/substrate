@@ -18,7 +18,8 @@
 #![allow(dead_code)]
 
 use frame_support::{
-	assert_ok, dispatch::UnfilteredDispatchable, parameter_types, traits, traits::Hooks,
+	assert_ok, parameter_types, traits,
+	traits::{Hooks, UnfilteredDispatchable},
 	weights::constants,
 };
 use frame_system::EnsureRoot;
