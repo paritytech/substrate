@@ -28,7 +28,6 @@ mod sync;
 
 use std::{
 	collections::HashMap,
-	marker::PhantomData,
 	pin::Pin,
 	sync::Arc,
 	task::{Context as FutureContext, Poll},
@@ -41,7 +40,7 @@ use log::trace;
 use parking_lot::Mutex;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client_api::{
-	backend::{AuxStore, Backend, Finalizer, TransactionFor},
+	backend::{AuxStore, Backend, Finalizer},
 	BlockBackend, BlockImportNotification, BlockchainEvents, FinalityNotification,
 	FinalityNotifications, ImportNotifications,
 };
@@ -117,8 +116,8 @@ impl PassThroughVerifier {
 impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 	async fn verify(
 		&mut self,
-		mut block: BlockImportParams<B, ()>,
-	) -> Result<BlockImportParams<B, ()>, String> {
+		mut block: BlockImportParams<B>,
+	) -> Result<BlockImportParams<B>, String> {
 		if block.fork_choice.is_none() {
 			block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 		};
@@ -210,7 +209,6 @@ impl PeersClient {
 #[async_trait::async_trait]
 impl BlockImport<Block> for PeersClient {
 	type Error = ConsensusError;
-	type Transaction = ();
 
 	async fn check_block(
 		&mut self,
@@ -221,9 +219,9 @@ impl BlockImport<Block> for PeersClient {
 
 	async fn import_block(
 		&mut self,
-		block: BlockImportParams<Block, ()>,
+		block: BlockImportParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		self.client.import_block(block.clear_storage_changes_and_mutate()).await
+		self.client.import_block(block).await
 	}
 }
 
@@ -248,7 +246,6 @@ pub struct Peer<D, BlockImport> {
 impl<D, B> Peer<D, B>
 where
 	B: BlockImport<Block, Error = ConsensusError> + Send + Sync,
-	B::Transaction: Send,
 {
 	/// Get this peer ID.
 	pub fn id(&self) -> PeerId {
@@ -556,24 +553,12 @@ where
 }
 
 pub trait BlockImportAdapterFull:
-	BlockImport<
-		Block,
-		Transaction = TransactionFor<substrate_test_runtime_client::Backend, Block>,
-		Error = ConsensusError,
-	> + Send
-	+ Sync
-	+ Clone
+	BlockImport<Block, Error = ConsensusError> + Send + Sync + Clone
 {
 }
 
 impl<T> BlockImportAdapterFull for T where
-	T: BlockImport<
-			Block,
-			Transaction = TransactionFor<substrate_test_runtime_client::Backend, Block>,
-			Error = ConsensusError,
-		> + Send
-		+ Sync
-		+ Clone
+	T: BlockImport<Block, Error = ConsensusError> + Send + Sync + Clone
 {
 }
 
@@ -583,27 +568,23 @@ impl<T> BlockImportAdapterFull for T where
 /// This is required as the `TestNetFactory` trait does not distinguish between
 /// full and light nodes.
 #[derive(Clone)]
-pub struct BlockImportAdapter<I, Transaction = ()> {
+pub struct BlockImportAdapter<I> {
 	inner: I,
-	_phantom: PhantomData<Transaction>,
 }
 
-impl<I, Transaction> BlockImportAdapter<I, Transaction> {
+impl<I> BlockImportAdapter<I> {
 	/// Create a new instance of `Self::Full`.
 	pub fn new(inner: I) -> Self {
-		Self { inner, _phantom: PhantomData }
+		Self { inner }
 	}
 }
 
 #[async_trait::async_trait]
-impl<I, Transaction> BlockImport<Block> for BlockImportAdapter<I, Transaction>
+impl<I> BlockImport<Block> for BlockImportAdapter<I>
 where
 	I: BlockImport<Block, Error = ConsensusError> + Send + Sync,
-	I::Transaction: Send,
-	Transaction: Send + 'static,
 {
 	type Error = ConsensusError;
-	type Transaction = Transaction;
 
 	async fn check_block(
 		&mut self,
@@ -614,9 +595,9 @@ where
 
 	async fn import_block(
 		&mut self,
-		block: BlockImportParams<Block, Self::Transaction>,
+		block: BlockImportParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.import_block(block.clear_storage_changes_and_mutate()).await
+		self.inner.import_block(block).await
 	}
 }
 
@@ -630,8 +611,8 @@ struct VerifierAdapter<B: BlockT> {
 impl<B: BlockT> Verifier<B> for VerifierAdapter<B> {
 	async fn verify(
 		&mut self,
-		block: BlockImportParams<B, ()>,
-	) -> Result<BlockImportParams<B, ()>, String> {
+		block: BlockImportParams<B>,
+	) -> Result<BlockImportParams<B>, String> {
 		let hash = block.header.hash();
 		self.verifier.lock().await.verify(block).await.map_err(|e| {
 			self.failed_verifications.lock().insert(hash, e.clone());
@@ -714,10 +695,7 @@ pub struct FullPeerConfig {
 }
 
 #[async_trait::async_trait]
-pub trait TestNetFactory: Default + Sized + Send
-where
-	<Self::BlockImport as BlockImport<Block>>::Transaction: Send,
-{
+pub trait TestNetFactory: Default + Sized + Send {
 	type Verifier: 'static + Verifier<Block>;
 	type BlockImport: BlockImport<Block, Error = ConsensusError> + Clone + Send + Sync + 'static;
 	type PeerData: Default + Send;

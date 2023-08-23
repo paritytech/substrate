@@ -88,7 +88,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		offchain_worker: OffchainWorkerConfig { enabled: true, indexing_enabled: false },
 		force_authoring: false,
 		disable_grandpa: false,
-		disable_beefy: false,
 		dev_key_seed: Some(Sr25519Keyring::Alice.to_seed()),
 		tracing_targets: None,
 		tracing_receiver: Default::default(),
@@ -113,13 +112,7 @@ fn extrinsic_set_time(now: u64) -> OpaqueExtrinsic {
 	.into()
 }
 
-fn import_block(
-	mut client: &FullClient,
-	built: BuiltBlock<
-		node_primitives::Block,
-		<FullClient as sp_api::CallApiAt<node_primitives::Block>>::StateBackend,
-	>,
-) {
+fn import_block(mut client: &FullClient, built: BuiltBlock<node_primitives::Block>) {
 	let mut params = BlockImportParams::new(BlockOrigin::File, built.block.header);
 	params.state_action =
 		StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(built.storage_changes));

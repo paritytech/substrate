@@ -40,12 +40,6 @@ pub trait AddressGenerator<T: Config> {
 		input_data: &[u8],
 		salt: &[u8],
 	) -> T::AccountId;
-
-	/// The address of the deposit account of `contract_addr`.
-	///
-	/// The address is generated once on instantiation and then stored in the contracts
-	/// metadata. Hence changes do only affect newly created contracts.
-	fn deposit_address(contract_addr: &T::AccountId) -> T::AccountId;
 }
 
 /// Default address generator.
@@ -68,13 +62,6 @@ impl<T: Config> AddressGenerator<T> for DefaultAddressGenerator {
 	) -> T::AccountId {
 		let entropy = (b"contract_addr_v1", deploying_address, code_hash, input_data, salt)
 			.using_encoded(T::Hashing::hash);
-		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
-			.expect("infinite length input; no invalid inputs for type; qed")
-	}
-
-	/// Formula: `hash("contract_depo_v1" ++ contract_addr)`
-	fn deposit_address(contract_addr: &T::AccountId) -> T::AccountId {
-		let entropy = (b"contract_depo_v1", contract_addr).using_encoded(T::Hashing::hash);
 		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
 			.expect("infinite length input; no invalid inputs for type; qed")
 	}

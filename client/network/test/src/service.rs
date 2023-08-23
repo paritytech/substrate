@@ -135,8 +135,8 @@ impl TestNetworkBuilder {
 		impl<B: BlockT> sc_consensus::Verifier<B> for PassThroughVerifier {
 			async fn verify(
 				&mut self,
-				mut block: sc_consensus::BlockImportParams<B, ()>,
-			) -> Result<sc_consensus::BlockImportParams<B, ()>, String> {
+				mut block: sc_consensus::BlockImportParams<B>,
+			) -> Result<sc_consensus::BlockImportParams<B>, String> {
 				block.finalized = self.0;
 				block.fork_choice = Some(sc_consensus::ForkChoiceStrategy::LongestChain);
 				Ok(block)

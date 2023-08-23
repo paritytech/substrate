@@ -456,28 +456,8 @@ pub use sp_api_proc_macro::mock_impl_runtime_apis;
 #[cfg(feature = "std")]
 pub type ProofRecorder<B> = sp_trie::recorder::Recorder<HashingFor<B>>;
 
-/// A type that is used as cache for the storage transactions.
 #[cfg(feature = "std")]
-pub type StorageTransactionCache<Block, Backend> = sp_state_machine::StorageTransactionCache<
-	<Backend as StateBackend<HashingFor<Block>>>::Transaction,
-	HashingFor<Block>,
->;
-
-#[cfg(feature = "std")]
-pub type StorageChanges<SBackend, Block> = sp_state_machine::StorageChanges<
-	<SBackend as StateBackend<HashingFor<Block>>>::Transaction,
-	HashingFor<Block>,
->;
-
-/// Extract the state backend type for a type that implements `ProvideRuntimeApi`.
-#[cfg(feature = "std")]
-pub type StateBackendFor<P, Block> =
-	<<P as ProvideRuntimeApi<Block>>::Api as ApiExt<Block>>::StateBackend;
-
-/// Extract the state backend transaction type for a type that implements `ProvideRuntimeApi`.
-#[cfg(feature = "std")]
-pub type TransactionFor<P, Block> =
-	<StateBackendFor<P, Block> as StateBackend<HashingFor<Block>>>::Transaction;
+pub type StorageChanges<Block> = sp_state_machine::StorageChanges<HashingFor<Block>>;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
@@ -531,9 +511,6 @@ pub enum ApiError {
 /// Extends the runtime api implementation with some common functionality.
 #[cfg(feature = "std")]
 pub trait ApiExt<Block: BlockT> {
-	/// The state backend that is used to store the block states.
-	type StateBackend: StateBackend<HashingFor<Block>>;
-
 	/// Execute the given closure inside a new transaction.
 	///
 	/// Depending on the outcome of the closure, the transaction is committed or rolled-back.
@@ -582,11 +559,11 @@ pub trait ApiExt<Block: BlockT> {
 	/// api functions.
 	///
 	/// After executing this function, all collected changes are reset.
-	fn into_storage_changes(
+	fn into_storage_changes<B: StateBackend<HashingFor<Block>>>(
 		&self,
-		backend: &Self::StateBackend,
+		backend: &B,
 		parent_hash: Block::Hash,
-	) -> Result<StorageChanges<Self::StateBackend, Block>, String>
+	) -> Result<StorageChanges<Block>, String>
 	where
 		Self: Sized;
 
@@ -599,7 +576,7 @@ pub trait ApiExt<Block: BlockT> {
 
 /// Parameters for [`CallApiAt::call_api_at`].
 #[cfg(feature = "std")]
-pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashingFor<Block>>> {
+pub struct CallApiAtParams<'a, Block: BlockT> {
 	/// The block id that determines the state that should be setup when calling the function.
 	pub at: Block::Hash,
 	/// The name of the function that should be called.
@@ -607,9 +584,7 @@ pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashingFor<B
 	/// The encoded arguments of the function.
 	pub arguments: Vec<u8>,
 	/// The overlayed changes that are on top of the state.
-	pub overlayed_changes: &'a RefCell<OverlayedChanges>,
-	/// The cache for storage transactions.
-	pub storage_transaction_cache: &'a RefCell<StorageTransactionCache<Block, Backend>>,
+	pub overlayed_changes: &'a RefCell<OverlayedChanges<HashingFor<Block>>>,
 	/// The call context of this call.
 	pub call_context: CallContext,
 	/// The optional proof recorder for recording storage accesses.
@@ -626,10 +601,7 @@ pub trait CallApiAt<Block: BlockT> {
 
 	/// Calls the given api function with the given encoded arguments at the given block and returns
 	/// the encoded result.
-	fn call_api_at(
-		&self,
-		params: CallApiAtParams<Block, Self::StateBackend>,
-	) -> Result<Vec<u8>, ApiError>;
+	fn call_api_at(&self, params: CallApiAtParams<Block>) -> Result<Vec<u8>, ApiError>;
 
 	/// Returns the runtime version at the given block.
 	fn runtime_version_at(&self, at_hash: Block::Hash) -> Result<RuntimeVersion, ApiError>;

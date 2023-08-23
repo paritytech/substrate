@@ -1,7 +1,7 @@
 
 == Shell completion
 
-The Substrate cli command supports shell auto-completion. For this to work, you will need to run the completion script matching you build and system.
+The Substrate cli command supports shell auto-completion. For this to work, you will need to run the completion script matching your build and system.
 
 Assuming you built a release version using `cargo build --release` and use `bash` run the following:
 
@@ -15,7 +15,7 @@ You can find completion scripts for:
 - elvish
 - powershell
 
-To make this change persistent, you can proceed as follow:
+To make this change persistent, you can proceed as follows:
 
 .First install
 
@@ -30,7 +30,7 @@ source $HOME/.bash_profile
 
 .Update
 
-When you build a new version of Substrate, the following will ensure you auto-completion script matches the current binary:
+When you build a new version of Substrate, the following will ensure your auto-completion script matches the current binary:
 
 [source, shell]
 ----

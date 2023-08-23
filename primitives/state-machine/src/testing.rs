@@ -23,8 +23,8 @@ use std::{
 };
 
 use crate::{
-	backend::Backend, ext::Ext, InMemoryBackend, OverlayedChanges, StorageKey,
-	StorageTransactionCache, StorageValue, TrieBackendBuilder,
+	backend::Backend, ext::Ext, InMemoryBackend, OverlayedChanges, StorageKey, StorageValue,
+	TrieBackendBuilder,
 };
 
 use hash_db::{HashDB, Hasher};
@@ -36,7 +36,7 @@ use sp_core::{
 	},
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions};
-use sp_trie::StorageProof;
+use sp_trie::{PrefixedMemoryDB, StorageProof};
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H>
@@ -45,10 +45,8 @@ where
 	H::Out: codec::Codec + Ord,
 {
 	/// The overlay changed storage.
-	overlay: OverlayedChanges,
+	overlay: OverlayedChanges<H>,
 	offchain_db: TestPersistentOffchainDB,
-	storage_transaction_cache:
-		StorageTransactionCache<<InMemoryBackend<H> as Backend<H>>::Transaction, H>,
 	/// Storage backend.
 	pub backend: InMemoryBackend<H>,
 	/// Extensions.
@@ -64,12 +62,7 @@ where
 {
 	/// Get externalities implementation.
 	pub fn ext(&mut self) -> Ext<H, InMemoryBackend<H>> {
-		Ext::new(
-			&mut self.overlay,
-			&mut self.storage_transaction_cache,
-			&self.backend,
-			Some(&mut self.extensions),
-		)
+		Ext::new(&mut self.overlay, &self.backend, Some(&mut self.extensions))
 	}
 
 	/// Create a new instance of `TestExternalities` with storage.
@@ -112,13 +105,12 @@ where
 			offchain_db,
 			extensions: Default::default(),
 			backend,
-			storage_transaction_cache: Default::default(),
 			state_version,
 		}
 	}
 
 	/// Returns the overlayed changes.
-	pub fn overlayed_changes(&self) -> &OverlayedChanges {
+	pub fn overlayed_changes(&self) -> &OverlayedChanges<H> {
 		&self.overlay
 	}
 
@@ -165,32 +157,50 @@ where
 	/// This can be used as a fast way to restore the storage state from a backup because the trie
 	/// does not need to be computed.
 	pub fn from_raw_snapshot(
-		&mut self,
-		raw_storage: Vec<(H::Out, (Vec<u8>, i32))>,
+		raw_storage: Vec<(Vec<u8>, (Vec<u8>, i32))>,
 		storage_root: H::Out,
-	) {
-		for (k, (v, ref_count)) in raw_storage {
+		state_version: StateVersion,
+	) -> Self {
+		let mut backend = PrefixedMemoryDB::default();
+
+		for (key, (v, ref_count)) in raw_storage {
+			let mut hash = H::Out::default();
+			let hash_len = hash.as_ref().len();
+
+			if key.len() < hash_len {
+				log::warn!("Invalid key in `from_raw_snapshot`: {key:?}");
+				continue
+			}
+
+			hash.as_mut().copy_from_slice(&key[(key.len() - hash_len)..]);
+
 			// Each time .emplace is called the internal MemoryDb ref count increments.
 			// Repeatedly call emplace to initialise the ref count to the correct value.
 			for _ in 0..ref_count {
-				self.backend.backend_storage_mut().emplace(k, hash_db::EMPTY_PREFIX, v.clone());
+				backend.emplace(hash, (&key[..(key.len() - hash_len)], None), v.clone());
 			}
 		}
-		self.backend.set_root(storage_root);
+
+		Self {
+			backend: TrieBackendBuilder::new(backend, storage_root).build(),
+			overlay: Default::default(),
+			offchain_db: Default::default(),
+			extensions: Default::default(),
+			state_version,
+		}
 	}
 
 	/// Drains the underlying raw storage key/values and returns the root hash.
 	///
 	/// Useful for backing up the storage in a format that can be quickly re-loaded.
-	///
-	/// Note: This DB will be inoperable after this call.
-	pub fn into_raw_snapshot(mut self) -> (Vec<(H::Out, (Vec<u8>, i32))>, H::Out) {
+	pub fn into_raw_snapshot(mut self) -> (Vec<(Vec<u8>, (Vec<u8>, i32))>, H::Out) {
 		let raw_key_values = self
 			.backend
 			.backend_storage_mut()
 			.drain()
 			.into_iter()
-			.collect::<Vec<(H::Out, (Vec<u8>, i32))>>();
+			.filter(|(_, (_, r))| *r > 0)
+			.collect::<Vec<(Vec<u8>, (Vec<u8>, i32))>>();
 
 		(raw_key_values, *self.backend.root())
 	}
@@ -220,11 +230,7 @@ where
 	///
 	/// This will panic if there are still open transactions.
 	pub fn commit_all(&mut self) -> Result<(), String> {
-		let changes = self.overlay.drain_storage_changes::<_, _>(
-			&self.backend,
-			&mut Default::default(),
-			self.state_version,
-		)?;
+		let changes = self.overlay.drain_storage_changes(&self.backend, self.state_version)?;
 
 		self.backend
 			.apply_transaction(changes.transaction_storage_root, changes.transaction);
@@ -248,12 +254,8 @@ where
 		let proving_backend = TrieBackendBuilder::wrap(&self.backend)
 			.with_recorder(Default::default())
 			.build();
-		let mut proving_ext = Ext::new(
-			&mut self.overlay,
-			&mut self.storage_transaction_cache,
-			&proving_backend,
-			Some(&mut self.extensions),
-		);
+		let mut proving_ext =
+			Ext::new(&mut self.overlay, &proving_backend, Some(&mut self.extensions));
 
 		let outcome = sp_externalities::set_and_run_with_externalities(&mut proving_ext, execute);
 		let proof = proving_backend.extract_proof().expect("Failed to extract storage proof");
@@ -409,36 +411,25 @@ mod tests {
 		original_ext.insert_child(child_info.clone(), b"cattytown".to_vec(), b"is_dark".to_vec());
 		original_ext.insert_child(child_info.clone(), b"doggytown".to_vec(), b"is_sunny".to_vec());
 
-		// Call emplace on one of the keys to increment the MemoryDb refcount, so we can check
-		// that it is intact in the recovered_ext.
-		let keys = original_ext.backend.backend_storage_mut().keys();
-		let expected_ref_count = 5;
-		let ref_count_key = keys.into_iter().next().unwrap().0;
-		for _ in 0..expected_ref_count - 1 {
-			original_ext.backend.backend_storage_mut().emplace(
-				ref_count_key,
-				hash_db::EMPTY_PREFIX,
-				// We can use anything for the 'value' because it does not affect behavior when
-				// emplacing an existing key.
-				(&[0u8; 32]).to_vec(),
-			);
-		}
-		let refcount = original_ext
-			.backend
-			.backend_storage()
-			.raw(&ref_count_key, hash_db::EMPTY_PREFIX)
-			.unwrap()
-			.1;
-		assert_eq!(refcount, expected_ref_count);
+		// Apply the backend to itself again to increase the ref count of all nodes.
+		original_ext.backend.apply_transaction(
+			*original_ext.backend.root(),
+			original_ext.backend.clone().into_storage(),
+		);
+
+		// Ensure all have the correct ref counrt
+		assert!(original_ext.backend.backend_storage().keys().values().all(|r| *r == 2));
 
 		// Drain the raw storage and root.
 		let root = *original_ext.backend.root();
 		let (raw_storage, storage_root) = original_ext.into_raw_snapshot();
 
 		// Load the raw storage and root into a new TestExternalities.
-		let mut recovered_ext =
-			TestExternalities::<BlakeTwo256>::from((Default::default(), Default::default()));
-		recovered_ext.from_raw_snapshot(raw_storage, storage_root);
+		let recovered_ext = TestExternalities::<BlakeTwo256>::from_raw_snapshot(
+			raw_storage,
+			storage_root,
+			Default::default(),
+		);
 
 		// Check the storage root is the same as the original
 		assert_eq!(root, *recovered_ext.backend.root());
@@ -458,14 +449,8 @@ mod tests {
 			Some(b"is_sunny".to_vec())
 		);
 
-		// Check the refcount of the key with > 1 refcount is correct.
-		let refcount = recovered_ext
-			.backend
-			.backend_storage()
-			.raw(&ref_count_key, hash_db::EMPTY_PREFIX)
-			.unwrap()
-			.1;
-		assert_eq!(refcount, expected_ref_count);
+		// Ensure all have the correct ref count after importing
+		assert!(recovered_ext.backend.backend_storage().keys().values().all(|r| *r == 2));
 	}
 
 	#[test]
