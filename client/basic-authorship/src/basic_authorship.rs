@@ -39,7 +39,7 @@ use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
-	Digest, Percent, SaturatedConversion,
+	Digest, ExtrinsicInclusionMode, Percent, SaturatedConversion,
 };
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
@@ -340,12 +340,13 @@ where
 
 		self.apply_inherents(&mut block_builder, inherent_data)?;
 
-		// TODO call `after_inherents` and check if we should apply extrinsincs here
-		// <https://github.com/paritytech/substrate/pull/14275/>
-
 		let block_timer = time::Instant::now();
-		let end_reason =
-			self.apply_extrinsics(&mut block_builder, deadline, block_size_limit).await?;
+		let end_reason = match block_builder.executive_mode {
+			ExtrinsicInclusionMode::AllExtrinsics =>
+				self.apply_transactions(&mut block_builder, deadline, block_size_limit).await?,
+			ExtrinsicInclusionMode::OnlyInherents => EndProposingReason::TransactionsForbidden,
+		};
+
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
 		let block_took = block_timer.elapsed();
 
@@ -400,8 +401,8 @@ where
 		Ok(())
 	}
 
-	/// Apply as many extrinsics as possible to the block.
-	async fn apply_extrinsics(
+	/// Apply as many transactions as possible to the block.
+	async fn apply_transactions(
 		&self,
 		block_builder: &mut sc_block_builder::BlockBuilder<'_, Block, C, B>,
 		deadline: time::Instant,

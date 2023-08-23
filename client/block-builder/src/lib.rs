@@ -36,7 +36,7 @@ use sp_core::traits::CallContext;
 use sp_runtime::{
 	legacy,
 	traits::{Block as BlockT, Hash, HashingFor, Header as HeaderT, NumberFor, One},
-	Digest,
+	Digest, ExtrinsicInclusionMode,
 };
 
 use sc_client_api::backend;
@@ -137,6 +137,8 @@ pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	backend: &'a B,
 	/// The estimated size of the block header.
 	estimated_header_size: usize,
+	/// The executive mode of the block that is currently being built.
+	pub executive_mode: ExtrinsicInclusionMode,
 }
 
 impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
@@ -170,6 +172,9 @@ where
 		let estimated_header_size = header.encoded_size();
 
 		let mut api = api.runtime_api();
+		let version = api
+			.api_version::<dyn BlockBuilderApi<Block>>(parent_hash)?
+			.ok_or_else(|| Error::VersionInvalid("BlockBuilderApi".to_string()))?;
 
 		if record_proof.yes() {
 			api.record_proof();
@@ -177,11 +182,13 @@ where
 
 		api.set_call_context(CallContext::Onchain);
 
-		api.initialize_block(parent_hash, &header)?;
-
-		let version = api
-			.api_version::<dyn BlockBuilderApi<Block>>(parent_hash)?
-			.ok_or_else(|| Error::VersionInvalid("BlockBuilderApi".to_string()))?;
+		let executive_mode = if version >= 5 {
+			api.initialize_block(parent_hash, &header)?
+		} else {
+			#[allow(deprecated)]
+			api.initialize_block_before_version_5(parent_hash, &header)?;
+			ExtrinsicInclusionMode::AllExtrinsics
+		};
 
 		Ok(Self {
 			parent_hash,
@@ -190,6 +197,7 @@ where
 			version,
 			backend,
 			estimated_header_size,
+			executive_mode,
 		})
 	}
 

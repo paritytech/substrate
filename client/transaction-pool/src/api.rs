@@ -255,7 +255,8 @@ where
 					)?;
 
 				// The old versions require us to call `initialize_block` before.
-				runtime_api.initialize_block(block_hash, &sp_runtime::traits::Header::new(
+				#[allow(deprecated)]
+				runtime_api.initialize_block_before_version_5(block_hash, &sp_runtime::traits::Header::new(
 					block_number + sp_runtime::traits::One::one(),
 					Default::default(),
 					Default::default(),

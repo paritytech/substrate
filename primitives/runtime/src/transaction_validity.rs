@@ -82,6 +82,8 @@ pub enum InvalidTransaction {
 	MandatoryValidation,
 	/// The sending address is disabled or known to be invalid.
 	BadSigner,
+	/// Only inherents are allowed in this block but a non-inherent was present.
+	NotInherent,
 }
 
 impl InvalidTransaction {
@@ -113,6 +115,8 @@ impl From<InvalidTransaction> for &'static str {
 				"Transaction dispatch is mandatory; transactions must not be validated.",
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
 			InvalidTransaction::BadSigner => "Invalid signing address",
+			InvalidTransaction::NotInherent =>
+				"Non-inherent extrinsic was supplied in a block that only allows inherent extrinsics",
 		}
 	}
 }

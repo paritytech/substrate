@@ -100,7 +100,7 @@ pub use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Hash as HashT, HashingFor, Header as HeaderT, NumberFor},
 	transaction_validity::TransactionValidity,
-	RuntimeString, TransactionOutcome,
+	ExtrinsicInclusionMode, RuntimeString, TransactionOutcome,
 };
 #[doc(hidden)]
 #[cfg(feature = "std")]
@@ -267,7 +267,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// ```rust
 /// use sp_version::create_runtime_str;
 /// #
-/// # use sp_runtime::traits::Block as BlockT;
+/// # use sp_runtime::{ExtrinsicInclusionMode, traits::Block as BlockT};
 /// # use sp_test_primitives::Block;
 /// #
 /// # /// The declaration of the `Runtime` type is done by the `construct_runtime!` macro
@@ -294,7 +294,9 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// #           unimplemented!()
 /// #       }
 /// #       fn execute_block(_block: Block) {}
-/// #       fn initialize_block(_header: &<Block as BlockT>::Header) {}
+/// #       fn initialize_block(_header: &<Block as BlockT>::Header) -> ExtrinsicInclusionMode {
+/// #           unimplemented!()
+/// #       }
 /// #   }
 ///
 ///     impl self::Balance<Block> for Runtime {
@@ -711,15 +713,18 @@ pub fn deserialize_runtime_api_info(bytes: [u8; RUNTIME_API_INFO_SIZE]) -> ([u8;
 decl_runtime_apis! {
 	/// The `Core` runtime api that every Substrate runtime needs to implement.
 	#[core_trait]
-	#[api_version(4)]
+	#[api_version(5)]
 	pub trait Core {
 		/// Returns the version of the runtime.
 		fn version() -> RuntimeVersion;
 		/// Execute the given block.
 		fn execute_block(block: Block);
 		/// Initialize a block with the given header.
+		#[changed_in(5)]
 		#[renamed("initialise_block", 2)]
 		fn initialize_block(header: &<Block as BlockT>::Header);
+		/// Initialize a block with the given header and return the runtime executive mode.
+		fn initialize_block(header: &<Block as BlockT>::Header) -> ExtrinsicInclusionMode;
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.

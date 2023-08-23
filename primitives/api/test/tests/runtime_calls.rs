@@ -66,8 +66,30 @@ fn initialize_block_works() {
 	let client = TestClientBuilder::new().build();
 	let runtime_api = client.runtime_api();
 	let best_hash = client.chain_info().best_hash;
-	runtime_api
+	let mode = runtime_api
 		.initialize_block(
+			best_hash,
+			&Header::new(
+				1,
+				Default::default(),
+				Default::default(),
+				Default::default(),
+				Default::default(),
+			),
+		)
+		.unwrap();
+	assert_eq!(runtime_api.get_block_number(best_hash).unwrap(), 1);
+	assert_eq!(mode, sp_api::ExtrinsicInclusionMode::AllExtrinsics);
+}
+
+#[test]
+fn initialize_block_before_version_5_works() {
+	let client = TestClientBuilder::new().build();
+	let runtime_api = client.runtime_api();
+	let best_hash = client.chain_info().best_hash;
+	#[allow(deprecated)]
+	let () = runtime_api
+		.initialize_block_before_version_5(
 			best_hash,
 			&Header::new(
 				1,

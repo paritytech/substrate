@@ -880,8 +880,9 @@ pub trait GetBacking {
 pub trait EnsureInherentsAreFirst<Block> {
 	/// Ensure the position of inherent is correct, i.e. they are before non-inherents.
 	///
-	/// On error return the index of the inherent with invalid position (counting from 0).
-	fn ensure_inherents_are_first(block: &Block) -> Result<(), u32>;
+	/// On error return the index of the inherent with invalid position (counting from 0). On
+	/// success it returns the number of inherents.
+	fn ensure_inherents_are_first(block: &Block) -> Result<u32, u32>;
 }
 
 /// An extrinsic on which we can get access to call.
