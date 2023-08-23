@@ -481,6 +481,7 @@ impl Config for Test {
 	type MaxDelegateDependencies = MaxDelegateDependencies;
 	#[cfg(feature = "unsafe-debug")]
 	type Debug = unsafe_debug::TestDebugger;
+	type Environment = ();
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);

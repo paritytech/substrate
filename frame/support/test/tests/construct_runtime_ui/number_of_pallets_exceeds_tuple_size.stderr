@@ -55,7 +55,9 @@ help: you might have meant to use the associated type
    |
 38 |     type PalletInfo = Self::PalletInfo;
    |                       ~~~~~~~~~~~~~~~~
-help: consider importing this trait
+help: consider importing one of these items
+   |
+1  + use frame_benchmarking::__private::traits::PalletInfo;
    |
 1  + use frame_support::traits::PalletInfo;
    |
