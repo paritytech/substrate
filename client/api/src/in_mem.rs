@@ -29,8 +29,8 @@ use sp_runtime::{
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
-	Backend as StateBackend, ChildStorageCollection, InMemoryBackend, IndexOperation,
-	StorageCollection,
+	Backend as StateBackend, BackendTransaction, ChildStorageCollection, InMemoryBackend,
+	IndexOperation, StorageCollection,
 };
 use std::{
 	collections::{HashMap, HashSet},
@@ -480,9 +480,7 @@ impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
 pub struct BlockImportOperation<Block: BlockT> {
 	pending_block: Option<PendingBlock<Block>>,
 	old_state: InMemoryBackend<HashingFor<Block>>,
-	new_state: Option<
-		<InMemoryBackend<HashingFor<Block>> as StateBackend<HashingFor<Block>>>::Transaction,
-	>,
+	new_state: Option<BackendTransaction<HashingFor<Block>>>,
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(Block::Hash, Option<Justification>)>,
 	set_head: Option<Block::Hash>,
@@ -540,7 +538,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 
 	fn update_db_storage(
 		&mut self,
-		update: <InMemoryBackend<HashingFor<Block>> as StateBackend<HashingFor<Block>>>::Transaction,
+		update: BackendTransaction<HashingFor<Block>>,
 	) -> sp_blockchain::Result<()> {
 		self.new_state = Some(update);
 		Ok(())

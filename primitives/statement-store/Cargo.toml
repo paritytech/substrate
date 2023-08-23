@@ -25,9 +25,9 @@ sp-externalities = { version = "0.19.0", default-features = false, path = "../ex
 thiserror = { version = "1.0", optional = true }
 
 # ECIES dependencies
-ed25519-dalek = { version = "1.0", optional = true }
-x25519-dalek = { version = "2.0.0-pre.1", optional = true }
-curve25519-dalek = { version = "3.2", optional = true }
+ed25519-dalek = { version = "2.0.0", optional = true }
+x25519-dalek = { version = "2.0.0", optional = true, features = ["static_secrets"] }
+curve25519-dalek = { version = "4.0.0", optional = true }
 aes-gcm = { version = "0.10", optional = true }
 hkdf = { version = "0.12.0", optional = true }
 sha2 = { version = "0.10.7", optional = true }
