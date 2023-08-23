@@ -1,5 +1,5 @@
 error[E0412]: cannot find type `RuntimeCall` in this scope
-  --> tests/derive_impl_ui/runtime_type_fails_when_type_not_in_scope.rs:13:10
+  --> tests/derive_impl_ui/inject_runtime_type_fails_when_type_not_in_scope.rs:13:10
    |
 13 |     type RuntimeCall = ();
    |          ^^^^^^^^^^^ help: you might have meant to use the associated type: `Self::RuntimeCall`

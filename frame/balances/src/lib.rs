@@ -225,7 +225,7 @@ pub mod pallet {
 
 		#[frame_support::register_default_impl(TestDefaultConfig)]
 		impl DefaultConfig for TestDefaultConfig {
-			#[runtime_type]
+			#[inject_runtime_type]
 			type RuntimeEvent = ();
 
 			type Balance = u64;

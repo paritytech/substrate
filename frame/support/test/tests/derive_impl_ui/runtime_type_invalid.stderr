@@ -1,11 +1,11 @@
-error: `#[runtime_type]` can only be attached to `RuntimeCall`, `RuntimeEvent`, `RuntimeOrigin` or `PalletInfo`
-  --> tests/derive_impl_ui/runtime_type_invalid.rs:15:5
+error: `#[inject_runtime_type]` can only be attached to `RuntimeCall`, `RuntimeEvent`, `RuntimeOrigin` or `PalletInfo`
+  --> tests/derive_impl_ui/inject_runtime_type_invalid.rs:15:5
    |
 15 |     type RuntimeInfo = ();
    |     ^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0046]: not all trait items implemented, missing: `RuntimeInfo`
-  --> tests/derive_impl_ui/runtime_type_invalid.rs:13:1
+  --> tests/derive_impl_ui/inject_runtime_type_invalid.rs:13:1
    |
 5  |     type RuntimeInfo;
    |     ---------------- `RuntimeInfo` from trait

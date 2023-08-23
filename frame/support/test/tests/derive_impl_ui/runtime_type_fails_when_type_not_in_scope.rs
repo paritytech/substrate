@@ -1,4 +1,4 @@
-use frame_support::{*, pallet_macros::runtime_type};
+use frame_support::{*, pallet_macros::inject_runtime_type};
 use static_assertions::assert_type_eq_all;
 
 pub trait Config {
@@ -9,7 +9,7 @@ struct Pallet;
 
 #[register_default_impl(Pallet)]
 impl Config for Pallet {
-    #[runtime_type]
+    #[inject_runtime_type]
     type RuntimeCall = ();
 }
 

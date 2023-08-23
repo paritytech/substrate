@@ -27,14 +27,14 @@ use syn::{
 };
 
 mod keyword {
-	syn::custom_keyword!(runtime_type);
+	syn::custom_keyword!(inject_runtime_type);
 	syn::custom_keyword!(no_aggregated_types);
 }
 
 #[derive(derive_syn_parse::Parse, PartialEq, Eq)]
 pub enum PalletAttrType {
-	#[peek(keyword::runtime_type, name = "runtime_type")]
-	RuntimeType(keyword::runtime_type),
+	#[peek(keyword::inject_runtime_type, name = "inject_runtime_type")]
+	RuntimeType(keyword::inject_runtime_type),
 }
 
 #[derive(derive_syn_parse::Parse)]

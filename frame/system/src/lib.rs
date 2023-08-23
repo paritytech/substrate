@@ -205,7 +205,7 @@ pub mod pallet {
 
 	/// Default implementations of [`DefaultConfig`], which can be used to implement [`Config`].
 	pub mod config_preludes {
-		use super::{runtime_type, DefaultConfig};
+		use super::{inject_runtime_type, DefaultConfig};
 
 		/// Provides a viable default config that can be used with
 		/// [`derive_impl`](`frame_support::derive_impl`) to derive a testing pallet config
@@ -232,13 +232,13 @@ pub mod pallet {
 			type BlockWeights = ();
 			type BlockLength = ();
 			type DbWeight = ();
-			#[runtime_type]
+			#[inject_runtime_type]
 			type RuntimeEvent = ();
-			#[runtime_type]
+			#[inject_runtime_type]
 			type RuntimeOrigin = ();
-			#[runtime_type]
+			#[inject_runtime_type]
 			type RuntimeCall = ();
-			#[runtime_type]
+			#[inject_runtime_type]
 			type PalletInfo = ();
 			type BaseCallFilter = frame_support::traits::Everything;
 			type BlockHashCount = frame_support::traits::ConstU64<10>;
