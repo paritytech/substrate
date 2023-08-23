@@ -183,7 +183,7 @@ const LOG_TARGET: &str = "runtime::contracts";
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use crate::debug::Debugging;
+	use crate::debug::Debugger;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::Perbill;
@@ -361,7 +361,7 @@ pub mod pallet {
 		/// For most production chains, it's recommended to use the `()` implementation of this
 		/// trait. This implementation offers additional logging when the log target
 		/// "runtime::contracts" is set to trace.
-		type Debug: Debugging<Self>;
+		type Debug: Debugger<Self>;
 	}
 
 	#[pallet::hooks]

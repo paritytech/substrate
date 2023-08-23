@@ -3,9 +3,9 @@ use crate::{CodeHash, Config, LOG_TARGET};
 use pallet_contracts_primitives::ExecReturnValue;
 
 /// Umbrella trait for all interfaces that serves for debugging.
-pub trait Debugging<T: Config>: Tracing<T> {}
+pub trait Debugger<T: Config>: Tracing<T> {}
 
-impl<T: Config, V> Debugging<T> for V where V: Tracing<T> {}
+impl<T: Config, V> Debugger<T> for V where V: Tracing<T> {}
 
 /// Defines methods to capture contract calls, enabling external observers to
 /// measure, trace, and react to contract interactions.
