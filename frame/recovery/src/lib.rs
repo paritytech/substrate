@@ -152,13 +152,16 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::traits::{CheckedAdd, CheckedMul, Dispatchable, SaturatedConversion, StaticLookup};
+use sp_runtime::{
+	traits::{CheckedAdd, CheckedMul, Dispatchable, SaturatedConversion, StaticLookup},
+	RuntimeDebug,
+};
 use sp_std::prelude::*;
 
 use frame_support::{
 	dispatch::{GetDispatchInfo, PostDispatchInfo},
 	traits::{BalanceStatus, Currency, ReservableCurrency},
-	BoundedVec, RuntimeDebug,
+	BoundedVec,
 };
 
 pub use pallet::*;

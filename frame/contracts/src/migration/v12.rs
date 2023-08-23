@@ -25,7 +25,7 @@ use crate::{
 };
 use codec::{Decode, Encode};
 use frame_support::{
-	codec, pallet_prelude::*, storage_alias, traits::ReservableCurrency, DefaultNoBound, Identity,
+	pallet_prelude::*, storage_alias, traits::ReservableCurrency, DefaultNoBound, Identity,
 };
 use scale_info::prelude::format;
 use sp_core::hexdisplay::HexDisplay;

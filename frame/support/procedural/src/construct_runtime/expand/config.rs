@@ -67,8 +67,8 @@ pub fn expand_outer_config(
 
 		#types
 
-		use #scrate::serde as __genesis_config_serde_import__;
-		#[derive(#scrate::serde::Serialize, #scrate::serde::Deserialize, Default)]
+		use #scrate::__private::serde as __genesis_config_serde_import__;
+		#[derive(#scrate::__private::serde::Serialize, #scrate::__private::serde::Deserialize, Default)]
 		#[serde(rename_all = "camelCase")]
 		#[serde(deny_unknown_fields)]
 		#[serde(crate = "__genesis_config_serde_import__")]
@@ -86,7 +86,7 @@ pub fn expand_outer_config(
 				&self,
 				storage: &mut #scrate::sp_runtime::Storage,
 			) -> std::result::Result<(), String> {
-				#scrate::BasicExternalities::execute_with_storage(storage, || {
+				#scrate::__private::BasicExternalities::execute_with_storage(storage, || {
 					<Self as #scrate::traits::BuildGenesisConfig>::build(&self);
 					Ok(())
 				})

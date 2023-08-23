@@ -164,13 +164,13 @@ impl OnRuntimeUpgrade for Tuple {
 	/// that occur.
 	#[cfg(feature = "try-runtime")]
 	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
-		let mut weight = Weight::zero();
+		let mut cumulative_weight = Weight::zero();
 
 		let mut errors = Vec::new();
 
 		for_tuples!(#(
 			match Tuple::try_on_runtime_upgrade(checks) {
-				Ok(weight) => { weight.saturating_add(weight); },
+				Ok(weight) => { cumulative_weight.saturating_accrue(weight); },
 				Err(err) => { errors.push(err); },
 			}
 		)*);
@@ -194,7 +194,7 @@ impl OnRuntimeUpgrade for Tuple {
 			return Err("Detected multiple errors while executing `try_on_runtime_upgrade`, check the logs!".into())
 		}
 
-		Ok(weight)
+		Ok(cumulative_weight)
 	}
 
 	/// [`OnRuntimeUpgrade::pre_upgrade`] should not be used on a tuple.

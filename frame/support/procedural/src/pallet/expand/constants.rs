@@ -54,7 +54,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 			default_byte_impl: quote::quote!(
 				let value = <<T as Config #trait_use_gen>::#ident as
 					#frame_support::traits::Get<#const_type>>::get();
-				#frame_support::codec::Encode::encode(&value)
+				#frame_support::__private::codec::Encode::encode(&value)
 			),
 			metadata_name: None,
 		}
@@ -69,7 +69,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 			doc: const_.doc.clone(),
 			default_byte_impl: quote::quote!(
 				let value = <Pallet<#type_use_gen>>::#ident();
-				#frame_support::codec::Encode::encode(&value)
+				#frame_support::__private::codec::Encode::encode(&value)
 			),
 			metadata_name: const_.metadata_name.clone(),
 		}
@@ -85,11 +85,11 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 		let default_byte_impl = &const_.default_byte_impl;
 
 		quote::quote!({
-			#frame_support::metadata_ir::PalletConstantMetadataIR {
+			#frame_support::__private::metadata_ir::PalletConstantMetadataIR {
 				name: #ident_str,
-				ty: #frame_support::scale_info::meta_type::<#const_type>(),
+				ty: #frame_support::__private::scale_info::meta_type::<#const_type>(),
 				value: { #default_byte_impl },
-				docs: #frame_support::sp_std::vec![ #( #doc ),* ],
+				docs: #frame_support::__private::sp_std::vec![ #( #doc ),* ],
 			}
 		})
 	});
@@ -99,9 +99,9 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 
 			#[doc(hidden)]
 			pub fn pallet_constants_metadata()
-				-> #frame_support::sp_std::vec::Vec<#frame_support::metadata_ir::PalletConstantMetadataIR>
+				-> #frame_support::__private::sp_std::vec::Vec<#frame_support::__private::metadata_ir::PalletConstantMetadataIR>
 			{
-				#frame_support::sp_std::vec![ #( #consts ),* ]
+				#frame_support::__private::sp_std::vec![ #( #consts ),* ]
 			}
 		}
 	)

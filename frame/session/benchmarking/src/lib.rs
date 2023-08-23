@@ -26,11 +26,9 @@ mod mock;
 use sp_runtime::traits::{One, StaticLookup, TrailingZeroInput};
 use sp_std::{prelude::*, vec};
 
+use codec::Decode;
 use frame_benchmarking::v1::benchmarks;
-use frame_support::{
-	codec::Decode,
-	traits::{Get, KeyOwnerProofSystem, OnInitialize},
-};
+use frame_support::traits::{Get, KeyOwnerProofSystem, OnInitialize};
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::{historical::Pallet as Historical, Pallet as Session, *};
 use pallet_staking::{
