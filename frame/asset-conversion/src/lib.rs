@@ -906,7 +906,6 @@ pub mod pallet {
 		) -> Result<(), DispatchError>
 		where
 			T::AssetBalance: Balanced<T::AccountId>,
-			// T::AssetBalance: From<Inspect<T::AccountId>::Balance>
 		{
 			// TODO similar to Self::transfer, use MultiAssetIdConverter to determine whether to use
 			// T::Assets or T:Currency
@@ -1081,7 +1080,20 @@ pub mod pallet {
 			path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
 		) -> Result<Credit<T::AccountId, T::AssetBalance>, DispatchError>
 		where
+			<T as Config>::MultiAssetId:
+				Into<
+					<<T as Config>::AssetBalance as Inspect<
+						<T as frame_system::Config>::AccountId,
+					>>::AssetId,
+				>,
 			T::AssetBalance: Balanced<T::AccountId>,
+			T::HigherPrecisionBalance:
+				From<T::AssetBalance>
+					+ From<
+						<<T as Config>::AssetBalance as Inspect<
+							<T as frame_system::Config>::AccountId,
+						>>::Balance,
+					>,
 		{
 			ensure!(amounts.len() > 1, Error::<T>::CorrespondenceError);
 
@@ -1092,10 +1104,14 @@ pub mod pallet {
 				let first_amount = amounts.first().ok_or(Error::<T>::CorrespondenceError)?;
 
 				ensure!(
-					credit_in.peek() >= first_amount,
+					T::HigherPrecisionBalance::from(credit_in.peek()) >=
+						T::HigherPrecisionBalance::from(first_amount.clone()),
 					Error::<T>::ProvidedMinimumNotSufficientForSwap
 				);
-				ensure!(credit_in.asset() == asset1, Error::<T>::AssetCreditMismatch);
+				ensure!(
+					credit_in.asset() == asset1.clone().into(),
+					Error::<T>::AssetCreditMismatch
+				);
 
 				Self::credit_resolve(asset1.clone(), &pool_account, credit_in)?;
 
@@ -1499,7 +1515,7 @@ impl<T: Config> Swap<T::AccountId, T::HigherPrecisionBalance, T::MultiAssetId> f
 		Ok(amount_out.into())
 	}
 
-	// fn swap_tokens_for_exact_tokens_credit(
+	// fn swap_tokens_for_exact_tokens(
 	// 	path: Vec<T::MultiAssetId>,
 	// 	amount_out: T::HigherPrecisionBalance,
 	// 	credit_in: Credit<T::AccountId, T::HigherPrecisionBalance>,
@@ -1548,7 +1564,7 @@ impl<T: Config> SwapCredit<T::AccountId, T::AssetBalance, T::MultiAssetId> for P
 where
 	T::AssetBalance: Balanced<T::AccountId>,
 {
-	// fn swap_exact_tokens_for_tokens_credit(
+	// fn swap_exact_tokens_for_tokens(
 	// 	path: Vec<T::MultiAssetId>,
 	// 	credit_in: Credit<T::AccountId, T::AssetBalance>,
 	// 	amount_out_min: Option<T::AssetBalance>,
@@ -1562,7 +1578,7 @@ where
 	// 	Ok(out.0)
 	// }
 
-	fn swap_tokens_for_exact_tokens_credit(
+	fn swap_tokens_for_exact_tokens(
 		path: Vec<T::MultiAssetId>,
 		amount_out: T::AssetBalance,
 		credit_in: Credit<T::AccountId, T::AssetBalance>,

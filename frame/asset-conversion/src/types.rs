@@ -151,13 +151,13 @@ pub trait Swap<AccountId, Balance, MultiAssetId> {
 }
 
 pub trait SwapCredit<AccountId, Balance: Balanced<AccountId>, MultiAssetId> {
-	// fn swap_exact_tokens_for_tokens_credit(
+	// fn swap_exact_tokens_for_tokens(
 	// 	path: Vec<MultiAssetId>,
 	// 	credit_in: Credit<AccountId, Balance>,
 	// 	amount_out_min: Option<Balance>,
 	// ) -> Result<Credit<AccountId, Balance>, DispatchError>;
 
-	fn swap_tokens_for_exact_tokens_credit(
+	fn swap_tokens_for_exact_tokens(
 		path: Vec<MultiAssetId>,
 		amount_out: Balance,
 		credit_in: Credit<AccountId, Balance>,
