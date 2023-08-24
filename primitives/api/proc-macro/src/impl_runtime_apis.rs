@@ -888,8 +888,10 @@ fn extract_cfg_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<
 		return Err(err)
 	}
 
-	let result = cfg_api_version_attr.drain(..).next().map(|(feature, name, _)| (feature, name));
-	Ok(result)
+	Ok(cfg_api_version_attr
+		.into_iter()
+		.next()
+		.map(|(feature, name, _)| (feature, name)))
 }
 
 /// Represents an API version.
