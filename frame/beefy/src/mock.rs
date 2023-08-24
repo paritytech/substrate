@@ -23,12 +23,11 @@ use frame_election_provider_support::{
 };
 use frame_support::{
 	construct_runtime, parameter_types,
-	sp_io::TestExternalities,
 	traits::{ConstU16, ConstU32, ConstU64, KeyOwnerProofSystem, OnFinalize, OnInitialize},
-	BasicExternalities,
 };
 use pallet_session::historical as pallet_session_historical;
 use sp_core::{crypto::KeyTypeId, ConstU128, H256};
+use sp_io::TestExternalities;
 use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	curve::PiecewiseLinear,
@@ -38,6 +37,7 @@ use sp_runtime::{
 	BuildStorage, Perbill,
 };
 use sp_staking::{EraIndex, SessionIndex};
+use sp_state_machine::BasicExternalities;
 
 use crate as pallet_beefy;
 

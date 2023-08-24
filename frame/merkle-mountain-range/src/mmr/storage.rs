@@ -18,7 +18,7 @@
 //! An MMR storage implementation.
 
 use codec::Encode;
-use frame_support::log::{debug, trace};
+use log::{debug, trace};
 use sp_core::offchain::StorageKind;
 use sp_io::offchain_index;
 use sp_mmr_primitives::{mmr_lib, mmr_lib::helper, utils::NodesUtils};

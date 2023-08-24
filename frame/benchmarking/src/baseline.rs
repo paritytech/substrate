@@ -20,13 +20,13 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use super::*;
 use crate::benchmarks;
 use frame_system::Pallet as System;
 use sp_runtime::{
 	traits::{AppVerify, Hash},
 	RuntimeAppPublic,
 };
+use sp_std::{vec, vec::Vec};
 
 mod crypto {
 	use sp_application_crypto::{app_crypto, sr25519, KeyTypeId};
@@ -110,7 +110,6 @@ benchmarks! {
 
 #[cfg(test)]
 pub mod mock {
-	use super::*;
 	use sp_runtime::{testing::H256, BuildStorage};
 
 	type AccountId = u64;

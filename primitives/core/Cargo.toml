@@ -73,67 +73,67 @@ harness = false
 bench = false
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
-	"arrayvec/std",
-	"merlin/std",
-	"full_crypto",
-	"log/std",
-	"thiserror",
-	"lazy_static",
-	"parking_lot",
-	"bandersnatch_vrfs/getrandom",
-	"bounded-collections/std",
-	"primitive-types/std",
-	"primitive-types/serde",
-	"primitive-types/byteorder",
-	"primitive-types/rustc-hex",
-	"impl-serde/std",
-	"codec/std",
-	"scale-info/std",
-	"hash256-std-hasher/std",
-	"hash-db/std",
-	"sp-std/std",
-	"serde/std",
-	"blake2/std",
 	"array-bytes",
-	"ed25519-zebra/std",
+	"arrayvec/std",
+	"bandersnatch_vrfs/getrandom",
+	"blake2/std",
+	"bounded-collections/std",
 	"bs58/std",
-	"substrate-bip39",
-	"tiny-bip39",
-	"rand",
-	"schnorrkel/std",
-	"regex",
-	"secp256k1/std",
-	"secp256k1/global-context",
-	"sp-core-hashing/std",
-	"sp-debug-derive/std",
-	"sp-storage/std",
-	"sp-runtime-interface/std",
-	"ss58-registry/std",
-	"zeroize/alloc",
-	"secrecy/alloc",
+	"codec/std",
+	"dyn-clonable",
+	"ed25519-zebra/std",
+	"full_crypto",
 	"futures",
 	"futures/thread-pool",
+	"hash-db/std",
+	"hash256-std-hasher/std",
+	"impl-serde/std",
+	"lazy_static",
 	"libsecp256k1/std",
-	"dyn-clonable",
+	"log/std",
+	"merlin/std",
+	"parking_lot",
+	"primitive-types/byteorder",
+	"primitive-types/rustc-hex",
+	"primitive-types/serde",
+	"primitive-types/std",
+	"rand",
+	"regex",
+	"scale-info/std",
+	"schnorrkel/std",
+	"secp256k1/global-context",
+	"secp256k1/std",
+	"secrecy/alloc",
+	"serde/std",
+	"sp-core-hashing/std",
+	"sp-debug-derive/std",
+	"sp-externalities/std",
+	"sp-runtime-interface/std",
+	"sp-std/std",
+	"sp-storage/std",
+	"ss58-registry/std",
+	"substrate-bip39",
+	"thiserror",
+	"tiny-bip39",
 	"tracing",
-	"sp-externalities/std"
+	"zeroize/alloc",
 ]
 
 # Serde support without relying on std features.
 serde = [
-	"dep:serde",
 	"array-bytes",
 	"blake2",
 	"bounded-collections/serde",
 	"bs58/alloc",
-	"scale-info/serde",
-	"secrecy/alloc",
+	"dep:serde",
 	"impl-serde",
 	"primitive-types/serde_no_std",
-	"sp-storage/serde",
+	"scale-info/serde",
+	"secrecy/alloc",
 	"sp-core-hashing",
+	"sp-storage/serde",
 ]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers
@@ -141,8 +141,8 @@ serde = [
 # For the regular wasm runtime builds this should not be used.
 full_crypto = [
 	"array-bytes",
-	"ed25519-zebra",
 	"blake2",
+	"ed25519-zebra",
 	"libsecp256k1",
 	"secp256k1",
 	"sp-core-hashing",
@@ -152,9 +152,9 @@ full_crypto = [
 # This feature adds BLS crypto primitives.
 # It should not be used in production since the implementation and interface may still
 # be subject to significant changes.
-bls-experimental = ["w3f-bls"]
+bls-experimental = [ "w3f-bls" ]
 
 # This feature adds Bandersnatch crypto primitives.
 # It should not be used in production since the implementation and interface may still
 # be subject to significant changes.
-bandersnatch-experimental = ["bandersnatch_vrfs"]
+bandersnatch-experimental = [ "bandersnatch_vrfs" ]

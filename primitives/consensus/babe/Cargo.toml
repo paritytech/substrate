@@ -27,7 +27,7 @@ sp-std = { version = "8.0.0", default-features = false, path = "../../std" }
 sp-timestamp = { version = "4.0.0-dev", optional = true, path = "../../timestamp" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"async-trait",
 	"codec/std",
@@ -40,7 +40,7 @@ std = [
 	"sp-inherents/std",
 	"sp-runtime/std",
 	"sp-std/std",
- 	"sp-timestamp/std",
+	"sp-timestamp/std",
 ]
 
 # Serde support without relying on std features.

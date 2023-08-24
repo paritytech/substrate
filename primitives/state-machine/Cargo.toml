@@ -37,7 +37,7 @@ sp-runtime = { version = "24.0.0", path = "../runtime" }
 assert_matches = "1.5"
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"hash-db/std",
@@ -47,10 +47,10 @@ std = [
 	"sp-core/std",
 	"sp-externalities/std",
 	"sp-panic-handler",
+	"sp-runtime/std",
 	"sp-std/std",
 	"sp-trie/std",
-	"trie-db/std",
 	"thiserror",
 	"tracing",
-	"sp-runtime/std"
+	"trie-db/std",
 ]

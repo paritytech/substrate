@@ -17,11 +17,10 @@
 
 //! Traits for encoding data related to pallet's storage items.
 
-use crate::sp_std::collections::btree_set::BTreeSet;
 use impl_trait_for_tuples::impl_for_tuples;
 pub use sp_core::storage::TrackedStorageKey;
-use sp_runtime::traits::Saturating;
-use sp_std::prelude::*;
+use sp_runtime::{traits::Saturating, RuntimeDebug};
+use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 
 /// An instance of a pallet in the storage.
 ///
@@ -61,7 +60,7 @@ pub trait StorageInstance {
 
 /// Metadata about storage from the runtime.
 #[derive(
-	codec::Encode, codec::Decode, crate::RuntimeDebug, Eq, PartialEq, Clone, scale_info::TypeInfo,
+	codec::Encode, codec::Decode, RuntimeDebug, Eq, PartialEq, Clone, scale_info::TypeInfo,
 )]
 pub struct StorageInfo {
 	/// Encoded string of pallet name.

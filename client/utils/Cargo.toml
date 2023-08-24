@@ -20,7 +20,7 @@ prometheus = { version = "0.13.0", default-features = false }
 sp-arithmetic = { version = "16.0.0", default-features = false, path = "../../primitives/arithmetic" }
 
 [features]
-default = ["metered"]
+default = [ "metered" ]
 metered = []
 
 [dev-dependencies]

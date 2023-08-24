@@ -18,8 +18,8 @@
 //! Storage types to build abstraction on storage, they implements storage traits such as
 //! StorageMap and others.
 
-use crate::metadata_ir::{StorageEntryMetadataIR, StorageEntryModifierIR};
 use codec::FullCodec;
+use sp_metadata_ir::{StorageEntryMetadataIR, StorageEntryModifierIR};
 use sp_std::prelude::*;
 
 mod counted_map;

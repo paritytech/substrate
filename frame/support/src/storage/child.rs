@@ -21,10 +21,10 @@
 // NOTE: could replace unhashed by having only one kind of storage (top trie being the child info
 // of null length parent storage key).
 
-pub use crate::sp_io::{KillStorageResult, MultiRemovalResults};
-use crate::sp_std::prelude::*;
 use codec::{Codec, Decode, Encode};
 pub use sp_core::storage::{ChildInfo, ChildType, StateVersion};
+pub use sp_io::{KillStorageResult, MultiRemovalResults};
+use sp_std::prelude::*;
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(child_info: &ChildInfo, key: &[u8]) -> Option<T> {

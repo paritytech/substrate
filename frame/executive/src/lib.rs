@@ -139,6 +139,8 @@ use sp_runtime::{
 use sp_std::{marker::PhantomData, prelude::*};
 
 #[cfg(feature = "try-runtime")]
+use log;
+#[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 
 #[allow(dead_code)]
@@ -252,7 +254,7 @@ where
 		signature_check: bool,
 		select: frame_try_runtime::TryStateSelect,
 	) -> Result<Weight, &'static str> {
-		frame_support::log::info!(
+		log::info!(
 			target: LOG_TARGET,
 			"try-runtime: executing block #{:?} / state root check: {:?} / signature check: {:?} / try-state-select: {:?}",
 			block.header().number(),
@@ -289,7 +291,7 @@ where
 
 		for e in extrinsics {
 			if let Err(err) = try_apply_extrinsic(e.clone()) {
-				frame_support::log::error!(
+				log::error!(
 					target: LOG_TARGET, "executing transaction {:?} failed due to {:?}. Aborting the rest of the block execution.",
 					e,
 					err,
@@ -308,7 +310,7 @@ where
 			BlockNumberFor<System>,
 		>>::try_state(*header.number(), select)
 		.map_err(|e| {
-			frame_support::log::error!(target: LOG_TARGET, "failure: {:?}", e);
+			log::error!(target: LOG_TARGET, "failure: {:?}", e);
 			e
 		})?;
 		drop(_guard);
@@ -338,7 +340,7 @@ where
 			);
 		}
 
-		frame_support::log::info!(
+		log::info!(
 			target: LOG_TARGET,
 			"try-runtime: Block #{:?} successfully executed",
 			header.number(),

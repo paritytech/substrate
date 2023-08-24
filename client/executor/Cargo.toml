@@ -55,7 +55,7 @@ name = "bench"
 harness = false
 
 [features]
-default = ["std"]
+default = [ "std" ]
 # This crate does not have `no_std` support, we just require this for tests
 std = [
 	"sc-runtime-test/std",
@@ -63,13 +63,13 @@ std = [
 	"sp-core/std",
 	"sp-externalities/std",
 	"sp-io/std",
-	"sp-runtime/std",
 	"sp-runtime-interface/std",
+	"sp-runtime/std",
 	"sp-state-machine/std",
 	"sp-tracing/std",
 	"sp-trie/std",
 	"sp-version/std",
 	"sp-wasm-interface/std",
-	"substrate-test-runtime/std"
+	"substrate-test-runtime/std",
 ]
 wasm-extern-trace = []

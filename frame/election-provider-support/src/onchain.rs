@@ -254,7 +254,8 @@ mod tests {
 	}
 
 	mod mock_data_provider {
-		use frame_support::{bounded_vec, traits::ConstU32};
+		use frame_support::traits::ConstU32;
+		use sp_runtime::bounded_vec;
 
 		use super::*;
 		use crate::{data_provider, VoterOf};

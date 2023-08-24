@@ -5,7 +5,7 @@ title: Style Guide for Rust in Substrate
 Where possible these styles are enforced by settings in `rustfmt.toml` so if you run `cargo fmt` 
 then you will adhere to most of these style guidelines automatically.
 
-# Formatting
+# Code Formatting
 
 -   Indent using tabs.
 -   Lines should be longer than 100 characters long only in exceptional circumstances and certainly
@@ -147,3 +147,26 @@ let mut target_path =
     -   how likely is it that invariants could be violated,
     -   are issues stemming from the use of unsafe code caught by existing tests/tooling,
     -   what are the consequences if the problems slip into production.
+
+# Manifest Formatting
+
+> **TLDR**
+> You can use the CLI tool [Zepter](https://crates.io/crates/zepter) to format the files: `zepter format features`
+
+Rust `Cargo.toml` files need to respect certain formatting rules. All entries need to be alphabetically sorted. This makes it easier to read them and insert new entries. The exhaustive list of rules is enforced by the CI. The general format looks like this:
+
+- The feature is written as a single line if it fits within 80 chars:
+```toml
+[features]
+default = [ "std" ]
+```
+
+- Otherwise the feature is broken down into multiple lines with one entry per line. Each line is padded with one tab and no trailing spaces but a trailing comma.
+```toml
+[features]
+default = [
+	"loooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+	# Comments go here as well ;)
+	"std",
+]
+```
