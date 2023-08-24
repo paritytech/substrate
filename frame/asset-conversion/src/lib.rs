@@ -1124,8 +1124,9 @@ pub mod pallet {
 				return Err(Error::<T>::ZeroLiquidity.into())
 			}
 
-			let fee_mult =
-				T::HigherPrecisionBalance::from(1_000_000u32 - T::LPFee::get().deconstruct());
+			let fee_mult = T::HigherPrecisionBalance::from(
+				(1_000_000u32 - T::LPFee::get().deconstruct()) / 1000, // Reduce to thousand
+			);
 
 			let amount_in_with_fee =
 				amount_in.checked_mul(&fee_mult).ok_or(Error::<T>::Overflow)?;
@@ -1171,8 +1172,9 @@ pub mod pallet {
 				.checked_mul(&1000u32.into())
 				.ok_or(Error::<T>::Overflow)?;
 
-			let fee_mult =
-				T::HigherPrecisionBalance::from(1_000_000u32 - T::LPFee::get().deconstruct());
+			let fee_mult = T::HigherPrecisionBalance::from(
+				(1_000_000u32 - T::LPFee::get().deconstruct()) / 1000, // Reduce to thousand
+			);
 
 			let denominator = reserve_out
 				.checked_sub(&amount_out)
