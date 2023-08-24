@@ -19,6 +19,7 @@ use super::*;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::traits::fungibles::Credit;
+use frame_system::Account;
 use scale_info::TypeInfo;
 use sp_std::{cmp::Ordering, marker::PhantomData};
 
@@ -150,18 +151,35 @@ pub trait Swap<AccountId, Balance, MultiAssetId> {
 	) -> Result<Balance, DispatchError>;
 }
 
-pub trait SwapCredit<AccountId, Balance: Balanced<AccountId>, MultiAssetId> {
-	// fn swap_exact_tokens_for_tokens(
+pub trait SwapCredit<AccountId, MultiAssetId, Balance, Fungible, Fungibles>
+where
+	Fungible: BalancedFungible<AccountId>,
+	Fungibles: Balanced<AccountId>,
+{
+	// fn swap_exact_native_tokens_for_tokens(
 	// 	path: Vec<MultiAssetId>,
-	// 	credit_in: Credit<AccountId, Balance>,
-	// 	amount_out_min: Option<Balance>,
-	// ) -> Result<Credit<AccountId, Balance>, DispatchError>;
+	// 	credit_in: CreditFungible<AccountId, Fungible>,
+	// 	amount_out_min: Option<AssetBalance>,
+	// ) -> Result<Credit<AccountId, Fungibles>, DispatchError>;
 
-	fn swap_tokens_for_exact_tokens(
+	// fn swap_native_tokens_for_exact_tokens(
+	// 	path: Vec<MultiAssetId>,
+	// 	amount_out: AssetBalance,
+	// 	credit_in: CreditFungible<AccountId, Fungible>,
+	// ) -> Result<(CreditFungible<AccountId, Fungible>, Credit<AccountId, Fungibles>),
+	//   DispatchError>;
+
+	// fn swap_exact_tokens_for_native_tokens(
+	// 	path: Vec<MultiAssetId>,
+	// 	credit_in: Credit<AccountId, Fungibles>,
+	// 	amount_out_min: Option<Balance>,
+	// ) -> Result<CreditFungible<AccountId, Fungible>, DispatchError>;
+
+	fn swap_tokens_for_exact_native_tokens(
 		path: Vec<MultiAssetId>,
 		amount_out: Balance,
-		credit_in: Credit<AccountId, Balance>,
-	) -> Result<(Credit<AccountId, Balance>, Credit<AccountId, Balance>), DispatchError>;
+		credit_in: Credit<AccountId, Fungibles>,
+	) -> Result<(Credit<AccountId, Fungibles>, CreditFungible<AccountId, Fungible>), DispatchError>;
 }
 
 /// An implementation of MultiAssetId that can be either Native or an asset.
