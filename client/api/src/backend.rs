@@ -25,7 +25,7 @@ use parking_lot::RwLock;
 use sp_consensus::BlockOrigin;
 use sp_core::offchain::OffchainStorage;
 use sp_runtime::{
-	traits::{Block as BlockT, HashFor, NumberFor},
+	traits::{Block as BlockT, HashingFor, NumberFor},
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
@@ -36,16 +36,10 @@ use sp_storage::{ChildInfo, StorageData, StorageKey};
 
 use crate::{blockchain::Backend as BlockchainBackend, UsageInfo};
 
-pub use sp_state_machine::{Backend as StateBackend, KeyValueStates};
+pub use sp_state_machine::{Backend as StateBackend, BackendTransaction, KeyValueStates};
 
 /// Extracts the state backend type for the given backend.
 pub type StateBackendFor<B, Block> = <B as Backend<Block>>::State;
-
-/// Extracts the transaction for the given state backend.
-pub type TransactionForSB<B, Block> = <B as StateBackend<HashFor<Block>>>::Transaction;
-
-/// Extracts the transaction for the given backend.
-pub type TransactionFor<B, Block> = TransactionForSB<StateBackendFor<B, Block>, Block>;
 
 /// Describes which block import notification stream should be notified.
 #[derive(Debug, Clone, Copy)]
@@ -161,7 +155,7 @@ impl NewBlockState {
 /// Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation<Block: BlockT> {
 	/// Associated state backend type.
-	type State: StateBackend<HashFor<Block>>;
+	type State: StateBackend<HashingFor<Block>>;
 
 	/// Returns pending state.
 	///
@@ -181,7 +175,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// Inject storage data into the database.
 	fn update_db_storage(
 		&mut self,
-		update: TransactionForSB<Self::State, Block>,
+		update: BackendTransaction<HashingFor<Block>>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Set genesis state. If `commit` is `false` the state is saved in memory, but is not written
@@ -315,16 +309,16 @@ pub trait AuxStore {
 /// An `Iterator` that iterates keys in a given block under a prefix.
 pub struct KeysIter<State, Block>
 where
-	State: StateBackend<HashFor<Block>>,
+	State: StateBackend<HashingFor<Block>>,
 	Block: BlockT,
 {
-	inner: <State as StateBackend<HashFor<Block>>>::RawIter,
+	inner: <State as StateBackend<HashingFor<Block>>>::RawIter,
 	state: State,
 }
 
 impl<State, Block> KeysIter<State, Block>
 where
-	State: StateBackend<HashFor<Block>>,
+	State: StateBackend<HashingFor<Block>>,
 	Block: BlockT,
 {
 	/// Create a new iterator over storage keys.
@@ -361,7 +355,7 @@ where
 impl<State, Block> Iterator for KeysIter<State, Block>
 where
 	Block: BlockT,
-	State: StateBackend<HashFor<Block>>,
+	State: StateBackend<HashingFor<Block>>,
 {
 	type Item = StorageKey;
 
@@ -373,17 +367,17 @@ where
 /// An `Iterator` that iterates keys and values in a given block under a prefix.
 pub struct PairsIter<State, Block>
 where
-	State: StateBackend<HashFor<Block>>,
+	State: StateBackend<HashingFor<Block>>,
 	Block: BlockT,
 {
-	inner: <State as StateBackend<HashFor<Block>>>::RawIter,
+	inner: <State as StateBackend<HashingFor<Block>>>::RawIter,
 	state: State,
 }
 
 impl<State, Block> Iterator for PairsIter<State, Block>
 where
 	Block: BlockT,
-	State: StateBackend<HashFor<Block>>,
+	State: StateBackend<HashingFor<Block>>,
 {
 	type Item = (StorageKey, StorageData);
 
@@ -397,7 +391,7 @@ where
 
 impl<State, Block> PairsIter<State, Block>
 where
-	State: StateBackend<HashFor<Block>>,
+	State: StateBackend<HashingFor<Block>>,
 	Block: BlockT,
 {
 	/// Create a new iterator over storage key and value pairs.
@@ -506,11 +500,11 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Associated blockchain backend type.
 	type Blockchain: BlockchainBackend<Block>;
 	/// Associated state backend type.
-	type State: StateBackend<HashFor<Block>>
+	type State: StateBackend<HashingFor<Block>>
 		+ Send
 		+ AsTrieBackend<
-			HashFor<Block>,
-			TrieBackendStorage = <Self::State as StateBackend<HashFor<Block>>>::TrieBackendStorage,
+			HashingFor<Block>,
+			TrieBackendStorage = <Self::State as StateBackend<HashingFor<Block>>>::TrieBackendStorage,
 		>;
 	/// Offchain workers local storage.
 	type OffchainStorage: OffchainStorage;

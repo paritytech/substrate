@@ -42,20 +42,21 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
 
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_io::storage;
 use sp_runtime::{traits::Hash, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*, result};
 
 use frame_support::{
-	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, GetDispatchInfo,
 		Pays, PostDispatchInfo,
 	},
-	ensure,
+	ensure, impl_ensure_origin_with_arg_ignoring_arg,
 	traits::{
-		Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers, StorageVersion,
+		Backing, ChangeMembers, EnsureOrigin, EnsureOriginWithArg, Get, GetBacking,
+		InitializeMembers, StorageVersion,
 	},
 	weights::Weight,
 };
@@ -200,7 +201,7 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The time-out for council motions.
-		type MotionDuration: Get<Self::BlockNumber>;
+		type MotionDuration: Get<BlockNumberFor<Self>>;
 
 		/// Maximum number of proposals allowed to be active in parallel.
 		type MaxProposals: Get<ProposalIndex>;
@@ -229,12 +230,13 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		#[serde(skip)]
 		pub phantom: PhantomData<I>,
 		pub members: Vec<T::AccountId>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			use sp_std::collections::btree_set::BTreeSet;
 			let members_set: BTreeSet<_> = self.members.iter().collect();
@@ -272,7 +274,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn voting)]
 	pub type Voting<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, T::Hash, Votes<T::AccountId, T::BlockNumber>, OptionQuery>;
+		StorageMap<_, Identity, T::Hash, Votes<T::AccountId, BlockNumberFor<T>>, OptionQuery>;
 
 	/// Proposals so far.
 	#[pallet::storage]
@@ -344,6 +346,8 @@ pub mod pallet {
 		WrongProposalWeight,
 		/// The given length bound for the proposal was too low.
 		WrongProposalLength,
+		/// Prime account is not a member
+		PrimeAccountNotMember,
 	}
 
 	#[pallet::hooks]
@@ -414,6 +418,9 @@ pub mod pallet {
 					old_count,
 					old.len(),
 				);
+			}
+			if let Some(p) = &prime {
+				ensure!(new_members.contains(p), Error::<T, I>::PrimeAccountNotMember);
 			}
 			let mut new_members = new_members;
 			new_members.sort();
@@ -1154,6 +1161,12 @@ impl<
 	}
 }
 
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., I: 'static, AccountId: Decode, T } >
+		EnsureOriginWithArg<O, T> for EnsureMember<AccountId, I>
+	{}
+}
+
 pub struct EnsureMembers<AccountId, I: 'static, const N: u32>(PhantomData<(AccountId, I)>);
 impl<
 		O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
@@ -1174,6 +1187,12 @@ impl<
 	fn try_successful_origin() -> Result<O, ()> {
 		Ok(O::from(RawOrigin::Members(N, N)))
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., I: 'static, const N: u32, AccountId, T } >
+		EnsureOriginWithArg<O, T> for EnsureMembers<AccountId, I, N>
+	{}
 }
 
 pub struct EnsureProportionMoreThan<AccountId, I: 'static, const N: u32, const D: u32>(
@@ -1201,6 +1220,12 @@ impl<
 	}
 }
 
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., I: 'static, const N: u32, const D: u32, AccountId, T } >
+		EnsureOriginWithArg<O, T> for EnsureProportionMoreThan<AccountId, I, N, D>
+	{}
+}
+
 pub struct EnsureProportionAtLeast<AccountId, I: 'static, const N: u32, const D: u32>(
 	PhantomData<(AccountId, I)>,
 );
@@ -1224,4 +1249,10 @@ impl<
 	fn try_successful_origin() -> Result<O, ()> {
 		Ok(O::from(RawOrigin::Members(0u32, 0u32)))
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., I: 'static, const N: u32, const D: u32, AccountId, T } >
+		EnsureOriginWithArg<O, T> for EnsureProportionAtLeast<AccountId, I, N, D>
+	{}
 }

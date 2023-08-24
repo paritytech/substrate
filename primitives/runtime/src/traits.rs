@@ -26,7 +26,7 @@ use crate::{
 	},
 	DispatchResult,
 };
-use codec::{Codec, Decode, Encode, EncodeLike, MaxEncodedLen};
+use codec::{Codec, Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
 #[cfg(feature = "serde")]
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -336,6 +336,33 @@ impl<T, A: TryInto<T>> TryMorph<A> for TryMorphInto<T> {
 	type Outcome = T;
 	fn try_morph(a: A) -> Result<T, ()> {
 		a.try_into().map_err(|_| ())
+	}
+}
+
+/// Implementation of `Morph` to retrieve just the first element of a tuple.
+pub struct TakeFirst;
+impl<T1> Morph<(T1,)> for TakeFirst {
+	type Outcome = T1;
+	fn morph(a: (T1,)) -> T1 {
+		a.0
+	}
+}
+impl<T1, T2> Morph<(T1, T2)> for TakeFirst {
+	type Outcome = T1;
+	fn morph(a: (T1, T2)) -> T1 {
+		a.0
+	}
+}
+impl<T1, T2, T3> Morph<(T1, T2, T3)> for TakeFirst {
+	type Outcome = T1;
+	fn morph(a: (T1, T2, T3)) -> T1 {
+		a.0
+	}
+}
+impl<T1, T2, T3, T4> Morph<(T1, T2, T3, T4)> for TakeFirst {
+	type Outcome = T1;
+	fn morph(a: (T1, T2, T3, T4)) -> T1 {
+		a.0
 	}
 }
 
@@ -932,19 +959,7 @@ pub trait Hash:
 	+ Hasher<Out = <Self as Hash>::Output>
 {
 	/// The hash type produced.
-	type Output: Member
-		+ MaybeSerializeDeserialize
-		+ Debug
-		+ sp_std::hash::Hash
-		+ AsRef<[u8]>
-		+ AsMut<[u8]>
-		+ Copy
-		+ Default
-		+ Encode
-		+ Decode
-		+ EncodeLike
-		+ MaxEncodedLen
-		+ TypeInfo;
+	type Output: HashOutput;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output {
@@ -961,6 +976,47 @@ pub trait Hash:
 
 	/// The Patricia tree root of the given mapping.
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, state_version: StateVersion) -> Self::Output;
+}
+
+/// Super trait with all the attributes for a hashing output.
+pub trait HashOutput:
+	Member
+	+ MaybeSerializeDeserialize
+	+ MaybeDisplay
+	+ MaybeFromStr
+	+ Debug
+	+ sp_std::hash::Hash
+	+ AsRef<[u8]>
+	+ AsMut<[u8]>
+	+ Copy
+	+ Ord
+	+ Default
+	+ Encode
+	+ Decode
+	+ EncodeLike
+	+ MaxEncodedLen
+	+ TypeInfo
+{
+}
+
+impl<T> HashOutput for T where
+	T: Member
+		+ MaybeSerializeDeserialize
+		+ MaybeDisplay
+		+ MaybeFromStr
+		+ Debug
+		+ sp_std::hash::Hash
+		+ AsRef<[u8]>
+		+ AsMut<[u8]>
+		+ Copy
+		+ Ord
+		+ Default
+		+ Encode
+		+ Decode
+		+ EncodeLike
+		+ MaxEncodedLen
+		+ TypeInfo
+{
 }
 
 /// Blake2-256 Hash implementation.
@@ -981,12 +1037,12 @@ impl Hasher for BlakeTwo256 {
 impl Hash for BlakeTwo256 {
 	type Output = sp_core::H256;
 
-	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
-		sp_io::trie::blake2_256_root(input, version)
-	}
-
 	fn ordered_trie_root(input: Vec<Vec<u8>>, version: StateVersion) -> Self::Output {
 		sp_io::trie::blake2_256_ordered_root(input, version)
+	}
+
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
+		sp_io::trie::blake2_256_root(input, version)
 	}
 }
 
@@ -1008,12 +1064,12 @@ impl Hasher for Keccak256 {
 impl Hash for Keccak256 {
 	type Output = sp_core::H256;
 
-	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
-		sp_io::trie::keccak_256_root(input, version)
-	}
-
 	fn ordered_trie_root(input: Vec<Vec<u8>>, version: StateVersion) -> Self::Output {
 		sp_io::trie::keccak_256_ordered_root(input, version)
+	}
+
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
+		sp_io::trie::keccak_256_root(input, version)
 	}
 }
 
@@ -1098,31 +1154,24 @@ pub trait IsMember<MemberId> {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Header:
+	Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + TypeInfo + 'static
+{
 	/// Header number.
 	type Number: Member
 		+ MaybeSerializeDeserialize
+		+ MaybeFromStr
 		+ Debug
 		+ sp_std::hash::Hash
 		+ Copy
 		+ MaybeDisplay
 		+ AtLeast32BitUnsigned
-		+ Codec
-		+ sp_std::str::FromStr;
-	/// Header hash type
-	type Hash: Member
-		+ MaybeSerializeDeserialize
-		+ Debug
-		+ sp_std::hash::Hash
-		+ Ord
-		+ Copy
-		+ MaybeDisplay
 		+ Default
-		+ SimpleBitOps
-		+ Codec
-		+ AsRef<[u8]>
-		+ AsMut<[u8]>
-		+ TypeInfo;
+		+ TypeInfo
+		+ MaxEncodedLen
+		+ FullCodec;
+	/// Header hash type
+	type Hash: HashOutput;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
 
@@ -1166,29 +1215,52 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 	}
 }
 
+// Something that provides the Header Type. Only for internal usage and should only be used
+// via `HeaderFor` or `BlockNumberFor`.
+//
+// This is needed to fix the "cyclical" issue in loading Header/BlockNumber as part of a
+// `pallet::call`. Essentially, `construct_runtime` aggregates all calls to create a `RuntimeCall`
+// that is then used to define `UncheckedExtrinsic`.
+// ```ignore
+// pub type UncheckedExtrinsic =
+// 	generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
+// ```
+// This `UncheckedExtrinsic` is supplied to the `Block`.
+// ```ignore
+// pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+// ```
+// So, if we do not create a trait outside of `Block` that doesn't have `Extrinsic`, we go into a
+// recursive loop leading to a build error.
+//
+// Note that this is a workaround for a compiler bug and should be removed when the compiler
+// bug is fixed.
+#[doc(hidden)]
+pub trait HeaderProvider {
+	/// Header type.
+	type HeaderT: Header;
+}
+
 /// Something which fulfills the abstract idea of a Substrate block. It has types for
 /// `Extrinsic` pieces of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Block:
+	HeaderProvider<HeaderT = <Self as Block>::Header>
+	+ Clone
+	+ Send
+	+ Sync
+	+ Codec
+	+ Eq
+	+ MaybeSerialize
+	+ Debug
+	+ 'static
+{
 	/// Type for extrinsics.
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	/// Header type.
-	type Header: Header<Hash = Self::Hash>;
+	type Header: Header<Hash = Self::Hash> + MaybeSerializeDeserialize;
 	/// Block hash type.
-	type Hash: Member
-		+ MaybeSerializeDeserialize
-		+ Debug
-		+ sp_std::hash::Hash
-		+ Ord
-		+ Copy
-		+ MaybeDisplay
-		+ Default
-		+ SimpleBitOps
-		+ Codec
-		+ AsRef<[u8]>
-		+ AsMut<[u8]>
-		+ TypeInfo;
+	type Hash: HashOutput;
 
 	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;
@@ -1210,14 +1282,14 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 /// Something that acts like an `Extrinsic`.
 pub trait Extrinsic: Sized {
 	/// The function call.
-	type Call;
+	type Call: TypeInfo;
 
 	/// The payload we carry for signed extrinsics.
 	///
 	/// Usually it will contain a `Signature` and
 	/// may include some additional data that are specific to signed
 	/// extrinsics.
-	type SignaturePayload;
+	type SignaturePayload: SignaturePayload;
 
 	/// Is this `Extrinsic` signed?
 	/// If no information are available about signed/unsigned, `None` should be returned.
@@ -1236,6 +1308,31 @@ pub trait Extrinsic: Sized {
 	}
 }
 
+/// Something that acts like a [`SignaturePayload`](Extrinsic::SignaturePayload) of an
+/// [`Extrinsic`].
+pub trait SignaturePayload {
+	/// The type of the address that signed the extrinsic.
+	///
+	/// Particular to a signed extrinsic.
+	type SignatureAddress: TypeInfo;
+
+	/// The signature type of the extrinsic.
+	///
+	/// Particular to a signed extrinsic.
+	type Signature: TypeInfo;
+
+	/// The additional data that is specific to the signed extrinsic.
+	///
+	/// Particular to a signed extrinsic.
+	type SignatureExtra: TypeInfo;
+}
+
+impl SignaturePayload for () {
+	type SignatureAddress = ();
+	type Signature = ();
+	type SignatureExtra = ();
+}
+
 /// Implementor is an [`Extrinsic`] and provides metadata about this extrinsic.
 pub trait ExtrinsicMetadata {
 	/// The format version of the `Extrinsic`.
@@ -1248,7 +1345,7 @@ pub trait ExtrinsicMetadata {
 }
 
 /// Extract the hashing type for a block.
-pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
+pub type HashingFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
 pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 /// Extract the digest type for a block.
@@ -2202,10 +2299,26 @@ pub trait BlockNumberProvider {
 mod tests {
 	use super::*;
 	use crate::codec::{Decode, Encode, Input};
+	#[cfg(feature = "bls-experimental")]
+	use sp_core::{bls377, bls381};
 	use sp_core::{
 		crypto::{Pair, UncheckedFrom},
-		ecdsa,
+		ecdsa, ed25519, sr25519,
 	};
+
+	macro_rules! signature_verify_test {
+		($algorithm:ident) => {
+			let msg = &b"test-message"[..];
+			let wrong_msg = &b"test-msg"[..];
+			let (pair, _) = $algorithm::Pair::generate();
+
+			let signature = pair.sign(&msg);
+			assert!($algorithm::Pair::verify(&signature, msg, &pair.public()));
+
+			assert!(signature.verify(msg, &pair.public()));
+			assert!(!signature.verify(wrong_msg, &pair.public()));
+		};
+	}
 
 	mod t {
 		use sp_application_crypto::{app_crypto, sr25519};
@@ -2317,14 +2430,27 @@ mod tests {
 	}
 
 	#[test]
+	fn ed25519_verify_works() {
+		signature_verify_test!(ed25519);
+	}
+
+	#[test]
+	fn sr25519_verify_works() {
+		signature_verify_test!(sr25519);
+	}
+
+	#[test]
 	fn ecdsa_verify_works() {
-		let msg = &b"test-message"[..];
-		let (pair, _) = ecdsa::Pair::generate();
+		signature_verify_test!(ecdsa);
+	}
 
-		let signature = pair.sign(&msg);
-		assert!(ecdsa::Pair::verify(&signature, msg, &pair.public()));
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_verify_works() {
+		signature_verify_test!(bls377)
+	}
 
-		assert!(signature.verify(msg, &pair.public()));
-		assert!(signature.verify(msg, &pair.public()));
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_verify_works() {
+		signature_verify_test!(bls381)
 	}
 }

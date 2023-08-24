@@ -13,10 +13,10 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-array-bytes = { version = "4.1", optional = true }
+array-bytes = { version = "6.1", optional = true }
 log = { version = "0.4.14", default-features = false }
 
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
@@ -33,39 +33,45 @@ pallet-identity = { version = "4.0.0-dev", path = "../identity", default-feature
 pallet-collective = { version = "4.0.0-dev", path = "../collective", default-features = false, optional = true }
 
 [dev-dependencies]
-array-bytes = "4.1"
+array-bytes = "6.1"
 sp-core-hashing = { version = "9.0.0", default-features = false, path = "../../primitives/core/hashing" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-collective = { version = "4.0.0-dev", path = "../collective" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
-	"sp-core-hashing?/std",
-	"pallet-collective?/std",
-	"frame-benchmarking?/std",
-	"log/std",
 	"codec/std",
+	"frame-benchmarking?/std",
+	"frame-support/std",
+	"frame-system/std",
+	"log/std",
+	"pallet-balances/std",
+	"pallet-collective?/std",
+	"pallet-identity/std",
 	"scale-info/std",
-	"sp-std/std",
+	"sp-core-hashing?/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
-	"frame-support/std",
-	"frame-system/std",
-	"pallet-identity/std",
+	"sp-std/std",
 ]
 runtime-benchmarks = [
 	"array-bytes",
-	"sp-core-hashing",
 	"frame-benchmarking/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
 	"pallet-collective/runtime-benchmarks",
 	"pallet-identity/runtime-benchmarks",
+	"sp-core-hashing",
+	"sp-runtime/runtime-benchmarks",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-collective?/try-runtime",
+	"pallet-identity/try-runtime",
+	"sp-runtime/try-runtime",
 ]

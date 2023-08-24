@@ -1062,20 +1062,16 @@ mod mock {
 	};
 	use sp_runtime::{
 		traits::{BlakeTwo256, Header as _, IdentityLookup},
-		StorageChild,
+		BuildStorage, StorageChild,
 	};
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-	type Block = frame_system::mocking::MockBlock<Test>;
+	type Block = frame_system::mocking::MockBlockU32<Test>;
 
 	// Configure a mock runtime to test the pallet.
 	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
+		pub enum Test
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
 			StateTrieMigration: pallet_state_trie_migration::{Pallet, Call, Storage, Event<T>},
 		}
@@ -1091,13 +1087,12 @@ mod mock {
 		type BlockLength = ();
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
-		type Index = u64;
-		type BlockNumber = u32;
+		type Nonce = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = sp_runtime::generic::Header<Self::BlockNumber, BlakeTwo256>;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU32<250>;
 		type DbWeight = ();
@@ -1241,8 +1236,8 @@ mod mock {
 		};
 
 		if with_pallets {
-			frame_system::GenesisConfig::default()
-				.assimilate_storage::<Test>(&mut custom_storage)
+			frame_system::GenesisConfig::<Test>::default()
+				.assimilate_storage(&mut custom_storage)
 				.unwrap();
 			pallet_balances::GenesisConfig::<Test> { balances: vec![(1, 1000)] }
 				.assimilate_storage(&mut custom_storage)
@@ -1273,8 +1268,8 @@ mod mock {
 #[cfg(test)]
 mod test {
 	use super::{mock::*, *};
-	use frame_support::{bounded_vec, dispatch::*};
-	use sp_runtime::{traits::Bounded, StateVersion};
+	use frame_support::dispatch::*;
+	use sp_runtime::{bounded_vec, traits::Bounded, StateVersion};
 
 	#[test]
 	fn fails_if_no_migration() {
@@ -1619,18 +1614,18 @@ pub(crate) mod remote_tests {
 		traits::{Get, Hooks},
 		weights::Weight,
 	};
-	use frame_system::Pallet as System;
+	use frame_system::{pallet_prelude::BlockNumberFor, Pallet as System};
 	use remote_externalities::Mode;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{Block as BlockT, HashFor, Header as _, One, Zero},
+		traits::{Block as BlockT, HashingFor, Header as _, One, Zero},
 		DeserializeOwned,
 	};
 	use thousands::Separable;
 
 	#[allow(dead_code)]
 	fn run_to_block<Runtime: crate::Config<Hash = H256>>(
-		n: <Runtime as frame_system::Config>::BlockNumber,
+		n: BlockNumberFor<Runtime>,
 	) -> (H256, Weight) {
 		let mut root = Default::default();
 		let mut weight_sum = Weight::zero();
@@ -1670,7 +1665,7 @@ pub(crate) mod remote_tests {
 			frame_system::Pallet::<Runtime>::block_number()
 		});
 
-		let mut duration: <Runtime as frame_system::Config>::BlockNumber = Zero::zero();
+		let mut duration: BlockNumberFor<Runtime> = Zero::zero();
 		// set the version to 1, as if the upgrade happened.
 		ext.state_version = sp_core::storage::StateVersion::V1;
 
@@ -1703,7 +1698,7 @@ pub(crate) mod remote_tests {
 			});
 
 			let compact_proof =
-				proof.clone().into_compact_proof::<HashFor<Block>>(last_state_root).unwrap();
+				proof.clone().into_compact_proof::<HashingFor<Block>>(last_state_root).unwrap();
 			log::info!(
 				target: LOG_TARGET,
 				"proceeded to #{}, weight: [{} / {}], proof: [{} / {} / {}]",

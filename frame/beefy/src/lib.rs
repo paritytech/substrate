@@ -21,7 +21,6 @@ use codec::{Encode, MaxEncodedLen};
 
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays},
-	log,
 	pallet_prelude::*,
 	traits::{Get, OneSessionHandler},
 	weights::Weight,
@@ -31,6 +30,7 @@ use frame_system::{
 	ensure_none, ensure_signed,
 	pallet_prelude::{BlockNumberFor, OriginFor},
 };
+use log;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, Member},
@@ -78,6 +78,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxAuthorities: Get<u32>;
 
+		/// The maximum number of nominators for each validator.
+		#[pallet::constant]
+		type MaxNominators: Get<u32>;
+
 		/// The maximum number of entries to keep in the set id to session index mapping.
 		///
 		/// Since the `SetIdSession` map is only used for validating equivocations this
@@ -112,7 +116,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	/// The current authorities set
 	#[pallet::storage]
@@ -176,7 +180,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			Pallet::<T>::initialize(&self.authorities)
 				// we panic here as runtime maintainers can simply reconfigure genesis and restart
@@ -203,7 +207,10 @@ pub mod pallet {
 		/// against the extracted offender. If both are valid, the offence
 		/// will be reported.
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
+		#[pallet::weight(T::WeightInfo::report_equivocation(
+			key_owner_proof.validator_count(),
+			T::MaxNominators::get(),
+		))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
 			equivocation_proof: Box<
@@ -235,7 +242,10 @@ pub mod pallet {
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
 		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
+		#[pallet::weight(T::WeightInfo::report_equivocation(
+			key_owner_proof.validator_count(),
+			T::MaxNominators::get(),
+		))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
 			equivocation_proof: Box<
@@ -441,5 +451,5 @@ impl<T: Config> IsMember<T::BeefyId> for Pallet<T> {
 }
 
 pub trait WeightInfo {
-	fn report_equivocation(validator_count: u32) -> Weight;
+	fn report_equivocation(validator_count: u32, max_nominators_per_validator: u32) -> Weight;
 }

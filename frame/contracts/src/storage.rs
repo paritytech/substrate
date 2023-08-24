@@ -22,35 +22,34 @@ pub mod meter;
 use crate::{
 	exec::{AccountIdOf, Key},
 	weights::WeightInfo,
-	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue,
-	DeletionQueueCounter, Error, Pallet, TrieId, SENTINEL,
+	BalanceOf, CodeHash, CodeInfo, Config, ContractInfoOf, DeletionQueue, DeletionQueueCounter,
+	Error, Pallet, TrieId, SENTINEL,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::DispatchError,
 	storage::child::{self, ChildInfo},
 	weights::Weight,
-	DefaultNoBound, RuntimeDebugNoBound,
+	CloneNoBound, DefaultNoBound,
 };
 use scale_info::TypeInfo;
+use sp_core::Get;
 use sp_io::KillStorageResult;
 use sp_runtime::{
 	traits::{Hash, Saturating, Zero},
-	RuntimeDebug,
+	BoundedBTreeMap, DispatchResult, RuntimeDebug,
 };
-use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
+use sp_std::{marker::PhantomData, prelude::*};
+
+use self::meter::Diff;
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(Encode, Decode, CloneNoBound, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
 pub struct ContractInfo<T: Config> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
-	/// The account that holds this contracts storage deposit.
-	///
-	/// This is held in a separate account to prevent the contract from spending it.
-	deposit_account: DepositAccount<T>,
 	/// The code associated with a given account.
 	pub code_hash: CodeHash<T>,
 	/// How many bytes of storage are accumulated in this contract's child trie.
@@ -66,6 +65,12 @@ pub struct ContractInfo<T: Config> {
 	/// We need to store this information separately so it is not used when calculating any refunds
 	/// since the base deposit can only ever be refunded on contract termination.
 	storage_base_deposit: BalanceOf<T>,
+	/// Map of code hashes and deposit balances.
+	///
+	/// Tracks the code hash and deposit held for adding delegate dependencies. Dependencies added
+	/// to the map can not be removed from the chain state and can be safely used for delegate
+	/// calls.
+	delegate_dependencies: BoundedBTreeMap<CodeHash<T>, BalanceOf<T>, T::MaxDelegateDependencies>,
 }
 
 impl<T: Config> ContractInfo<T> {
@@ -90,17 +95,15 @@ impl<T: Config> ContractInfo<T> {
 				.expect("Runtime uses a reasonable hash size. Hence sizeof(T::Hash) <= 128; qed")
 		};
 
-		let deposit_account = DepositAccount(T::AddressGenerator::deposit_address(account));
-
 		let contract = Self {
 			trie_id,
-			deposit_account,
 			code_hash,
 			storage_bytes: 0,
 			storage_items: 0,
 			storage_byte_deposit: Zero::zero(),
 			storage_item_deposit: Zero::zero(),
 			storage_base_deposit: Zero::zero(),
+			delegate_dependencies: Default::default(),
 		};
 
 		Ok(contract)
@@ -123,9 +126,9 @@ impl<T: Config> ContractInfo<T> {
 			.saturating_sub(Pallet::<T>::min_balance())
 	}
 
-	/// Return the account that storage deposits should be deposited into.
-	pub fn deposit_account(&self) -> &DepositAccount<T> {
-		&self.deposit_account
+	/// Returns the storage base deposit of the contract.
+	pub fn storage_base_deposit(&self) -> BalanceOf<T> {
+		self.storage_base_deposit
 	}
 
 	/// Reads a storage kv pair of a contract.
@@ -199,6 +202,68 @@ impl<T: Config> ContractInfo<T> {
 			(Some(old_len), None) => WriteOutcome::Overwritten(old_len),
 			(Some(_), Some(old_value)) => WriteOutcome::Taken(old_value),
 		})
+	}
+
+	/// Sets and returns the contract base deposit.
+	///
+	/// The base deposit is updated when the `code_hash` of the contract changes, as it depends on
+	/// the deposit paid to upload the contract's code.
+	pub fn update_base_deposit(&mut self, code_info: &CodeInfo<T>) -> BalanceOf<T> {
+		let ed = Pallet::<T>::min_balance();
+		let info_deposit =
+			Diff { bytes_added: self.encoded_size() as u32, items_added: 1, ..Default::default() }
+				.update_contract::<T>(None)
+				.charge_or_zero();
+
+		// Instantiating the contract prevents its code to be deleted, therefore the base deposit
+		// includes a fraction (`T::CodeHashLockupDepositPercent`) of the original storage deposit
+		// to prevent abuse.
+		let upload_deposit = T::CodeHashLockupDepositPercent::get().mul_ceil(code_info.deposit());
+
+		// Instantiate needs to transfer at least the minimum balance in order to pull the
+		// contract's own account into existence, as the deposit itself does not contribute to the
+		// `ed`.
+		let deposit = info_deposit.saturating_add(upload_deposit).saturating_add(ed);
+
+		self.storage_base_deposit = deposit;
+		deposit
+	}
+
+	/// Adds a new delegate dependency to the contract.
+	/// The `amount` is the amount of funds that will be reserved for the dependency.
+	///
+	/// Returns an error if the maximum number of delegate_dependencies is reached or if
+	/// the delegate dependency already exists.
+	pub fn add_delegate_dependency(
+		&mut self,
+		code_hash: CodeHash<T>,
+		amount: BalanceOf<T>,
+	) -> DispatchResult {
+		self.delegate_dependencies
+			.try_insert(code_hash, amount)
+			.map_err(|_| Error::<T>::MaxDelegateDependenciesReached)?
+			.map_or(Ok(()), |_| Err(Error::<T>::DelegateDependencyAlreadyExists))
+			.map_err(Into::into)
+	}
+
+	/// Removes the delegate dependency from the contract and returns the deposit held for this
+	/// dependency.
+	///
+	/// Returns an error if the entry doesn't exist.
+	pub fn remove_delegate_dependency(
+		&mut self,
+		code_hash: &CodeHash<T>,
+	) -> Result<BalanceOf<T>, DispatchError> {
+		self.delegate_dependencies
+			.remove(code_hash)
+			.ok_or(Error::<T>::DelegateDependencyNotFound.into())
+	}
+
+	/// Returns the delegate_dependencies of the contract.
+	pub fn delegate_dependencies(
+		&self,
+	) -> &BoundedBTreeMap<CodeHash<T>, BalanceOf<T>, T::MaxDelegateDependencies> {
+		&self.delegate_dependencies
 	}
 
 	/// Push a contract's trie to the deletion queue for lazy removal.
@@ -311,18 +376,6 @@ impl WriteOutcome {
 			Self::Overwritten(len) => *len,
 			Self::Taken(value) => value.len() as u32,
 		}
-	}
-}
-
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen)]
-#[scale_info(skip_type_params(T))]
-pub struct DepositAccount<T: Config>(AccountIdOf<T>);
-
-impl<T: Config> Deref for DepositAccount<T> {
-	type Target = AccountIdOf<T>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
 	}
 }
 

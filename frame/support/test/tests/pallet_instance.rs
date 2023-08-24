@@ -185,13 +185,15 @@ pub mod pallet {
 	>;
 
 	#[pallet::genesis_config]
-	#[derive(Default)]
-	pub struct GenesisConfig {
+	#[derive(frame_support::DefaultNoBound)]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		#[serde(skip)]
+		_config: sp_std::marker::PhantomData<(T, I)>,
 		_myfield: u32,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {}
 	}
 
@@ -281,7 +283,7 @@ pub mod pallet2 {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {}
 	}
 }
@@ -289,14 +291,13 @@ pub mod pallet2 {
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u32;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
@@ -334,10 +335,7 @@ pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
-	pub struct Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub struct Runtime
 	{
 		// Exclude part `Storage` in order not to check its metadata in tests.
 		System: frame_system exclude_parts { Storage },
@@ -417,6 +415,39 @@ fn error_expand() {
 			message: Some("InsufficientProposersBalance")
 		}),
 	);
+}
+
+#[test]
+fn module_error_outer_enum_expand() {
+	// assert that all variants of the Example pallet are included into the
+	// RuntimeError definition.
+	match RuntimeError::Example(pallet::Error::InsufficientProposersBalance) {
+		RuntimeError::Example(example) => match example {
+			pallet::Error::InsufficientProposersBalance => (),
+			pallet::Error::NonExistentStorageValue => (),
+			// Extra pattern added by `construct_runtime`.
+			pallet::Error::__Ignore(_, _) => (),
+		},
+		_ => (),
+	};
+}
+
+#[test]
+fn module_error_from_dispatch_error() {
+	let dispatch_err = DispatchError::Module(ModuleError {
+		index: 1,
+		error: [0; 4],
+		message: Some("InsufficientProposersBalance"),
+	});
+	let err = RuntimeError::from_dispatch_error(dispatch_err).unwrap();
+
+	match err {
+		RuntimeError::Example(pallet::Error::InsufficientProposersBalance) => (),
+		_ => panic!("Module error constructed incorrectly"),
+	};
+
+	// Only `ModuleError` is converted.
+	assert!(RuntimeError::from_dispatch_error(DispatchError::BadOrigin).is_none());
 }
 
 #[test]
@@ -690,7 +721,7 @@ fn pallet_on_genesis() {
 
 #[test]
 fn metadata() {
-	use frame_support::metadata::*;
+	use frame_metadata::{v14::*, *};
 
 	let system_pallet_metadata = PalletMetadata {
 		index: 0,

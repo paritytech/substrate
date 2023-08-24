@@ -41,7 +41,7 @@ pub struct StorageNoopGuard(sp_std::vec::Vec<u8>);
 
 impl Default for StorageNoopGuard {
 	fn default() -> Self {
-		Self(frame_support::storage_root(frame_support::StateVersion::V1))
+		Self(sp_io::storage::root(sp_runtime::StateVersion::V1))
 	}
 }
 
@@ -52,7 +52,7 @@ impl Drop for StorageNoopGuard {
 			return
 		}
 		assert_eq!(
-			frame_support::storage_root(frame_support::StateVersion::V1),
+			sp_io::storage::root(sp_runtime::StateVersion::V1),
 			self.0,
 			"StorageNoopGuard detected wrongful storage changes.",
 		);

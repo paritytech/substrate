@@ -106,6 +106,7 @@ use sc_consensus_slots::{
 	SlotInfo, StorageChanges,
 };
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_application_crypto::AppCrypto;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
@@ -116,7 +117,7 @@ use sp_blockchain::{
 use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;
-use sp_core::ExecutionContext;
+use sp_core::traits::SpawnEssentialNamed;
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::KeystorePtr;
 use sp_runtime::{
@@ -491,11 +492,8 @@ where
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
-	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
-	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<C, B>>
-		+ Send
-		+ Sync
-		+ 'static,
+	E::Proposer: Proposer<B, Error = Error>,
+	I: BlockImport<B, Error = ConsensusError> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
 	L: sc_consensus::JustificationSyncLink<B> + 'static,
 	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync + 'static,
@@ -726,8 +724,8 @@ where
 	C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error = ClientError>,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error = Error> + Sync,
-	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
-	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
+	E::Proposer: Proposer<B, Error = Error>,
+	I: BlockImport<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone + Sync,
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Sync,
@@ -821,13 +819,10 @@ where
 		header: B::Header,
 		header_hash: &B::Hash,
 		body: Vec<B::Extrinsic>,
-		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
+		storage_changes: StorageChanges<B>,
 		(_, public): Self::Claim,
 		epoch_descriptor: Self::AuxData,
-	) -> Result<
-		BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
-		ConsensusError,
-	> {
+	) -> Result<BlockImportParams<B>, ConsensusError> {
 		let signature = self
 			.keystore
 			.sr25519_sign(<AuthorityId as AppCrypto>::ID, public.as_ref(), header_hash.as_ref())
@@ -992,6 +987,7 @@ pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CIDP> {
 	config: BabeConfiguration,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	telemetry: Option<TelemetryHandle>,
+	offchain_tx_pool_factory: OffchainTransactionPoolFactory<Block>,
 }
 
 impl<Block, Client, SelectChain, CIDP> BabeVerifier<Block, Client, SelectChain, CIDP>
@@ -1008,12 +1004,11 @@ where
 		at_hash: Block::Hash,
 		inherent_data: InherentData,
 		create_inherent_data_providers: CIDP::InherentDataProviders,
-		execution_context: ExecutionContext,
 	) -> Result<(), Error<Block>> {
 		let inherent_res = self
 			.client
 			.runtime_api()
-			.check_inherents_with_context(at_hash, execution_context, block, inherent_data)
+			.check_inherents(at_hash, block, inherent_data)
 			.map_err(Error::RuntimeApi)?;
 
 		if !inherent_res.ok() {
@@ -1098,8 +1093,13 @@ where
 		};
 
 		// submit equivocation report at best block.
-		self.client
-			.runtime_api()
+		let mut runtime_api = self.client.runtime_api();
+
+		// Register the offchain tx pool to be able to use it from the runtime.
+		runtime_api
+			.register_extension(self.offchain_tx_pool_factory.offchain_transaction_pool(best_hash));
+
+		runtime_api
 			.submit_report_equivocation_unsigned_extrinsic(
 				best_hash,
 				equivocation_proof,
@@ -1131,8 +1131,8 @@ where
 {
 	async fn verify(
 		&mut self,
-		mut block: BlockImportParams<Block, ()>,
-	) -> Result<BlockImportParams<Block, ()>, String> {
+		mut block: BlockImportParams<Block>,
+	) -> Result<BlockImportParams<Block>, String> {
 		trace!(
 			target: LOG_TARGET,
 			"Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
@@ -1152,10 +1152,10 @@ where
 			// Verification for imported blocks is skipped in two cases:
 			// 1. When importing blocks below the last finalized block during network initial
 			//    synchronization.
-			// 2. When importing whole state we don't calculate epoch descriptor, but rather
-			//    read it from the state after import. We also skip all verifications
-			//    because there's no parent state and we trust the sync module to verify
-			//    that the state is correct and finalized.
+			// 2. When importing whole state we don't calculate epoch descriptor, but rather read it
+			//    from the state after import. We also skip all verifications because there's no
+			//    parent state and we trust the sync module to verify that the state is correct and
+			//    finalized.
 			return Ok(block)
 		}
 
@@ -1250,7 +1250,6 @@ where
 							parent_hash,
 							inherent_data,
 							create_inherent_data_providers,
-							block.origin.into(),
 						)
 						.await?;
 					}
@@ -1331,7 +1330,7 @@ impl<Block: BlockT, Client, I> BabeBlockImport<Block, Client, I> {
 impl<Block, Client, Inner> BabeBlockImport<Block, Client, Inner>
 where
 	Block: BlockT,
-	Inner: BlockImport<Block, Transaction = sp_api::TransactionFor<Client, Block>> + Send + Sync,
+	Inner: BlockImport<Block> + Send + Sync,
 	Inner::Error: Into<ConsensusError>,
 	Client: HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
@@ -1346,7 +1345,7 @@ where
 	// end up in an inconsistent state and have to resync.
 	async fn import_state(
 		&mut self,
-		mut block: BlockImportParams<Block, sp_api::TransactionFor<Client, Block>>,
+		mut block: BlockImportParams<Block>,
 	) -> Result<ImportResult, ConsensusError> {
 		let hash = block.post_hash();
 		let parent_hash = *block.header.parent_hash();
@@ -1395,7 +1394,7 @@ where
 impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client, Inner>
 where
 	Block: BlockT,
-	Inner: BlockImport<Block, Transaction = sp_api::TransactionFor<Client, Block>> + Send + Sync,
+	Inner: BlockImport<Block> + Send + Sync,
 	Inner::Error: Into<ConsensusError>,
 	Client: HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
@@ -1406,11 +1405,10 @@ where
 	Client::Api: BabeApi<Block> + ApiExt<Block>,
 {
 	type Error = ConsensusError;
-	type Transaction = sp_api::TransactionFor<Client, Block>;
 
 	async fn import_block(
 		&mut self,
-		mut block: BlockImportParams<Block, Self::Transaction>,
+		mut block: BlockImportParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
@@ -1768,6 +1766,38 @@ where
 	Ok((import, link))
 }
 
+/// Parameters passed to [`import_queue`].
+pub struct ImportQueueParams<'a, Block: BlockT, BI, Client, CIDP, SelectChain, Spawn> {
+	/// The BABE link that is created by [`block_import`].
+	pub link: BabeLink<Block>,
+	/// The block import that should be wrapped.
+	pub block_import: BI,
+	/// Optional justification import.
+	pub justification_import: Option<BoxJustificationImport<Block>>,
+	/// The client to interact with the internals of the node.
+	pub client: Arc<Client>,
+	/// A [`SelectChain`] implementation.
+	///
+	/// Used to determine the best block that should be used as basis when sending an equivocation
+	/// report.
+	pub select_chain: SelectChain,
+	/// Used to crate the inherent data providers.
+	///
+	/// These inherent data providers are then used to create the inherent data that is
+	/// passed to the `check_inherents` runtime call.
+	pub create_inherent_data_providers: CIDP,
+	/// Spawner for spawning futures.
+	pub spawner: &'a Spawn,
+	/// Registry for prometheus metrics.
+	pub registry: Option<&'a Registry>,
+	/// Optional telemetry handle to report telemetry events.
+	pub telemetry: Option<TelemetryHandle>,
+	/// The offchain transaction pool factory.
+	///
+	/// Will be used when sending equivocation reports.
+	pub offchain_tx_pool_factory: OffchainTransactionPoolFactory<Block>,
+}
+
 /// Start an import queue for the BABE consensus algorithm.
 ///
 /// This method returns the import queue, some data that needs to be passed to the block authoring
@@ -1777,25 +1807,22 @@ where
 ///
 /// The block import object provided must be the `BabeBlockImport` or a wrapper
 /// of it, otherwise crucial import logic will be omitted.
-pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CIDP>(
-	babe_link: BabeLink<Block>,
-	block_import: Inner,
-	justification_import: Option<BoxJustificationImport<Block>>,
-	client: Arc<Client>,
-	select_chain: SelectChain,
-	create_inherent_data_providers: CIDP,
-	spawner: &impl sp_core::traits::SpawnEssentialNamed,
-	registry: Option<&Registry>,
-	telemetry: Option<TelemetryHandle>,
-) -> ClientResult<(DefaultImportQueue<Block, Client>, BabeWorkerHandle<Block>)>
+pub fn import_queue<Block: BlockT, Client, SelectChain, BI, CIDP, Spawn>(
+	ImportQueueParams {
+		link: babe_link,
+		block_import,
+		justification_import,
+		client,
+		select_chain,
+		create_inherent_data_providers,
+		spawner,
+		registry,
+		telemetry,
+		offchain_tx_pool_factory,
+	}: ImportQueueParams<'_, Block, BI, Client, CIDP, SelectChain, Spawn>,
+) -> ClientResult<(DefaultImportQueue<Block>, BabeWorkerHandle<Block>)>
 where
-	Inner: BlockImport<
-			Block,
-			Error = ConsensusError,
-			Transaction = sp_api::TransactionFor<Client, Block>,
-		> + Send
-		+ Sync
-		+ 'static,
+	BI: BlockImport<Block, Error = ConsensusError> + Send + Sync + 'static,
 	Client: ProvideRuntimeApi<Block>
 		+ HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
@@ -1807,6 +1834,7 @@ where
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
 	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
+	Spawn: SpawnEssentialNamed,
 {
 	const HANDLE_BUFFER_SIZE: usize = 1024;
 
@@ -1817,6 +1845,7 @@ where
 		epoch_changes: babe_link.epoch_changes.clone(),
 		telemetry,
 		client: client.clone(),
+		offchain_tx_pool_factory,
 	};
 
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);

@@ -17,17 +17,18 @@ proc-macro = true
 [dependencies]
 derive-syn-parse = "0.1.5"
 Inflector = "0.11.4"
-cfg-expr = "0.15.1"
+cfg-expr = "0.15.4"
 itertools = "0.10.3"
 proc-macro2 = "1.0.56"
 quote = "1.0.28"
 syn = { version = "2.0.16", features = ["full"] }
 frame-support-procedural-tools = { version = "4.0.0-dev", path = "./tools" }
 proc-macro-warning = { version = "0.4.1", default-features = false }
-macro_magic = { version = "0.3.3", features = ["proc_support"] }
+macro_magic = { version = "0.4.2", features = ["proc_support"] }
+expander = "2.0.0"
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = []
 no-metadata-docs = []
 # Generate impl-trait for tuples with the given number of tuples. Will be needed as the number of

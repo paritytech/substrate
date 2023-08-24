@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-array-bytes = "4.1"
+array-bytes = "6.1"
 chrono = "0.4.10"
 clap = { version = "4.2.5", features = ["derive", "string"] }
 fdlimit = "0.2.1"
@@ -21,7 +21,7 @@ futures = "0.3.21"
 libp2p-identity = { version = "0.1.2", features = ["peerid", "ed25519"]}
 log = "0.4.17"
 names = { version = "0.13.0", default-features = false }
-parity-scale-codec = "3.2.2"
+parity-scale-codec = "3.6.1"
 rand = "0.8.5"
 regex = "1.6.0"
 rpassword = "7.0.0"
@@ -34,7 +34,6 @@ sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../db" }
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
-sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../service" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
@@ -53,5 +52,5 @@ futures-timer = "3.0.1"
 sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
 
 [features]
-default = ["rocksdb"]
-rocksdb = ["sc-client-db/rocksdb"]
+default = [ "rocksdb" ]
+rocksdb = [ "sc-client-db/rocksdb" ]

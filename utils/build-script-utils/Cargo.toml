@@ -13,4 +13,3 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-platforms = "3.0"

@@ -42,7 +42,7 @@ pub const DEFENSIVE_OP_INTERNAL_ERROR: &str = "Defensive failure has been trigge
 #[macro_export]
 macro_rules! defensive {
 	() => {
-		frame_support::log::error!(
+		frame_support::__private::log::error!(
 			target: "runtime",
 			"{}",
 			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR
@@ -50,7 +50,7 @@ macro_rules! defensive {
 		debug_assert!(false, "{}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR);
 	};
 	($error:expr $(,)?) => {
-		frame_support::log::error!(
+		frame_support::__private::log::error!(
 			target: "runtime",
 			"{}: {:?}",
 			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR,
@@ -59,7 +59,7 @@ macro_rules! defensive {
 		debug_assert!(false, "{}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error);
 	};
 	($error:expr, $proof:expr $(,)?) => {
-		frame_support::log::error!(
+		frame_support::__private::log::error!(
 			target: "runtime",
 			"{}: {:?}: {:?}",
 			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR,
@@ -893,7 +893,8 @@ pub trait ExtrinsicCall: sp_runtime::traits::Extrinsic {
 #[cfg(feature = "std")]
 impl<Call, Extra> ExtrinsicCall for sp_runtime::testing::TestXt<Call, Extra>
 where
-	Call: codec::Codec + Sync + Send,
+	Call: codec::Codec + Sync + Send + TypeInfo,
+	Extra: TypeInfo,
 {
 	fn call(&self) -> &Self::Call {
 		&self.call
@@ -903,7 +904,10 @@ where
 impl<Address, Call, Signature, Extra> ExtrinsicCall
 	for sp_runtime::generic::UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
-	Extra: sp_runtime::traits::SignedExtension,
+	Address: TypeInfo,
+	Call: TypeInfo,
+	Signature: TypeInfo,
+	Extra: sp_runtime::traits::SignedExtension + TypeInfo,
 {
 	fn call(&self) -> &Self::Call {
 		&self.function

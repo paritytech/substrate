@@ -19,7 +19,7 @@
 //! See <https://github.com/paritytech/substrate/pull/13702>.
 
 use crate::{
-	migration::{IsFinished, Migrate},
+	migration::{IsFinished, MigrationStep},
 	weights::WeightInfo,
 	Config, Pallet, TrieId, Weight, LOG_TARGET,
 };
@@ -27,7 +27,7 @@ use crate::{
 use sp_runtime::TryRuntimeError;
 
 use codec::{Decode, Encode};
-use frame_support::{codec, pallet_prelude::*, storage_alias, DefaultNoBound};
+use frame_support::{pallet_prelude::*, storage_alias, DefaultNoBound};
 use sp_std::{marker::PhantomData, prelude::*};
 mod old {
 	use super::*;
@@ -69,7 +69,7 @@ pub struct Migration<T: Config> {
 	_phantom: PhantomData<T>,
 }
 
-impl<T: Config> Migrate for Migration<T> {
+impl<T: Config> MigrationStep for Migration<T> {
 	const VERSION: u16 = 11;
 
 	// It would be more correct to make our use the now removed [DeletionQueueDepth](https://github.com/paritytech/substrate/pull/13702/files#diff-70e9723e9db62816e35f6f885b6770a8449c75a6c2733e9fa7a245fe52c4656c)
@@ -80,7 +80,9 @@ impl<T: Config> Migrate for Migration<T> {
 	}
 
 	fn step(&mut self) -> (IsFinished, Weight) {
-		let Some(old_queue) = old::DeletionQueue::<T>::take() else { return (IsFinished::Yes, Weight::zero()) };
+		let Some(old_queue) = old::DeletionQueue::<T>::take() else {
+			return (IsFinished::Yes, Weight::zero())
+		};
 		let len = old_queue.len();
 
 		log::debug!(
@@ -121,7 +123,8 @@ impl<T: Config> Migrate for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		let len = <u32 as Decode>::decode(&mut &state[..]).unwrap();
+		let len = <u32 as Decode>::decode(&mut &state[..])
+			.expect("pre_upgrade_step provides a valid state; qed");
 		let counter = <DeletionQueueCounter<T>>::get();
 		ensure!(counter.insert_counter == len, "invalid insert counter");
 		ensure!(counter.delete_counter == 0, "invalid delete counter");

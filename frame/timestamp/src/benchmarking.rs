@@ -20,9 +20,10 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::v1::{benchmarks, TrackedStorageKey};
+use frame_benchmarking::v1::benchmarks;
 use frame_support::{ensure, traits::OnFinalize};
 use frame_system::RawOrigin;
+use sp_storage::TrackedStorageKey;
 
 use crate::Pallet as Timestamp;
 

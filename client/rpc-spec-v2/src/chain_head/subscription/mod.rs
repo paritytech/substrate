@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use futures::channel::oneshot;
 use parking_lot::RwLock;
 use sc_client_api::Backend;
 use sp_runtime::traits::Block as BlockT;
@@ -25,9 +24,11 @@ use std::{sync::Arc, time::Duration};
 mod error;
 mod inner;
 
+use self::inner::SubscriptionsInner;
+
+pub use self::inner::OperationState;
 pub use error::SubscriptionManagementError;
-pub use inner::BlockGuard;
-use inner::SubscriptionsInner;
+pub use inner::{BlockGuard, InsertedSubscriptionData};
 
 /// Manage block pinning / unpinning for subscription IDs.
 pub struct SubscriptionManagement<Block: BlockT, BE: Backend<Block>> {
@@ -41,12 +42,14 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionManagement<Block, BE> {
 	pub fn new(
 		global_max_pinned_blocks: usize,
 		local_max_pin_duration: Duration,
+		max_ongoing_operations: usize,
 		backend: Arc<BE>,
 	) -> Self {
 		SubscriptionManagement {
 			inner: RwLock::new(SubscriptionsInner::new(
 				global_max_pinned_blocks,
 				local_max_pin_duration,
+				max_ongoing_operations,
 				backend,
 			)),
 		}
@@ -61,7 +64,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionManagement<Block, BE> {
 		&self,
 		sub_id: String,
 		runtime_updates: bool,
-	) -> Option<oneshot::Receiver<()>> {
+	) -> Option<InsertedSubscriptionData<Block>> {
 		let mut inner = self.inner.write();
 		inner.insert_subscription(sub_id, runtime_updates)
 	}
@@ -111,15 +114,24 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionManagement<Block, BE> {
 
 	/// Ensure the block remains pinned until the return object is dropped.
 	///
-	/// Returns a [`BlockGuard`] that pins and unpins the block hash in RAII manner.
-	/// Returns an error if the block hash is not pinned for the subscription or
-	/// the subscription ID is invalid.
+	/// Returns a [`BlockGuard`] that pins and unpins the block hash in RAII manner
+	/// and reserves capacity for ogoing operations.
+	///
+	/// Returns an error if the block hash is not pinned for the subscription,
+	/// the subscription ID is invalid or the limit of ongoing operations was exceeded.
 	pub fn lock_block(
 		&self,
 		sub_id: &str,
 		hash: Block::Hash,
+		to_reserve: usize,
 	) -> Result<BlockGuard<Block, BE>, SubscriptionManagementError> {
 		let mut inner = self.inner.write();
-		inner.lock_block(sub_id, hash)
+		inner.lock_block(sub_id, hash, to_reserve)
+	}
+
+	/// Get the operation state.
+	pub fn get_operation(&self, sub_id: &str, operation_id: &str) -> Option<OperationState> {
+		let mut inner = self.inner.write();
+		inner.get_operation(sub_id, operation_id)
 	}
 }

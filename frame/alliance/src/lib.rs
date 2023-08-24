@@ -94,6 +94,7 @@ pub mod migration;
 mod types;
 pub mod weights;
 
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 use sp_runtime::{
@@ -103,13 +104,11 @@ use sp_runtime::{
 use sp_std::{convert::TryInto, prelude::*};
 
 use frame_support::{
-	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, GetDispatchInfo,
 		PostDispatchInfo,
 	},
 	ensure,
-	scale_info::TypeInfo,
 	traits::{
 		ChangeMembers, Currency, Get, InitializeMembers, IsSubType, OnUnbalanced,
 		ReservableCurrency,
@@ -117,6 +116,7 @@ use frame_support::{
 	weights::Weight,
 };
 use pallet_identity::IdentityField;
+use scale_info::TypeInfo;
 
 pub use pallet::*;
 pub use types::*;
@@ -309,7 +309,7 @@ pub mod pallet {
 
 		/// The number of blocks a member must wait between giving a retirement notice and retiring.
 		/// Supposed to be greater than time required to `kick_member`.
-		type RetirementPeriod: Get<Self::BlockNumber>;
+		type RetirementPeriod: Get<BlockNumberFor<Self>>;
 	}
 
 	#[pallet::error]
@@ -405,11 +405,12 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub fellows: Vec<T::AccountId>,
 		pub allies: Vec<T::AccountId>,
+		#[serde(skip)]
 		pub phantom: PhantomData<(T, I)>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			for m in self.fellows.iter().chain(self.allies.iter()) {
 				assert!(Pallet::<T, I>::has_identity(m).is_ok(), "Member does not set identity!");
@@ -476,7 +477,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn retiring_members)]
 	pub type RetiringMembers<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, T::AccountId, BlockNumberFor<T>, OptionQuery>;
 
 	/// The current list of accounts deemed unscrupulous. These accounts non grata cannot submit
 	/// candidacy.

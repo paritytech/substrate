@@ -37,6 +37,10 @@ pub mod mock;
 mod tests;
 
 mod common_functions;
+/// A library providing the feature set of this pallet. It contains modules with helper methods that
+/// perform storage updates and checks required by this pallet's dispatchables. To use pallet level
+/// features, make sure to set appropriate bitflags for [`Config::Features`] in your runtime
+/// configuration trait.
 mod features;
 mod impl_nonfungibles;
 mod types;
@@ -46,7 +50,8 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::traits::{
-	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, Incrementable,
+	ReservableCurrency,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -62,6 +67,7 @@ pub use weights::WeightInfo;
 /// The log target of this pallet.
 pub const LOG_TARGET: &'static str = "runtime::nfts";
 
+/// A type alias for the account ID type used in the dispatchable functions of this pallet.
 type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
@@ -100,6 +106,14 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Identifier for the collection of item.
+		///
+		/// SAFETY: The functions in the `Incrementable` trait are fallible. If the functions
+		/// of the implementation both return `None`, the automatic CollectionId generation
+		/// should not be used. So the `create` and `force_create` extrinsics and the
+		/// `create_collection` function will return an `UnknownCollection` Error. Instead use
+		/// the `create_collection_with_id` function. However, if the `Incrementable` trait
+		/// implementation has an incremental order, the `create_collection_with_id` function
+		/// should not be used as it can claim a value in the ID sequence.
 		type CollectionId: Member + Parameter + MaxEncodedLen + Copy + Incrementable;
 
 		/// The type used to identify a unique item within a collection.
@@ -170,7 +184,7 @@ pub mod pallet {
 
 		/// The max duration in blocks for deadlines.
 		#[pallet::constant]
-		type MaxDeadlineDuration: Get<<Self as SystemConfig>::BlockNumber>;
+		type MaxDeadlineDuration: Get<BlockNumberFor<Self>>;
 
 		/// The max number of attributes a user could set per call.
 		#[pallet::constant]
@@ -342,7 +356,7 @@ pub mod pallet {
 			T::CollectionId,
 			T::ItemId,
 			PriceWithDirection<ItemPrice<T, I>>,
-			<T as SystemConfig>::BlockNumber,
+			BlockNumberFor<T>,
 		>,
 		OptionQuery,
 	>;
@@ -413,7 +427,7 @@ pub mod pallet {
 			item: T::ItemId,
 			owner: T::AccountId,
 			delegate: T::AccountId,
-			deadline: Option<<T as SystemConfig>::BlockNumber>,
+			deadline: Option<BlockNumberFor<T>>,
 		},
 		/// An approval for a `delegate` account to transfer the `item` of an item
 		/// `collection` was cancelled by its `owner`.
@@ -475,7 +489,7 @@ pub mod pallet {
 		/// Mint settings for a collection had changed.
 		CollectionMintSettingsUpdated { collection: T::CollectionId },
 		/// Event gets emitted when the `NextCollectionId` gets incremented.
-		NextCollectionIdIncremented { next_id: T::CollectionId },
+		NextCollectionIdIncremented { next_id: Option<T::CollectionId> },
 		/// The price was set for the item.
 		ItemPriceSet {
 			collection: T::CollectionId,
@@ -508,7 +522,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			desired_item: Option<T::ItemId>,
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			deadline: <T as SystemConfig>::BlockNumber,
+			deadline: BlockNumberFor<T>,
 		},
 		/// The swap was cancelled.
 		SwapCancelled {
@@ -517,7 +531,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			desired_item: Option<T::ItemId>,
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			deadline: <T as SystemConfig>::BlockNumber,
+			deadline: BlockNumberFor<T>,
 		},
 		/// The swap has been claimed.
 		SwapClaimed {
@@ -528,7 +542,7 @@ pub mod pallet {
 			received_item: T::ItemId,
 			received_item_owner: T::AccountId,
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			deadline: <T as SystemConfig>::BlockNumber,
+			deadline: BlockNumberFor<T>,
 		},
 		/// New attributes have been set for an `item` of the `collection`.
 		PreSignedAttributesSet {
@@ -648,7 +662,7 @@ pub mod pallet {
 		///
 		/// The origin must be Signed and the sender must have sufficient funds free.
 		///
-		/// `ItemDeposit` funds of sender are reserved.
+		/// `CollectionDeposit` funds of sender are reserved.
 		///
 		/// Parameters:
 		/// - `admin`: The admin of this collection. The admin is the initial address of each
@@ -664,8 +678,9 @@ pub mod pallet {
 			admin: AccountIdLookupOf<T>,
 			config: CollectionConfigFor<T, I>,
 		) -> DispatchResult {
-			let collection =
-				NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value());
+			let collection = NextCollectionId::<T, I>::get()
+				.or(T::CollectionId::initial_value())
+				.ok_or(Error::<T, I>::UnknownCollection)?;
 
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
 			let admin = T::Lookup::lookup(admin)?;
@@ -683,7 +698,10 @@ pub mod pallet {
 				config,
 				T::CollectionDeposit::get(),
 				Event::Created { collection, creator: owner, owner: admin },
-			)
+			)?;
+
+			Self::set_next_collection_id(collection);
+			Ok(())
 		}
 
 		/// Issue a new collection of non-fungible items from a privileged origin.
@@ -711,8 +729,9 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			let collection =
-				NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value());
+			let collection = NextCollectionId::<T, I>::get()
+				.or(T::CollectionId::initial_value())
+				.ok_or(Error::<T, I>::UnknownCollection)?;
 
 			Self::do_create_collection(
 				collection,
@@ -721,7 +740,10 @@ pub mod pallet {
 				config,
 				Zero::zero(),
 				Event::ForceCreated { collection, owner },
-			)
+			)?;
+
+			Self::set_next_collection_id(collection);
+			Ok(())
 		}
 
 		/// Destroy a collection of fungible items.
@@ -822,6 +844,7 @@ pub mod pallet {
 						MintType::HolderOf(collection_id) => {
 							let MintWitness { owned_item, .. } =
 								witness_data.clone().ok_or(Error::<T, I>::WitnessRequired)?;
+							let owned_item = owned_item.ok_or(Error::<T, I>::BadWitness)?;
 
 							let owns_item = Account::<T, I>::contains_key((
 								&caller,
@@ -1235,7 +1258,7 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			delegate: AccountIdLookupOf<T>,
-			maybe_deadline: Option<<T as SystemConfig>::BlockNumber>,
+			maybe_deadline: Option<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -1658,11 +1681,7 @@ pub mod pallet {
 		pub fn update_mint_settings(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			mint_settings: MintSettings<
-				BalanceOf<T, I>,
-				<T as SystemConfig>::BlockNumber,
-				T::CollectionId,
-			>,
+			mint_settings: MintSettings<BalanceOf<T, I>, BlockNumberFor<T>, T::CollectionId>,
 		) -> DispatchResult {
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -1758,7 +1777,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			maybe_desired_item: Option<T::ItemId>,
 			maybe_price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			duration: <T as SystemConfig>::BlockNumber,
+			duration: BlockNumberFor<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::do_create_swap(

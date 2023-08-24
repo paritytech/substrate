@@ -32,10 +32,10 @@ use sp_api::{
 	ApiExt, ApiRef, Core, ProvideRuntimeApi, StorageChanges, StorageProof, TransactionOutcome,
 };
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
-use sp_core::ExecutionContext;
+use sp_core::traits::CallContext;
 use sp_runtime::{
 	legacy,
-	traits::{Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
+	traits::{Block as BlockT, Hash, HashingFor, Header as HeaderT, NumberFor, One},
 	Digest,
 };
 
@@ -85,20 +85,18 @@ impl From<bool> for RecordProof {
 /// backend to get the state of the block. Furthermore an optional `proof` is included which
 /// can be used to proof that the build block contains the expected data. The `proof` will
 /// only be set when proof recording was activated.
-pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>> {
+pub struct BuiltBlock<Block: BlockT> {
 	/// The actual block that was build.
 	pub block: Block,
 	/// The changes that need to be applied to the backend to get the state of the build block.
-	pub storage_changes: StorageChanges<StateBackend, Block>,
+	pub storage_changes: StorageChanges<Block>,
 	/// An optional proof that was recorded while building the block.
 	pub proof: Option<StorageProof>,
 }
 
-impl<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>>
-	BuiltBlock<Block, StateBackend>
-{
+impl<Block: BlockT> BuiltBlock<Block> {
 	/// Convert into the inner values.
-	pub fn into_inner(self) -> (Block, StorageChanges<StateBackend, Block>, Option<StorageProof>) {
+	pub fn into_inner(self) -> (Block, StorageChanges<Block>, Option<StorageProof>) {
 		(self.block, self.storage_changes, self.proof)
 	}
 }
@@ -145,8 +143,7 @@ impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
 where
 	Block: BlockT,
 	A: ProvideRuntimeApi<Block> + 'a,
-	A::Api:
-		BlockBuilderApi<Block> + ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
+	A::Api: BlockBuilderApi<Block> + ApiExt<Block>,
 	B: backend::Backend<Block>,
 {
 	/// Create a new instance of builder based on the given `parent_hash` and `parent_number`.
@@ -178,11 +175,9 @@ where
 			api.record_proof();
 		}
 
-		api.initialize_block_with_context(
-			parent_hash,
-			ExecutionContext::BlockConstruction,
-			&header,
-		)?;
+		api.set_call_context(CallContext::Onchain);
+
+		api.initialize_block(parent_hash, &header)?;
 
 		let version = api
 			.api_version::<dyn BlockBuilderApi<Block>>(parent_hash)?
@@ -209,18 +204,10 @@ where
 		self.api.execute_in_transaction(|api| {
 			let res = if version < 6 {
 				#[allow(deprecated)]
-				api.apply_extrinsic_before_version_6_with_context(
-					parent_hash,
-					ExecutionContext::BlockConstruction,
-					xt.clone(),
-				)
-				.map(legacy::byte_sized_error::convert_to_latest)
+				api.apply_extrinsic_before_version_6(parent_hash, xt.clone())
+					.map(legacy::byte_sized_error::convert_to_latest)
 			} else {
-				api.apply_extrinsic_with_context(
-					parent_hash,
-					ExecutionContext::BlockConstruction,
-					xt.clone(),
-				)
+				api.apply_extrinsic(parent_hash, xt.clone())
 			};
 
 			match res {
@@ -241,14 +228,12 @@ where
 	/// Returns the build `Block`, the changes to the storage and an optional `StorageProof`
 	/// supplied by `self.api`, combined as [`BuiltBlock`].
 	/// The storage proof will be `Some(_)` when proof recording was enabled.
-	pub fn build(mut self) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
-		let header = self
-			.api
-			.finalize_block_with_context(self.parent_hash, ExecutionContext::BlockConstruction)?;
+	pub fn build(mut self) -> Result<BuiltBlock<Block>, Error> {
+		let header = self.api.finalize_block(self.parent_hash)?;
 
 		debug_assert_eq!(
 			header.extrinsics_root().clone(),
-			HashFor::<Block>::ordered_trie_root(
+			HashingFor::<Block>::ordered_trie_root(
 				self.extrinsics.iter().map(Encode::encode).collect(),
 				sp_runtime::StateVersion::V0,
 			),
@@ -282,11 +267,7 @@ where
 			.execute_in_transaction(move |api| {
 				// `create_inherents` should not change any state, to ensure this we always rollback
 				// the transaction.
-				TransactionOutcome::Rollback(api.inherent_extrinsics_with_context(
-					parent_hash,
-					ExecutionContext::BlockConstruction,
-					inherent_data,
-				))
+				TransactionOutcome::Rollback(api.inherent_extrinsics(parent_hash, inherent_data))
 			})
 			.map_err(|e| Error::Application(Box::new(e)))
 	}

@@ -17,11 +17,10 @@
 
 //! Traits for encoding data related to pallet's storage items.
 
-use crate::sp_std::collections::btree_set::BTreeSet;
 use impl_trait_for_tuples::impl_for_tuples;
 pub use sp_core::storage::TrackedStorageKey;
-use sp_runtime::traits::Saturating;
-use sp_std::prelude::*;
+use sp_runtime::{traits::Saturating, RuntimeDebug};
+use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 
 /// An instance of a pallet in the storage.
 ///
@@ -35,6 +34,12 @@ pub trait Instance: 'static {
 	const PREFIX: &'static str;
 	/// Unique numerical identifier for an instance.
 	const INDEX: u8;
+}
+
+// Dummy implementation for `()`.
+impl Instance for () {
+	const PREFIX: &'static str = "";
+	const INDEX: u8 = 0;
 }
 
 /// An instance of a storage in a pallet.
@@ -55,7 +60,7 @@ pub trait StorageInstance {
 
 /// Metadata about storage from the runtime.
 #[derive(
-	codec::Encode, codec::Decode, crate::RuntimeDebug, Eq, PartialEq, Clone, scale_info::TypeInfo,
+	codec::Encode, codec::Decode, RuntimeDebug, Eq, PartialEq, Clone, scale_info::TypeInfo,
 )]
 pub struct StorageInfo {
 	/// Encoded string of pallet name.
@@ -126,24 +131,37 @@ macro_rules! impl_incrementable {
 	($($type:ty),+) => {
 		$(
 			impl Incrementable for $type {
-				fn increment(&self) -> Self {
+				fn increment(&self) -> Option<Self> {
 					let mut val = self.clone();
 					val.saturating_inc();
-					val
+					Some(val)
 				}
 
-				fn initial_value() -> Self {
-					0
+				fn initial_value() -> Option<Self> {
+					Some(0)
 				}
 			}
 		)+
 	};
 }
 
-/// For example: allows new identifiers to be created in a linear fashion.
-pub trait Incrementable {
-	fn increment(&self) -> Self;
-	fn initial_value() -> Self;
+/// A trait representing an incrementable type.
+///
+/// The `increment` and `initial_value` functions are fallible.
+/// They should either both return `Some` with a valid value, or `None`.
+pub trait Incrementable
+where
+	Self: Sized,
+{
+	/// Increments the value.
+	///
+	/// Returns `Some` with the incremented value if it is possible, or `None` if it is not.
+	fn increment(&self) -> Option<Self>;
+
+	/// Returns the initial value.
+	///
+	/// Returns `Some` with the initial value if it is available, or `None` if it is not.
+	fn initial_value() -> Option<Self>;
 }
 
 impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);

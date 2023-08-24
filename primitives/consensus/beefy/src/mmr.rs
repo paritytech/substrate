@@ -26,7 +26,7 @@
 //! but we imagine they will be useful for other chains that either want to bridge with Polkadot
 //! or are completely standalone, but heavily inspired by Polkadot.
 
-use crate::{crypto::AuthorityId, ConsensusLog, MmrRootHash, Vec, BEEFY_ENGINE_ID};
+use crate::{ecdsa_crypto::AuthorityId, ConsensusLog, MmrRootHash, Vec, BEEFY_ENGINE_ID};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -102,7 +102,7 @@ impl MmrLeafVersion {
 /// Details of a BEEFY authority set.
 #[derive(Debug, Default, PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct BeefyAuthoritySet<MerkleRoot> {
+pub struct BeefyAuthoritySet<AuthoritySetCommitment> {
 	/// Id of the set.
 	///
 	/// Id is required to correlate BEEFY signed commitments with the validator set.
@@ -115,12 +115,19 @@ pub struct BeefyAuthoritySet<MerkleRoot> {
 	/// of signatures. We put set length here, so that these clients can verify the minimal
 	/// number of required signatures.
 	pub len: u32,
-	/// Merkle Root Hash built from BEEFY AuthorityIds.
+
+	/// Commitment(s) to BEEFY AuthorityIds.
 	///
 	/// This is used by Light Clients to confirm that the commitments are signed by the correct
 	/// validator set. Light Clients using interactive protocol, might verify only subset of
 	/// signatures, hence don't require the full list here (will receive inclusion proofs).
-	pub root: MerkleRoot,
+	///
+	/// This could be Merkle Root Hash built from BEEFY ECDSA public keys and/or
+	/// polynomial commitment to the polynomial interpolating BLS public keys
+	/// which is used by APK proof based light clients to verify the validity
+	/// of aggregated BLS keys using APK proofs.
+	/// Multiple commitments can be tupled together.
+	pub keyset_commitment: AuthoritySetCommitment,
 }
 
 /// Details of the next BEEFY authority set.

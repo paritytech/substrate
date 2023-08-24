@@ -40,10 +40,10 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	log,
 	traits::{DisabledValidators, FindAuthor, Get, OnTimestampSet, OneSessionHandler},
 	BoundedSlice, BoundedVec, ConsensusEngineId, Parameter,
 };
+use log;
 use sp_consensus_aura::{AuthorityIndex, ConsensusLog, Slot, AURA_ENGINE_ID};
 use sp_runtime::{
 	generic::DigestItem,
@@ -59,6 +59,23 @@ mod tests;
 pub use pallet::*;
 
 const LOG_TARGET: &str = "runtime::aura";
+
+/// A slot duration provider which infers the slot duration from the
+/// [`pallet_timestamp::Config::MinimumPeriod`] by multiplying it by two, to ensure
+/// that authors have the majority of their slot to author within.
+///
+/// This was the default behavior of the Aura pallet and may be used for
+/// backwards compatibility.
+///
+/// Note that this type is likely not useful without the `experimental`
+/// feature.
+pub struct MinimumPeriodTimesTwo<T>(sp_std::marker::PhantomData<T>);
+
+impl<T: pallet_timestamp::Config> Get<T::Moment> for MinimumPeriodTimesTwo<T> {
+	fn get() -> T::Moment {
+		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
+	}
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -81,6 +98,30 @@ pub mod pallet {
 		/// Blocks authored by a disabled validator will lead to a panic as part of this module's
 		/// initialization.
 		type DisabledValidators: DisabledValidators;
+
+		/// Whether to allow block authors to create multiple blocks per slot.
+		///
+		/// If this is `true`, the pallet will allow slots to stay the same across sequential
+		/// blocks. If this is `false`, the pallet will require that subsequent blocks always have
+		/// higher slots than previous ones.
+		///
+		/// Regardless of the setting of this storage value, the pallet will always enforce the
+		/// invariant that slots don't move backwards as the chain progresses.
+		///
+		/// The typical value for this should be 'false' unless this pallet is being augmented by
+		/// another pallet which enforces some limitation on the number of blocks authors can create
+		/// using the same slot.
+		type AllowMultipleBlocksPerSlot: Get<bool>;
+
+		/// The slot duration Aura should run with, expressed in milliseconds.
+		/// The effective value of this type should not change while the chain is running.
+		///
+		/// For backwards compatibility either use [`MinimumPeriodTimesTwo`] or a const.
+		///
+		/// This associated type is only present when compiled with the `experimental`
+		/// feature.
+		#[cfg(feature = "experimental")]
+		type SlotDuration: Get<<Self as pallet_timestamp::Config>::Moment>;
 	}
 
 	#[pallet::pallet]
@@ -88,11 +129,16 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_: T::BlockNumber) -> Weight {
+		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			if let Some(new_slot) = Self::current_slot_from_digests() {
 				let current_slot = CurrentSlot::<T>::get();
 
-				assert!(current_slot < new_slot, "Slot must increase");
+				if T::AllowMultipleBlocksPerSlot::get() {
+					assert!(current_slot <= new_slot, "Slot must not decrease");
+				} else {
+					assert!(current_slot < new_slot, "Slot must increase");
+				}
+
 				CurrentSlot::<T>::put(new_slot);
 
 				if let Some(n_authorities) = <Authorities<T>>::decode_len() {
@@ -112,6 +158,11 @@ pub mod pallet {
 			} else {
 				T::DbWeight::get().reads(1)
 			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_: BlockNumberFor<T>) -> Result<(), sp_runtime::TryRuntimeError> {
+			Self::do_try_state()
 		}
 	}
 
@@ -135,7 +186,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			Pallet::<T>::initialize_authorities(&self.authorities);
 		}
@@ -194,9 +245,66 @@ impl<T: Config> Pallet<T> {
 
 	/// Determine the Aura slot-duration based on the Timestamp module configuration.
 	pub fn slot_duration() -> T::Moment {
-		// we double the minimum block-period so each author can always propose within
-		// the majority of its slot.
-		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
+		#[cfg(feature = "experimental")]
+		{
+			T::SlotDuration::get()
+		}
+
+		#[cfg(not(feature = "experimental"))]
+		{
+			// we double the minimum block-period so each author can always propose within
+			// the majority of its slot.
+			<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
+		}
+	}
+
+	/// Ensure the correctness of the state of this pallet.
+	///
+	/// This should be valid before or after each state transition of this pallet.
+	///
+	/// # Invariants
+	///
+	/// ## `CurrentSlot`
+	///
+	/// If we don't allow for multiple blocks per slot, then the current slot must be less than the
+	/// maximal slot number. Otherwise, it can be arbitrary.
+	///
+	/// ## `Authorities`
+	///
+	/// * The authorities must be non-empty.
+	/// * The current authority cannot be disabled.
+	/// * The number of authorities must be less than or equal to `T::MaxAuthorities`. This however,
+	///   is guarded by the type system.
+	#[cfg(any(test, feature = "try-runtime"))]
+	pub fn do_try_state() -> Result<(), sp_runtime::TryRuntimeError> {
+		// We don't have any guarantee that we are already after `on_initialize` and thus we have to
+		// check the current slot from the digest or take the last known slot.
+		let current_slot =
+			Self::current_slot_from_digests().unwrap_or_else(|| CurrentSlot::<T>::get());
+
+		// Check that the current slot is less than the maximal slot number, unless we allow for
+		// multiple blocks per slot.
+		if !T::AllowMultipleBlocksPerSlot::get() {
+			frame_support::ensure!(
+				current_slot < u64::MAX,
+				"Current slot has reached maximum value and cannot be incremented further.",
+			);
+		}
+
+		let authorities_len =
+			<Authorities<T>>::decode_len().ok_or("Failed to decode authorities length")?;
+
+		// Check that the authorities are non-empty.
+		frame_support::ensure!(!authorities_len.is_zero(), "Authorities must be non-empty.");
+
+		// Check that the current authority is not disabled.
+		let authority_index = *current_slot % authorities_len as u64;
+		frame_support::ensure!(
+			!T::DisabledValidators::is_disabled(authority_index as u32),
+			"Current validator is disabled and should not be attempting to author blocks.",
+		);
+
+		Ok(())
 	}
 }
 

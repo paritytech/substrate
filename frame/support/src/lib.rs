@@ -32,55 +32,42 @@
 /// Export ourself as `frame_support` to make tests happy.
 extern crate self as frame_support;
 
+/// Private exports that are being used by macros.
+///
+/// The exports are not stable and should not be relied on.
 #[doc(hidden)]
-pub use sp_tracing;
-
-#[doc(hidden)]
-pub use codec;
-#[doc(hidden)]
-pub use frame_metadata as metadata;
-#[doc(hidden)]
-pub use log;
-#[cfg(feature = "std")]
-#[doc(hidden)]
-pub use once_cell;
-#[doc(hidden)]
-pub use paste;
-#[doc(hidden)]
-pub use scale_info;
-pub use serde;
-pub use sp_api::metadata_ir;
-pub use sp_core::{OpaqueMetadata, Void};
-#[doc(hidden)]
-pub use sp_core_hashing_proc_macro;
-#[doc(hidden)]
-pub use sp_io::{self, storage::root as storage_root};
-#[cfg(feature = "std")]
-#[doc(hidden)]
-pub use sp_runtime::{bounded_btree_map, bounded_vec};
-#[doc(hidden)]
-pub use sp_runtime::{RuntimeDebug, StateVersion};
-#[cfg(feature = "std")]
-#[doc(hidden)]
-pub use sp_state_machine::BasicExternalities;
-#[doc(hidden)]
-pub use sp_std;
-#[doc(hidden)]
-pub use tt_call::*;
+pub mod __private {
+	pub use codec;
+	pub use frame_metadata as metadata;
+	pub use log;
+	pub use paste;
+	pub use scale_info;
+	pub use serde;
+	pub use sp_core::{OpaqueMetadata, Void};
+	pub use sp_core_hashing_proc_macro;
+	pub use sp_io::{self, storage::root as storage_root};
+	pub use sp_metadata_ir as metadata_ir;
+	#[cfg(feature = "std")]
+	pub use sp_runtime::{bounded_btree_map, bounded_vec};
+	pub use sp_runtime::{RuntimeDebug, StateVersion};
+	#[cfg(feature = "std")]
+	pub use sp_state_machine::BasicExternalities;
+	pub use sp_std;
+	pub use sp_tracing;
+	pub use tt_call::*;
+}
 
 #[macro_use]
 pub mod dispatch;
-mod hash;
-pub mod storage;
-#[macro_use]
-pub mod event;
-pub mod inherent;
-#[macro_use]
-pub mod error;
 pub mod crypto;
 pub mod dispatch_context;
+mod hash;
+pub mod inherent;
 pub mod instances;
 pub mod migrations;
+pub mod storage;
+#[cfg(test)]
+mod tests;
 pub mod traits;
 pub mod weights;
 #[doc(hidden)]
@@ -134,83 +121,52 @@ impl TypeId for PalletId {
 	const TYPE_ID: [u8; 4] = *b"modl";
 }
 
-/// Generate a new type alias for [`storage::types::StorageValue`],
-/// [`storage::types::StorageMap`], [`storage::types::StorageDoubleMap`]
-/// and [`storage::types::StorageNMap`].
+/// Generate a [`#[pallet::storage]`](pallet_macros::storage) alias outside of a pallet.
 ///
-/// Useful for creating a *storage-like* struct for test and migrations.
+/// This storage alias works similarly to the [`#[pallet::storage]`](pallet_macros::storage)
+/// attribute macro. It supports [`StorageValue`](storage::types::StorageValue),
+/// [`StorageMap`](storage::types::StorageMap),
+/// [`StorageDoubleMap`](storage::types::StorageDoubleMap) and
+/// [`StorageNMap`](storage::types::StorageNMap). The main difference to the normal
+/// [`#[pallet::storage]`](pallet_macros::storage) is the flexibility around declaring the
+/// storage prefix to use. The storage prefix determines where to find the value in the
+/// storage. [`#[pallet::storage]`](pallet_macros::storage) uses the name of the pallet as
+/// declared in [`construct_runtime!`].
 ///
-/// ```
-/// # use frame_support::storage_alias;
-/// use frame_support::codec;
-/// use frame_support::Twox64Concat;
-/// // generate a storage value with type u32.
-/// #[storage_alias]
-/// type StorageName = StorageValue<Prefix, u32>;
+/// The flexibility around declaring the storage prefix makes this macro very useful for
+/// writing migrations etc.
 ///
-/// // generate a double map from `(u32, u32)` (with hashers `Twox64Concat` for each key)
-/// // to `Vec<u8>`
-/// #[storage_alias]
-/// type OtherStorageName = StorageDoubleMap<
-/// 	OtherPrefix,
-/// 	Twox64Concat,
-/// 	u32,
-/// 	Twox64Concat,
-/// 	u32,
-/// 	Vec<u8>,
-/// >;
+/// # Examples
 ///
-/// // optionally specify the query type
-/// use frame_support::pallet_prelude::{ValueQuery, OptionQuery};
-/// #[storage_alias]
-/// type ValueName = StorageValue<Prefix, u32, OptionQuery>;
-/// #[storage_alias]
-/// type SomeStorageName = StorageMap<
-/// 	Prefix,
-/// 	Twox64Concat,
-/// 	u32,
-/// 	Vec<u8>,
-/// 	ValueQuery,
-/// >;
+/// There are different ways to declare the `prefix` to use. The `prefix` type can either be
+/// declared explicetly by passing it to the macro as an attribute or by letting the macro
+/// guess on what the `prefix` type is. The `prefix` is always passed as the first generic
+/// argument to the type declaration. When using [`#[pallet::storage]`](pallet_macros::storage)
+/// this first generic argument is always `_`. Besides declaring the `prefix`, the rest of the
+/// type declaration works as with [`#[pallet::storage]`](pallet_macros::storage).
 ///
-/// // generate a map from `Config::AccountId` (with hasher `Twox64Concat`) to `Vec<u8>`
-/// trait Config { type AccountId: codec::FullCodec; }
-/// #[storage_alias]
-/// type GenericStorage<T> = StorageMap<Prefix, Twox64Concat, <T as Config>::AccountId, Vec<u8>>;
+/// 1. Use the `verbatim` prefix type. This prefix type uses the given identifier as the
+/// `prefix`:
+#[doc = docify::embed!("src/tests/storage_alias.rs", verbatim_attribute)]
 ///
-/// // It also supports NMap
-/// use frame_support::storage::types::Key as NMapKey;
+/// 2. Use the `pallet_name` prefix type. This prefix type uses the name of the pallet as
+/// configured in    [`construct_runtime!`] as the `prefix`:
+#[doc = docify::embed!("src/tests/storage_alias.rs", pallet_name_attribute)]
+/// It requires that the given prefix type implements
+/// [`PalletInfoAccess`](traits::PalletInfoAccess) (which is always the case for FRAME pallet
+/// structs). In the example above, `Pallet<T>` is the prefix type.
 ///
-/// #[storage_alias]
-/// type SomeNMap = StorageNMap<Prefix, (NMapKey<Twox64Concat, u32>, NMapKey<Twox64Concat, u64>), Vec<u8>>;
+/// 3. Use the `dynamic` prefix type. This prefix type calls [`Get::get()`](traits::Get::get)
+///    to get the `prefix`:
+#[doc = docify::embed!("src/tests/storage_alias.rs", dynamic_attribute)]
+/// It requires that the given prefix type implements [`Get<'static str>`](traits::Get).
 ///
-/// // Using pallet name as prefix.
-/// //
-/// // When the first generic argument is taking generic arguments it is expected to be a pallet.
-/// // The prefix will then be the pallet name as configured in the runtime through
-/// // `construct_runtime!`.
-///
-/// # struct Pallet<T: Config, I = ()>(std::marker::PhantomData<(T, I)>);
-/// # impl<T: Config, I: 'static> frame_support::traits::PalletInfoAccess for Pallet<T, I> {
-/// # 	fn index() -> usize { 0 }
-/// # 	fn name() -> &'static str { "pallet" }
-/// # 	fn module_name() -> &'static str { "module" }
-/// # 	fn crate_version() -> frame_support::traits::CrateVersion { unimplemented!() }
-/// # }
-///
-/// #[storage_alias]
-/// type SomeValue<T: Config> = StorageValue<Pallet<T>, u64>;
-///
-/// // Pallet with instance
-///
-/// #[storage_alias]
-/// type SomeValue2<T: Config, I: 'static> = StorageValue<Pallet<T, I>, u64>;
-///
-/// # fn main() {}
-/// ```
+/// 4. Let the macro "guess" what kind of prefix type to use. This only supports verbatim or
+///    pallet name. The macro uses the presence of generic arguments to the prefix type as an
+///    indication that it should use the pallet name as the `prefix`:
+#[doc = docify::embed!("src/tests/storage_alias.rs", storage_alias_guess)]
 pub use frame_support_procedural::storage_alias;
 
-#[macro_magic::use_attr]
 pub use frame_support_procedural::derive_impl;
 
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.
@@ -291,7 +247,7 @@ macro_rules! parameter_types {
 	) => (
 		$( #[ $attr ] )*
 		$vis struct $name $(
-			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
+			< $($ty_params),* >( $($crate::__private::sp_std::marker::PhantomData<$ty_params>),* )
 		)?;
 		$crate::parameter_types!(IMPL_CONST $name , $type , $value $( $(, $ty_params)* )?);
 		$crate::parameter_types!( $( $rest )* );
@@ -303,7 +259,7 @@ macro_rules! parameter_types {
 	) => (
 		$( #[ $attr ] )*
 		$vis struct $name $(
-			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
+			< $($ty_params),* >( $($crate::__private::sp_std::marker::PhantomData<$ty_params>),* )
 		)?;
 		$crate::parameter_types!(IMPL $name, $type, $value $( $(, $ty_params)* )?);
 		$crate::parameter_types!( $( $rest )* );
@@ -315,7 +271,7 @@ macro_rules! parameter_types {
 	) => (
 		$( #[ $attr ] )*
 		$vis struct $name $(
-			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
+			< $($ty_params),* >( $($crate::__private::sp_std::marker::PhantomData<$ty_params>),* )
 		)?;
 		$crate::parameter_types!(IMPL_STORAGE $name, $type, $value $( $(, $ty_params)* )?);
 		$crate::parameter_types!( $( $rest )* );
@@ -368,7 +324,7 @@ macro_rules! parameter_types {
 		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the key for this parameter type.
 			pub fn key() -> [u8; 16] {
-				$crate::sp_core_hashing_proc_macro::twox_128!(b":", $name, b":")
+				$crate::__private::sp_core_hashing_proc_macro::twox_128!(b":", $name, b":")
 			}
 
 			/// Set the value of this parameter type in the storage.
@@ -433,7 +389,7 @@ macro_rules! parameter_types_impl_thread_local {
 		$crate::parameter_types_impl_thread_local!(
 			IMPL_THREAD_LOCAL $( $vis, $name, $type, $value, )*
 		);
-		$crate::paste::item! {
+		$crate::__private::paste::item! {
 			$crate::parameter_types!(
 				$(
 					$( #[ $attr ] )*
@@ -468,7 +424,7 @@ macro_rules! parameter_types_impl_thread_local {
 		}
 	};
 	(IMPL_THREAD_LOCAL $( $vis:vis, $name:ident, $type:ty, $value:expr, )* ) => {
-		$crate::paste::item! {
+		$crate::__private::paste::item! {
 			thread_local! {
 				$(
 					pub static [<$name:snake:upper>]: std::cell::RefCell<$type> =
@@ -498,7 +454,7 @@ macro_rules! ord_parameter_types {
 	(IMPL $name:ident , $type:ty , $value:expr) => {
 		impl $crate::traits::SortedMembers<$type> for $name {
 			fn contains(t: &$type) -> bool { &$value == t }
-			fn sorted_members() -> $crate::sp_std::prelude::Vec<$type> { vec![$value] }
+			fn sorted_members() -> $crate::__private::sp_std::prelude::Vec<$type> { vec![$value] }
 			fn count() -> usize { 1 }
 			#[cfg(feature = "runtime-benchmarks")]
 			fn add(_: &$type) {}
@@ -521,9 +477,9 @@ macro_rules! runtime_print {
 	($($arg:tt)+) => {
 		{
 			use core::fmt::Write;
-			let mut w = $crate::sp_std::Writer::default();
+			let mut w = $crate::__private::sp_std::Writer::default();
 			let _ = core::write!(&mut w, $($arg)+);
-			$crate::sp_io::misc::print_utf8(&w.inner())
+			$crate::__private::sp_io::misc::print_utf8(&w.inner())
 		}
 	}
 }
@@ -535,8 +491,7 @@ pub fn debug(data: &impl sp_std::fmt::Debug) {
 
 #[doc(inline)]
 pub use frame_support_procedural::{
-	construct_runtime, decl_storage, match_and_insert, transactional, PalletError,
-	RuntimeDebugNoBound,
+	construct_runtime, match_and_insert, transactional, PalletError, RuntimeDebugNoBound,
 };
 
 #[doc(hidden)]
@@ -721,9 +676,13 @@ macro_rules! assert_noop {
 		$x:expr,
 		$y:expr $(,)?
 	) => {
-		let h = $crate::storage_root($crate::StateVersion::V1);
+		let h = $crate::__private::storage_root($crate::__private::StateVersion::V1);
 		$crate::assert_err!($x, $y);
-		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1), "storage has been mutated");
+		assert_eq!(
+			h,
+			$crate::__private::storage_root($crate::__private::StateVersion::V1),
+			"storage has been mutated"
+		);
 	};
 }
 
@@ -736,9 +695,9 @@ macro_rules! assert_storage_noop {
 	(
 		$x:expr
 	) => {
-		let h = $crate::storage_root($crate::StateVersion::V1);
+		let h = $crate::__private::storage_root($crate::__private::StateVersion::V1);
 		$x;
-		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1));
+		assert_eq!(h, $crate::__private::storage_root($crate::__private::StateVersion::V1));
 	};
 }
 
@@ -827,702 +786,10 @@ pub use serde::{Deserialize, Serialize};
 #[cfg(not(no_std))]
 pub use macro_magic;
 
-#[cfg(test)]
-pub mod tests {
-	use super::*;
-	use crate::metadata_ir::{
-		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,
-		StorageEntryTypeIR, StorageHasherIR,
-	};
-	use sp_io::{MultiRemovalResults, TestExternalities};
-	use sp_runtime::{generic, traits::BlakeTwo256, BuildStorage};
-	use sp_std::result;
-
-	pub use self::frame_system::{Config, Pallet};
-
-	#[pallet]
-	pub mod frame_system {
-		#[allow(unused)]
-		use super::{frame_system, frame_system::pallet_prelude::*};
-		pub use crate::dispatch::RawOrigin;
-		use crate::pallet_prelude::*;
-
-		#[pallet::pallet]
-		pub struct Pallet<T>(PhantomData<T>);
-
-		#[pallet::config]
-		#[pallet::disable_frame_system_supertrait_check]
-		pub trait Config: 'static {
-			type BlockNumber: Parameter + Default + MaxEncodedLen;
-			type AccountId;
-			type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;
-			type RuntimeOrigin;
-			type RuntimeCall;
-			type PalletInfo: crate::traits::PalletInfo;
-			type DbWeight: Get<crate::weights::RuntimeDbWeight>;
-		}
-
-		#[pallet::error]
-		pub enum Error<T> {
-			/// Required by construct_runtime
-			CallFiltered,
-		}
-
-		#[pallet::origin]
-		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
-
-		#[pallet::call]
-		impl<T: Config> Pallet<T> {}
-
-		#[pallet::storage]
-		pub type Data<T> = StorageMap<_, Twox64Concat, u32, u64, ValueQuery>;
-
-		#[pallet::storage]
-		pub type OptionLinkedMap<T> = StorageMap<_, Blake2_128Concat, u32, u32, OptionQuery>;
-
-		#[pallet::storage]
-		#[pallet::getter(fn generic_data)]
-		pub type GenericData<T: Config> =
-			StorageMap<_, Identity, T::BlockNumber, T::BlockNumber, ValueQuery>;
-
-		#[pallet::storage]
-		#[pallet::getter(fn generic_data2)]
-		pub type GenericData2<T: Config> =
-			StorageMap<_, Blake2_128Concat, T::BlockNumber, T::BlockNumber, OptionQuery>;
-
-		#[pallet::storage]
-		pub type DataDM<T> =
-			StorageDoubleMap<_, Twox64Concat, u32, Blake2_128Concat, u32, u64, ValueQuery>;
-
-		#[pallet::storage]
-		pub type GenericDataDM<T: Config> = StorageDoubleMap<
-			_,
-			Blake2_128Concat,
-			T::BlockNumber,
-			Identity,
-			T::BlockNumber,
-			T::BlockNumber,
-			ValueQuery,
-		>;
-
-		#[pallet::storage]
-		pub type GenericData2DM<T: Config> = StorageDoubleMap<
-			_,
-			Blake2_128Concat,
-			T::BlockNumber,
-			Twox64Concat,
-			T::BlockNumber,
-			T::BlockNumber,
-			OptionQuery,
-		>;
-
-		#[pallet::storage]
-		#[pallet::unbounded]
-		pub type AppendableDM<T: Config> = StorageDoubleMap<
-			_,
-			Blake2_128Concat,
-			u32,
-			Blake2_128Concat,
-			T::BlockNumber,
-			Vec<u32>,
-			ValueQuery,
-		>;
-
-		#[pallet::genesis_config]
-		pub struct GenesisConfig {
-			pub data: Vec<(u32, u64)>,
-			pub test_config: Vec<(u32, u32, u64)>,
-		}
-
-		impl Default for GenesisConfig {
-			fn default() -> Self {
-				Self { data: vec![(15u32, 42u64)], test_config: vec![(15u32, 16u32, 42u64)] }
-			}
-		}
-
-		#[pallet::genesis_build]
-		impl<T: Config> GenesisBuild<T> for GenesisConfig {
-			fn build(&self) {
-				for (k, v) in &self.data {
-					<Data<T>>::insert(k, v);
-				}
-				for (k1, k2, v) in &self.test_config {
-					<DataDM<T>>::insert(k1, k2, v);
-				}
-			}
-		}
-
-		pub mod pallet_prelude {
-			pub type OriginFor<T> = <T as super::Config>::RuntimeOrigin;
-		}
-	}
-
-	type BlockNumber = u32;
-	type AccountId = u32;
-	type Header = generic::Header<BlockNumber, BlakeTwo256>;
-	type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
-	type Block = generic::Block<Header, UncheckedExtrinsic>;
-
-	crate::construct_runtime!(
-		pub enum Runtime
-		where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
-		{
-			System: self::frame_system,
-		}
-	);
-
-	impl Config for Runtime {
-		type BlockNumber = BlockNumber;
-		type AccountId = AccountId;
-		type BaseCallFilter = crate::traits::Everything;
-		type RuntimeOrigin = RuntimeOrigin;
-		type RuntimeCall = RuntimeCall;
-		type PalletInfo = PalletInfo;
-		type DbWeight = ();
-	}
-
-	fn new_test_ext() -> TestExternalities {
-		RuntimeGenesisConfig::default().build_storage().unwrap().into()
-	}
-
-	trait Sorted {
-		fn sorted(self) -> Self;
-	}
-
-	impl<T: Ord> Sorted for Vec<T> {
-		fn sorted(mut self) -> Self {
-			self.sort();
-			self
-		}
-	}
-
-	#[test]
-	fn storage_alias_works() {
-		new_test_ext().execute_with(|| {
-			#[crate::storage_alias]
-			type GenericData2<T> = StorageMap<
-				System,
-				Blake2_128Concat,
-				<T as Config>::BlockNumber,
-				<T as Config>::BlockNumber,
-			>;
-
-			assert_eq!(Pallet::<Runtime>::generic_data2(5), None);
-			GenericData2::<Runtime>::insert(5, 5);
-			assert_eq!(Pallet::<Runtime>::generic_data2(5), Some(5));
-
-			/// Some random docs that ensure that docs are accepted
-			#[crate::storage_alias]
-			pub type GenericData<T> = StorageMap<
-				Test2,
-				Blake2_128Concat,
-				<T as Config>::BlockNumber,
-				<T as Config>::BlockNumber,
-			>;
-		});
-	}
-
-	#[test]
-	fn storage_value_mutate_exists_should_work() {
-		new_test_ext().execute_with(|| {
-			#[crate::storage_alias]
-			pub type Value = StorageValue<Test, u32>;
-
-			assert!(!Value::exists());
-
-			Value::mutate_exists(|v| *v = Some(1));
-			assert!(Value::exists());
-			assert_eq!(Value::get(), Some(1));
-
-			// removed if mutated to `None`
-			Value::mutate_exists(|v| *v = None);
-			assert!(!Value::exists());
-		});
-	}
-
-	#[test]
-	fn storage_value_try_mutate_exists_should_work() {
-		new_test_ext().execute_with(|| {
-			#[crate::storage_alias]
-			pub type Value = StorageValue<Test, u32>;
-
-			type TestResult = result::Result<(), &'static str>;
-
-			assert!(!Value::exists());
-
-			// mutated if `Ok`
-			assert_ok!(Value::try_mutate_exists(|v| -> TestResult {
-				*v = Some(1);
-				Ok(())
-			}));
-			assert!(Value::exists());
-			assert_eq!(Value::get(), Some(1));
-
-			// no-op if `Err`
-			assert_noop!(
-				Value::try_mutate_exists(|v| -> TestResult {
-					*v = Some(2);
-					Err("nah")
-				}),
-				"nah"
-			);
-			assert_eq!(Value::get(), Some(1));
-
-			// removed if mutated to`None`
-			assert_ok!(Value::try_mutate_exists(|v| -> TestResult {
-				*v = None;
-				Ok(())
-			}));
-			assert!(!Value::exists());
-		});
-	}
-
-	#[test]
-	fn map_issue_3318() {
-		new_test_ext().execute_with(|| {
-			type OptionLinkedMap = self::frame_system::OptionLinkedMap<Runtime>;
-
-			OptionLinkedMap::insert(1, 1);
-			assert_eq!(OptionLinkedMap::get(1), Some(1));
-			OptionLinkedMap::insert(1, 2);
-			assert_eq!(OptionLinkedMap::get(1), Some(2));
-		});
-	}
-
-	#[test]
-	fn map_swap_works() {
-		new_test_ext().execute_with(|| {
-			type OptionLinkedMap = self::frame_system::OptionLinkedMap<Runtime>;
-
-			OptionLinkedMap::insert(0, 0);
-			OptionLinkedMap::insert(1, 1);
-			OptionLinkedMap::insert(2, 2);
-			OptionLinkedMap::insert(3, 3);
-
-			let collect = || OptionLinkedMap::iter().collect::<Vec<_>>().sorted();
-			assert_eq!(collect(), vec![(0, 0), (1, 1), (2, 2), (3, 3)]);
-
-			// Two existing
-			OptionLinkedMap::swap(1, 2);
-			assert_eq!(collect(), vec![(0, 0), (1, 2), (2, 1), (3, 3)]);
-
-			// Back to normal
-			OptionLinkedMap::swap(2, 1);
-			assert_eq!(collect(), vec![(0, 0), (1, 1), (2, 2), (3, 3)]);
-
-			// Left existing
-			OptionLinkedMap::swap(2, 5);
-			assert_eq!(collect(), vec![(0, 0), (1, 1), (3, 3), (5, 2)]);
-
-			// Right existing
-			OptionLinkedMap::swap(5, 2);
-			assert_eq!(collect(), vec![(0, 0), (1, 1), (2, 2), (3, 3)]);
-		});
-	}
-
-	#[test]
-	fn double_map_swap_works() {
-		new_test_ext().execute_with(|| {
-			type DataDM = self::frame_system::DataDM<Runtime>;
-
-			DataDM::insert(0, 1, 1);
-			DataDM::insert(1, 0, 2);
-			DataDM::insert(1, 1, 3);
-
-			let get_all = || {
-				vec![
-					DataDM::get(0, 1),
-					DataDM::get(1, 0),
-					DataDM::get(1, 1),
-					DataDM::get(2, 0),
-					DataDM::get(2, 1),
-				]
-			};
-			assert_eq!(get_all(), vec![1, 2, 3, 0, 0]);
-
-			// Two existing
-			DataDM::swap(0, 1, 1, 0);
-			assert_eq!(get_all(), vec![2, 1, 3, 0, 0]);
-
-			// Left existing
-			DataDM::swap(1, 0, 2, 0);
-			assert_eq!(get_all(), vec![2, 0, 3, 1, 0]);
-
-			// Right existing
-			DataDM::swap(2, 1, 1, 1);
-			assert_eq!(get_all(), vec![2, 0, 0, 1, 3]);
-		});
-	}
-
-	#[test]
-	fn map_basic_insert_remove_should_work() {
-		new_test_ext().execute_with(|| {
-			type Map = self::frame_system::Data<Runtime>;
-
-			// initialized during genesis
-			assert_eq!(Map::get(&15u32), 42u64);
-
-			// get / insert / take
-			let key = 17u32;
-			assert_eq!(Map::get(&key), 0u64);
-			Map::insert(key, 4u64);
-			assert_eq!(Map::get(&key), 4u64);
-			assert_eq!(Map::take(&key), 4u64);
-			assert_eq!(Map::get(&key), 0u64);
-
-			// mutate
-			Map::mutate(&key, |val| {
-				*val = 15;
-			});
-			assert_eq!(Map::get(&key), 15u64);
-
-			// remove
-			Map::remove(&key);
-			assert_eq!(Map::get(&key), 0u64);
-		});
-	}
-
-	#[test]
-	fn map_iteration_should_work() {
-		new_test_ext().execute_with(|| {
-			type Map = self::frame_system::Data<Runtime>;
-
-			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(15, 42)]);
-			// insert / remove
-			let key = 17u32;
-			Map::insert(key, 4u64);
-			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(15, 42), (key, 4)]);
-			assert_eq!(Map::take(&15), 42u64);
-			assert_eq!(Map::take(&key), 4u64);
-			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![]);
-
-			// Add couple of more elements
-			Map::insert(key, 42u64);
-			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(key, 42)]);
-			Map::insert(key + 1, 43u64);
-			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(key, 42), (key + 1, 43)]);
-
-			// mutate
-			let key = key + 2;
-			Map::mutate(&key, |val| {
-				*val = 15;
-			});
-			assert_eq!(
-				Map::iter().collect::<Vec<_>>().sorted(),
-				vec![(key - 2, 42), (key - 1, 43), (key, 15)]
-			);
-			Map::mutate(&key, |val| {
-				*val = 17;
-			});
-			assert_eq!(
-				Map::iter().collect::<Vec<_>>().sorted(),
-				vec![(key - 2, 42), (key - 1, 43), (key, 17)]
-			);
-
-			// remove first
-			Map::remove(&key);
-			assert_eq!(
-				Map::iter().collect::<Vec<_>>().sorted(),
-				vec![(key - 2, 42), (key - 1, 43)]
-			);
-
-			// remove last from the list
-			Map::remove(&(key - 2));
-			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(key - 1, 43)]);
-
-			// remove the last element
-			Map::remove(&(key - 1));
-			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![]);
-		});
-	}
-
-	#[test]
-	fn double_map_basic_insert_remove_remove_prefix_with_commit_should_work() {
-		let key1 = 17u32;
-		let key2 = 18u32;
-		type DoubleMap = self::frame_system::DataDM<Runtime>;
-		let mut e = new_test_ext();
-		e.execute_with(|| {
-			// initialized during genesis
-			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
-
-			// get / insert / take
-			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
-			DoubleMap::insert(&key1, &key2, &4u64);
-			assert_eq!(DoubleMap::get(&key1, &key2), 4u64);
-			assert_eq!(DoubleMap::take(&key1, &key2), 4u64);
-			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
-
-			// mutate
-			DoubleMap::mutate(&key1, &key2, |val| *val = 15);
-			assert_eq!(DoubleMap::get(&key1, &key2), 15u64);
-
-			// remove
-			DoubleMap::remove(&key1, &key2);
-			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
-
-			// remove prefix
-			DoubleMap::insert(&key1, &key2, &4u64);
-			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
-			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
-			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
-		});
-		e.commit_all().unwrap();
-		e.execute_with(|| {
-			assert!(matches!(
-				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
-				MultiRemovalResults { maybe_cursor: None, backend: 2, unique: 2, loops: 2 }
-			));
-			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
-			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
-			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);
-			assert_eq!(DoubleMap::get(&(key1 + 1), &(key2 + 1)), 4u64);
-		});
-	}
-
-	#[test]
-	fn double_map_basic_insert_remove_remove_prefix_should_work() {
-		new_test_ext().execute_with(|| {
-			let key1 = 17u32;
-			let key2 = 18u32;
-			type DoubleMap = self::frame_system::DataDM<Runtime>;
-
-			// initialized during genesis
-			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
-
-			// get / insert / take
-			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
-			DoubleMap::insert(&key1, &key2, &4u64);
-			assert_eq!(DoubleMap::get(&key1, &key2), 4u64);
-			assert_eq!(DoubleMap::take(&key1, &key2), 4u64);
-			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
-
-			// mutate
-			DoubleMap::mutate(&key1, &key2, |val| *val = 15);
-			assert_eq!(DoubleMap::get(&key1, &key2), 15u64);
-
-			// remove
-			DoubleMap::remove(&key1, &key2);
-			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
-
-			// remove prefix
-			DoubleMap::insert(&key1, &key2, &4u64);
-			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
-			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
-			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
-			// all in overlay
-			assert!(matches!(
-				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
-				MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }
-			));
-			// Note this is the incorrect answer (for now), since we are using v2 of
-			// `clear_prefix`.
-			// When we switch to v3, then this will become:
-			//   MultiRemovalResults:: { maybe_cursor: None, backend: 0, unique: 2, loops: 2 },
-			assert!(matches!(
-				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
-				MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }
-			));
-			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
-			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
-			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);
-			assert_eq!(DoubleMap::get(&(key1 + 1), &(key2 + 1)), 4u64);
-		});
-	}
-
-	#[test]
-	fn double_map_append_should_work() {
-		new_test_ext().execute_with(|| {
-			type DoubleMap = self::frame_system::AppendableDM<Runtime>;
-
-			let key1 = 17u32;
-			let key2 = 18u32;
-
-			DoubleMap::insert(&key1, &key2, &vec![1]);
-			DoubleMap::append(&key1, &key2, 2);
-			assert_eq!(DoubleMap::get(&key1, &key2), &[1, 2]);
-		});
-	}
-
-	#[test]
-	fn double_map_mutate_exists_should_work() {
-		new_test_ext().execute_with(|| {
-			type DoubleMap = self::frame_system::DataDM<Runtime>;
-
-			let (key1, key2) = (11, 13);
-
-			// mutated
-			DoubleMap::mutate_exists(key1, key2, |v| *v = Some(1));
-			assert_eq!(DoubleMap::get(&key1, key2), 1);
-
-			// removed if mutated to `None`
-			DoubleMap::mutate_exists(key1, key2, |v| *v = None);
-			assert!(!DoubleMap::contains_key(&key1, key2));
-		});
-	}
-
-	#[test]
-	fn double_map_try_mutate_exists_should_work() {
-		new_test_ext().execute_with(|| {
-			type DoubleMap = self::frame_system::DataDM<Runtime>;
-			type TestResult = Result<(), &'static str>;
-
-			let (key1, key2) = (11, 13);
-
-			// mutated if `Ok`
-			assert_ok!(DoubleMap::try_mutate_exists(key1, key2, |v| -> TestResult {
-				*v = Some(1);
-				Ok(())
-			}));
-			assert_eq!(DoubleMap::get(&key1, key2), 1);
-
-			// no-op if `Err`
-			assert_noop!(
-				DoubleMap::try_mutate_exists(key1, key2, |v| -> TestResult {
-					*v = Some(2);
-					Err("nah")
-				}),
-				"nah"
-			);
-
-			// removed if mutated to`None`
-			assert_ok!(DoubleMap::try_mutate_exists(key1, key2, |v| -> TestResult {
-				*v = None;
-				Ok(())
-			}));
-			assert!(!DoubleMap::contains_key(&key1, key2));
-		});
-	}
-
-	fn expected_metadata() -> PalletStorageMetadataIR {
-		PalletStorageMetadataIR {
-			prefix: "System",
-			entries: vec![
-				StorageEntryMetadataIR {
-					name: "Data",
-					modifier: StorageEntryModifierIR::Default,
-					ty: StorageEntryTypeIR::Map {
-						hashers: vec![StorageHasherIR::Twox64Concat],
-						key: scale_info::meta_type::<u32>(),
-						value: scale_info::meta_type::<u64>(),
-					},
-					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![],
-				},
-				StorageEntryMetadataIR {
-					name: "OptionLinkedMap",
-					modifier: StorageEntryModifierIR::Optional,
-					ty: StorageEntryTypeIR::Map {
-						hashers: vec![StorageHasherIR::Blake2_128Concat],
-						key: scale_info::meta_type::<u32>(),
-						value: scale_info::meta_type::<u32>(),
-					},
-					default: vec![0],
-					docs: vec![],
-				},
-				StorageEntryMetadataIR {
-					name: "GenericData",
-					modifier: StorageEntryModifierIR::Default,
-					ty: StorageEntryTypeIR::Map {
-						hashers: vec![StorageHasherIR::Identity],
-						key: scale_info::meta_type::<u32>(),
-						value: scale_info::meta_type::<u32>(),
-					},
-					default: vec![0, 0, 0, 0],
-					docs: vec![],
-				},
-				StorageEntryMetadataIR {
-					name: "GenericData2",
-					modifier: StorageEntryModifierIR::Optional,
-					ty: StorageEntryTypeIR::Map {
-						hashers: vec![StorageHasherIR::Blake2_128Concat],
-						key: scale_info::meta_type::<u32>(),
-						value: scale_info::meta_type::<u32>(),
-					},
-					default: vec![0],
-					docs: vec![],
-				},
-				StorageEntryMetadataIR {
-					name: "DataDM",
-					modifier: StorageEntryModifierIR::Default,
-					ty: StorageEntryTypeIR::Map {
-						hashers: vec![
-							StorageHasherIR::Twox64Concat,
-							StorageHasherIR::Blake2_128Concat,
-						],
-						key: scale_info::meta_type::<(u32, u32)>(),
-						value: scale_info::meta_type::<u64>(),
-					},
-					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![],
-				},
-				StorageEntryMetadataIR {
-					name: "GenericDataDM",
-					modifier: StorageEntryModifierIR::Default,
-					ty: StorageEntryTypeIR::Map {
-						hashers: vec![StorageHasherIR::Blake2_128Concat, StorageHasherIR::Identity],
-						key: scale_info::meta_type::<(u32, u32)>(),
-						value: scale_info::meta_type::<u32>(),
-					},
-					default: vec![0, 0, 0, 0],
-					docs: vec![],
-				},
-				StorageEntryMetadataIR {
-					name: "GenericData2DM",
-					modifier: StorageEntryModifierIR::Optional,
-					ty: StorageEntryTypeIR::Map {
-						hashers: vec![
-							StorageHasherIR::Blake2_128Concat,
-							StorageHasherIR::Twox64Concat,
-						],
-						key: scale_info::meta_type::<(u32, u32)>(),
-						value: scale_info::meta_type::<u32>(),
-					},
-					default: vec![0],
-					docs: vec![],
-				},
-				StorageEntryMetadataIR {
-					name: "AppendableDM",
-					modifier: StorageEntryModifierIR::Default,
-					ty: StorageEntryTypeIR::Map {
-						hashers: vec![
-							StorageHasherIR::Blake2_128Concat,
-							StorageHasherIR::Blake2_128Concat,
-						],
-						key: scale_info::meta_type::<(u32, u32)>(),
-						value: scale_info::meta_type::<Vec<u32>>(),
-					},
-					default: vec![0],
-					docs: vec![],
-				},
-			],
-		}
-	}
-
-	#[test]
-	fn store_metadata() {
-		let metadata = Pallet::<Runtime>::storage_metadata();
-		pretty_assertions::assert_eq!(expected_metadata(), metadata);
-	}
-
-	parameter_types! {
-		storage StorageParameter: u64 = 10;
-	}
-
-	#[test]
-	fn check_storage_parameter_type_works() {
-		TestExternalities::default().execute_with(|| {
-			assert_eq!(sp_io::hashing::twox_128(b":StorageParameter:"), StorageParameter::key());
-
-			assert_eq!(10, StorageParameter::get());
-
-			StorageParameter::set(&300);
-			assert_eq!(300, StorageParameter::get());
-		})
-	}
+/// Private module re-exporting items used by frame support macros.
+#[doc(hidden)]
+pub mod _private {
+	pub use sp_inherents;
 }
 
 /// Prelude to be used for pallet testing, for ease of use.
@@ -1530,10 +797,10 @@ pub mod tests {
 pub mod testing_prelude {
 	pub use super::{
 		assert_err, assert_err_ignore_postinfo, assert_err_with_weight, assert_error_encoded_size,
-		assert_noop, assert_ok, assert_storage_noop, bounded_btree_map, bounded_vec,
-		parameter_types, traits::Get,
+		assert_noop, assert_ok, assert_storage_noop, parameter_types, traits::Get,
 	};
 	pub use sp_arithmetic::assert_eq_error_rate;
+	pub use sp_runtime::{bounded_btree_map, bounded_vec};
 }
 
 /// Prelude to be used alongside pallet macro, for ease of use.
@@ -1549,21 +816,23 @@ pub mod pallet_prelude {
 		storage::{
 			bounded_vec::BoundedVec,
 			types::{
-				CountedStorageMap, Key as NMapKey, OptionQuery, ResultQuery, StorageDoubleMap,
-				StorageMap, StorageNMap, StorageValue, ValueQuery,
+				CountedStorageMap, CountedStorageNMap, Key as NMapKey, OptionQuery, ResultQuery,
+				StorageDoubleMap, StorageMap, StorageNMap, StorageValue, ValueQuery,
 			},
+			StorageList,
 		},
 		traits::{
-			ConstU32, EnsureOrigin, GenesisBuild, Get, GetDefault, GetStorageVersion, Hooks,
+			BuildGenesisConfig, ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks,
 			IsType, PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,
-		PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
+		PartialEqNoBound, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
 	};
 	pub use codec::{Decode, Encode, MaxEncodedLen};
 	pub use frame_support::pallet_macros::*;
 	pub use frame_support_procedural::register_default_impl;
 	pub use scale_info::TypeInfo;
+	pub use sp_inherents::MakeFatalError;
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
 		transaction_validity::{
@@ -1571,7 +840,7 @@ pub mod pallet_prelude {
 			TransactionTag, TransactionValidity, TransactionValidityError, UnknownTransaction,
 			ValidTransaction,
 		},
-		MAX_MODULE_ERROR_ENCODED_SIZE,
+		RuntimeDebug, MAX_MODULE_ERROR_ENCODED_SIZE,
 	};
 	pub use sp_std::marker::PhantomData;
 	pub use sp_weights::Weight;
@@ -1662,9 +931,14 @@ pub mod pallet_prelude {
 ///   default, dev mode pallets will assume a weight of zero (`0`) if a weight is not
 ///   specified. This is equivalent to specifying `#[weight(0)]` on all calls that do not
 ///   specify a weight.
+/// * Call indices no longer need to be specified on every `#[pallet::call]` declaration. By
+///   default, dev mode pallets will assume a call index based on the order of the call.
 /// * All storages are marked as unbounded, meaning you do not need to implement
 ///   `MaxEncodedLen` on storage types. This is equivalent to specifying `#[pallet::unbounded]`
 ///   on all storage type definitions.
+/// * Storage hashers no longer need to be specified and can be replaced by `_`. In dev mode,
+///   these will be replaced by `Blake2_128Concat`. In case of explicit key-binding, `Hasher`
+///   can simply be ignored when in `dev_mode`.
 ///
 /// Note that the `dev_mode` argument can only be supplied to the `#[pallet]` or
 /// `#[frame_support::pallet]` attribute macro that encloses your pallet module. This argument
@@ -2228,7 +1502,7 @@ pub mod pallet_prelude {
 /// for the pallet.
 ///
 /// Item is defined as either an enum or a struct. It needs to be public and implement the
-/// trait [`GenesisBuild`](`traits::GenesisBuild`) with
+/// trait [`BuildGenesisConfig`](`traits::BuildGenesisConfig`) with
 /// [`#[pallet::genesis_build]`](#genesis-build-palletgenesis_build-optional). The type
 /// generics are constrained to be either none, or `T` or `T: Config`.
 ///
@@ -2510,14 +1784,15 @@ pub mod pallet_prelude {
 /// 	//
 /// 	// Type must implement the `Default` trait.
 /// 	#[pallet::genesis_config]
-/// 	#[derive(Default)]
-/// 	pub struct GenesisConfig {
+/// 	#[derive(frame_support::DefaultNoBound)]
+/// 	pub struct GenesisConfig<T: Config> {
+/// 	    _config: sp_std::marker::PhantomData<T>,
 /// 		_myfield: u32,
 /// 	}
 ///
 /// 	// Declare genesis builder. (This is need only if GenesisConfig is declared)
 /// 	#[pallet::genesis_build]
-/// 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+/// 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 /// 		fn build(&self) {}
 /// 	}
 ///
@@ -2647,13 +1922,14 @@ pub mod pallet_prelude {
 /// 		StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 ///
 /// 	#[pallet::genesis_config]
-/// 	#[derive(Default)]
-/// 	pub struct GenesisConfig {
+/// 	#[derive(frame_support::DefaultNoBound)]
+/// 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+/// 		 _config: sp_std::marker::PhantomData<(T,I)>,
 /// 		_myfield: u32,
 /// 	}
 ///
 /// 	#[pallet::genesis_build]
-/// 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
+/// 	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 /// 		fn build(&self) {}
 /// 	}
 ///
@@ -2711,13 +1987,13 @@ pub mod pallet_prelude {
 ///     - query the metadata using the `state_getMetadata` RPC and curl, or use `subsee -p
 ///       <PALLET_NAME> > meta.json`
 /// 2. Generate the template upgrade for the pallet provided by `decl_storage` with the
-///     environment variable `PRINT_PALLET_UPGRADE`: `PRINT_PALLET_UPGRADE=1 cargo check -p
-///     my_pallet`. This template can be used as it contains all information for storages,
-///     genesis config and genesis build.
+///    environment variable `PRINT_PALLET_UPGRADE`: `PRINT_PALLET_UPGRADE=1 cargo check -p
+///    my_pallet`. This template can be used as it contains all information for storages,
+///    genesis config and genesis build.
 /// 3. Reorganize the pallet to have the trait `Config`, `decl_*` macros,
-///     [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`),
-///     [`ProvideInherent`](`pallet_prelude::ProvideInherent`), and Origin` all together in one
-///     file. Suggested order:
+///    [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`),
+///    [`ProvideInherent`](`pallet_prelude::ProvideInherent`), and Origin` all together in one
+///    file. Suggested order:
 ///     * `Config`,
 ///     * `decl_module`,
 ///     * `decl_event`,
@@ -2777,8 +2053,8 @@ pub mod pallet_prelude {
 /// 8. **migrate error**: rewrite it with attribute
 ///    [`#[pallet::error]`](#error-palleterror-optional).
 /// 9. **migrate storage**: `decl_storage` provide an upgrade template (see 3.). All storages,
-///     genesis config, genesis build and default implementation of genesis config can be
-///     taken from it directly.
+///    genesis config, genesis build and default implementation of genesis config can be taken
+///    from it directly.
 ///
 ///     Otherwise here is the manual process:
 ///
@@ -2899,10 +2175,16 @@ pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		call_index, compact, composite_enum, config, constant,
 		disable_frame_system_supertrait_check, error, event, extra_constants, generate_deposit,
-		generate_store, genesis_build, genesis_config, getter, hooks, inherent, no_default, origin,
-		storage, storage_prefix, storage_version, type_value, unbounded, validate_unsigned, weight,
-		whitelist_storage,
+		generate_store, genesis_build, genesis_config, getter, hooks, import_section, inherent,
+		no_default, origin, pallet_section, storage, storage_prefix, storage_version, type_value,
+		unbounded, validate_unsigned, weight, whitelist_storage,
 	};
+}
+
+#[deprecated(note = "Will be removed after July 2023; Use `sp_runtime::traits` directly instead.")]
+pub mod error {
+	#[doc(hidden)]
+	pub use sp_runtime::traits::{BadOrigin, LookupError};
 }
 
 #[doc(inline)]
@@ -2910,3 +2192,6 @@ pub use frame_support_procedural::register_default_impl;
 
 // Generate a macro that will enable/disable code based on `std` feature being active.
 sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);
+
+// Helper for implementing GenesisBuilder runtime API
+pub mod genesis_builder_helper;
