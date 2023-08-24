@@ -42,6 +42,8 @@ std = [
 	"pallet-proxy?/std",
 	"pallet-utility?/std",
 	"scale-info/std",
+	"sp-core/std",
+	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
 ]
@@ -52,6 +54,7 @@ runtime-benchmarks = [
 	"pallet-balances/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",
 	"pallet-utility/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
