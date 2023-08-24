@@ -32,16 +32,16 @@ pallet-utility = { version = "4.0.0-dev", path = "../utility" }
 pallet-proxy = { version = "4.0.0-dev", path = "../proxy" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
-	"scale-info/std",
 	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-balances?/std",
-	"pallet-utility?/std",
 	"pallet-proxy?/std",
+	"pallet-utility?/std",
+	"scale-info/std",
 	"sp-runtime/std",
 	"sp-std/std",
 ]
@@ -50,10 +50,7 @@ runtime-benchmarks = [
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
-	"pallet-utility/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",
+	"pallet-utility/runtime-benchmarks",
 ]
-try-runtime = [
-	"frame-support/try-runtime",
-	"frame-system/try-runtime",
-]
+try-runtime = [ "frame-support/try-runtime", "frame-system/try-runtime" ]
