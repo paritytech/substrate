@@ -23,11 +23,11 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../../../pr
 sp-weights = { version = "20.0.0", default-features = false, path = "../../../primitives/weights" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"scale-info/std",
-	"sp-weights/std"
+	"sp-weights/std",
 ]

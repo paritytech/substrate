@@ -33,7 +33,7 @@ use sp_keystore::KeystorePtr;
 use std::{marker::PhantomData, sync::Arc};
 
 use sc_consensus::{BlockImportParams, ForkChoiceStrategy, Verifier};
-use sp_api::{ProvideRuntimeApi, TransactionFor};
+use sp_api::ProvideRuntimeApi;
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus_babe::{
 	digests::{NextEpochDescriptor, PreDigest, SecondaryPlainPreDigest},
@@ -97,8 +97,8 @@ where
 {
 	async fn verify(
 		&mut self,
-		mut import_params: BlockImportParams<B, ()>,
-	) -> Result<BlockImportParams<B, ()>, String> {
+		mut import_params: BlockImportParams<B>,
+	) -> Result<BlockImportParams<B>, String> {
 		import_params.finalized = false;
 		import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
@@ -197,7 +197,6 @@ where
 	C::Api: BabeApi<B>,
 	P: Send + Sync,
 {
-	type Transaction = TransactionFor<C, B>;
 	type Proof = P;
 
 	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<Digest, Error> {
@@ -264,7 +263,7 @@ where
 	fn append_block_import(
 		&self,
 		parent: &B::Header,
-		params: &mut BlockImportParams<B, Self::Transaction>,
+		params: &mut BlockImportParams<B>,
 		inherents: &InherentData,
 		_proof: Self::Proof,
 	) -> Result<(), Error> {

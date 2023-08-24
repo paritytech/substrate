@@ -150,11 +150,9 @@ mod tests {
 		offchain::{testing::TestOffchainExt, OffchainDbExt, OffchainWorkerExt, StorageKind},
 	};
 	use sp_runtime::{testing::UintAuthorityId, BuildStorage};
+	use sp_state_machine::BasicExternalities;
 
-	use frame_support::{
-		traits::{KeyOwnerProofSystem, OnInitialize},
-		BasicExternalities,
-	};
+	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize};
 
 	type Historical = Pallet<Test>;
 

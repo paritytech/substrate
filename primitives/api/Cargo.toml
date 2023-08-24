@@ -32,24 +32,24 @@ log = { version = "0.4.17", default-features = false }
 sp-test-primitives = { version = "2.0.0", path = "../test-primitives" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
-	"sp-core/std",
-	"sp-externalities",
-	"sp-std/std",
-	"sp-runtime/std",
-	"sp-state-machine/std",
-	"sp-trie/std",
-	"sp-version/std",
 	"hash-db",
-	"thiserror",
 	"log/std",
 	"scale-info/std",
-	"sp-metadata-ir?/std",
 	"sp-api-proc-macro/std",
+	"sp-core/std",
+	"sp-externalities",
 	"sp-externalities?/std",
-	"sp-test-primitives/std"
+	"sp-metadata-ir?/std",
+	"sp-runtime/std",
+	"sp-state-machine/std",
+	"sp-std/std",
+	"sp-test-primitives/std",
+	"sp-trie/std",
+	"sp-version/std",
+	"thiserror",
 ]
 # Special feature to disable logging completely.
 #
@@ -58,10 +58,7 @@ std = [
 # building a runtime for registering it on chain.
 #
 # This sets the max logging level to `off` for `log`.
-disable-logging = ["log/max_level_off"]
+disable-logging = [ "log/max_level_off" ]
 # Do not report the documentation in the metadata.
-no-metadata-docs = ["sp-api-proc-macro/no-metadata-docs"]
-frame-metadata = [
-	"sp-metadata-ir",
-	"sp-api-proc-macro/frame-metadata"
-]
+no-metadata-docs = [ "sp-api-proc-macro/no-metadata-docs" ]
+frame-metadata = [ "sp-api-proc-macro/frame-metadata", "sp-metadata-ir" ]

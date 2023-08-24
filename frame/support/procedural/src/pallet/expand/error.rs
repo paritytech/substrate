@@ -44,7 +44,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 					$caller:tt
 					frame_support = [{ $($frame_support:ident)::* }]
 				} => {
-					$($frame_support::)*tt_return! {
+					$($frame_support::)*__private::tt_return! {
 						$caller
 					}
 				};
@@ -62,7 +62,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		#[doc(hidden)]
 		#[codec(skip)]
 		__Ignore(
-			#frame_support::sp_std::marker::PhantomData<(#type_use_gen)>,
+			#frame_support::__private::sp_std::marker::PhantomData<(#type_use_gen)>,
 			#frame_support::Never,
 		)
 	);
@@ -98,9 +98,9 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	// derive TypeInfo for error metadata
 	error_item.attrs.push(syn::parse_quote! {
 		#[derive(
-			#frame_support::codec::Encode,
-			#frame_support::codec::Decode,
-			#frame_support::scale_info::TypeInfo,
+			#frame_support::__private::codec::Encode,
+			#frame_support::__private::codec::Decode,
+			#frame_support::__private::scale_info::TypeInfo,
 			#frame_support::PalletError,
 		)]
 	});
@@ -115,11 +115,11 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	}
 
 	quote::quote_spanned!(error.attr_span =>
-		impl<#type_impl_gen> #frame_support::sp_std::fmt::Debug for #error_ident<#type_use_gen>
+		impl<#type_impl_gen> #frame_support::__private::sp_std::fmt::Debug for #error_ident<#type_use_gen>
 			#config_where_clause
 		{
-			fn fmt(&self, f: &mut #frame_support::sp_std::fmt::Formatter<'_>)
-				-> #frame_support::sp_std::fmt::Result
+			fn fmt(&self, f: &mut #frame_support::__private::sp_std::fmt::Formatter<'_>)
+				-> #frame_support::__private::sp_std::fmt::Result
 			{
 				f.write_str(self.as_str())
 			}
@@ -148,7 +148,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 			#config_where_clause
 		{
 			fn from(err: #error_ident<#type_use_gen>) -> Self {
-				use #frame_support::codec::Encode;
+				use #frame_support::__private::codec::Encode;
 				let index = <
 					<T as #frame_system::Config>::PalletInfo
 					as #frame_support::traits::PalletInfo
@@ -172,7 +172,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 				$caller:tt
 				frame_support = [{ $($frame_support:ident)::* }]
 			} => {
-				$($frame_support::)*tt_return! {
+				$($frame_support::)*__private::tt_return! {
 					$caller
 					error = [{ #error_ident }]
 				}

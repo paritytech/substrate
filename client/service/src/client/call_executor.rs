@@ -21,10 +21,13 @@ use sc_client_api::{
 	backend, call_executor::CallExecutor, execution_extensions::ExecutionExtensions, HeaderBackend,
 };
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
-use sp_api::{ProofRecorder, StorageTransactionCache};
+use sp_api::ProofRecorder;
 use sp_core::traits::{CallContext, CodeExecutor, RuntimeCode};
 use sp_externalities::Extensions;
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, HashingFor},
+};
 use sp_state_machine::{backend::AsTrieBackend, Ext, OverlayedChanges, StateMachine, StorageProof};
 use std::{cell::RefCell, sync::Arc};
 
@@ -119,8 +122,7 @@ where
 	) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 
-		let mut cache = StorageTransactionCache::<Block, B::State>::default();
-		let mut ext = Ext::new(&mut overlay, &mut cache, state, None);
+		let mut ext = Ext::new(&mut overlay, state, None);
 
 		self.executor
 			.runtime_version(&mut ext, code)
@@ -197,14 +199,11 @@ where
 		at_hash: Block::Hash,
 		method: &str,
 		call_data: &[u8],
-		changes: &RefCell<OverlayedChanges>,
-		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
+		changes: &RefCell<OverlayedChanges<HashingFor<Block>>>,
 		recorder: &Option<ProofRecorder<Block>>,
 		call_context: CallContext,
 		extensions: &RefCell<Extensions>,
 	) -> Result<Vec<u8>, sp_blockchain::Error> {
-		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
-
 		let state = self.backend.state_at(at_hash)?;
 
 		let changes = &mut *changes.borrow_mut();
@@ -237,7 +236,6 @@ where
 					&runtime_code,
 					call_context,
 				)
-				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
 				state_machine.execute()
 			},
@@ -252,7 +250,6 @@ where
 					&runtime_code,
 					call_context,
 				)
-				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
 				state_machine.execute()
 			},

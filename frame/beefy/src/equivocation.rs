@@ -35,11 +35,8 @@
 //! definition.
 
 use codec::{self as codec, Decode, Encode};
-use frame_support::{
-	log,
-	traits::{Get, KeyOwnerProofSystem},
-};
-use frame_system::pallet_prelude::{BlockNumberFor, HeaderFor};
+use frame_support::traits::{Get, KeyOwnerProofSystem};
+use frame_system::pallet_prelude::BlockNumberFor;
 use log::{error, info};
 use sp_consensus_beefy::{VoteEquivocationProof, ForkEquivocationProof, ValidatorSetId, KEY_TYPE as BEEFY_KEY_TYPE};
 use sp_runtime::{

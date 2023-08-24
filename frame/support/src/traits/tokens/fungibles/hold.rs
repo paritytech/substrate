@@ -332,7 +332,7 @@ pub trait Mutate<AccountId>:
 
 	/// Transfer held funds into a destination account.
 	///
-	/// If `on_hold` is `true`, then the destination account must already exist and the assets
+	/// If `mode` is `OnHold`, then the destination account must already exist and the assets
 	/// transferred will still be on hold in the destination account. If not, then the destination
 	/// account need not already exist, but must be creatable.
 	///

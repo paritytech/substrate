@@ -21,11 +21,11 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../../../..
 sp-version = { version = "22.0.0", default-features = false, path = "../../../../primitives/version" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
-	"renamed-frame-support/std",
 	"frame-system/std",
+	"renamed-frame-support/std",
 	"scale-info/std",
 	"sp-core/std",
 	"sp-runtime/std",

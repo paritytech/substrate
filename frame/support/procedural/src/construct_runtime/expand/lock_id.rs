@@ -38,9 +38,9 @@ pub fn expand_outer_lock_id(pallet_decls: &[Pallet], scrate: &TokenStream) -> To
 		/// An identifier for each lock placed on funds.
 		#[derive(
 			Copy, Clone, Eq, PartialEq, Ord, PartialOrd,
-			#scrate::codec::Encode, #scrate::codec::Decode, #scrate::codec::MaxEncodedLen,
-			#scrate::scale_info::TypeInfo,
-			#scrate::RuntimeDebug,
+			#scrate::__private::codec::Encode, #scrate::__private::codec::Decode, #scrate::__private::codec::MaxEncodedLen,
+			#scrate::__private::scale_info::TypeInfo,
+			#scrate::__private::RuntimeDebug,
 		)]
 		pub enum RuntimeLockId {
 			#( #lock_id_variants )*

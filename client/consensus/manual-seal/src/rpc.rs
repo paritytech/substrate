@@ -97,6 +97,8 @@ pub struct CreatedBlock<Hash> {
 	pub hash: Hash,
 	/// some extra details about the import operation
 	pub aux: ImportedAux,
+	/// uncompacted storage proof size (zero mean that there is no proof)
+	pub proof_size: usize,
 }
 
 impl<Hash> ManualSeal<Hash> {

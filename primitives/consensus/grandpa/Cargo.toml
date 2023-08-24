@@ -27,7 +27,7 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../../runti
 sp-std = { version = "8.0.0", default-features = false, path = "../../std" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"grandpa/std",
@@ -37,9 +37,9 @@ std = [
 	"sp-api/std",
 	"sp-application-crypto/std",
 	"sp-core/std",
- 	"sp-keystore/std",
- 	"sp-runtime/std",
- 	"sp-std/std"
+	"sp-keystore/std",
+	"sp-runtime/std",
+	"sp-std/std",
 ]
 
 # Serde support without relying on std features.
