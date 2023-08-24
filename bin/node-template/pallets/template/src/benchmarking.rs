@@ -1,7 +1,6 @@
 //! Benchmarking setup for pallet-template
 #![cfg(feature = "runtime-benchmarks")]
 use super::*;
-use sp_std::vec;
 
 #[allow(unused)]
 use crate::Pallet as Template;
