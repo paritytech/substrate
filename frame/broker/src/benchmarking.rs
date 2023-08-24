@@ -29,7 +29,7 @@ use frame_support::{
 	},
 };
 use frame_system::{Pallet as System, RawOrigin};
-use sp_arithmetic::Perbill;
+use sp_arithmetic::{traits::Zero, Perbill};
 use sp_core::Get;
 use sp_runtime::Saturating;
 
