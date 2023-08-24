@@ -24,7 +24,10 @@ use crate as pallet_child_bounties;
 
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
-	traits::{ConstU32, ConstU64, OnInitialize},
+	traits::{
+		tokens::{PayFromAccount, UnityAssetBalanceConversion},
+		ConstU32, ConstU64, OnInitialize,
+	},
 	weights::Weight,
 	PalletId,
 };
@@ -104,6 +107,7 @@ parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
+	pub TreasuryAccount: u128 = Treasury::account_id();
 	pub const SpendLimit: Balance = u64::MAX;
 }
 
@@ -124,6 +128,14 @@ impl pallet_treasury::Config for Test {
 	type SpendFunds = Bounties;
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = frame_system::EnsureRootWithSuccess<Self::AccountId, SpendLimit>;
+	type AssetKind = ();
+	type Beneficiary = Self::AccountId;
+	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
+	type BalanceConverter = UnityAssetBalanceConversion;
+	type PayoutPeriod = ConstU64<10>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 parameter_types! {
 	// This will be 50% of the bounty fee.

@@ -29,7 +29,10 @@ use sp_storage::Storage;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
 	storage::StoragePrefixedMap,
-	traits::{ConstU32, ConstU64, SortedMembers, StorageVersion},
+	traits::{
+		tokens::{PayFromAccount, UnityAssetBalanceConversion},
+		ConstU32, ConstU64, SortedMembers, StorageVersion,
+	},
 	PalletId,
 };
 
@@ -123,7 +126,10 @@ parameter_types! {
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const TreasuryPalletId2: PalletId = PalletId(*b"py/trsr2");
+	pub TreasuryAccount: u128 = Treasury::account_id();
+	pub TreasuryAccount1: u128 = Treasury1::account_id();
 }
+
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
 	type Currency = pallet_balances::Pallet<Test>;
@@ -141,6 +147,14 @@ impl pallet_treasury::Config for Test {
 	type SpendFunds = ();
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = frame_support::traits::NeverEnsureOrigin<u64>;
+	type AssetKind = ();
+	type Beneficiary = Self::AccountId;
+	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
+	type BalanceConverter = UnityAssetBalanceConversion;
+	type PayoutPeriod = ConstU64<10>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 impl pallet_treasury::Config<Instance1> for Test {
@@ -160,6 +174,14 @@ impl pallet_treasury::Config<Instance1> for Test {
 	type SpendFunds = ();
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = frame_support::traits::NeverEnsureOrigin<u64>;
+	type AssetKind = ();
+	type Beneficiary = Self::AccountId;
+	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount1>;
+	type BalanceConverter = UnityAssetBalanceConversion;
+	type PayoutPeriod = ConstU64<10>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 parameter_types! {

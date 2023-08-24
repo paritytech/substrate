@@ -24,7 +24,10 @@ use crate as pallet_bounties;
 
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
-	traits::{ConstU32, ConstU64, OnInitialize},
+	traits::{
+		tokens::{PayFromAccount, UnityAssetBalanceConversion},
+		ConstU32, ConstU64, OnInitialize,
+	},
 	PalletId,
 };
 
@@ -104,6 +107,8 @@ parameter_types! {
 	pub const TreasuryPalletId2: PalletId = PalletId(*b"py/trsr2");
 	pub static SpendLimit: Balance = u64::MAX;
 	pub static SpendLimit1: Balance = u64::MAX;
+	pub TreasuryAccount: u128 = Treasury::account_id();
+	pub TreasuryAccount1: u128 = Treasury1::account_id();
 }
 
 impl pallet_treasury::Config for Test {
@@ -123,6 +128,14 @@ impl pallet_treasury::Config for Test {
 	type SpendFunds = Bounties;
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = frame_system::EnsureRootWithSuccess<Self::AccountId, SpendLimit>;
+	type AssetKind = ();
+	type Beneficiary = Self::AccountId;
+	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
+	type BalanceConverter = UnityAssetBalanceConversion;
+	type PayoutPeriod = ConstU64<10>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 impl pallet_treasury::Config<Instance1> for Test {
@@ -142,6 +155,14 @@ impl pallet_treasury::Config<Instance1> for Test {
 	type SpendFunds = Bounties1;
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = frame_system::EnsureRootWithSuccess<Self::AccountId, SpendLimit1>;
+	type AssetKind = ();
+	type Beneficiary = Self::AccountId;
+	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount1>;
+	type BalanceConverter = UnityAssetBalanceConversion;
+	type PayoutPeriod = ConstU64<10>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 parameter_types! {

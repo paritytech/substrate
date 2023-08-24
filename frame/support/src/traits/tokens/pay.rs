@@ -23,7 +23,7 @@ use sp_core::{RuntimeDebug, TypedGet};
 use sp_runtime::DispatchError;
 use sp_std::fmt::Debug;
 
-use super::{fungible, Balance, Preservation::Expendable};
+use super::{fungible, fungibles, Balance, Preservation::Expendable};
 
 /// Can be implemented by `PayFromAccount` using a `fungible` impl, but can also be implemented with
 /// XCM/MultiAsset and made generic over assets.
@@ -103,6 +103,39 @@ impl<A: TypedGet, F: fungible::Mutate<A::Type>> Pay for PayFromAccount<F, A> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn ensure_successful(_: &Self::Beneficiary, _: Self::AssetKind, amount: Self::Balance) {
 		<F as fungible::Mutate<_>>::mint_into(&A::get(), amount).unwrap();
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_concluded(_: Self::Id) {}
+}
+
+/// Simple implementation of `Pay` for assets which makes a payment from a "pot" - i.e. a single
+/// account.
+pub struct PayAssetFromAccount<F, A>(sp_std::marker::PhantomData<(F, A)>);
+impl<A, F> frame_support::traits::tokens::Pay for PayAssetFromAccount<F, A>
+where
+	A: TypedGet,
+	F: fungibles::Mutate<A::Type> + fungibles::Create<A::Type>,
+{
+	type Balance = F::Balance;
+	type Beneficiary = A::Type;
+	type AssetKind = F::AssetId;
+	type Id = ();
+	type Error = DispatchError;
+	fn pay(
+		who: &Self::Beneficiary,
+		asset: Self::AssetKind,
+		amount: Self::Balance,
+	) -> Result<Self::Id, Self::Error> {
+		<F as fungibles::Mutate<_>>::transfer(asset, &A::get(), who, amount, Expendable)?;
+		Ok(())
+	}
+	fn check_payment(_: ()) -> PaymentStatus {
+		PaymentStatus::Success
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_successful(_: &Self::Beneficiary, asset: Self::AssetKind, amount: Self::Balance) {
+		<F as fungibles::Create<_>>::create(asset.clone(), A::get(), true, amount).unwrap();
+		<F as fungibles::Mutate<_>>::mint_into(asset, &A::get(), amount).unwrap();
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn ensure_concluded(_: Self::Id) {}

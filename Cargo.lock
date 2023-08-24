@@ -7774,6 +7774,7 @@ dependencies = [
 name = "pallet-treasury"
 version = "4.0.0-dev"
 dependencies = [
+ "docify 0.2.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
