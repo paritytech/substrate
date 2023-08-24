@@ -29,7 +29,7 @@ assert_matches = "1.3.0"
 
 [features]
 # Required for the doc tests
-default = ["std"]
+default = [ "std" ]
 std = []
 no-metadata-docs = []
 frame-metadata = []

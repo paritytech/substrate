@@ -32,38 +32,30 @@
 /// Export ourself as `frame_support` to make tests happy.
 extern crate self as frame_support;
 
+/// Private exports that are being used by macros.
+///
+/// The exports are not stable and should not be relied on.
 #[doc(hidden)]
-pub use sp_tracing;
-
-#[doc(hidden)]
-pub use codec;
-#[doc(hidden)]
-pub use frame_metadata as metadata;
-#[doc(hidden)]
-pub use log;
-#[doc(hidden)]
-pub use paste;
-#[doc(hidden)]
-pub use scale_info;
-pub use serde;
-pub use sp_api::metadata_ir;
-pub use sp_core::{OpaqueMetadata, Void};
-#[doc(hidden)]
-pub use sp_core_hashing_proc_macro;
-#[doc(hidden)]
-pub use sp_io::{self, storage::root as storage_root};
-#[cfg(feature = "std")]
-#[doc(hidden)]
-pub use sp_runtime::{bounded_btree_map, bounded_vec};
-#[doc(hidden)]
-pub use sp_runtime::{RuntimeDebug, StateVersion};
-#[cfg(feature = "std")]
-#[doc(hidden)]
-pub use sp_state_machine::BasicExternalities;
-#[doc(hidden)]
-pub use sp_std;
-#[doc(hidden)]
-pub use tt_call::*;
+pub mod __private {
+	pub use codec;
+	pub use frame_metadata as metadata;
+	pub use log;
+	pub use paste;
+	pub use scale_info;
+	pub use serde;
+	pub use sp_core::{OpaqueMetadata, Void};
+	pub use sp_core_hashing_proc_macro;
+	pub use sp_io::{self, storage::root as storage_root};
+	pub use sp_metadata_ir as metadata_ir;
+	#[cfg(feature = "std")]
+	pub use sp_runtime::{bounded_btree_map, bounded_vec};
+	pub use sp_runtime::{RuntimeDebug, StateVersion};
+	#[cfg(feature = "std")]
+	pub use sp_state_machine::BasicExternalities;
+	pub use sp_std;
+	pub use sp_tracing;
+	pub use tt_call::*;
+}
 
 #[macro_use]
 pub mod dispatch;
@@ -255,7 +247,7 @@ macro_rules! parameter_types {
 	) => (
 		$( #[ $attr ] )*
 		$vis struct $name $(
-			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
+			< $($ty_params),* >( $($crate::__private::sp_std::marker::PhantomData<$ty_params>),* )
 		)?;
 		$crate::parameter_types!(IMPL_CONST $name , $type , $value $( $(, $ty_params)* )?);
 		$crate::parameter_types!( $( $rest )* );
@@ -267,7 +259,7 @@ macro_rules! parameter_types {
 	) => (
 		$( #[ $attr ] )*
 		$vis struct $name $(
-			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
+			< $($ty_params),* >( $($crate::__private::sp_std::marker::PhantomData<$ty_params>),* )
 		)?;
 		$crate::parameter_types!(IMPL $name, $type, $value $( $(, $ty_params)* )?);
 		$crate::parameter_types!( $( $rest )* );
@@ -279,7 +271,7 @@ macro_rules! parameter_types {
 	) => (
 		$( #[ $attr ] )*
 		$vis struct $name $(
-			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
+			< $($ty_params),* >( $($crate::__private::sp_std::marker::PhantomData<$ty_params>),* )
 		)?;
 		$crate::parameter_types!(IMPL_STORAGE $name, $type, $value $( $(, $ty_params)* )?);
 		$crate::parameter_types!( $( $rest )* );
@@ -332,7 +324,7 @@ macro_rules! parameter_types {
 		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the key for this parameter type.
 			pub fn key() -> [u8; 16] {
-				$crate::sp_core_hashing_proc_macro::twox_128!(b":", $name, b":")
+				$crate::__private::sp_core_hashing_proc_macro::twox_128!(b":", $name, b":")
 			}
 
 			/// Set the value of this parameter type in the storage.
@@ -397,7 +389,7 @@ macro_rules! parameter_types_impl_thread_local {
 		$crate::parameter_types_impl_thread_local!(
 			IMPL_THREAD_LOCAL $( $vis, $name, $type, $value, )*
 		);
-		$crate::paste::item! {
+		$crate::__private::paste::item! {
 			$crate::parameter_types!(
 				$(
 					$( #[ $attr ] )*
@@ -432,7 +424,7 @@ macro_rules! parameter_types_impl_thread_local {
 		}
 	};
 	(IMPL_THREAD_LOCAL $( $vis:vis, $name:ident, $type:ty, $value:expr, )* ) => {
-		$crate::paste::item! {
+		$crate::__private::paste::item! {
 			thread_local! {
 				$(
 					pub static [<$name:snake:upper>]: std::cell::RefCell<$type> =
@@ -462,7 +454,7 @@ macro_rules! ord_parameter_types {
 	(IMPL $name:ident , $type:ty , $value:expr) => {
 		impl $crate::traits::SortedMembers<$type> for $name {
 			fn contains(t: &$type) -> bool { &$value == t }
-			fn sorted_members() -> $crate::sp_std::prelude::Vec<$type> { vec![$value] }
+			fn sorted_members() -> $crate::__private::sp_std::prelude::Vec<$type> { vec![$value] }
 			fn count() -> usize { 1 }
 			#[cfg(feature = "runtime-benchmarks")]
 			fn add(_: &$type) {}
@@ -485,9 +477,9 @@ macro_rules! runtime_print {
 	($($arg:tt)+) => {
 		{
 			use core::fmt::Write;
-			let mut w = $crate::sp_std::Writer::default();
+			let mut w = $crate::__private::sp_std::Writer::default();
 			let _ = core::write!(&mut w, $($arg)+);
-			$crate::sp_io::misc::print_utf8(&w.inner())
+			$crate::__private::sp_io::misc::print_utf8(&w.inner())
 		}
 	}
 }
@@ -684,9 +676,13 @@ macro_rules! assert_noop {
 		$x:expr,
 		$y:expr $(,)?
 	) => {
-		let h = $crate::storage_root($crate::StateVersion::V1);
+		let h = $crate::__private::storage_root($crate::__private::StateVersion::V1);
 		$crate::assert_err!($x, $y);
-		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1), "storage has been mutated");
+		assert_eq!(
+			h,
+			$crate::__private::storage_root($crate::__private::StateVersion::V1),
+			"storage has been mutated"
+		);
 	};
 }
 
@@ -699,9 +695,9 @@ macro_rules! assert_storage_noop {
 	(
 		$x:expr
 	) => {
-		let h = $crate::storage_root($crate::StateVersion::V1);
+		let h = $crate::__private::storage_root($crate::__private::StateVersion::V1);
 		$x;
-		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1));
+		assert_eq!(h, $crate::__private::storage_root($crate::__private::StateVersion::V1));
 	};
 }
 
@@ -801,10 +797,10 @@ pub mod _private {
 pub mod testing_prelude {
 	pub use super::{
 		assert_err, assert_err_ignore_postinfo, assert_err_with_weight, assert_error_encoded_size,
-		assert_noop, assert_ok, assert_storage_noop, bounded_btree_map, bounded_vec,
-		parameter_types, traits::Get,
+		assert_noop, assert_ok, assert_storage_noop, parameter_types, traits::Get,
 	};
 	pub use sp_arithmetic::assert_eq_error_rate;
+	pub use sp_runtime::{bounded_btree_map, bounded_vec};
 }
 
 /// Prelude to be used alongside pallet macro, for ease of use.
@@ -830,7 +826,7 @@ pub mod pallet_prelude {
 			IsType, PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,
-		PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
+		PartialEqNoBound, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
 	};
 	pub use codec::{Decode, Encode, MaxEncodedLen};
 	pub use frame_support::pallet_macros::*;
@@ -844,7 +840,7 @@ pub mod pallet_prelude {
 			TransactionTag, TransactionValidity, TransactionValidityError, UnknownTransaction,
 			ValidTransaction,
 		},
-		MAX_MODULE_ERROR_ENCODED_SIZE,
+		RuntimeDebug, MAX_MODULE_ERROR_ENCODED_SIZE,
 	};
 	pub use sp_std::marker::PhantomData;
 	pub use sp_weights::Weight;

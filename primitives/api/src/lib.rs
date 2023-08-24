@@ -344,6 +344,54 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// ```
 /// In this case `Balance` api version 3 is being implemented for `Runtime`. The `impl` block
 /// must contain all methods declared in version 3 and below.
+///
+/// # Conditional version implementation
+///
+/// `impl_runtime_apis!` supports `cfg_attr` attribute for conditional compilation. For example
+/// let's say you want to implement a staging version of the runtime api and put it behind a
+/// feature flag. You can do it this way:
+/// ```ignore
+/// pub struct Runtime {}
+/// sp_api::decl_runtime_apis! {
+///     pub trait ApiWithStagingMethod {
+///         fn stable_one(data: u64);
+///
+///         #[api_version(99)]
+///         fn staging_one();
+///     }
+/// }
+///
+/// sp_api::impl_runtime_apis! {
+///     #[cfg_attr(feature = "enable-staging-api", api_version(99))]
+///     impl self::ApiWithStagingMethod<Block> for Runtime {
+///         fn stable_one(_: u64) {}
+///
+///         #[cfg(feature = "enable-staging-api")]
+///         fn staging_one() {}
+///     }
+/// }
+/// ```
+///
+/// [`decl_runtime_apis!`] declares two version of the api - 1 (the default one, which is
+/// considered stable in our example) and 99 (which is considered staging). In
+/// `impl_runtime_apis!` a `cfg_attr` attribute is attached to the `ApiWithStagingMethod`
+/// implementation. If the code is compiled with  `enable-staging-api` feature a version 99 of
+/// the runtime api will be built which will include `staging_one`. Note that `staging_one`
+/// implementation is feature gated by `#[cfg(feature = ... )]` attribute.
+///
+/// If the code is compiled without `enable-staging-api` version 1 (the default one) will be
+/// built which doesn't include `staging_one`.
+///
+/// `cfg_attr` can also be used together with `api_version`. For the next snippet will build
+/// version 99 if `enable-staging-api` is enabled and version 2 otherwise because both
+/// `cfg_attr` and `api_version` are attached to the impl block:
+/// ```ignore
+/// #[cfg_attr(feature = "enable-staging-api", api_version(99))]
+/// #[api_version(2)]
+/// impl self::ApiWithStagingAndVersionedMethods<Block> for Runtime {
+///  // impl skipped
+/// }
+/// ```
 pub use sp_api_proc_macro::impl_runtime_apis;
 
 /// Mocks given trait implementations as runtime apis.

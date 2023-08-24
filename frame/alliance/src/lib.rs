@@ -94,6 +94,7 @@ pub mod migration;
 mod types;
 pub mod weights;
 
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 use sp_runtime::{
@@ -103,13 +104,11 @@ use sp_runtime::{
 use sp_std::{convert::TryInto, prelude::*};
 
 use frame_support::{
-	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, GetDispatchInfo,
 		PostDispatchInfo,
 	},
 	ensure,
-	scale_info::TypeInfo,
 	traits::{
 		ChangeMembers, Currency, Get, InitializeMembers, IsSubType, OnUnbalanced,
 		ReservableCurrency,
@@ -117,6 +116,7 @@ use frame_support::{
 	weights::Weight,
 };
 use pallet_identity::IdentityField;
+use scale_info::TypeInfo;
 
 pub use pallet::*;
 pub use types::*;

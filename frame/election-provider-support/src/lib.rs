@@ -82,7 +82,7 @@
 //! # use frame_election_provider_support::{*, data_provider};
 //! # use sp_npos_elections::{Support, Assignment};
 //! # use frame_support::traits::ConstU32;
-//! # use frame_support::bounded_vec;
+//! # use sp_runtime::bounded_vec;
 //!
 //! type AccountId = u64;
 //! type Balance = u64;
@@ -177,14 +177,17 @@ pub mod bounds;
 pub mod onchain;
 pub mod traits;
 
-use sp_runtime::traits::{Bounded, Saturating, Zero};
+use sp_runtime::{
+	traits::{Bounded, Saturating, Zero},
+	RuntimeDebug,
+};
 use sp_std::{fmt::Debug, prelude::*};
 
 pub use bounds::DataProviderBounds;
 pub use codec::{Decode, Encode};
 /// Re-export the solution generation macro.
 pub use frame_election_provider_solution_type::generate_solution_type;
-pub use frame_support::{traits::Get, weights::Weight, BoundedVec, RuntimeDebug};
+pub use frame_support::{traits::Get, weights::Weight, BoundedVec};
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{

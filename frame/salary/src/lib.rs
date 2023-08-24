@@ -23,7 +23,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{Saturating, Zero};
-use sp_runtime::Perbill;
+use sp_runtime::{Perbill, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
@@ -33,7 +33,6 @@ use frame_support::{
 		tokens::{GetSalary, Pay, PaymentStatus},
 		RankedMembers,
 	},
-	RuntimeDebug,
 };
 
 #[cfg(test)]

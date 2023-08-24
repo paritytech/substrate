@@ -28,16 +28,16 @@ sp-std = { version = "8.0.0", default-features = false, path = "../../primitives
 sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks"
+	"sp-runtime/runtime-benchmarks",
 ]
 std = [
-	"frame-benchmarking?/std",
 	"codec/std",
+	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
 	"scale-info/std",
@@ -50,5 +50,5 @@ std = [
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

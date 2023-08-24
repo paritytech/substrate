@@ -42,7 +42,7 @@ pub const DEFENSIVE_OP_INTERNAL_ERROR: &str = "Defensive failure has been trigge
 #[macro_export]
 macro_rules! defensive {
 	() => {
-		frame_support::log::error!(
+		frame_support::__private::log::error!(
 			target: "runtime",
 			"{}",
 			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR
@@ -50,7 +50,7 @@ macro_rules! defensive {
 		debug_assert!(false, "{}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR);
 	};
 	($error:expr $(,)?) => {
-		frame_support::log::error!(
+		frame_support::__private::log::error!(
 			target: "runtime",
 			"{}: {:?}",
 			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR,
@@ -59,7 +59,7 @@ macro_rules! defensive {
 		debug_assert!(false, "{}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error);
 	};
 	($error:expr, $proof:expr $(,)?) => {
-		frame_support::log::error!(
+		frame_support::__private::log::error!(
 			target: "runtime",
 			"{}: {:?}: {:?}",
 			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR,

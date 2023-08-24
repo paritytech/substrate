@@ -20,7 +20,7 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../../../..
 sp-weights = { version = "20.0.0", default-features = false, path = "../../../../primitives/weights" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"pallet-transaction-payment/std",

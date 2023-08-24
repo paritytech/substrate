@@ -51,9 +51,9 @@ default = []
 test-helpers = []
 runtime-benchmarks = [
 	"kitchensink-runtime/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks"
+	"sp-runtime/runtime-benchmarks",
 ]
-rocksdb = ["kvdb-rocksdb"]
+rocksdb = [ "kvdb-rocksdb" ]
 
 [[bench]]
 name = "state_access"

@@ -21,7 +21,6 @@ use codec::{Encode, MaxEncodedLen};
 
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays},
-	log,
 	pallet_prelude::*,
 	traits::{Get, OneSessionHandler},
 	weights::Weight,
@@ -31,6 +30,7 @@ use frame_system::{
 	ensure_none, ensure_signed,
 	pallet_prelude::{BlockNumberFor, OriginFor},
 };
+use log;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, Member},

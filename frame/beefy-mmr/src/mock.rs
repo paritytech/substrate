@@ -20,18 +20,18 @@ use std::vec;
 use codec::Encode;
 use frame_support::{
 	construct_runtime, parameter_types,
-	sp_io::TestExternalities,
 	traits::{ConstU16, ConstU32, ConstU64},
-	BasicExternalities,
 };
 use sp_consensus_beefy::mmr::MmrLeafVersion;
 use sp_core::H256;
+use sp_io::TestExternalities;
 use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	impl_opaque_keys,
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup, Keccak256, OpaqueKeys},
 	BuildStorage,
 };
+use sp_state_machine::BasicExternalities;
 
 use crate as pallet_beefy_mmr;
 

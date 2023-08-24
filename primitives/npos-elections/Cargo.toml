@@ -26,7 +26,7 @@ rand = "0.8.5"
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 bench = []
 std = [
 	"codec/std",

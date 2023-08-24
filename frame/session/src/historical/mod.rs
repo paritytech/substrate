@@ -378,11 +378,9 @@ pub(crate) mod tests {
 	};
 
 	use sp_runtime::{key_types::DUMMY, testing::UintAuthorityId, BuildStorage};
+	use sp_state_machine::BasicExternalities;
 
-	use frame_support::{
-		traits::{KeyOwnerProofSystem, OnInitialize},
-		BasicExternalities,
-	};
+	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize};
 
 	type Historical = Pallet<Test>;
 

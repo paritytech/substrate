@@ -279,7 +279,8 @@ impl StorePreimage for () {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{bounded_vec, BoundedVec};
+	use crate::BoundedVec;
+	use sp_runtime::bounded_vec;
 
 	#[test]
 	fn bounded_size_is_correct() {

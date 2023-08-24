@@ -35,10 +35,7 @@
 //! definition.
 
 use codec::{self as codec, Decode, Encode};
-use frame_support::{
-	log,
-	traits::{Get, KeyOwnerProofSystem},
-};
+use frame_support::traits::{Get, KeyOwnerProofSystem};
 use frame_system::pallet_prelude::BlockNumberFor;
 use log::{error, info};
 use sp_consensus_beefy::{EquivocationProof, ValidatorSetId, KEY_TYPE as BEEFY_KEY_TYPE};
