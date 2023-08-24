@@ -131,6 +131,7 @@ members = [
 	"frame/benchmarking",
 	"frame/benchmarking/pov",
 	"frame/bounties",
+	"frame/broker",
 	"frame/child-bounties",
 	"frame/collective",
 	"frame/contracts",
