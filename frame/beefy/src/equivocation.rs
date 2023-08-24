@@ -36,7 +36,7 @@
 
 use codec::{self as codec, Decode, Encode};
 use frame_support::traits::{Get, KeyOwnerProofSystem};
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::pallet_prelude::{BlockNumberFor, HeaderFor};
 use log::{error, info};
 use sp_consensus_beefy::{
 	ForkEquivocationProof, ValidatorSetId, VoteEquivocationProof, KEY_TYPE as BEEFY_KEY_TYPE,
