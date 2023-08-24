@@ -25,6 +25,7 @@ use sp_runtime::{generic, traits::BlakeTwo256, BuildStorage};
 
 pub use self::frame_system::{pallet_prelude::*, Config, Pallet};
 
+mod inject_runtime_type;
 mod storage_alias;
 
 #[pallet]
@@ -34,17 +35,40 @@ pub mod frame_system {
 	pub use crate::dispatch::RawOrigin;
 	use crate::pallet_prelude::*;
 
+	pub mod config_preludes {
+		use super::{inject_runtime_type, DefaultConfig};
+		pub struct TestDefaultConfig;
+
+		#[crate::register_default_impl(TestDefaultConfig)]
+		impl DefaultConfig for TestDefaultConfig {
+			type AccountId = u64;
+			type BaseCallFilter = frame_support::traits::Everything;
+			#[inject_runtime_type]
+			type RuntimeOrigin = ();
+			#[inject_runtime_type]
+			type RuntimeCall = ();
+			#[inject_runtime_type]
+			type PalletInfo = ();
+			type DbWeight = ();
+		}
+	}
+
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
-	#[pallet::config]
+	#[pallet::config(with_default)]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: 'static {
+		#[pallet::no_default]
 		type Block: Parameter + sp_runtime::traits::Block;
 		type AccountId;
+		#[pallet::no_default_bounds]
 		type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;
+		#[pallet::no_default_bounds]
 		type RuntimeOrigin;
+		#[pallet::no_default_bounds]
 		type RuntimeCall;
+		#[pallet::no_default_bounds]
 		type PalletInfo: crate::traits::PalletInfo;
 		type DbWeight: Get<crate::weights::RuntimeDbWeight>;
 	}
@@ -168,14 +192,10 @@ crate::construct_runtime!(
 	}
 );
 
+#[crate::derive_impl(self::frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl Config for Runtime {
 	type Block = Block;
 	type AccountId = AccountId;
-	type BaseCallFilter = crate::traits::Everything;
-	type RuntimeOrigin = RuntimeOrigin;
-	type RuntimeCall = RuntimeCall;
-	type PalletInfo = PalletInfo;
-	type DbWeight = ();
 }
 
 fn new_test_ext() -> TestExternalities {

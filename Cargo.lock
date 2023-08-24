@@ -3000,6 +3000,7 @@ dependencies = [
  "sp-std",
  "sp-tracing",
  "sp-weights",
+ "static_assertions",
  "tt-call",
 ]
 
