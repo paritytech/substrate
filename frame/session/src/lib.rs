@@ -115,8 +115,8 @@ mod mock;
 mod tests;
 pub mod weights;
 
+use codec::{Decode, MaxEncodedLen};
 use frame_support::{
-	codec::{Decode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
 	traits::{

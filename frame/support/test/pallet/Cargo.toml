@@ -20,12 +20,12 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../../
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../../../primitives/runtime" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",
 	"scale-info/std",
 	"serde/std",
-	"sp-runtime/std"
+	"sp-runtime/std",
 ]

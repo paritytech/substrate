@@ -124,7 +124,7 @@ fn generate_field_types(
 					res = Some(None);
 				} else if meta.path.is_ident("compact") {
 					let field_ty = &field.ty;
-					res = Some(Some(quote::quote!(#scrate::codec::Compact<#field_ty>)));
+					res = Some(Some(quote::quote!(#scrate::__private::codec::Compact<#field_ty>)));
 				} else if meta.path.is_ident("compact") {
 					res = Some(Some(meta.value()?.parse()?));
 				}

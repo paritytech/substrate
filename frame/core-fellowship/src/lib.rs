@@ -61,6 +61,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{Saturating, Zero};
+use sp_runtime::RuntimeDebug;
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
@@ -69,7 +70,7 @@ use frame_support::{
 	traits::{
 		tokens::Balance as BalanceTrait, EnsureOrigin, EnsureOriginWithArg, Get, RankedMembers,
 	},
-	BoundedVec, RuntimeDebug,
+	BoundedVec,
 };
 
 #[cfg(test)]

@@ -37,6 +37,10 @@ pub mod mock;
 mod tests;
 
 mod common_functions;
+/// A library providing the feature set of this pallet. It contains modules with helper methods that
+/// perform storage updates and checks required by this pallet's dispatchables. To use pallet level
+/// features, make sure to set appropriate bitflags for [`Config::Features`] in your runtime
+/// configuration trait.
 mod features;
 mod impl_nonfungibles;
 mod types;
@@ -63,6 +67,7 @@ pub use weights::WeightInfo;
 /// The log target of this pallet.
 pub const LOG_TARGET: &'static str = "runtime::nfts";
 
+/// A type alias for the account ID type used in the dispatchable functions of this pallet.
 type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
@@ -657,7 +662,7 @@ pub mod pallet {
 		///
 		/// The origin must be Signed and the sender must have sufficient funds free.
 		///
-		/// `ItemDeposit` funds of sender are reserved.
+		/// `CollectionDeposit` funds of sender are reserved.
 		///
 		/// Parameters:
 		/// - `admin`: The admin of this collection. The admin is the initial address of each
@@ -839,6 +844,7 @@ pub mod pallet {
 						MintType::HolderOf(collection_id) => {
 							let MintWitness { owned_item, .. } =
 								witness_data.clone().ok_or(Error::<T, I>::WitnessRequired)?;
+							let owned_item = owned_item.ok_or(Error::<T, I>::BadWitness)?;
 
 							let owns_item = Account::<T, I>::contains_key((
 								&caller,

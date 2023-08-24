@@ -15,6 +15,7 @@
   variables:
     RUSTFLAGS: "-D warnings"
   script:
+    - cargo install --locked --git https://github.com/paritytech/try-runtime-cli --rev a93c9b5abe5d31a4cf1936204f7e5c489184b521
     - git clone
       --depth=1
       --branch="$PIPELINE_SCRIPTS_TAG"
@@ -36,10 +37,9 @@
       substrate: polkadot-v*
       polkadot: release-v*
     COMPANION_CHECK_COMMAND: >
-      time cargo build --release -p "$NETWORK"-runtime &&
-      time cargo run --release --features try-runtime try-runtime \
+      time cargo build --release -p "$NETWORK"-runtime --features try-runtime &&
+      time try-runtime \
           --runtime ./target/release/wbuild/"$NETWORK"-runtime/target/wasm32-unknown-unknown/release/"$NETWORK"_runtime.wasm \
-          --chain=${NETWORK}-dev \
           on-runtime-upgrade --checks=pre-and-post live --uri wss://${NETWORK}-try-runtime-node.parity-chains.parity.io:443
 
 # Individual jobs are set up for each dependent project so that they can be ran in parallel.

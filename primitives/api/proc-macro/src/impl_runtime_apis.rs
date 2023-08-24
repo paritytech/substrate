@@ -31,10 +31,11 @@ use quote::quote;
 
 use syn::{
 	fold::{self, Fold},
+	parenthesized,
 	parse::{Error, Parse, ParseStream, Result},
 	parse_macro_input, parse_quote,
 	spanned::Spanned,
-	Attribute, Ident, ImplItem, ItemImpl, Path, Signature, Type, TypePath,
+	Attribute, Ident, ImplItem, ItemImpl, LitInt, LitStr, Path, Signature, Type, TypePath,
 };
 
 use std::collections::HashSet;
@@ -67,6 +68,7 @@ fn generate_impl_call(
 	runtime: &Type,
 	input: &Ident,
 	impl_trait: &Path,
+	api_version: &ApiVersion,
 ) -> Result<TokenStream> {
 	let params =
 		extract_parameter_names_types_and_borrows(signature, AllowSelfRefInParameters::No)?;
@@ -111,11 +113,40 @@ fn generate_impl_call(
 		)
 	};
 
+	let fn_calls = if let Some(feature_gated) = &api_version.feature_gated {
+		let pnames = pnames2;
+		let pnames2 = pnames.clone();
+		let pborrow2 = pborrow.clone();
+
+		let feature_name = &feature_gated.0;
+		let impl_trait_fg = extend_with_api_version(impl_trait.clone(), Some(feature_gated.1));
+		let impl_trait = extend_with_api_version(impl_trait.clone(), api_version.custom);
+
+		quote!(
+			#[cfg(feature = #feature_name)]
+			#[allow(deprecated)]
+			let r = <#runtime as #impl_trait_fg>::#fn_name(#( #pborrow #pnames ),*);
+
+			#[cfg(not(feature = #feature_name))]
+			#[allow(deprecated)]
+			let r = <#runtime as #impl_trait>::#fn_name(#( #pborrow2 #pnames2 ),*);
+
+			r
+		)
+	} else {
+		let pnames = pnames2;
+		let impl_trait = extend_with_api_version(impl_trait.clone(), api_version.custom);
+
+		quote!(
+			#[allow(deprecated)]
+			<#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames ),*)
+		)
+	};
+
 	Ok(quote!(
 		#decode_params
 
-		#[allow(deprecated)]
-		<#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames2 ),*)
+		#fn_calls
 	))
 }
 
@@ -130,7 +161,6 @@ fn generate_impl_calls(
 		let trait_api_ver = extract_api_version(&impl_.attrs, impl_.span())?;
 		let impl_trait_path = extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?;
 		let impl_trait = extend_with_runtime_decl_path(impl_trait_path.clone());
-		let impl_trait = extend_with_api_version(impl_trait, trait_api_ver);
 		let impl_trait_ident = &impl_trait_path
 			.segments
 			.last()
@@ -139,14 +169,23 @@ fn generate_impl_calls(
 
 		for item in &impl_.items {
 			if let ImplItem::Fn(method) = item {
-				let impl_call =
-					generate_impl_call(&method.sig, &impl_.self_ty, input, &impl_trait)?;
+				let impl_call = generate_impl_call(
+					&method.sig,
+					&impl_.self_ty,
+					input,
+					&impl_trait,
+					&trait_api_ver,
+				)?;
+				let mut attrs = filter_cfg_attrs(&impl_.attrs);
+
+				// Add any `#[cfg(feature = X)]` attributes of the method to result
+				attrs.extend(filter_cfg_attrs(&method.attrs));
 
 				impl_calls.push((
 					impl_trait_ident.clone(),
 					method.sig.ident.clone(),
 					impl_call,
-					filter_cfg_attrs(&impl_.attrs),
+					attrs,
 				));
 			}
 		}
@@ -229,10 +268,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block> + 'static> {
 				call: &'static C,
 				transaction_depth: std::cell::RefCell<u16>,
-				changes: std::cell::RefCell<#crate_::OverlayedChanges>,
-				storage_transaction_cache: std::cell::RefCell<
-					#crate_::StorageTransactionCache<Block, C::StateBackend>
-				>,
+				changes: std::cell::RefCell<#crate_::OverlayedChanges<#crate_::HashingFor<Block>>>,
 				recorder: std::option::Option<#crate_::ProofRecorder<Block>>,
 				call_context: #crate_::CallContext,
 				extensions: std::cell::RefCell<#crate_::Extensions>,
@@ -242,8 +278,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> #crate_::ApiExt<Block> for
 				RuntimeApiImpl<Block, C>
 			{
-				type StateBackend = C::StateBackend;
-
 				fn execute_in_transaction<F: FnOnce(&Self) -> #crate_::TransactionOutcome<R>, R>(
 					&self,
 					call: F,
@@ -305,22 +339,21 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					})
 				}
 
-				fn into_storage_changes(
+				fn into_storage_changes<B: #crate_::StateBackend<#crate_::HashingFor<Block>>>(
 					&self,
-					backend: &Self::StateBackend,
+					backend: &B,
 					parent_hash: Block::Hash,
 				) -> core::result::Result<
-					#crate_::StorageChanges<C::StateBackend, Block>,
+					#crate_::StorageChanges<Block>,
 				String
 					> where Self: Sized {
 						let state_version = #crate_::CallApiAt::<Block>::runtime_version_at(self.call, std::clone::Clone::clone(&parent_hash))
 							.map(|v| #crate_::RuntimeVersion::state_version(&v))
 							.map_err(|e| format!("Failed to get state version: {}", e))?;
 
-						#crate_::OverlayedChanges::into_storage_changes(
-							std::cell::RefCell::take(&self.changes),
+						#crate_::OverlayedChanges::drain_storage_changes(
+							&mut std::cell::RefCell::borrow_mut(&self.changes),
 							backend,
-							core::cell::RefCell::take(&self.storage_transaction_cache),
 							state_version,
 						)
 					}
@@ -349,7 +382,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 						transaction_depth: 0.into(),
 						changes: std::default::Default::default(),
 						recorder: std::default::Default::default(),
-						storage_transaction_cache: std::default::Default::default(),
 						call_context: #crate_::CallContext::Offchain,
 						extensions: std::default::Default::default(),
 						extensions_generated_for: std::default::Default::default(),
@@ -448,6 +480,18 @@ fn extend_with_api_version(mut trait_: Path, version: Option<u64>) -> Path {
 	trait_
 }
 
+/// Adds a feature guard to `attributes`.
+///
+/// Depending on `enable`, the feature guard either enables ('feature = "something"`) or disables
+/// (`not(feature = "something")`).
+fn add_feature_guard(attrs: &mut Vec<Attribute>, feature_name: &str, enable: bool) {
+	let attr = match enable {
+		true => parse_quote!(#[cfg(feature = #feature_name)]),
+		false => parse_quote!(#[cfg(not(feature = #feature_name))]),
+	};
+	attrs.push(attr);
+}
+
 /// Generates the implementations of the apis for the runtime.
 fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let mut impls_prepared = Vec::new();
@@ -458,12 +502,29 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 		let trait_api_ver = extract_api_version(&impl_.attrs, impl_.span())?;
 
 		let mut impl_ = impl_.clone();
+		impl_.attrs = filter_cfg_attrs(&impl_.attrs);
+
 		let trait_ = extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?.clone();
 		let trait_ = extend_with_runtime_decl_path(trait_);
-		let trait_ = extend_with_api_version(trait_, trait_api_ver);
+		// If the trait api contains feature gated version - there are staging methods in it. Handle
+		// them explicitly here by adding staging implementation with `#cfg(feature = ...)` and
+		// stable implementation with `#[cfg(not(feature = ...))]`.
+		if let Some(feature_gated) = trait_api_ver.feature_gated {
+			let mut feature_gated_impl = impl_.clone();
+			add_feature_guard(&mut feature_gated_impl.attrs, &feature_gated.0, true);
+			feature_gated_impl.trait_.as_mut().unwrap().1 =
+				extend_with_api_version(trait_.clone(), Some(feature_gated.1));
 
+			impls_prepared.push(feature_gated_impl);
+
+			// Finally add `#[cfg(not(feature = ...))]` for the stable implementation (which is
+			// generated outside this if).
+			add_feature_guard(&mut impl_.attrs, &feature_gated.0, false);
+		}
+
+		// Generate stable trait implementation.
+		let trait_ = extend_with_api_version(trait_, trait_api_ver.custom);
 		impl_.trait_.as_mut().unwrap().1 = trait_;
-		impl_.attrs = filter_cfg_attrs(&impl_.attrs);
 		impls_prepared.push(impl_);
 	}
 
@@ -535,7 +596,6 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 						function: (*fn_name)(version),
 						arguments: params,
 						overlayed_changes: &self.changes,
-						storage_transaction_cache: &self.storage_transaction_cache,
 						call_context: self.call_context,
 						recorder: &self.recorder,
 						extensions: &self.extensions,
@@ -671,7 +731,8 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let c = generate_crate_access();
 
 	for impl_ in impls {
-		let api_ver = extract_api_version(&impl_.attrs, impl_.span())?.map(|a| a as u32);
+		let versions = extract_api_version(&impl_.attrs, impl_.span())?;
+		let api_ver = versions.custom.map(|a| a as u32);
 
 		let mut path = extend_with_runtime_decl_path(
 			extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?.clone(),
@@ -695,11 +756,34 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 		}
 
 		let id: Path = parse_quote!( #path ID );
-		let version = quote!( #path VERSION );
-		let attrs = filter_cfg_attrs(&impl_.attrs);
+		let mut attrs = filter_cfg_attrs(&impl_.attrs);
 
-		let api_ver = api_ver.map(|a| quote!( #a )).unwrap_or_else(|| version);
-		populate_runtime_api_versions(&mut result, &mut sections, attrs, id, api_ver, &c)
+		// Handle API versioning
+		// If feature gated version is set - handle it first
+		if let Some(feature_gated) = versions.feature_gated {
+			let feature_gated_version = feature_gated.1 as u32;
+			// the attributes for the feature gated staging api
+			let mut feature_gated_attrs = attrs.clone();
+			add_feature_guard(&mut feature_gated_attrs, &feature_gated.0, true);
+			populate_runtime_api_versions(
+				&mut result,
+				&mut sections,
+				feature_gated_attrs,
+				id.clone(),
+				quote!( #feature_gated_version ),
+				&c,
+			);
+
+			// Add `#[cfg(not(feature ...))]` to the initial attributes. If the staging feature flag
+			// is not set we want to set the stable api version
+			add_feature_guard(&mut attrs, &feature_gated.0, false);
+		}
+
+		// Now add the stable api version to the versions list. If the api has got staging functions
+		// there might be a `#[cfg(not(feature ...))]` attribute attached to the stable version.
+		let base_api_version = quote!( #path VERSION );
+		let api_ver = api_ver.map(|a| quote!( #a )).unwrap_or_else(|| base_api_version);
+		populate_runtime_api_versions(&mut result, &mut sections, attrs, id, api_ver, &c);
 	}
 
 	Ok(quote!(
@@ -766,12 +850,64 @@ fn filter_cfg_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
 	attrs.iter().filter(|a| a.path().is_ident("cfg")).cloned().collect()
 }
 
+/// Parse feature flagged api_version.
+/// E.g. `#[cfg_attr(feature = "enable-staging-api", api_version(99))]`
+fn extract_cfg_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<(String, u64)>> {
+	let cfg_attrs = attrs.iter().filter(|a| a.path().is_ident("cfg_attr")).collect::<Vec<_>>();
+
+	let mut cfg_api_version_attr = Vec::new();
+	for cfg_attr in cfg_attrs {
+		let mut feature_name = None;
+		let mut api_version = None;
+		cfg_attr.parse_nested_meta(|m| {
+			if m.path.is_ident("feature") {
+				let a = m.value()?;
+				let b: LitStr = a.parse()?;
+				feature_name = Some(b.value());
+			} else if m.path.is_ident(API_VERSION_ATTRIBUTE) {
+				let content;
+				parenthesized!(content in m.input);
+				let ver: LitInt = content.parse()?;
+				api_version = Some(ver.base10_parse::<u64>()?);
+			}
+			Ok(())
+		})?;
+
+		// If there is a cfg attribute containing api_version - save if for processing
+		if let (Some(feature_name), Some(api_version)) = (feature_name, api_version) {
+			cfg_api_version_attr.push((feature_name, api_version, cfg_attr.span()));
+		}
+	}
+
+	if cfg_api_version_attr.len() > 1 {
+		let mut err = Error::new(span, format!("Found multiple feature gated api versions (cfg attribute with nested `{}` attribute). This is not supported.", API_VERSION_ATTRIBUTE));
+		for (_, _, attr_span) in cfg_api_version_attr {
+			err.combine(Error::new(attr_span, format!("`{}` found here", API_VERSION_ATTRIBUTE)));
+		}
+
+		return Err(err)
+	}
+
+	Ok(cfg_api_version_attr
+		.into_iter()
+		.next()
+		.map(|(feature, name, _)| (feature, name)))
+}
+
+/// Represents an API version.
+struct ApiVersion {
+	/// Corresponds to `#[api_version(X)]` attribute.
+	pub custom: Option<u64>,
+	/// Corresponds to `#[cfg_attr(feature = "enable-staging-api", api_version(99))]`
+	/// attribute. `String` is the feature name, `u64` the staging api version.
+	pub feature_gated: Option<(String, u64)>,
+}
+
 // Extracts the value of `API_VERSION_ATTRIBUTE` and handles errors.
 // Returns:
 // - Err if the version is malformed
-// - Some(u64) if the version is set
-// - None if the version is not set (this is valid).
-fn extract_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<u64>> {
+// - `ApiVersion` on success. If a version is set or not is determined by the fields of `ApiVersion`
+fn extract_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<ApiVersion> {
 	// First fetch all `API_VERSION_ATTRIBUTE` values (should be only one)
 	let api_ver = attrs
 		.iter()
@@ -790,7 +926,10 @@ fn extract_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<u64>
 	}
 
 	// Parse the runtime version if there exists one.
-	api_ver.first().map(|v| parse_runtime_api_version(v)).transpose()
+	Ok(ApiVersion {
+		custom: api_ver.first().map(|v| parse_runtime_api_version(v)).transpose()?,
+		feature_gated: extract_cfg_api_version(attrs, span)?,
+	})
 }
 
 #[cfg(test)]

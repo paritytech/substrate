@@ -37,11 +37,11 @@ pub struct Key<Hasher, KeyType>(core::marker::PhantomData<(Hasher, KeyType)>);
 /// A trait that contains the current key as an associated type.
 pub trait KeyGenerator {
 	type Key: EncodeLike<Self::Key> + StaticTypeInfo;
-	type KArg: Encode;
+	type KArg: Encode + EncodeLike<Self::KArg>;
 	type HashFn: FnOnce(&[u8]) -> Vec<u8>;
 	type HArg;
 
-	const HASHER_METADATA: &'static [crate::metadata_ir::StorageHasherIR];
+	const HASHER_METADATA: &'static [sp_metadata_ir::StorageHasherIR];
 
 	/// Given a `key` tuple, calculate the final key by encoding each element individually and
 	/// hashing them using the corresponding hasher in the `KeyGenerator`.
@@ -74,7 +74,7 @@ impl<H: StorageHasher, K: FullCodec + StaticTypeInfo> KeyGenerator for Key<H, K>
 	type HashFn = Box<dyn FnOnce(&[u8]) -> Vec<u8>>;
 	type HArg = (Self::HashFn,);
 
-	const HASHER_METADATA: &'static [crate::metadata_ir::StorageHasherIR] = &[H::METADATA];
+	const HASHER_METADATA: &'static [sp_metadata_ir::StorageHasherIR] = &[H::METADATA];
 
 	fn final_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
 		H::hash(&key.to_encoded_iter().next().expect("should have at least one element!"))
@@ -114,7 +114,7 @@ impl KeyGenerator for Tuple {
 	for_tuples!( type HArg = ( #(Tuple::HashFn),* ); );
 	type HashFn = Box<dyn FnOnce(&[u8]) -> Vec<u8>>;
 
-	const HASHER_METADATA: &'static [crate::metadata_ir::StorageHasherIR] =
+	const HASHER_METADATA: &'static [sp_metadata_ir::StorageHasherIR] =
 		&[for_tuples!( #(Tuple::Hasher::METADATA),* )];
 
 	fn final_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
@@ -196,6 +196,11 @@ impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P);
 impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q);
 impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q, R);
 
+impl<'a, T: EncodeLike<U> + EncodeLikeTuple<U>, U: Encode> EncodeLikeTuple<U>
+	for codec::Ref<'a, T, U>
+{
+}
+
 /// Trait to indicate that a tuple can be converted into an iterator of a vector of encoded bytes.
 pub trait TupleToEncodedIter {
 	fn to_encoded_iter(&self) -> sp_std::vec::IntoIter<Vec<u8>>;
@@ -212,6 +217,15 @@ impl TupleToEncodedIter for Tuple {
 impl<T: TupleToEncodedIter> TupleToEncodedIter for &T {
 	fn to_encoded_iter(&self) -> sp_std::vec::IntoIter<Vec<u8>> {
 		(*self).to_encoded_iter()
+	}
+}
+
+impl<'a, T: EncodeLike<U> + TupleToEncodedIter, U: Encode> TupleToEncodedIter
+	for codec::Ref<'a, T, U>
+{
+	fn to_encoded_iter(&self) -> sp_std::vec::IntoIter<Vec<u8>> {
+		use core::ops::Deref as _;
+		self.deref().to_encoded_iter()
 	}
 }
 

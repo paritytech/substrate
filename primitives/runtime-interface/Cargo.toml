@@ -37,18 +37,18 @@ trybuild = "1.0.74"
 [features]
 default = [ "std" ]
 std = [
-	"sp-storage/std",
 	"bytes/std",
-	"sp-wasm-interface/std",
-	"sp-std/std",
-	"sp-tracing/std",
 	"codec/std",
-	"sp-externalities/std",
 	"primitive-types/std",
 	"sp-core/std",
+	"sp-externalities/std",
 	"sp-io/std",
 	"sp-runtime-interface-test-wasm/std",
-	"sp-state-machine/std"
+	"sp-state-machine/std",
+	"sp-std/std",
+	"sp-storage/std",
+	"sp-tracing/std",
+	"sp-wasm-interface/std",
 ]
 
 # ATTENTION

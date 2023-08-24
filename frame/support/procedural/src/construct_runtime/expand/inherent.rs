@@ -58,17 +58,17 @@ pub fn expand_outer_inherent(
 
 		trait InherentDataExt {
 			fn create_extrinsics(&self) ->
-				#scrate::sp_std::vec::Vec<<#block as #scrate::sp_runtime::traits::Block>::Extrinsic>;
+				#scrate::__private::sp_std::vec::Vec<<#block as #scrate::sp_runtime::traits::Block>::Extrinsic>;
 			fn check_extrinsics(&self, block: &#block) -> #scrate::inherent::CheckInherentsResult;
 		}
 
 		impl InherentDataExt for #scrate::inherent::InherentData {
 			fn create_extrinsics(&self) ->
-				#scrate::sp_std::vec::Vec<<#block as #scrate::sp_runtime::traits::Block>::Extrinsic>
+				#scrate::__private::sp_std::vec::Vec<<#block as #scrate::sp_runtime::traits::Block>::Extrinsic>
 			{
 				use #scrate::inherent::ProvideInherent;
 
-				let mut inherents = #scrate::sp_std::vec::Vec::new();
+				let mut inherents = #scrate::__private::sp_std::vec::Vec::new();
 
 				#(
 					#pallet_attrs
@@ -91,7 +91,7 @@ pub fn expand_outer_inherent(
 				use #scrate::traits::{IsSubType, ExtrinsicCall};
 				use #scrate::sp_runtime::traits::Block as _;
 				use #scrate::_private::sp_inherents::Error;
-				use #scrate::log;
+				use #scrate::__private::log;
 
 				let mut result = #scrate::inherent::CheckInherentsResult::new();
 

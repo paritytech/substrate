@@ -17,8 +17,5 @@ sp-core = { version = "21.0.0", default-features = false, path = "../../../primi
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
 
 [features]
-default = ["std"]
-std = [
-	"sp-core/std",
-	"sp-runtime/std",
-]
+default = [ "std" ]
+std = [ "sp-core/std", "sp-runtime/std" ]

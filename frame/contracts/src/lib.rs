@@ -96,18 +96,19 @@ mod storage;
 mod wasm;
 
 pub mod chain_extension;
+pub mod debug;
 pub mod migration;
 pub mod weights;
 
 #[cfg(test)]
 mod tests;
 use crate::{
-	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
+	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, MomentOf, Stack as ExecStack},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
 	wasm::{CodeInfo, WasmBlob},
 };
-use codec::{Codec, Decode, Encode, HasCompact};
+use codec::{Codec, Decode, Encode, HasCompact, MaxEncodedLen};
 use environmental::*;
 use frame_support::{
 	dispatch::{
@@ -121,9 +122,13 @@ use frame_support::{
 		ConstU32, Contains, Get, Randomness, Time,
 	},
 	weights::Weight,
-	BoundedVec, RuntimeDebugNoBound,
+	BoundedVec, DefaultNoBound, RuntimeDebugNoBound,
 };
-use frame_system::{ensure_signed, pallet_prelude::OriginFor, EventRecord, Pallet as System};
+use frame_system::{
+	ensure_signed,
+	pallet_prelude::{BlockNumberFor, OriginFor},
+	EventRecord, Pallet as System,
+};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
 	ContractInstantiateResult, ContractResult, ExecReturnValue, GetStorageResult,
@@ -131,11 +136,15 @@ use pallet_contracts_primitives::{
 };
 use scale_info::TypeInfo;
 use smallvec::Array;
-use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, Zero};
+use sp_runtime::{
+	traits::{Convert, Hash, Saturating, StaticLookup, Zero},
+	RuntimeDebug,
+};
 use sp_std::{fmt::Debug, prelude::*};
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
+	debug::Tracing,
 	exec::Frame,
 	migration::{MigrateSequence, Migration, NoopMigration},
 	pallet::*,
@@ -178,15 +187,46 @@ const SENTINEL: u32 = u32::MAX;
 /// Example: `RUST_LOG=runtime::contracts=debug my_code --dev`
 const LOG_TARGET: &str = "runtime::contracts";
 
+/// Wrapper around `PhantomData` to prevent it being filtered by `scale-info`.
+///
+/// `scale-info` filters out `PhantomData` fields because usually we are only interested
+/// in sized types. However, when trying to communicate **types** as opposed to **values**
+/// we want to have those zero sized types be included.
+#[derive(Encode, Decode, DefaultNoBound, TypeInfo)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+pub struct EnvironmentType<T>(PhantomData<T>);
+
+/// List of all runtime configurable types that are used in the communication between
+/// `pallet-contracts` and any given contract.
+///
+/// Since those types are configurable they can vary between
+/// chains all using `pallet-contracts`. Hence we need a mechanism to communicate those types
+/// in a way that can be consumed by offchain tooling.
+///
+/// This type only exists in order to appear in the metadata where it can be read by
+/// offchain tooling.
+#[derive(Encode, Decode, DefaultNoBound, TypeInfo)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[scale_info(skip_type_params(T))]
+pub struct Environment<T: Config> {
+	account_id: EnvironmentType<AccountIdOf<T>>,
+	balance: EnvironmentType<BalanceOf<T>>,
+	hash: EnvironmentType<<T as frame_system::Config>::Hash>,
+	hasher: EnvironmentType<<T as frame_system::Config>::Hashing>,
+	timestamp: EnvironmentType<MomentOf<T>>,
+	block_number: EnvironmentType<BlockNumberFor<T>>,
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use crate::debug::Debugger;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::Perbill;
 
 	/// The current storage version.
-	pub(crate) const STORAGE_VERSION: StorageVersion = StorageVersion::new(14);
+	pub(crate) const STORAGE_VERSION: StorageVersion = StorageVersion::new(15);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -351,6 +391,19 @@ pub mod pallet {
 		/// type Migrations = (v10::Migration<Runtime, Currency>,);
 		/// ```
 		type Migrations: MigrateSequence;
+
+		/// # Note
+		/// For most production chains, it's recommended to use the `()` implementation of this
+		/// trait. This implementation offers additional logging when the log target
+		/// "runtime::contracts" is set to trace.
+		type Debug: Debugger<Self>;
+
+		/// Type that bundles together all the runtime configurable interface types.
+		///
+		/// This is not a real config. We just mention the type here as constant so that
+		/// its type appears in the metadata. Only valid value is `()`.
+		#[pallet::constant]
+		type Environment: Get<Environment<Self>>;
 	}
 
 	#[pallet::hooks]
@@ -890,6 +943,20 @@ pub mod pallet {
 			/// The code hash that was delegate called.
 			code_hash: CodeHash<T>,
 		},
+
+		/// Some funds have been transferred and held as storage deposit.
+		StorageDepositTransferredAndHeld {
+			from: T::AccountId,
+			to: T::AccountId,
+			amount: BalanceOf<T>,
+		},
+
+		/// Some storage deposit funds have been transferred and released.
+		StorageDepositTransferredAndReleased {
+			from: T::AccountId,
+			to: T::AccountId,
+			amount: BalanceOf<T>,
+		},
 	}
 
 	#[pallet::error]
@@ -990,6 +1057,8 @@ pub mod pallet {
 	pub enum HoldReason {
 		/// The Pallet has reserved it for storing code on-chain.
 		CodeUploadDepositReserve,
+		/// The Pallet has reserved it for storage deposit.
+		StorageDepositReserve,
 	}
 
 	/// A mapping from a contract's code hash to its code.
@@ -1110,7 +1179,9 @@ struct InstantiateInput<T: Config> {
 }
 
 /// Determines whether events should be collected during execution.
-#[derive(PartialEq)]
+#[derive(
+	Copy, Clone, PartialEq, Eq, RuntimeDebug, Decode, Encode, MaxEncodedLen, scale_info::TypeInfo,
+)]
 pub enum CollectEvents {
 	/// Collect events.
 	///
@@ -1126,7 +1197,9 @@ pub enum CollectEvents {
 }
 
 /// Determines whether debug messages will be collected.
-#[derive(PartialEq)]
+#[derive(
+	Copy, Clone, PartialEq, Eq, RuntimeDebug, Decode, Encode, MaxEncodedLen, scale_info::TypeInfo,
+)]
 pub enum DebugInfo {
 	/// Collect debug messages.
 	/// # Note
