@@ -1062,7 +1062,7 @@ pub(crate) mod tests {
 	use sp_blockchain::Backend as BlockchainBackendT;
 	use sp_consensus_beefy::{
 		generate_vote_equivocation_proof, generate_fork_equivocation_proof_vote, known_payloads, known_payloads::MMR_ROOT_ID,
-		mmr::MmrRootProvider, Keyring, Payload, SignedCommitment,
+		mmr::MmrRootProvider, Keyring, Payload, SignedCommitment, ForkEquivocationProof,
 	};
 	use sp_runtime::traits::One;
 	use std::marker::PhantomData;
@@ -1677,14 +1677,14 @@ pub(crate) mod tests {
 
 	#[tokio::test]
 	async fn should_report_valid_fork_equivocations() {
-		let peers = [Keyring::Alice, Keyring::Bob];
+		let peers = [Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 		let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
 		let mut api_alice = TestApi::with_validator_set(&validator_set);
 		api_alice.allow_equivocations();
 		let api_alice = Arc::new(api_alice);
 
 		// instantiate network with Alice and Bob running full voters.
-		let mut net = BeefyTestNet::new(2);
+		let mut net = BeefyTestNet::new(3);
 
 		let session_len = 10;
 		let hashes = net.generate_blocks_and_sync(50, session_len, &validator_set, true).await;
@@ -1693,10 +1693,14 @@ pub(crate) mod tests {
 		let block_number = 1;
 		let header = net.peer(1).client().as_backend().blockchain().header(hashes[block_number as usize]).unwrap().unwrap();
 		let payload = Payload::from_single_entry(MMR_ROOT_ID, "amievil".encode());
+		let votes: Vec<_> = peers.iter().map(|k| {
+			// signed_vote(block_number as u64, payload.clone(), validator_set.id(), k)
+			(block_number as u64, payload.clone(), validator_set.id(), k)
+		}).collect();
 
-		let validator_set_id = 0;
 
-		let proof = generate_fork_equivocation_proof_vote((block_number as u64, payload.clone(), validator_set_id, &Keyring::Bob), header.clone());
+		// verify: Alice reports Bob
+		let proof = generate_fork_equivocation_proof_vote(votes[1].clone(), header.clone());
 		{
 			// expect fisher (Alice) to successfully process it
 			assert_eq!(alice_worker.gossip_validator.fisherman.report_fork_equivocation(proof.clone()), Ok(()));
@@ -1706,15 +1710,33 @@ pub(crate) mod tests {
 			assert_eq!(*reported.get(0).unwrap(), proof);
 		}
 
-		let proof = generate_fork_equivocation_proof_vote((block_number as u64, payload, validator_set_id, &Keyring::Alice), header);
+		// verify: Alice does not self-report
+		let proof = generate_fork_equivocation_proof_vote(votes[0].clone(), header.clone());
 		{
 			// expect fisher (Alice) to successfully process it
 			assert_eq!(alice_worker.gossip_validator.fisherman.report_fork_equivocation(proof.clone()), Ok(()));
-			// verify Alice does not report her own equivocation to runtime
+			// verify Alice does *not* report her own equivocation to runtime
 			let reported = alice_worker.runtime.reported_fork_equivocations.as_ref().unwrap().lock();
 			assert_eq!(reported.len(), 1);
 			assert!(*reported.get(0).unwrap() != proof);
 		}
 
+		// verify: Alice reports VersionedFinalityProof equivocation
+		let commitment = Commitment {
+			payload: payload.clone(),
+			block_number: block_number as u64,
+			validator_set_id: validator_set.id(),
+		};
+		// only Bob and Charlie sign
+		let signatories: Vec<_> = vec![Keyring::Bob, Keyring::Charlie].iter().map(|k| (k.public(), k.sign(&commitment.encode()))).collect();
+		let proof = ForkEquivocationProof {commitment, signatories, correct_header: header};
+		{
+			// expect fisher (Alice) to successfully process it
+			assert_eq!(alice_worker.gossip_validator.fisherman.report_fork_equivocation(proof.clone()), Ok(()));
+			// verify Alice report Bob's and Charlie's equivocation to runtime
+			let reported = alice_worker.runtime.reported_fork_equivocations.as_ref().unwrap().lock();
+			assert_eq!(reported.len(), 2);
+			assert_eq!(*reported.get(1).unwrap(), proof);
+		}
 	}
 }
