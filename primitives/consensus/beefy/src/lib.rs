@@ -372,10 +372,9 @@ where
 	// cheap failfasts:
 	// 1. check that `payload` on the `vote` is different that the `expected_payload`
 	// 2. if the signatories signed a payload when there should be none (for
-	// instance for a block prior to BEEFY activation), they should likewise be
-	// slashed
-	if Some(&commitment.payload) != expected_payload.as_ref() || expected_mmr_root_digest.is_none()
-	{
+	// instance for a block prior to BEEFY activation), then expected_payload =
+	// None, and they will likewise be slashed
+	if Some(&commitment.payload) != expected_payload.as_ref() {
 		// check check each signatory's signature on the commitment.
 		// if any are invalid, equivocation report is invalid
 		// TODO: refactor check_commitment_signature to take a slice of signatories
