@@ -20,9 +20,9 @@
 use crate::{self as pallet_sassafras, SameAuthoritiesForever, *};
 
 use frame_support::traits::{ConstU32, ConstU64, OnFinalize, OnInitialize};
-use scale_codec::Encode;
+// use scale_codec::Encode;
 use sp_consensus_sassafras::{
-	digests::PreDigest, AuthorityIndex, AuthorityPair, EpochConfiguration, RingProver, Slot,
+	digests::SlotClaim, AuthorityIndex, AuthorityPair, EpochConfiguration, RingProver, Slot,
 	TicketBody, TicketEnvelope, TicketId, VrfSignature,
 };
 use sp_core::{
@@ -296,27 +296,20 @@ fn slot_claim_vrf_signature(slot: Slot, pair: &AuthorityPair) -> VrfSignature {
 	pair.as_ref().vrf_sign(&data)
 }
 
-/// Produce a `PreDigest` instance for the given parameters.
-pub fn make_pre_digest(
+/// Construct a `PreDigest` instance for the given parameters.
+pub fn make_slot_claim(
 	authority_idx: AuthorityIndex,
 	slot: Slot,
 	pair: &AuthorityPair,
-) -> PreDigest {
+) -> SlotClaim {
 	let vrf_signature = slot_claim_vrf_signature(slot, pair);
-	PreDigest { authority_idx, slot, vrf_signature, ticket_claim: None }
+	SlotClaim { authority_idx, slot, vrf_signature, ticket_claim: None }
 }
 
-/// Produce a `PreDigest` instance for the given parameters and wrap the result into a `Digest`
-/// instance.
-pub fn make_wrapped_pre_digest(
-	authority_idx: AuthorityIndex,
-	slot: Slot,
-	pair: &AuthorityPair,
-) -> Digest {
-	let pre_digest = make_pre_digest(authority_idx, slot, pair);
-	let log =
-		DigestItem::PreRuntime(sp_consensus_sassafras::SASSAFRAS_ENGINE_ID, pre_digest.encode());
-	Digest { logs: vec![log] }
+/// Construct a `Digest` with a `SlotClaim` item.
+pub fn make_digest(authority_idx: AuthorityIndex, slot: Slot, pair: &AuthorityPair) -> Digest {
+	let claim = make_slot_claim(authority_idx, slot, pair);
+	Digest { logs: vec![DigestItem::from(&claim)] }
 }
 
 pub fn initialize_block(
@@ -325,7 +318,7 @@ pub fn initialize_block(
 	parent_hash: H256,
 	pair: &AuthorityPair,
 ) -> Digest {
-	let digest = make_wrapped_pre_digest(0, slot, pair);
+	let digest = make_digest(0, slot, pair);
 	System::reset_events();
 	System::initialize(&number, &parent_hash, &digest);
 	Sassafras::on_initialize(number);
@@ -342,7 +335,7 @@ pub fn go_to_block(number: u64, slot: Slot, pair: &AuthorityPair) -> Digest {
 	Sassafras::on_finalize(System::block_number());
 	let parent_hash = System::finalize().hash();
 
-	let digest = make_wrapped_pre_digest(0, slot, pair);
+	let digest = make_digest(0, slot, pair);
 
 	System::reset_events();
 	System::initialize(&number, &parent_hash, &digest);

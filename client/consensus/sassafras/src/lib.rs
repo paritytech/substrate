@@ -75,7 +75,7 @@ use sp_runtime::{
 
 // Re-export some primitives.
 pub use sp_consensus_sassafras::{
-	digests::{CompatibleDigestItem, ConsensusLog, NextEpochDescriptor, PreDigest},
+	digests::{ConsensusLog, NextEpochDescriptor, SlotClaim},
 	vrf, AuthorityId, AuthorityIndex, AuthorityPair, AuthoritySignature, EpochConfiguration,
 	SassafrasApi, TicketBody, TicketClaim, TicketEnvelope, TicketId, RANDOMNESS_LENGTH,
 	SASSAFRAS_ENGINE_ID,
@@ -104,13 +104,13 @@ pub const INTERMEDIATE_KEY: &[u8] = b"sass1";
 /// Errors encountered by the Sassafras routines.
 #[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
-	/// Multiple Sassafras pre-runtime digests
-	#[error("Multiple pre-runtime digests")]
-	MultiplePreRuntimeDigests,
-	/// No Sassafras pre-runtime digest found
-	#[error("No pre-runtime digest found")]
-	NoPreRuntimeDigest,
-	/// Multiple Sassafras epoch change digests
+	/// Multiple slot claim digests
+	#[error("Multiple slot-claim digests")]
+	MultipleSlotClaimDigests,
+	/// Missing slot claim digest
+	#[error("No slot-claim digest found")]
+	MissingSlotClaimDigest,
+	/// Multiple epoch change digests
 	#[error("Multiple epoch change digests")]
 	MultipleEpochChangeDigests,
 	/// Could not fetch epoch
@@ -292,30 +292,33 @@ pub struct SassafrasIntermediate<B: BlockT> {
 	pub epoch_descriptor: ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 }
 
-/// Extract the Sassafras pre digest from the given header.
+/// Extract the Sassafras slot claim from the given header.
 ///
-/// Pre-runtime digests are mandatory, the function will return `Err` if none is found.
-fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>> {
+/// Slot claim digest is mandatory, the function will return `Err` if none is found.
+fn find_slot_claim<B: BlockT>(header: &B::Header) -> Result<SlotClaim, Error<B>> {
 	if header.number().is_zero() {
-		// Genesis block doesn't contain a pre digest so let's generate a
-		// dummy one to not break any invariant in the rest of the code.
+		// Genesis block doesn't contain a slot-claim so let's generate a
+		// dummy one jyst to not break any invariant in the rest of the code.
 		use sp_core::crypto::VrfSecret;
 		let pair = sp_consensus_sassafras::AuthorityPair::from_seed(&[0u8; 32]);
 		let data = vrf::slot_claim_sign_data(&Default::default(), 0.into(), 0);
-		let vrf_signature = pair.as_ref().vrf_sign(&data);
-		return Ok(PreDigest { authority_idx: 0, slot: 0.into(), ticket_claim: None, vrf_signature })
+		return Ok(SlotClaim {
+			authority_idx: 0,
+			slot: 0.into(),
+			ticket_claim: None,
+			vrf_signature: pair.as_ref().vrf_sign(&data),
+		})
 	}
 
-	let mut pre_digest: Option<_> = None;
+	let mut claim: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: LOG_TARGET, "Checking log {:?}, looking for pre runtime digest", log);
-		match (log.as_sassafras_pre_digest(), pre_digest.is_some()) {
-			(Some(_), true) => return Err(sassafras_err(Error::MultiplePreRuntimeDigests)),
-			(None, _) => trace!(target: LOG_TARGET, "Ignoring digest not meant for us"),
-			(s, false) => pre_digest = s,
+		match (log.try_into(), claim.is_some()) {
+			(Ok(_), true) => return Err(sassafras_err(Error::MultipleSlotClaimDigests)),
+			(Err(_), _) => trace!(target: LOG_TARGET, "Ignoring digest not meant for us"),
+			(Ok(c), false) => claim = Some(c),
 		}
 	}
-	pre_digest.ok_or_else(|| sassafras_err(Error::NoPreRuntimeDigest))
+	claim.ok_or_else(|| sassafras_err(Error::MissingSlotClaimDigest))
 }
 
 /// Extract the Sassafras epoch change digest from the given header, if it exists.
@@ -324,7 +327,6 @@ fn find_next_epoch_digest<B: BlockT>(
 ) -> Result<Option<NextEpochDescriptor>, Error<B>> {
 	let mut epoch_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: LOG_TARGET, "Checking log {:?}, looking for epoch change digest.", log);
 		let log = log.try_to::<ConsensusLog>(OpaqueDigestItemId::Consensus(&SASSAFRAS_ENGINE_ID));
 		match (log, epoch_digest.is_some()) {
 			(Some(ConsensusLog::NextEpochData(_)), true) =>

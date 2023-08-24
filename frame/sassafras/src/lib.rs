@@ -57,7 +57,7 @@ use frame_system::{
 	pallet_prelude::{BlockNumberFor, HeaderFor},
 };
 use sp_consensus_sassafras::{
-	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
+	digests::{ConsensusLog, NextEpochDescriptor, SlotClaim},
 	vrf, AuthorityId, Epoch, EpochConfiguration, EquivocationProof, Randomness, RingContext, Slot,
 	SlotDuration, TicketBody, TicketEnvelope, TicketId, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID,
 };
@@ -188,7 +188,7 @@ pub mod pallet {
 	/// if per-block initialization has already been called for current block.
 	#[pallet::storage]
 	#[pallet::getter(fn initialized)]
-	pub type Initialized<T> = StorageValue<_, PreDigest>;
+	pub type Initialized<T> = StorageValue<_, SlotClaim>;
 
 	/// The configuration for the current epoch.
 	#[pallet::storage]
@@ -274,31 +274,23 @@ pub mod pallet {
 				return Weight::zero()
 			}
 
-			let pre_digest = <frame_system::Pallet<T>>::digest()
+			let claim = <frame_system::Pallet<T>>::digest()
 				.logs
 				.iter()
-				.filter_map(|digest| {
-					digest.as_pre_runtime().and_then(|(id, mut data)| {
-						if id == SASSAFRAS_ENGINE_ID {
-							PreDigest::decode(&mut data).ok()
-						} else {
-							None
-						}
-					})
-				})
+				.filter_map(|item| item.pre_runtime_try_to::<SlotClaim>(&SASSAFRAS_ENGINE_ID))
 				.next()
-				.expect("Valid Sassafras block should have a pre-digest. qed");
+				.expect("Valid block must have a slot claim. qed");
 
-			CurrentSlot::<T>::put(pre_digest.slot);
+			CurrentSlot::<T>::put(claim.slot);
 
 			// On the first non-zero block (i.e. block #1) this is where the first epoch
 			// (epoch #0) actually starts. We need to adjust internal storage accordingly.
 			if *GenesisSlot::<T>::get() == 0 {
-				debug!(target: LOG_TARGET, ">>> GENESIS SLOT: {:?}", pre_digest.slot);
-				Self::initialize_genesis_epoch(pre_digest.slot)
+				debug!(target: LOG_TARGET, ">>> GENESIS SLOT: {:?}", claim.slot);
+				Self::initialize_genesis_epoch(claim.slot)
 			}
 
-			Initialized::<T>::put(pre_digest);
+			Initialized::<T>::put(claim);
 
 			// Enact epoch change, if necessary.
 			T::EpochChangeTrigger::trigger::<T>(now);
@@ -308,13 +300,13 @@ pub mod pallet {
 
 		/// Block finalization
 		fn on_finalize(_now: BlockNumberFor<T>) {
-			// TODO DAVXY: check if is a disabled validator?
+			// TODO @davxy: check if is a disabled validator?
 
 			// At the end of the block, we can safely include the new VRF output from
 			// this block into the randomness accumulator. If we've determined
 			// that this block was the first in a new epoch, the changeover logic has
 			// already occurred at this point.
-			let pre_digest = Initialized::<T>::take()
+			let claim = Initialized::<T>::take()
 				.expect("Finalization is called after initialization; qed.");
 
 			let claim_input = vrf::slot_claim_input(
@@ -322,7 +314,7 @@ pub mod pallet {
 				CurrentSlot::<T>::get(),
 				EpochIndex::<T>::get(),
 			);
-			let claim_output = pre_digest
+			let claim_output = claim
 				.vrf_signature
 				.outputs
 				.get(0)
@@ -334,7 +326,7 @@ pub mod pallet {
 
 			// If we are in the epoch's second half, we start sorting the next epoch tickets.
 			let epoch_duration = T::EpochDuration::get();
-			let current_slot_idx = Self::slot_index(pre_digest.slot);
+			let current_slot_idx = Self::slot_index(claim.slot);
 			if current_slot_idx >= epoch_duration / 2 {
 				let mut metadata = TicketsMeta::<T>::get();
 				if metadata.segments_count != 0 {
@@ -381,14 +373,14 @@ pub mod pallet {
 			debug!(target: LOG_TARGET, "... Built");
 
 			// Check tickets score
-			let next_auth = NextAuthorities::<T>::get();
-			let epoch_config = EpochConfig::<T>::get();
+			let next_auth = Self::next_authorities();
+			let next_config = Self::next_config().unwrap_or_else(|| Self::config());
 			// Current slot should be less than half of epoch duration.
 			let epoch_duration = T::EpochDuration::get();
 			let ticket_threshold = sp_consensus_sassafras::ticket_id_threshold(
-				epoch_config.redundancy_factor,
+				next_config.redundancy_factor,
 				epoch_duration as u32,
-				epoch_config.attempts_number,
+				next_config.attempts_number,
 				next_auth.len() as u32,
 			);
 
@@ -495,7 +487,8 @@ pub mod pallet {
 
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::submit_tickets { tickets } = call {
-				// Discard tickets not coming from the local node
+				// Discard tickets not coming from the local node or that are not
+				// yet included in a block
 				debug!(
 					target: LOG_TARGET,
 					"Validating unsigned from {} source",
@@ -514,8 +507,9 @@ pub mod pallet {
 					// Maybe this is one valid reason to introduce proxies.
 					// In short the question is >>> WHO HAS THE RIGHT TO SUBMIT A TICKET? <<<
 					//  A) The current epoch validators
-					//  B) The next epoch validators
-					//  C) Doesn't matter as far as the tickets are good (i.e. RVRF verify is ok)
+					//  B) Doesn't matter as far as the tickets are good (i.e. RVRF verify is ok)
+					// TODO @davxy: maybe we also provide a signed extrinsic to submit tickets
+					// where the submitter doesn't pay if the tickets are good?
 					warn!(
 						target: LOG_TARGET,
 						"Rejecting unsigned transaction from external sources.",
@@ -527,40 +521,12 @@ pub mod pallet {
 				let epoch_duration = T::EpochDuration::get();
 
 				let current_slot_idx = Self::current_slot_index();
-				if current_slot_idx >= epoch_duration / 2 {
+				if current_slot_idx > epoch_duration / 2 {
 					warn!(target: LOG_TARGET, "Timeout to propose tickets, bailing out.",);
 					return InvalidTransaction::Stale.into()
 				}
 
-				// // Check tickets score
-				// let next_auth = NextAuthorities::<T>::get();
-				// let epoch_config = EpochConfig::<T>::get();
-
-				// TODO DAVXY
-				// If we insert the pre-computed id within the body then we can:
-				// 1. check for equality (not strictly required as far as the output is < threshold)
-				// 2. avoid recompute it in the submit call that will follow...
-				// Unfortunatelly here we can't discard a subset of the tickets...
-				// so we have to decide if we want to discard the whole set in presence of "bad
-				// apples"
-				// let threshold = sp_consensus_sassafras::compute_ticket_id_threshold(
-				// 	epoch_config.redundancy_factor,
-				// 	epoch_duration as u32,
-				// 	epoch_config.attempts_number,
-				// 	next_auth.len() as u32,
-				// );
-				// for ticket in tickets {
-				// 	let _preout = ticket.vrf_preout.clone();
-				// 	// TODO DAVXY: here we have to call vrf preout.make_bytes()...
-				// 	// Available with thin-vrf. Not available with plain schnorrkel without public
-				// 	// key. For now, just set as the preout
-				// 	// Check score...
-				// }
-
 				// This should be set such that it is discarded after the first epoch half
-				// TODO-SASS-P3: double check this. Should we then check again in the extrinsic
-				// itself? Is this run also just before the extrinsic execution or only on tx queue
-				// insertion?
 				let tickets_longevity = epoch_duration / 2 - current_slot_idx;
 				let tickets_tag = tickets.using_encoded(|bytes| hashing::blake2_256(bytes));
 

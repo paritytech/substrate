@@ -28,28 +28,12 @@ use sp_core::{
 // Allowed slot drift.
 const MAX_SLOT_DRIFT: u64 = 1;
 
-/// Verification parameters
-struct VerificationParams<'a, B: 'a + BlockT> {
-	/// The header being verified.
-	header: B::Header,
-	/// The pre-digest of the header being verified.
-	pre_digest: &'a PreDigest,
-	/// The slot number of the current time.
-	slot_now: Slot,
-	/// Epoch descriptor of the epoch this block _should_ be under, if it's valid.
-	epoch: &'a Epoch,
-	/// Origin
-	origin: BlockOrigin,
-	/// Expected ticket for this block.
-	maybe_ticket: Option<(TicketId, TicketBody)>,
-}
-
 /// Verified information
 struct VerifiedHeaderInfo {
 	/// Authority index.
 	authority_id: AuthorityId,
-	/// Seal found within the header.
-	seal: DigestItem,
+	/// Seal digest found within the header.
+	seal_digest: DigestItem,
 }
 
 /// Check a header has been signed by the right key. If the slot is too far in
@@ -62,31 +46,32 @@ struct VerifiedHeaderInfo {
 /// The given header can either be from a primary or secondary slot assignment,
 /// with each having different validation logic.
 fn check_header<B: BlockT + Sized>(
-	params: VerificationParams<B>,
+	mut header: B::Header,
+	claim: &SlotClaim,
+	slot_now: Slot,
+	epoch: &Epoch,
+	origin: BlockOrigin,
+	maybe_ticket: Option<(TicketId, TicketBody)>,
 ) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo>, Error<B>> {
-	let VerificationParams { mut header, pre_digest, slot_now, epoch, origin, maybe_ticket } =
-		params;
-
-	let seal = header
-		.digest_mut()
-		.pop()
-		.ok_or_else(|| sassafras_err(Error::HeaderUnsealed(header.hash())))?;
-
 	// Check that the slot is not in the future, with some drift being allowed.
-	if pre_digest.slot > slot_now + MAX_SLOT_DRIFT {
-		header.digest_mut().push(seal);
-		return Ok(CheckedHeader::Deferred(header, pre_digest.slot))
+	if claim.slot > slot_now + MAX_SLOT_DRIFT {
+		// header.digest_mut().push(seal);
+		return Ok(CheckedHeader::Deferred(header, claim.slot))
 	}
 
-	let Some(authority_id) = epoch.authorities.get(pre_digest.authority_idx as usize) else {
+	let Some(authority_id) = epoch.authorities.get(claim.authority_idx as usize) else {
 		return Err(sassafras_err(Error::SlotAuthorNotFound))
 	};
 
 	// Check header signature (aka the Seal)
 
-	let signature = seal
-		.as_sassafras_seal()
-		.ok_or_else(|| sassafras_err(Error::HeaderBadSeal(header.hash())))?;
+	let seal_digest = header
+		.digest_mut()
+		.pop()
+		.ok_or_else(|| sassafras_err(Error::HeaderUnsealed(header.hash())))?;
+
+	let signature = AuthoritySignature::try_from(&seal_digest)
+		.map_err(|_| sassafras_err(Error::HeaderBadSeal(header.hash())))?;
 
 	let pre_hash = header.hash();
 	if !AuthorityPair::verify(&signature, &pre_hash, authority_id) {
@@ -95,10 +80,9 @@ fn check_header<B: BlockT + Sized>(
 
 	// Optionally check ticket ownership
 
-	let mut sign_data =
-		vrf::slot_claim_sign_data(&epoch.randomness, pre_digest.slot, epoch.epoch_idx);
+	let mut sign_data = vrf::slot_claim_sign_data(&epoch.randomness, claim.slot, epoch.epoch_idx);
 
-	match (&maybe_ticket, &pre_digest.ticket_claim) {
+	match (&maybe_ticket, &claim.ticket_claim) {
 		(Some((_ticket_id, ticket_body)), ticket_claim) => {
 			debug!(target: LOG_TARGET, "checking primary");
 
@@ -110,7 +94,7 @@ fn check_header<B: BlockT + Sized>(
 				ticket_body.attempt_idx,
 				epoch.epoch_idx,
 			);
-			let revealed_output = pre_digest
+			let revealed_output = claim
 				.vrf_signature
 				.outputs
 				.get(1)
@@ -136,8 +120,8 @@ fn check_header<B: BlockT + Sized>(
 		},
 		(None, None) => {
 			debug!(target: LOG_TARGET, "checking secondary");
-			let idx = authorship::secondary_authority_index(pre_digest.slot, epoch);
-			if idx != pre_digest.authority_idx {
+			let idx = authorship::secondary_authority_index(claim.slot, epoch);
+			if idx != claim.authority_idx {
 				error!(target: LOG_TARGET, "Bad secondary authority index");
 				return Err(Error::SlotAuthorNotFound)
 			}
@@ -150,13 +134,13 @@ fn check_header<B: BlockT + Sized>(
 	}
 
 	// Check per-slot vrf proof
-	if !authority_id.as_inner_ref().vrf_verify(&sign_data, &pre_digest.vrf_signature) {
+	if !authority_id.as_inner_ref().vrf_verify(&sign_data, &claim.vrf_signature) {
 		warn!(target: LOG_TARGET, ">>> VERIFICATION FAILED (pri = {})!!!", maybe_ticket.is_some());
 		return Err(sassafras_err(Error::VrfVerificationFailed))
 	}
 	warn!(target: LOG_TARGET, ">>> VERIFICATION OK (pri = {})!!!", maybe_ticket.is_some());
 
-	let info = VerifiedHeaderInfo { authority_id: authority_id.clone(), seal };
+	let info = VerifiedHeaderInfo { authority_id: authority_id.clone(), seal_digest };
 
 	Ok(CheckedHeader::Checked(header, info))
 }
@@ -367,7 +351,7 @@ where
 			.header_metadata(parent_hash)
 			.map_err(Error::<Block>::FetchParentHeader)?;
 
-		let pre_digest = find_pre_digest::<Block>(&block.header)?;
+		let claim = find_slot_claim::<Block>(&block.header)?;
 
 		let (checked_header, epoch_descriptor) = {
 			let epoch_changes = self.epoch_changes.shared_data();
@@ -376,7 +360,7 @@ where
 					descendent_query(&*self.client),
 					&parent_hash,
 					parent_header_metadata.number,
-					pre_digest.slot,
+					claim.slot,
 				)
 				.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
 				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
@@ -387,19 +371,18 @@ where
 			let maybe_ticket = self
 				.client
 				.runtime_api()
-				.slot_ticket(parent_hash, pre_digest.slot)
+				.slot_ticket(parent_hash, claim.slot)
 				.ok()
 				.unwrap_or_else(|| None);
 
-			let verification_params = VerificationParams {
-				header: block.header.clone(),
-				pre_digest: &pre_digest,
+			let checked_header = check_header::<Block>(
+				block.header.clone(),
+				&claim,
 				slot_now,
-				epoch: viable_epoch.as_ref(),
-				origin: block.origin,
+				viable_epoch.as_ref(),
+				block.origin,
 				maybe_ticket,
-			};
-			let checked_header = check_header::<Block>(verification_params)?;
+			)?;
 
 			(checked_header, epoch_descriptor)
 		};
@@ -412,7 +395,7 @@ where
 				if let Err(err) = self
 					.check_and_report_equivocation(
 						slot_now,
-						pre_digest.slot,
+						claim.slot,
 						&block.header,
 						&verified_info.authority_id,
 						&block.origin,
@@ -437,7 +420,7 @@ where
 							.create_inherent_data()
 							.await
 							.map_err(Error::<Block>::CreateInherents)?;
-						inherent_data.sassafras_replace_inherent_data(&pre_digest.slot);
+						inherent_data.sassafras_replace_inherent_data(&claim.slot);
 						self.check_inherents(
 							new_block.clone(),
 							parent_hash,
@@ -461,8 +444,7 @@ where
 
 				block.header = pre_header;
 				block.post_hash = Some(hash);
-				// TODO DAVXY: seal required???
-				block.post_digests.push(verified_info.seal);
+				block.post_digests.push(verified_info.seal_digest);
 				block.insert_intermediate(
 					INTERMEDIATE_KEY,
 					SassafrasIntermediate::<Block> { epoch_descriptor },

@@ -58,10 +58,7 @@ type TestClient = substrate_test_runtime_client::client::Client<
 type TestSelectChain =
 	substrate_test_runtime_client::LongestChain<substrate_test_runtime_client::Backend, TestBlock>;
 
-type TestTransaction =
-	sc_client_api::TransactionFor<substrate_test_runtime_client::Backend, TestBlock>;
-
-type TestBlockImportParams = BlockImportParams<TestBlock, TestTransaction>;
+type TestBlockImportParams = BlockImportParams<TestBlock>;
 
 type TestViableEpochDescriptor = sc_consensus_epochs::ViableEpochDescriptor<Hash, u64, Epoch>;
 
@@ -106,8 +103,7 @@ impl TestProposer {
 
 impl Proposer<TestBlock> for TestProposer {
 	type Error = TestError;
-	type Transaction = TestTransaction;
-	type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction, ()>, Self::Error>>;
+	type Proposal = future::Ready<Result<Proposal<TestBlock, ()>, Self::Error>>;
 	type ProofRecording = DisableProofRecording;
 	type Proof = ();
 
@@ -227,7 +223,7 @@ impl TestContext {
 		Self { client, backend, link, block_import, verifier, keystore }
 	}
 
-	fn import_block(&mut self, mut params: TestBlockImportParams) -> Hash {
+	fn import_block(&mut self, mut params: TestBlockImportParams) -> Result<Hash, ConsensusError> {
 		let post_hash = params.post_hash();
 
 		if params.post_digests.is_empty() {
@@ -239,18 +235,14 @@ impl TestContext {
 			}
 		}
 
-		match block_on(self.block_import.import_block(params)).unwrap() {
-			ImportResult::Imported(_) => (),
-			_ => panic!("expected block to be imported"),
-		}
-
-		post_hash
+		block_on(self.block_import.import_block(params)).map(|ir| match ir {
+			ImportResult::Imported(_) => post_hash,
+			_ => panic!("Unexpected outcome"),
+		})
 	}
 
 	fn verify_block(&mut self, params: TestBlockImportParams) -> TestBlockImportParams {
-		let tmp_params = params.clear_storage_changes_and_mutate();
-		let tmp_params = block_on(self.verifier.verify(tmp_params)).unwrap();
-		tmp_params.clear_storage_changes_and_mutate()
+		block_on(self.verifier.verify(params)).unwrap()
 	}
 
 	fn epoch_data(&self, parent_hash: &Hash, parent_number: u64, slot: Slot) -> Epoch {
@@ -297,8 +289,8 @@ impl TestContext {
 		let proposer = block_on(self.init(&parent_header)).unwrap();
 
 		let slot = slot.unwrap_or_else(|| {
-			let parent_pre_digest = find_pre_digest::<TestBlock>(&parent_header).unwrap();
-			parent_pre_digest.slot + 1
+			let parent_claim = find_slot_claim::<TestBlock>(&parent_header).unwrap();
+			parent_claim.slot + 1
 		});
 
 		// TODO DAVXY: here maybe we can use the epoch.randomness???
@@ -311,25 +303,22 @@ impl TestContext {
 			.unwrap()
 			.unwrap();
 
-		let pre_digest = PreDigest { slot, authority_idx: 0, vrf_signature, ticket_claim: None };
-		let digest = sp_runtime::generic::Digest {
-			logs: vec![DigestItem::sassafras_pre_digest(pre_digest)],
-		};
+		let claim = SlotClaim { slot, authority_idx: 0, vrf_signature, ticket_claim: None };
+		let digest = sp_runtime::generic::Digest { logs: vec![DigestItem::from(&claim)] };
 
 		let mut block = proposer.propose_block(digest);
 
 		let epoch_descriptor = self.epoch_descriptor(&parent_hash, parent_number, slot);
 
-		// Sign the pre-sealed hash of the block and then add it to a digest item.
+		// Sign the pre-sealed hash of the block and then add it to the digest.
 		let hash = block.header.hash();
-		let signature = self
+		let signature: AuthoritySignature = self
 			.keystore
 			.bandersnatch_sign(SASSAFRAS, &public, hash.as_ref())
 			.unwrap()
 			.unwrap()
-			.try_into()
-			.unwrap();
-		let seal = DigestItem::sassafras_seal(signature);
+			.into();
+		let seal = DigestItem::from(&signature);
 		block.header.digest_mut().push(seal);
 
 		let mut params = BlockImportParams::new(BlockOrigin::Own, block.header);
@@ -344,7 +333,7 @@ impl TestContext {
 	// This skips verification.
 	fn propose_and_import_block(&mut self, parent_hash: Hash, slot: Option<Slot>) -> Hash {
 		let params = self.propose_block(parent_hash, slot);
-		self.import_block(params)
+		self.import_block(params).unwrap()
 	}
 
 	// Propose and import n valid blocks that are built on top of the given parent.
@@ -444,7 +433,7 @@ fn claim_primary_slots_works() {
 		.tickets_aux
 		.insert(ticket_id, (alice_authority_idx, ticket_secret.clone()));
 
-	let (pre_digest, auth_id) = authorship::claim_slot(
+	let (claim, auth_id) = authorship::claim_slot(
 		0.into(),
 		&mut epoch,
 		Some((ticket_id, ticket_body.clone())),
@@ -453,7 +442,7 @@ fn claim_primary_slots_works() {
 	.unwrap();
 
 	assert!(epoch.tickets_aux.is_empty());
-	assert_eq!(pre_digest.authority_idx, alice_authority_idx);
+	assert_eq!(claim.authority_idx, alice_authority_idx);
 	assert_eq!(auth_id, Keyring::Alice.public().into());
 
 	// Fail if we have ticket aux data but not the authority key in out keystore
@@ -468,19 +457,19 @@ fn claim_primary_slots_works() {
 }
 
 #[test]
-#[should_panic(expected = "valid headers contain a pre-digest")]
-fn import_rejects_block_without_pre_digest() {
+fn import_rejects_block_without_slot_claim() {
 	let mut env = TestContext::new();
 
 	let mut import_params = env.propose_block(env.client.info().genesis_hash, Some(999.into()));
 	// Remove logs from the header
 	import_params.header.digest_mut().logs.clear();
 
-	env.import_block(import_params);
+	let res = env.import_block(import_params);
+
+	assert_eq!(res.unwrap_err().to_string(), "Import failed: No slot-claim digest found");
 }
 
 #[test]
-#[should_panic(expected = "Unexpected epoch change")]
 fn import_rejects_block_with_unexpected_epoch_changes() {
 	let mut env = TestContext::new();
 
@@ -498,11 +487,12 @@ fn import_rejects_block_with_unexpected_epoch_changes() {
 	let digest = import_params.header.digest_mut();
 	digest.logs.insert(digest.logs.len() - 1, digest_item);
 
-	env.import_block(import_params);
+	let res = env.import_block(import_params);
+
+	assert_eq!(res.unwrap_err().to_string(), "Import failed: Unexpected epoch change");
 }
 
 #[test]
-#[should_panic(expected = "Expected epoch change to happen")]
 fn import_rejects_block_with_missing_epoch_changes() {
 	let mut env = TestContext::new();
 
@@ -516,7 +506,12 @@ fn import_rejects_block_with_missing_epoch_changes() {
 	// (Implementation detail: should be the second to last entry, just before the seal)
 	digest.logs.remove(digest.logs.len() - 2);
 
-	env.import_block(import_params);
+	let res = env.import_block(import_params);
+
+	assert!(res
+		.unwrap_err()
+		.to_string()
+		.contains("Import failed: Expected epoch change to happen"));
 }
 
 #[test]
@@ -901,7 +896,7 @@ async fn sassafras_network_progress() {
 			// another babe instance and then tries to build a block in the same slot making
 			// this test fail.
 			let parent_header = client_clone.header(parent).ok().flatten().unwrap();
-			let slot = Slot::from(find_pre_digest::<TestBlock>(&parent_header).unwrap().slot + 1);
+			let slot = Slot::from(find_slot_claim::<TestBlock>(&parent_header).unwrap().slot + 1);
 			async move { Ok((InherentDataProvider::new(slot),)) }
 		});
 		let sassafras_params = SassafrasWorkerParams {

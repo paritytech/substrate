@@ -352,9 +352,9 @@ where
 			.remove_intermediate::<SassafrasIntermediate<Block>>(INTERMEDIATE_KEY)?
 			.epoch_descriptor;
 
-		let pre_digest = find_pre_digest::<Block>(&block.header)
-			.expect("valid headers contain a pre-digest; header has been already verified; qed");
-		let slot = pre_digest.slot;
+		let claim = find_slot_claim::<Block>(&block.header)
+			.map_err(|e| ConsensusError::ClientImport(e.into()))?;
+		let slot = claim.slot;
 
 		let parent_hash = *block.header.parent_hash();
 		let parent_header = self
@@ -366,9 +366,9 @@ where
 					sassafras_err(Error::<Block>::ParentUnavailable(parent_hash, hash)).into(),
 				)
 			})?;
-		let parent_slot = find_pre_digest::<Block>(&parent_header)
-			.map(|d| d.slot)
-			.expect("parent is non-genesis; valid headers contain a pre-digest; header has been already verified; qed");
+		let parent_slot = find_slot_claim::<Block>(&parent_header)
+			.map(|claim| claim.slot)
+			.map_err(|e| ConsensusError::ClientImport(e.into()))?;
 
 		// Make sure that slot number is strictly increasing
 		if slot <= parent_slot {
@@ -409,7 +409,7 @@ where
 				)
 			})?;
 
-		let total_weight = parent_weight + pre_digest.ticket_claim.is_some() as u32;
+		let total_weight = parent_weight + claim.ticket_claim.is_some() as u32;
 
 		aux_schema::write_block_weight(hash, total_weight, |values| {
 			block
@@ -478,10 +478,10 @@ where
 		let finalized_header = client
 			.header(info.finalized_hash)
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
-			.expect("finalized headers must exist in db; qed");
+			.expect("finalized headers must exist in storage; qed");
 
-		find_pre_digest::<B>(&finalized_header)
-			.expect("valid blocks have a pre-digest; qed")
+		find_slot_claim::<B>(&finalized_header)
+			.expect("valid block header have a slot-claim; qed")
 			.slot
 	};
 

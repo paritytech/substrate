@@ -22,7 +22,7 @@ use super::*;
 
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_sassafras::{
-	digests::PreDigest, ticket_id_threshold, AuthorityId, Slot, TicketBody, TicketClaim,
+	digests::SlotClaim, ticket_id_threshold, AuthorityId, Slot, TicketBody, TicketClaim,
 	TicketEnvelope, TicketId,
 };
 use sp_core::{
@@ -43,7 +43,7 @@ pub(crate) fn claim_slot(
 	epoch: &mut Epoch,
 	maybe_ticket: Option<(TicketId, TicketBody)>,
 	keystore: &KeystorePtr,
-) -> Option<(PreDigest, AuthorityId)> {
+) -> Option<(SlotClaim, AuthorityId)> {
 	if epoch.authorities.is_empty() {
 		return None
 	}
@@ -103,9 +103,9 @@ pub(crate) fn claim_slot(
 		warn!(target: LOG_TARGET, "{:?}", output);
 	}
 
-	let pre_digest = PreDigest { authority_idx, slot, vrf_signature, ticket_claim };
+	let claim = SlotClaim { authority_idx, slot, vrf_signature, ticket_claim };
 
-	Some((pre_digest, authority_id.clone()))
+	Some((claim, authority_id.clone()))
 }
 
 /// Generate the tickets for the given epoch.
@@ -235,7 +235,7 @@ where
 	L: sc_consensus::JustificationSyncLink<B>,
 	ER: std::error::Error + Send + 'static,
 {
-	type Claim = (PreDigest, AuthorityId);
+	type Claim = (SlotClaim, AuthorityId);
 	type SyncOracle = SO;
 	type JustificationSyncLink = L;
 	type CreateProposer =
@@ -313,8 +313,8 @@ where
 		});
 	}
 
-	fn pre_digest_data(&self, _slot: Slot, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem> {
-		vec![<DigestItem as CompatibleDigestItem>::sassafras_pre_digest(claim.0.clone())]
+	fn pre_digest_data(&self, _slot: Slot, claim: &Self::Claim) -> Vec<DigestItem> {
+		vec![DigestItem::from(&claim.0)]
 	}
 
 	async fn block_import_params(
@@ -326,37 +326,24 @@ where
 		(_, public): Self::Claim,
 		epoch_descriptor: Self::AuxData,
 	) -> Result<BlockImportParams<B>, ConsensusError> {
-		// TODO DAVXY SASS-32: this seal may be revisited.
-		// We already have a VRF signature, this could be completelly redundant.
-		// The header.hash() can be added to the VRF signed data.
-		// OR maybe we can maintain this seal but compute it using some of the data in the
-		// pre-digest
-		// Another option is to not recompute this signature and push (reuse) the one in the
-		// pre-digest as the seal
 		let signature = self
 			.keystore
-			.sign_with(
+			.bandersnatch_sign(
 				<AuthorityId as AppCrypto>::ID,
-				<AuthorityId as AppCrypto>::CRYPTO_ID,
 				public.as_ref(),
 				header_hash.as_ref(),
 			)
 			.map_err(|e| ConsensusError::CannotSign(format!("{}. Key {:?}", e, public)))?
+			.map(|sig| AuthoritySignature::from(sig))
 			.ok_or_else(|| {
 				ConsensusError::CannotSign(format!(
 					"Could not find key in keystore. Key {:?}",
 					public
 				))
 			})?;
-		let signature: AuthoritySignature = signature
-			.clone()
-			.try_into()
-			.map_err(|_| ConsensusError::InvalidSignature(signature, public.to_raw_vec()))?;
-
-		let digest_item = <DigestItem as CompatibleDigestItem>::sassafras_seal(signature);
 
 		let mut block = BlockImportParams::new(BlockOrigin::Own, header);
-		block.post_digests.push(digest_item);
+		block.post_digests.push(DigestItem::from(&signature));
 		block.body = Some(body);
 		block.state_action =
 			StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
@@ -397,7 +384,7 @@ where
 	}
 
 	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> Duration {
-		let parent_slot = find_pre_digest::<B>(&slot_info.chain_head).ok().map(|d| d.slot);
+		let parent_slot = find_slot_claim::<B>(&slot_info.chain_head).ok().map(|d| d.slot);
 
 		// TODO-SASS-P2 : clarify this field. In Sassafras this is part of 'self'
 		let block_proposal_slot_portion = sc_consensus_slots::SlotProportion::new(0.5);

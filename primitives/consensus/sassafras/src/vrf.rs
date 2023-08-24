@@ -17,9 +17,7 @@
 
 //! Utilities related to VRF input, output and signatures.
 
-use crate::{
-	Randomness, TicketBody, TicketId, VrfInput, VrfOutput, VrfSignData, SASSAFRAS_ENGINE_ID,
-};
+use crate::{Randomness, TicketBody, TicketId, VrfInput, VrfOutput, VrfSignData};
 use scale_codec::Encode;
 use sp_consensus_slots::Slot;
 use sp_std::vec::Vec;
@@ -51,7 +49,11 @@ pub fn slot_claim_input(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfI
 /// Signing-data to claim slot ownership during block production.
 pub fn slot_claim_sign_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfSignData {
 	let vrf_input = slot_claim_input(randomness, slot, epoch);
-	VrfSignData::new_unchecked(&SASSAFRAS_ENGINE_ID, Some("slot-claim-transcript"), Some(vrf_input))
+	VrfSignData::new_unchecked(
+		b"sassafras-slot-claim-transcript-v1.0",
+		Option::<&[u8]>::None,
+		Some(vrf_input),
+	)
 }
 
 /// VRF input to generate the ticket id.
@@ -73,8 +75,8 @@ pub fn revealed_key_input(randomness: &Randomness, attempt: u32, epoch: u64) -> 
 /// Data to be signed via ring-vrf.
 pub fn ticket_body_sign_data(ticket_body: &TicketBody, ticket_id_input: VrfInput) -> VrfSignData {
 	VrfSignData::new_unchecked(
-		&SASSAFRAS_ENGINE_ID,
-		&[b"ticket-body-transcript", ticket_body.encode().as_slice()],
+		b"sassafras-ticket-body-transcript-v1.0",
+		Some(ticket_body.encode().as_slice()),
 		Some(ticket_id_input),
 	)
 }
