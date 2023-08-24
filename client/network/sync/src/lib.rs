@@ -90,6 +90,7 @@ pub use service::chain_sync::SyncingService;
 
 mod block_announce_validator;
 mod extra_requests;
+mod futures_stream;
 mod schema;
 
 pub mod block_request_handler;

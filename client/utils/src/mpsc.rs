@@ -123,6 +123,11 @@ impl<T> TracingUnboundedSender<T> {
 			s
 		})
 	}
+
+	/// The number of elements in the channel (proxy function to [`async_channel::Sender`]).
+	pub fn len(&self) -> usize {
+		self.inner.len()
+	}
 }
 
 impl<T> TracingUnboundedReceiver<T> {
@@ -138,6 +143,11 @@ impl<T> TracingUnboundedReceiver<T> {
 			UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.name, "received"]).inc();
 			s
 		})
+	}
+
+	/// The number of elements in the channel (proxy function to [`async_channel::Receiver`]).
+	pub fn len(&self) -> usize {
+		self.inner.len()
 	}
 }
 
