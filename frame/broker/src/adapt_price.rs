@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![deny(missing_docs)]
+
 use crate::CoreIndex;
 use sp_arithmetic::{traits::One, FixedU64};
 
