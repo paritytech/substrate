@@ -622,15 +622,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	#[cfg(any(feature = "try-runtime", test))]
 	pub fn do_try_state() -> Result<(), TryRuntimeError> {
 		let reasons = Reasons::<T, I>::iter_keys().collect::<Vec<_>>();
-		let tips = Tips::<T, I>::iter_keys().collect::<Vec<_>>();
 
-		for reason in reasons {
-			for tip in &tips {
-				ensure!(
-					reason == Tips::<T, I>::get(tip).unwrap().reason,
-					TryRuntimeError::Other("reasons don't match")
-				);
-			}
+		for tip in Tips::<T, I>::iter_keys() {
+			let tip_reason = Tips::<T, I>::get(&tip).unwrap().reason;
+			ensure!(reasons.contains(&tip_reason), TryRuntimeError::Other("reasons don't match"));
 		}
 		Ok(())
 	}
