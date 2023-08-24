@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use super::{Config, Runtime};
-use crate::{derive_impl, pallet_macros::inject_runtime_type};
+use crate::{derive_impl, pallet_prelude::inject_runtime_type};
 use static_assertions::assert_type_eq_all;
 
 #[docify::export]
