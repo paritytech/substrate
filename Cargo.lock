@@ -4318,6 +4318,7 @@ dependencies = [
  "sp-staking",
  "sp-statement-store",
  "sp-std",
+ "sp-storage",
  "sp-transaction-pool",
  "sp-version",
  "static_assertions",
@@ -5825,6 +5826,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-std",
+ "sp-storage",
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",
@@ -6676,6 +6678,7 @@ dependencies = [
  "parity-scale-codec",
  "sp-npos-elections",
  "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -7652,6 +7655,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -7669,6 +7673,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "sp-storage",
  "sp-timestamp",
 ]
 

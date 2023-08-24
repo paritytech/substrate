@@ -429,7 +429,7 @@ macro_rules! benchmarks_iter {
 		verify $postcode:block
 		$( $rest:tt )*
 	) => {
-		$crate::paste::paste! {
+		$crate::__private::paste::paste! {
 			$crate::benchmarks_iter! {
 				{ $($bench_module, $new_test_ext, $test $(, $( $args )* )?)? }
 				{ $( $instance: $instance_bound )? }
@@ -446,17 +446,17 @@ macro_rules! benchmarks_iter {
 					>:: [< new_call_variant_ $dispatch >] (
 						$($arg),*
 					);
-					let __benchmarked_call_encoded = $crate::frame_support::__private::codec::Encode::encode(
+					let __benchmarked_call_encoded = $crate::__private::codec::Encode::encode(
 						&__call
 					);
 				}: {
 					let __call_decoded = <
 						Call<T $(, $instance )?>
-						as $crate::frame_support::__private::codec::Decode
+						as $crate::__private::codec::Decode
 					>::decode(&mut &__benchmarked_call_encoded[..])
 						.expect("call is encoded above, encoding must be correct");
 					let __origin = $crate::to_origin!($origin $(, $origin_type)?);
-					<Call<T $(, $instance)? > as $crate::frame_support::traits::UnfilteredDispatchable
+					<Call<T $(, $instance)? > as $crate::__private::traits::UnfilteredDispatchable
 						>::dispatch_bypass_filter(__call_decoded, __origin)?;
 				}
 				verify $postcode
@@ -776,8 +776,8 @@ macro_rules! benchmark_backend {
 			$crate::BenchmarkingSetup<T $(, $instance)? > for $name
 			where $( $where_clause )*
 		{
-			fn components(&self) -> $crate::Vec<($crate::BenchmarkParameter, u32, u32)> {
-				$crate::vec! [
+			fn components(&self) -> $crate::__private::Vec<($crate::BenchmarkParameter, u32, u32)> {
+				$crate::__private::vec! [
 					$(
 						($crate::BenchmarkParameter::$param, $param_from, $param_to)
 					),*
@@ -788,7 +788,7 @@ macro_rules! benchmark_backend {
 				&self,
 				components: &[($crate::BenchmarkParameter, u32)],
 				verify: bool
-			) -> Result<$crate::Box<dyn FnOnce() -> Result<(), $crate::BenchmarkError>>, $crate::BenchmarkError> {
+			) -> Result<$crate::__private::Box<dyn FnOnce() -> Result<(), $crate::BenchmarkError>>, $crate::BenchmarkError> {
 				$(
 					// Prepare instance
 					let $param = components.iter()
@@ -802,7 +802,7 @@ macro_rules! benchmark_backend {
 				$( $param_instancer ; )*
 				$( $post )*
 
-				Ok($crate::Box::new(move || -> Result<(), $crate::BenchmarkError> {
+				Ok($crate::__private::Box::new(move || -> Result<(), $crate::BenchmarkError> {
 					$eval;
 					if verify {
 						$postcode;
@@ -842,15 +842,15 @@ macro_rules! impl_bench_name_tests {
 		{ $( $names_extra:tt )* },
 		{ $name:ident }
 	) => {
-		$crate::paste::paste! {
+		$crate::__private::paste::paste! {
 			#[test]
 			fn [<bench_ $name>] () {
 				$new_test_exec.$exec_name(|| {
 					// Skip all #[extra] benchmarks if $extra is false.
 					if !($extra) {
-						let disabled = $crate::vec![ $( stringify!($names_extra).as_ref() ),* ];
+						let disabled = $crate::__private::vec![ $( stringify!($names_extra).as_ref() ),* ];
 						if disabled.contains(&stringify!($name)) {
-							$crate::log::error!(
+							$crate::__private::log::error!(
 								"INFO: extra benchmark skipped - {}",
 								stringify!($name),
 							);
@@ -873,21 +873,21 @@ macro_rules! impl_bench_name_tests {
 								},
 								$crate::BenchmarkError::Override(_) => {
 									// This is still considered a success condition.
-									$crate::log::error!(
+									$crate::__private::log::error!(
 										"WARNING: benchmark error overrided - {}",
 										stringify!($name),
 									);
 								},
 								$crate::BenchmarkError::Skip => {
 									// This is considered a success condition.
-									$crate::log::error!(
+									$crate::__private::log::error!(
 										"WARNING: benchmark error skipped - {}",
 										stringify!($name),
 									);
 								},
 								$crate::BenchmarkError::Weightless => {
 									// This is considered a success condition.
-									$crate::log::error!(
+									$crate::__private::log::error!(
 										"WARNING: benchmark weightless skipped - {}",
 										stringify!($name),
 									);
@@ -948,7 +948,7 @@ macro_rules! selected_benchmark {
 			$crate::BenchmarkingSetup<T $(, $instance )? > for SelectedBenchmark
 			where $( $where_clause )*
 		{
-			fn components(&self) -> $crate::Vec<($crate::BenchmarkParameter, u32, u32)> {
+			fn components(&self) -> $crate::__private::Vec<($crate::BenchmarkParameter, u32, u32)> {
 				match self {
 					$(
 						Self::$bench => <
@@ -962,7 +962,7 @@ macro_rules! selected_benchmark {
 				&self,
 				components: &[($crate::BenchmarkParameter, u32)],
 				verify: bool
-			) -> Result<$crate::Box<dyn FnOnce() -> Result<(), $crate::BenchmarkError>>, $crate::BenchmarkError> {
+			) -> Result<$crate::__private::Box<dyn FnOnce() -> Result<(), $crate::BenchmarkError>>, $crate::BenchmarkError> {
 				match self {
 					$(
 						Self::$bench => <
@@ -992,19 +992,19 @@ macro_rules! impl_benchmark {
 			$crate::Benchmarking for Pallet<T $(, $instance)? >
 			where T: frame_system::Config, $( $where_clause )*
 		{
-			fn benchmarks(extra: bool) -> $crate::Vec<$crate::BenchmarkMetadata> {
+			fn benchmarks(extra: bool) -> $crate::__private::Vec<$crate::BenchmarkMetadata> {
 				$($crate::validate_pov_mode!(
 					$pov_name: $( $storage = $pov_mode )*;
 				);)*
-				let mut all_names = $crate::vec![ $( stringify!($name).as_ref() ),* ];
+				let mut all_names = $crate::__private::vec![ $( stringify!($name).as_ref() ),* ];
 				if !extra {
 					let extra = [ $( stringify!($name_extra).as_ref() ),* ];
 					all_names.retain(|x| !extra.contains(x));
 				}
-				let pov_modes: $crate::Vec<($crate::Vec<u8>, $crate::Vec<($crate::Vec<u8>, $crate::Vec<u8>)>)> = $crate::vec![
+				let pov_modes: $crate::__private::Vec<($crate::__private::Vec<u8>, $crate::__private::Vec<($crate::__private::Vec<u8>, $crate::__private::Vec<u8>)>)> = $crate::__private::vec![
 					$(
 						(stringify!($pov_name).as_bytes().to_vec(),
-						$crate::vec![
+						$crate::__private::vec![
 							$( ( stringify!($storage).as_bytes().to_vec(),
 								 stringify!($pov_mode).as_bytes().to_vec() ), )*
 						]),
@@ -1025,18 +1025,18 @@ macro_rules! impl_benchmark {
 						components,
 						pov_modes: pov_modes.iter().find(|p| p.0 == name).map(|p| p.1.clone()).unwrap_or_default(),
 					}
-				}).collect::<$crate::Vec<_>>()
+				}).collect::<$crate::__private::Vec<_>>()
 			}
 
 			fn run_benchmark(
 				extrinsic: &[u8],
 				c: &[($crate::BenchmarkParameter, u32)],
-				whitelist: &[$crate::TrackedStorageKey],
+				whitelist: &[$crate::__private::TrackedStorageKey],
 				verify: bool,
 				internal_repeats: u32,
-			) -> Result<$crate::Vec<$crate::BenchmarkResult>, $crate::BenchmarkError> {
+			) -> Result<$crate::__private::Vec<$crate::BenchmarkResult>, $crate::BenchmarkError> {
 				// Map the input to the selected benchmark.
-				let extrinsic = $crate::str::from_utf8(extrinsic)
+				let extrinsic = $crate::__private::str::from_utf8(extrinsic)
 					.map_err(|_| "`extrinsic` is not a valid utf8 string!")?;
 				let selected_benchmark = match extrinsic {
 					$( stringify!($name) => SelectedBenchmark::$name, )*
@@ -1046,34 +1046,34 @@ macro_rules! impl_benchmark {
 				// Add whitelist to DB including whitelisted caller
 				let mut whitelist = whitelist.to_vec();
 				let whitelisted_caller_key =
-					<frame_system::Account::<T> as $crate::frame_support::storage::StorageMap<_,_>>::hashed_key_for(
+					<frame_system::Account::<T> as $crate::__private::storage::StorageMap<_,_>>::hashed_key_for(
 						$crate::whitelisted_caller::<T::AccountId>()
 					);
 				whitelist.push(whitelisted_caller_key.into());
 				// Whitelist the transactional layer.
-				let transactional_layer_key = $crate::TrackedStorageKey::new(
-					$crate::frame_support::storage::transactional::TRANSACTION_LEVEL_KEY.into()
+				let transactional_layer_key = $crate::__private::TrackedStorageKey::new(
+					$crate::__private::storage::transactional::TRANSACTION_LEVEL_KEY.into()
 				);
 				whitelist.push(transactional_layer_key);
 				// Whitelist the `:extrinsic_index`.
-				let extrinsic_index = $crate::TrackedStorageKey::new(
-					$crate::well_known_keys::EXTRINSIC_INDEX.into()
+				let extrinsic_index = $crate::__private::TrackedStorageKey::new(
+					$crate::__private::well_known_keys::EXTRINSIC_INDEX.into()
 				);
 				whitelist.push(extrinsic_index);
 				// Whitelist the `:intrablock_entropy`.
-				let intrablock_entropy = $crate::TrackedStorageKey::new(
-					$crate::well_known_keys::INTRABLOCK_ENTROPY.into()
+				let intrablock_entropy = $crate::__private::TrackedStorageKey::new(
+					$crate::__private::well_known_keys::INTRABLOCK_ENTROPY.into()
 				);
 				whitelist.push(intrablock_entropy);
 
 				$crate::benchmarking::set_whitelist(whitelist.clone());
 
-				let mut results: $crate::Vec<$crate::BenchmarkResult> = $crate::Vec::new();
+				let mut results: $crate::__private::Vec<$crate::BenchmarkResult> = $crate::__private::Vec::new();
 
 				// Always do at least one internal repeat...
 				for _ in 0 .. internal_repeats.max(1) {
 					// Always reset the state after the benchmark.
-					$crate::defer!($crate::benchmarking::wipe_db());
+					$crate::__private::defer!($crate::benchmarking::wipe_db());
 
 					// Set up the externalities environment for the setup we want to
 					// benchmark.
@@ -1082,7 +1082,7 @@ macro_rules! impl_benchmark {
 					>::instance(&selected_benchmark, c, verify)?;
 
 					// Set the block number to at least 1 so events are deposited.
-					if $crate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
+					if $crate::__private::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
 						frame_system::Pallet::<T>::set_block_number(1u32.into());
 					}
 
@@ -1093,14 +1093,14 @@ macro_rules! impl_benchmark {
 					// Access all whitelisted keys to get them into the proof recorder since the
 					// recorder does now have a whitelist.
 					for key in &whitelist {
-						$crate::frame_support::storage::unhashed::get_raw(&key.key);
+						$crate::__private::storage::unhashed::get_raw(&key.key);
 					}
 
 					// Reset the read/write counter so we don't count operations in the setup process.
 					$crate::benchmarking::reset_read_write_count();
 
 					// Time the extrinsic logic.
-					$crate::log::trace!(
+					$crate::__private::log::trace!(
 						target: "benchmark",
 						"Start Benchmark: {} ({:?}) verify {}",
 						extrinsic,
@@ -1125,29 +1125,29 @@ macro_rules! impl_benchmark {
 
 					// Commit the changes to get proper write count
 					$crate::benchmarking::commit_db();
-					$crate::log::trace!(
+					$crate::__private::log::trace!(
 						target: "benchmark",
 						"End Benchmark: {} ns", elapsed_extrinsic
 					);
 					let read_write_count = $crate::benchmarking::read_write_count();
-					$crate::log::trace!(
+					$crate::__private::log::trace!(
 						target: "benchmark",
 						"Read/Write Count {:?}", read_write_count
 					);
-					$crate::log::trace!(
+					$crate::__private::log::trace!(
 						target: "benchmark",
 						"Proof sizes: before {:?} after {:?} diff {}", &start_pov, &end_pov, &diff_pov
 					);
 
 					// Time the storage root recalculation.
 					let start_storage_root = $crate::benchmarking::current_time();
-					$crate::storage_root($crate::StateVersion::V1);
+					$crate::__private::storage_root($crate::__private::StateVersion::V1);
 					let finish_storage_root = $crate::benchmarking::current_time();
 					let elapsed_storage_root = finish_storage_root - start_storage_root;
 
 					let skip_meta = [ $( stringify!($name_skip_meta).as_ref() ),* ];
 					let read_and_written_keys = if skip_meta.contains(&extrinsic) {
-						$crate::vec![(b"Skipped Metadata".to_vec(), 0, 0, false)]
+						$crate::__private::vec![(b"Skipped Metadata".to_vec(), 0, 0, false)]
 					} else {
 						$crate::benchmarking::get_read_and_written_keys()
 					};
@@ -1185,11 +1185,11 @@ macro_rules! impl_benchmark {
 			/// author chooses not to implement benchmarks.
 			#[allow(unused)]
 			fn test_bench_by_name(name: &[u8]) -> Result<(), $crate::BenchmarkError> {
-				let name = $crate::str::from_utf8(name)
+				let name = $crate::__private::str::from_utf8(name)
 					.map_err(|_| -> $crate::BenchmarkError { "`name` is not a valid utf8 string!".into() })?;
 				match name {
 					$( stringify!($name) => {
-						$crate::paste::paste! { Self::[< test_benchmark_ $name >]() }
+						$crate::__private::paste::paste! { Self::[< test_benchmark_ $name >]() }
 					} )*
 					_ => Err("Could not find test for requested benchmark.".into()),
 				}
@@ -1211,7 +1211,7 @@ macro_rules! impl_benchmark_test {
 		{ $( $instance:ident: $instance_bound:tt )? }
 		$name:ident
 	) => {
-		$crate::paste::item! {
+		$crate::__private::paste::item! {
 			#[cfg(test)]
 			impl<T: Config $(<$instance>, $instance: $instance_bound )? >
 				Pallet<T $(, $instance)? >
@@ -1225,10 +1225,10 @@ macro_rules! impl_benchmark_test {
 					>::components(&selected_benchmark);
 
 					let execute_benchmark = |
-						c: $crate::Vec<($crate::BenchmarkParameter, u32)>
+						c: $crate::__private::Vec<($crate::BenchmarkParameter, u32)>
 					| -> Result<(), $crate::BenchmarkError> {
 						// Always reset the state after the benchmark.
-						$crate::defer!($crate::benchmarking::wipe_db());
+						$crate::__private::defer!($crate::benchmarking::wipe_db());
 
 						// Set up the benchmark, return execution + verification function.
 						let closure_to_verify = <
@@ -1236,7 +1236,7 @@ macro_rules! impl_benchmark_test {
 						>::instance(&selected_benchmark, &c, true)?;
 
 						// Set the block number to at least 1 so events are deposited.
-						if $crate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
+						if $crate::__private::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
 							frame_system::Pallet::<T>::set_block_number(1u32.into());
 						}
 
@@ -1266,7 +1266,7 @@ macro_rules! impl_benchmark_test {
 							// and up to num_values-2 more equidistant values in between.
 							// For 0..10 and num_values=6 this would mean: [0, 2, 4, 6, 8, 10]
 
-							let mut values = $crate::vec![low];
+							let mut values = $crate::__private::vec![low];
 							let diff = (high - low).min(num_values - 1);
 							let slope = (high - low) as f32 / diff as f32;
 
@@ -1278,7 +1278,7 @@ macro_rules! impl_benchmark_test {
 
 							for component_value in values {
 								// Select the max value for all the other components.
-								let c: $crate::Vec<($crate::BenchmarkParameter, u32)> = components
+								let c: $crate::__private::Vec<($crate::BenchmarkParameter, u32)> = components
 									.iter()
 									.map(|(n, _, h)|
 										if *n == name {
@@ -1684,7 +1684,7 @@ macro_rules! impl_test_function {
 							Err(err) => {
 								println!(
 									"{}: {:?}",
-									$crate::str::from_utf8(benchmark_name)
+									$crate::__private::str::from_utf8(benchmark_name)
 										.expect("benchmark name is always a valid string!"),
 									err,
 								);
@@ -1695,7 +1695,7 @@ macro_rules! impl_test_function {
 									$crate::BenchmarkError::Stop(err) => {
 										println!(
 											"{}: {:?}",
-											$crate::str::from_utf8(benchmark_name)
+											$crate::__private::str::from_utf8(benchmark_name)
 												.expect("benchmark name is always a valid string!"),
 											err,
 										);
@@ -1703,25 +1703,25 @@ macro_rules! impl_test_function {
 									},
 									$crate::BenchmarkError::Override(_) => {
 										// This is still considered a success condition.
-										$crate::log::error!(
+										$crate::__private::log::error!(
 											"WARNING: benchmark error overrided - {}",
-												$crate::str::from_utf8(benchmark_name)
+												$crate::__private::str::from_utf8(benchmark_name)
 													.expect("benchmark name is always a valid string!"),
 											);
 									},
 									$crate::BenchmarkError::Skip => {
 										// This is considered a success condition.
-										$crate::log::error!(
+										$crate::__private::log::error!(
 											"WARNING: benchmark error skipped - {}",
-											$crate::str::from_utf8(benchmark_name)
+											$crate::__private::str::from_utf8(benchmark_name)
 												.expect("benchmark name is always a valid string!"),
 										);
 									}
 									$crate::BenchmarkError::Weightless => {
 										// This is considered a success condition.
-										$crate::log::error!(
+										$crate::__private::log::error!(
 											"WARNING: benchmark weightless skipped - {}",
-											$crate::str::from_utf8(benchmark_name)
+											$crate::__private::str::from_utf8(benchmark_name)
 												.expect("benchmark name is always a valid string!"),
 										);
 									}
@@ -1777,7 +1777,7 @@ pub fn show_benchmark_debug_info(
 /// For values that should be skipped entirely, we can just pass `key.into()`. For example:
 ///
 /// ```
-/// use frame_benchmarking::TrackedStorageKey;
+/// use sp_storage::TrackedStorageKey;
 /// let whitelist: Vec<TrackedStorageKey> = vec![
 /// 	// Block Number
 /// 	array_bytes::hex_into_unchecked("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac"),
@@ -1850,13 +1850,13 @@ macro_rules! add_benchmark {
 				Ok(results) => Some(results),
 				Err($crate::BenchmarkError::Override(mut result)) => {
 					// Insert override warning as the first storage key.
-					$crate::log::error!(
+					$crate::__private::log::error!(
 						"WARNING: benchmark error overrided - {}",
-						$crate::str::from_utf8(benchmark)
+						$crate::__private::str::from_utf8(benchmark)
 							.expect("benchmark name is always a valid string!")
 					);
 					result.keys.insert(0, (b"Benchmark Override".to_vec(), 0, 0, false));
-					Some($crate::vec![result])
+					Some($crate::__private::vec![result])
 				},
 				Err($crate::BenchmarkError::Stop(e)) => {
 					$crate::show_benchmark_debug_info(
@@ -1869,20 +1869,20 @@ macro_rules! add_benchmark {
 					return Err(e.into())
 				},
 				Err($crate::BenchmarkError::Skip) => {
-					$crate::log::error!(
+					$crate::__private::log::error!(
 						"WARNING: benchmark error skipped - {}",
-						$crate::str::from_utf8(benchmark)
+						$crate::__private::str::from_utf8(benchmark)
 							.expect("benchmark name is always a valid string!")
 					);
 					None
 				},
 				Err($crate::BenchmarkError::Weightless) => {
-					$crate::log::error!(
+					$crate::__private::log::error!(
 						"WARNING: benchmark weightless skipped - {}",
-						$crate::str::from_utf8(benchmark)
+						$crate::__private::str::from_utf8(benchmark)
 							.expect("benchmark name is always a valid string!")
 					);
-					Some(vec![$crate::BenchmarkResult {
+					Some($crate::__private::vec![$crate::BenchmarkResult {
 						components: selected_components.clone(),
 						..Default::default()
 					}])

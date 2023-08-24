@@ -24,6 +24,7 @@ sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../
 sp-io = { version = "23.0.0", default-features = false, optional = true, path = "../../primitives/io" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
+sp-storage = { version = "13.0.0", default-features = false, path = "../../primitives/storage" }
 sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../primitives/timestamp" }
 
 [dev-dependencies]
@@ -44,6 +45,7 @@ std = [
 	"sp-io?/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-storage/std",
 	"sp-timestamp/std",
 ]
 runtime-benchmarks = [

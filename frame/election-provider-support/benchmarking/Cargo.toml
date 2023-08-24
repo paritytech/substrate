@@ -20,6 +20,7 @@ frame-election-provider-support = { version = "4.0.0-dev", default-features = fa
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
 
 [features]
 default = [ "std" ]
@@ -30,6 +31,7 @@ std = [
 	"frame-system/std",
 	"sp-npos-elections/std",
 	"sp-runtime/std",
+	"sp-std/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

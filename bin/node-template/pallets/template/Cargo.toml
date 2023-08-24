@@ -20,6 +20,7 @@ scale-info = { version = "2.5.0", default-features = false, features = ["derive"
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../../../frame/benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/system" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../../../primitives/std" }
 
 [dev-dependencies]
 sp-core = { version = "21.0.0", path = "../../../../primitives/core" }
@@ -37,6 +38,7 @@ std = [
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
+	"sp-std/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

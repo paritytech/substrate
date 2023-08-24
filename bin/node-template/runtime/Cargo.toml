@@ -36,6 +36,7 @@ sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../.
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
 sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
+sp-storage = { version = "13.0.0", default-features = false, path = "../../../primitives/storage" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
 sp-version = { version = "22.0.0", default-features = false, path = "../../../primitives/version" }
 
@@ -84,6 +85,7 @@ std = [
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-std/std",
+	"sp-storage/std",
 	"sp-transaction-pool/std",
 	"sp-version/std",
 	"substrate-wasm-builder",
