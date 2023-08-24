@@ -17,12 +17,15 @@
 
 //! Utilities related to VRF input, output and signatures.
 
-use crate::{Randomness, TicketBody, TicketId, VrfInput, VrfOutput, VrfSignData};
+use crate::{Randomness, TicketBody, TicketId};
 use scale_codec::Encode;
 use sp_consensus_slots::Slot;
 use sp_std::vec::Vec;
 
-pub use sp_core::ed25519::{Public as EphemeralPublic, Signature as EphemeralSignature};
+pub use sp_core::bandersnatch::{
+	ring_vrf::{RingContext, RingProver, RingVerifier, RingVrfSignature},
+	vrf::{VrfInput, VrfOutput, VrfSignData, VrfSignature},
+};
 
 fn vrf_input_from_data(
 	domain: &[u8],

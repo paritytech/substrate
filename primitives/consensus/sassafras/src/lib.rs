@@ -28,10 +28,6 @@ use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
 
 pub use sp_consensus_slots::{Slot, SlotDuration};
-pub use sp_core::bandersnatch::{
-	ring_vrf::{RingContext, RingProver, RingVerifier, RingVrfSignature},
-	vrf::{VrfInput, VrfOutput, VrfSignData, VrfSignature},
-};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -129,7 +125,7 @@ sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with Sassafras.
 	pub trait SassafrasApi {
 		/// Get ring context to be used for ticket construction and verification.
-		fn ring_context() -> Option<RingContext>;
+		fn ring_context() -> Option<vrf::RingContext>;
 
 		/// Submit next epoch validator tickets via an unsigned extrinsic.
 		/// This method returns `false` when creation of the extrinsics fails.

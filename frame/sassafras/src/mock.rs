@@ -20,10 +20,10 @@
 use crate::{self as pallet_sassafras, SameAuthoritiesForever, *};
 
 use frame_support::traits::{ConstU32, ConstU64, OnFinalize, OnInitialize};
-// use scale_codec::Encode;
 use sp_consensus_sassafras::{
-	digests::SlotClaim, AuthorityIndex, AuthorityPair, EpochConfiguration, RingProver, Slot,
-	TicketBody, TicketEnvelope, TicketId, VrfSignature,
+	digests::SlotClaim,
+	vrf::{RingProver, VrfSignature},
+	AuthorityIndex, AuthorityPair, EpochConfiguration, Slot, TicketBody, TicketEnvelope, TicketId,
 };
 use sp_core::{
 	crypto::{ByteArray, Pair, UncheckedFrom, VrfSecret, Wraps},
@@ -139,8 +139,8 @@ pub fn new_test_ext_with_pairs(
 	if with_ring_context {
 		ext.execute_with(|| {
 			log::debug!("Building new testing ring context");
-			let ring_ctx = RingContext::new_testing();
-			RingVrfContext::<Test>::set(Some(ring_ctx.clone()));
+			let ring_ctx = vrf::RingContext::new_testing();
+			RingContext::<Test>::set(Some(ring_ctx.clone()));
 		});
 	}
 
