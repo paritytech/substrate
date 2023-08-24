@@ -16,9 +16,12 @@
 // limitations under the License.
 
 mod pallet_dummy;
-mod unsafe_debug;
+mod test_debug;
 
-use self::test_utils::{ensure_stored, expected_deposit, hash};
+use self::{
+	test_debug::TestDebug,
+	test_utils::{ensure_stored, expected_deposit, hash},
+};
 use crate::{
 	self as pallet_contracts,
 	chain_extension::{
@@ -479,8 +482,7 @@ impl Config for Test {
 	type Migrations = crate::migration::codegen::BenchMigrations;
 	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
 	type MaxDelegateDependencies = MaxDelegateDependencies;
-	#[cfg(feature = "unsafe-debug")]
-	type Debug = unsafe_debug::TestDebugger;
+	type Debug = TestDebug;
 	type Environment = ();
 }
 

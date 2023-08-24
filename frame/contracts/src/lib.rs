@@ -96,8 +96,8 @@ mod storage;
 mod wasm;
 
 pub mod chain_extension;
+pub mod debug;
 pub mod migration;
-pub mod unsafe_debug;
 pub mod weights;
 
 #[cfg(test)]
@@ -144,6 +144,7 @@ use sp_std::{fmt::Debug, prelude::*};
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
+	debug::Tracing,
 	exec::Frame,
 	migration::{MigrateSequence, Migration, NoopMigration},
 	pallet::*,
@@ -219,6 +220,7 @@ pub struct Environment<T: Config> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use crate::debug::Debugger;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::Perbill;
@@ -390,13 +392,11 @@ pub mod pallet {
 		/// ```
 		type Migrations: MigrateSequence;
 
-		/// Type that provides debug handling for the contract execution process.
-		///
-		/// # Warning
-		///
-		/// Do **not** use it in a production environment or for benchmarking purposes.
-		#[cfg(feature = "unsafe-debug")]
-		type Debug: unsafe_debug::UnsafeDebug<Self>;
+		/// # Note
+		/// For most production chains, it's recommended to use the `()` implementation of this
+		/// trait. This implementation offers additional logging when the log target
+		/// "runtime::contracts" is set to trace.
+		type Debug: Debugger<Self>;
 
 		/// Type that bundles together all the runtime configurable interface types.
 		///
