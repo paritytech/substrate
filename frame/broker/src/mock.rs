@@ -243,20 +243,24 @@ pub fn attribute<T: codec::Decode>(nft: RegionId, attribute: impl codec::Encode)
 	<Broker as NftInspect<_>>::typed_attribute::<_, T>(&nft.into(), &attribute).unwrap()
 }
 
+pub fn new_config() -> ConfigRecordOf<Test> {
+	ConfigRecord {
+		advance_notice: 2,
+		interlude_length: 1,
+		leadin_length: 1,
+		ideal_bulk_proportion: Default::default(),
+		limit_cores_offered: None,
+		region_length: 3,
+		renewal_bump: Perbill::from_percent(10),
+		contribution_timeout: 5,
+	}
+}
+
 pub struct TestExt(ConfigRecordOf<Test>);
 #[allow(dead_code)]
 impl TestExt {
 	pub fn new() -> Self {
-		Self(ConfigRecord {
-			advance_notice: 2,
-			interlude_length: 1,
-			leadin_length: 1,
-			ideal_bulk_proportion: Default::default(),
-			limit_cores_offered: None,
-			region_length: 3,
-			renewal_bump: Perbill::from_percent(10),
-			contribution_timeout: 5,
-		})
+		Self(new_config())
 	}
 
 	pub fn advance_notice(mut self, advance_notice: Timeslice) -> Self {

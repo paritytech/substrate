@@ -468,6 +468,8 @@ pub mod pallet {
 		UnknownRenewal,
 		/// The lease expiry time has already passed.
 		AlreadyExpired,
+		/// The configuration could not be applied because it is invalid.
+		InvalidConfig,
 	}
 
 	#[pallet::hooks]

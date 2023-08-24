@@ -274,3 +274,17 @@ pub struct ConfigRecord<BlockNumber, RelayBlockNumber> {
 	pub contribution_timeout: Timeslice,
 }
 pub type ConfigRecordOf<T> = ConfigRecord<BlockNumberFor<T>, RelayBlockNumberOf<T>>;
+
+impl<BlockNumber, RelayBlockNumber> ConfigRecord<BlockNumber, RelayBlockNumber>
+where
+	BlockNumber: sp_arithmetic::traits::Zero,
+{
+	/// Check the config for basic validity constraints.
+	pub(crate) fn validate(&self) -> Result<(), ()> {
+		if self.leadin_length.is_zero() {
+			return Err(())
+		}
+
+		Ok(())
+	}
+}

@@ -23,6 +23,7 @@ use frame_support::{
 	traits::nonfungible::{Inspect as NftInspect, Transfer},
 	BoundedVec,
 };
+use frame_system::RawOrigin::Root;
 use sp_runtime::traits::Get;
 use CoreAssignment::*;
 use CoretimeTraceItem::*;
@@ -878,5 +879,17 @@ fn pool_should_drop_invalid_region() {
 		assert_ok!(Broker::do_pool(region, Some(1), 1001, Provisional));
 		region.begin = 7;
 		System::assert_last_event(Event::RegionDropped { region_id: region, duration: 0 }.into());
+	});
+}
+
+#[test]
+fn config_works() {
+	TestExt::new().execute_with(|| {
+		let mut cfg = new_config();
+		// Good config works:
+		assert_ok!(Broker::configure(Root.into(), cfg.clone()));
+		// Bad config is a noop:
+		cfg.leadin_length = 0;
+		assert_noop!(Broker::configure(Root.into(), cfg), Error::<Test>::InvalidConfig);
 	});
 }
