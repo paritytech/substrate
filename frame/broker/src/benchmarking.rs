@@ -32,6 +32,7 @@ use frame_system::{Pallet as System, RawOrigin};
 use sp_arithmetic::{traits::Zero, Perbill};
 use sp_core::Get;
 use sp_runtime::Saturating;
+use sp_std::{vec, vec::Vec};
 
 const SEED: u32 = 0;
 const MAX_CORE_COUNT: u16 = 1_000;
