@@ -40,7 +40,7 @@ mod benchmarks {
 	/// `on_initialize` exiting since the until block is in the past.
 	#[benchmark]
 	fn on_initialize_exit() {
-		EnteredUntil::<T>::put(&T::BlockNumber::zero());
+		EnteredUntil::<T>::put(&BlockNumberFor::<T>::zero());
 		assert!(SafeMode::<T>::is_entered());
 
 		#[block]
@@ -154,7 +154,7 @@ mod benchmarks {
 
 		T::Currency::set_balance(&alice, init_bal::<T>());
 		// Mock the storage. This is needed in case the `EnterDepositAmount` is zero.
-		let block: T::BlockNumber = 1u32.into();
+		let block: BlockNumberFor<T> = 1u32.into();
 		let bal: BalanceOf<T> = 1u32.into();
 		Deposits::<T>::insert(&alice, &block, &bal);
 		T::Currency::hold(&HoldReason::EnterOrExtend.into(), &alice, bal)?;
@@ -183,7 +183,7 @@ mod benchmarks {
 		T::Currency::set_balance(&alice, init_bal::<T>());
 
 		// Mock the storage. This is needed in case the `EnterDepositAmount` is zero.
-		let block: T::BlockNumber = 1u32.into();
+		let block: BlockNumberFor<T> = 1u32.into();
 		let bal: BalanceOf<T> = 1u32.into();
 		Deposits::<T>::insert(&alice, &block, &bal);
 		T::Currency::hold(&&HoldReason::EnterOrExtend.into(), &alice, bal)?;
@@ -213,7 +213,7 @@ mod benchmarks {
 		T::Currency::set_balance(&alice, init_bal::<T>());
 
 		// Mock the storage. This is needed in case the `EnterDepositAmount` is zero.
-		let block: T::BlockNumber = 1u32.into();
+		let block: BlockNumberFor<T> = 1u32.into();
 		let bal: BalanceOf<T> = 1u32.into();
 		Deposits::<T>::insert(&alice, &block, &bal);
 		T::Currency::hold(&&HoldReason::EnterOrExtend.into(), &alice, bal)?;

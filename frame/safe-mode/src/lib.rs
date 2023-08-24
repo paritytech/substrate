@@ -76,13 +76,13 @@ pub mod pallet {
 
 		/// For how many blocks the safe-mode will be entered by [`Pallet::enter`].
 		#[pallet::constant]
-		type EnterDuration: Get<Self::BlockNumber>;
+		type EnterDuration: Get<BlockNumberFor<Self>>;
 
 		/// For how many blocks the safe-mode can be extended by each [`Pallet::extend`] call.
 		///
 		/// This does not impose a hard limit as the safe-mode can be extended multiple times.
 		#[pallet::constant]
-		type ExtendDuration: Get<Self::BlockNumber>;
+		type ExtendDuration: Get<BlockNumberFor<Self>>;
 
 		/// The amount that will be reserved upon calling [`Pallet::enter`].
 		///
@@ -99,12 +99,12 @@ pub mod pallet {
 		/// The origin that may call [`Pallet::force_enter`].
 		///
 		/// The `Success` value is the number of blocks that this origin can enter safe-mode for.
-		type ForceEnterOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::BlockNumber>;
+		type ForceEnterOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = BlockNumberFor<Self>>;
 
 		/// The origin that may call [`Pallet::force_extend`].
 		///
 		/// The `Success` value is the number of blocks that this origin can extend the safe-mode.
-		type ForceExtendOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::BlockNumber>;
+		type ForceExtendOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = BlockNumberFor<Self>>;
 
 		/// The origin that may call [`Pallet::force_enter`].
 		type ForceExitOrigin: EnsureOrigin<Self::RuntimeOrigin>;
@@ -124,7 +124,7 @@ pub mod pallet {
 		/// `None` disallows permissionlessly releasing the safe-mode deposits and is a sane
 		/// default.
 		#[pallet::constant]
-		type ReleaseDelay: Get<Option<Self::BlockNumber>>;
+		type ReleaseDelay: Get<Option<BlockNumberFor<Self>>>;
 
 		// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -158,10 +158,10 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// The safe-mode was entered until inclusively this block.
-		Entered { until: T::BlockNumber },
+		Entered { until: BlockNumberFor<T> },
 
 		/// The safe-mode was extended until inclusively this block.
-		Extended { until: T::BlockNumber },
+		Extended { until: BlockNumberFor<T> },
 
 		/// Exited the safe-mode for a specific reason.
 		Exited { reason: ExitReason },
@@ -202,7 +202,7 @@ pub mod pallet {
 	///
 	/// Safe-mode is automatically exited when the current block number exceeds this value.
 	#[pallet::storage]
-	pub type EnteredUntil<T: Config> = StorageValue<_, T::BlockNumber, OptionQuery>;
+	pub type EnteredUntil<T: Config> = StorageValue<_, BlockNumberFor<T>, OptionQuery>;
 
 	/// Holds the reserve that was taken from an account at a specific block number.
 	///
@@ -214,7 +214,7 @@ pub mod pallet {
 		Twox64Concat,
 		T::AccountId,
 		Twox64Concat,
-		T::BlockNumber,
+		BlockNumberFor<T>,
 		BalanceOf<T>,
 		OptionQuery,
 	>;
@@ -223,11 +223,11 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
-		pub entered_until: Option<T::BlockNumber>,
+		pub entered_until: Option<BlockNumberFor<T>>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			if let Some(block) = self.entered_until {
 				EnteredUntil::<T>::put(block);
@@ -337,7 +337,7 @@ pub mod pallet {
 		pub fn force_slash_deposit(
 			origin: OriginFor<T>,
 			account: T::AccountId,
-			block: T::BlockNumber,
+			block: BlockNumberFor<T>,
 		) -> DispatchResult {
 			T::ForceDepositOrigin::ensure_origin(origin)?;
 
@@ -361,7 +361,7 @@ pub mod pallet {
 		pub fn release_deposit(
 			origin: OriginFor<T>,
 			account: T::AccountId,
-			block: T::BlockNumber,
+			block: BlockNumberFor<T>,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
 
@@ -384,7 +384,7 @@ pub mod pallet {
 		pub fn force_release_deposit(
 			origin: OriginFor<T>,
 			account: T::AccountId,
-			block: T::BlockNumber,
+			block: BlockNumberFor<T>,
 		) -> DispatchResult {
 			T::ForceDepositOrigin::ensure_origin(origin)?;
 
@@ -396,7 +396,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Automatically exits safe-mode when the current block number is greater than
 		/// [`EnteredUntil`].
-		fn on_initialize(current: T::BlockNumber) -> Weight {
+		fn on_initialize(current: BlockNumberFor<T>) -> Weight {
 			let Some(limit) = EnteredUntil::<T>::get() else {
 				return T::WeightInfo::on_initialize_noop();
 			};
@@ -415,7 +415,7 @@ impl<T: Config> Pallet<T> {
 	/// Logic for the [`crate::Pallet::enter`] and [`crate::Pallet::force_enter`] calls.
 	pub(crate) fn do_enter(
 		who: Option<T::AccountId>,
-		duration: T::BlockNumber,
+		duration: BlockNumberFor<T>,
 	) -> Result<(), Error<T>> {
 		ensure!(!Self::is_entered(), Error::<T>::Entered);
 
@@ -434,7 +434,7 @@ impl<T: Config> Pallet<T> {
 	/// Logic for the [`crate::Pallet::extend`] and [`crate::Pallet::force_extend`] calls.
 	pub(crate) fn do_extend(
 		who: Option<T::AccountId>,
-		duration: T::BlockNumber,
+		duration: BlockNumberFor<T>,
 	) -> Result<(), Error<T>> {
 		let mut until = EnteredUntil::<T>::get().ok_or(Error::<T>::Exited)?;
 
@@ -464,7 +464,7 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn do_release(
 		force: bool,
 		account: T::AccountId,
-		block: T::BlockNumber,
+		block: BlockNumberFor<T>,
 	) -> Result<(), Error<T>> {
 		let amount = Deposits::<T>::take(&account, &block).ok_or(Error::<T>::NoDeposit)?;
 
@@ -490,7 +490,7 @@ impl<T: Config> Pallet<T> {
 	/// Logic for the [`crate::Pallet::slash_deposit`] call.
 	pub(crate) fn do_force_deposit(
 		account: T::AccountId,
-		block: T::BlockNumber,
+		block: BlockNumberFor<T>,
 	) -> Result<(), Error<T>> {
 		let amount = Deposits::<T>::take(&account, block).ok_or(Error::<T>::NoDeposit)?;
 
@@ -559,24 +559,24 @@ where
 }
 
 impl<T: Config> frame_support::traits::SafeMode for Pallet<T> {
-	type BlockNumber = T::BlockNumber;
+	type BlockNumber = BlockNumberFor<T>;
 
 	fn is_entered() -> bool {
 		Self::is_entered()
 	}
 
-	fn remaining() -> Option<Self::BlockNumber> {
+	fn remaining() -> Option<BlockNumberFor<T>> {
 		EnteredUntil::<T>::get().map(|until| {
 			let now = <frame_system::Pallet<T>>::block_number();
 			until.saturating_sub(now)
 		})
 	}
 
-	fn enter(duration: Self::BlockNumber) -> Result<(), frame_support::traits::SafeModeError> {
+	fn enter(duration: BlockNumberFor<T>) -> Result<(), frame_support::traits::SafeModeError> {
 		Self::do_enter(None, duration).map_err(Into::into)
 	}
 
-	fn extend(duration: Self::BlockNumber) -> Result<(), frame_support::traits::SafeModeError> {
+	fn extend(duration: BlockNumberFor<T>) -> Result<(), frame_support::traits::SafeModeError> {
 		Self::do_extend(None, duration).map_err(Into::into)
 	}
 
