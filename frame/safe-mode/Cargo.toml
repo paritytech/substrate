@@ -54,4 +54,11 @@ runtime-benchmarks = [
 	"pallet-proxy/runtime-benchmarks",
 	"pallet-utility/runtime-benchmarks",
 ]
-try-runtime = [ "frame-support/try-runtime", "frame-system/try-runtime" ]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-balances?/try-runtime",
+	"pallet-proxy?/try-runtime",
+	"pallet-utility?/try-runtime",
+	"sp-runtime/try-runtime",
+]
