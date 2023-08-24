@@ -34,13 +34,13 @@
 mod commitment;
 pub mod mmr;
 mod payload;
-#[cfg(feature = "std")]
+#[cfg(all(test, feature = "std"))]
 mod test_utils;
 pub mod witness;
 
 pub use commitment::{Commitment, SignedCommitment, VersionedFinalityProof};
 pub use payload::{known_payloads, BeefyPayloadId, Payload, PayloadProvider};
-#[cfg(feature = "std")]
+#[cfg(all(test, feature = "std"))]
 pub use test_utils::*;
 
 use codec::{Codec, Decode, Encode};

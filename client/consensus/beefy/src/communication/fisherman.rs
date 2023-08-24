@@ -27,7 +27,7 @@ use sp_blockchain::HeaderBackend;
 use sp_consensus_beefy::{
 	check_fork_equivocation_proof,
 	ecdsa_crypto::{AuthorityId, Signature},
-	BeefyApi, ForkEquivocationProof, Payload, PayloadProvider, ValidatorSet, VoteMessage, Commitment, OpaqueKeyOwnershipProof, SignedCommitment,
+	BeefyApi, ForkEquivocationProof, Payload, PayloadProvider, ValidatorSet, VoteMessage, SignedCommitment,
 };
 use sp_runtime::{
 	generic::BlockId,
