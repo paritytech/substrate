@@ -29,10 +29,10 @@ use crate::{
 		},
 	},
 	import::BeefyBlockImport,
+	keystore::BeefyKeystore,
 	metrics::register_metrics,
 	round::Rounds,
 	worker::PersistedState,
-	keystore::BeefyKeystore,
 };
 use futures::{stream::Fuse, StreamExt};
 use log::{error, info};

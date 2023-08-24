@@ -44,7 +44,7 @@ use sc_consensus::{
 };
 use sc_network::{config::RequestResponseConfig, ProtocolName};
 use sc_network_test::{
-	Block, BlockImportAdapter, Header, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
+	Block, BlockImportAdapter, FullPeerConfig, Header, PassThroughVerifier, Peer, PeersClient,
 	PeersFullClient, TestNetFactory,
 };
 use sc_utils::notification::NotificationReceiver;
@@ -56,9 +56,9 @@ use sp_consensus_beefy::{
 	ecdsa_crypto::{AuthorityId, Signature},
 	known_payloads,
 	mmr::{find_mmr_root_digest, MmrRootProvider},
-	BeefyApi, Commitment, ConsensusLog, ForkEquivocationProof, VoteEquivocationProof, Keyring as BeefyKeyring, MmrRootHash,
-	OpaqueKeyOwnershipProof, Payload, SignedCommitment, ValidatorSet, ValidatorSetId,
-	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
+	BeefyApi, Commitment, ConsensusLog, ForkEquivocationProof, Keyring as BeefyKeyring,
+	MmrRootHash, OpaqueKeyOwnershipProof, Payload, SignedCommitment, ValidatorSet, ValidatorSetId,
+	VersionedFinalityProof, VoteEquivocationProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 use sp_core::H256;
 use sp_keystore::{testing::MemoryKeystore, Keystore, KeystorePtr};
@@ -254,7 +254,10 @@ impl<B: BlockT> BeefyFisherman<B> for DummyFisherman<B> {
 	fn check_proof(&self, _: BeefyVersionedFinalityProof<B>) -> Result<(), Error> {
 		Ok(())
 	}
-	fn check_signed_commitment(&self, _: SignedCommitment<NumberFor<B>, Signature>) -> Result<(), Error> {
+	fn check_signed_commitment(
+		&self,
+		_: SignedCommitment<NumberFor<B>, Signature>,
+	) -> Result<(), Error> {
 		Ok(())
 	}
 	fn check_vote(
@@ -272,8 +275,9 @@ pub(crate) struct TestApi {
 	pub mmr_root_hash: MmrRootHash,
 	pub reported_vote_equivocations:
 		Option<Arc<Mutex<Vec<VoteEquivocationProof<NumberFor<Block>, AuthorityId, Signature>>>>>,
-	pub reported_fork_equivocations:
-		Option<Arc<Mutex<Vec<ForkEquivocationProof<NumberFor<Block>, AuthorityId, Signature, Header>>>>>,
+	pub reported_fork_equivocations: Option<
+		Arc<Mutex<Vec<ForkEquivocationProof<NumberFor<Block>, AuthorityId, Signature, Header>>>>,
+	>,
 }
 
 impl TestApi {
@@ -425,7 +429,7 @@ fn initialize_beefy<API>(
 	min_block_delta: u32,
 ) -> impl Future<Output = ()>
 where
-	API: ProvideRuntimeApi<Block> + Sync + Send +'static,
+	API: ProvideRuntimeApi<Block> + Sync + Send + 'static,
 	API::Api: BeefyApi<Block, AuthorityId> + MmrApi<Block, MmrRootHash, NumberFor<Block>>,
 {
 	let tasks = FuturesUnordered::new();
@@ -1318,7 +1322,8 @@ async fn beefy_reports_vote_equivocations() {
 	}
 
 	// Verify expected equivocation
-	let alice_reported_vote_equivocations = api_alice.reported_vote_equivocations.as_ref().unwrap().lock();
+	let alice_reported_vote_equivocations =
+		api_alice.reported_vote_equivocations.as_ref().unwrap().lock();
 	assert_eq!(alice_reported_vote_equivocations.len(), 1);
 	let equivocation_proof = alice_reported_vote_equivocations.get(0).unwrap();
 	assert_eq!(equivocation_proof.first.id, BeefyKeyring::Bob.public());

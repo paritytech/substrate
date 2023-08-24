@@ -22,7 +22,7 @@ use codec::{Decode, Encode};
 use log::debug;
 use sp_consensus_beefy::{
 	ecdsa_crypto::{AuthorityId, Signature},
-	Commitment, VoteEquivocationProof, SignedCommitment, ValidatorSet, ValidatorSetId, VoteMessage,
+	Commitment, SignedCommitment, ValidatorSet, ValidatorSetId, VoteEquivocationProof, VoteMessage,
 };
 use sp_runtime::traits::{Block, NumberFor};
 use std::collections::BTreeMap;
@@ -203,8 +203,8 @@ mod tests {
 	use sc_network_test::Block;
 
 	use sp_consensus_beefy::{
-		known_payloads::MMR_ROOT_ID, Commitment, VoteEquivocationProof, Keyring, Payload,
-		SignedCommitment, ValidatorSet, VoteMessage,
+		known_payloads::MMR_ROOT_ID, Commitment, Keyring, Payload, SignedCommitment, ValidatorSet,
+		VoteEquivocationProof, VoteMessage,
 	};
 
 	use super::{threshold, AuthorityId, Block as BlockT, RoundTracker, Rounds};

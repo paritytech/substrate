@@ -47,7 +47,7 @@ use codec::{Codec, Decode, Encode};
 use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::H256;
-use sp_runtime::traits::{Hash, Keccak256, NumberFor, Header};
+use sp_runtime::traits::{Hash, Header, Keccak256, NumberFor};
 use sp_std::prelude::*;
 
 /// Key type for BEEFY module.
@@ -366,16 +366,16 @@ where
 	}
 
 	let expected_mmr_root_digest = mmr::find_mmr_root_digest::<Header>(correct_header);
-	let expected_payload = expected_mmr_root_digest.map(|mmr_root| {
-		Payload::from_single_entry(known_payloads::MMR_ROOT_ID, mmr_root.encode())
-	});
+	let expected_payload = expected_mmr_root_digest
+		.map(|mmr_root| Payload::from_single_entry(known_payloads::MMR_ROOT_ID, mmr_root.encode()));
 
 	// cheap failfasts:
 	// 1. check that `payload` on the `vote` is different that the `expected_payload`
 	// 2. if the signatories signed a payload when there should be none (for
 	// instance for a block prior to BEEFY activation), they should likewise be
 	// slashed
-	if Some(&commitment.payload) != expected_payload.as_ref() || expected_mmr_root_digest.is_none() {
+	if Some(&commitment.payload) != expected_payload.as_ref() || expected_mmr_root_digest.is_none()
+	{
 		// check check each signatory's signature on the commitment.
 		// if any are invalid, equivocation report is invalid
 		// TODO: refactor check_commitment_signature to take a slice of signatories

@@ -17,7 +17,10 @@
 
 #![cfg(feature = "std")]
 
-use crate::{ecdsa_crypto, ForkEquivocationProof, Commitment, SignedCommitment, VoteEquivocationProof, Payload, ValidatorSetId, VoteMessage};
+use crate::{
+	ecdsa_crypto, Commitment, ForkEquivocationProof, Payload, SignedCommitment, ValidatorSetId,
+	VoteEquivocationProof, VoteMessage,
+};
 use codec::Encode;
 use sp_core::{ecdsa, keccak_256, Pair};
 use std::collections::HashMap;
@@ -92,7 +95,12 @@ impl From<Keyring> for ecdsa_crypto::Public {
 }
 
 /// Create a new `VoteMessage` from commitment primitives and keyring
-fn signed_vote(block_number: u64, payload: Payload, validator_set_id: ValidatorSetId, keyring: &Keyring) -> VoteMessage<u64, ecdsa_crypto::Public, ecdsa_crypto::Signature> {
+fn signed_vote(
+	block_number: u64,
+	payload: Payload,
+	validator_set_id: ValidatorSetId,
+	keyring: &Keyring,
+) -> VoteMessage<u64, ecdsa_crypto::Public, ecdsa_crypto::Signature> {
 	let commitment = Commitment { validator_set_id, block_number, payload };
 	let signature = keyring.sign(&commitment.encode());
 	VoteMessage { commitment, id: keyring.public(), signature }

@@ -17,7 +17,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	error::Error, justification::BeefyVersionedFinalityProof, keystore::{BeefyKeystore, BeefySignatureHasher},
+	error::Error,
+	justification::BeefyVersionedFinalityProof,
+	keystore::{BeefyKeystore, BeefySignatureHasher},
 	LOG_TARGET,
 };
 use log::debug;
@@ -27,7 +29,8 @@ use sp_blockchain::HeaderBackend;
 use sp_consensus_beefy::{
 	check_fork_equivocation_proof,
 	ecdsa_crypto::{AuthorityId, Signature},
-	BeefyApi, ForkEquivocationProof, Payload, PayloadProvider, ValidatorSet, VoteMessage, SignedCommitment,
+	BeefyApi, ForkEquivocationProof, Payload, PayloadProvider, SignedCommitment, ValidatorSet,
+	VoteMessage,
 };
 use sp_runtime::{
 	generic::BlockId,
@@ -70,7 +73,10 @@ where
 	R: ProvideRuntimeApi<B> + Send + Sync,
 	R::Api: BeefyApi<B, AuthorityId>,
 {
-	fn expected_header_and_payload(&self, number: NumberFor<B>) -> Result<(B::Header, Payload), Error> {
+	fn expected_header_and_payload(
+		&self,
+		number: NumberFor<B>,
+	) -> Result<(B::Header, Payload), Error> {
 		// This should be un-ambiguous since `number` is finalized.
 		let hash = self
 			.backend
@@ -113,13 +119,19 @@ where
 			.map_err(|e| Error::Backend(e.to_string()))?;
 
 		if proof.commitment.validator_set_id != set_id ||
-			!check_fork_equivocation_proof::<NumberFor<B>, AuthorityId, BeefySignatureHasher, B::Header>(&proof, &expected_header_hash)
+			!check_fork_equivocation_proof::<
+				NumberFor<B>,
+				AuthorityId,
+				BeefySignatureHasher,
+				B::Header,
+			>(&proof, &expected_header_hash)
 		{
 			debug!(target: LOG_TARGET, "🥩 Skip report for bad invalid fork proof {:?}", proof);
 			return Ok(())
 		}
 
-		let offender_ids = proof.signatories.iter().cloned().map(|(id, _sig)| id).collect::<Vec<_>>();
+		let offender_ids =
+			proof.signatories.iter().cloned().map(|(id, _sig)| id).collect::<Vec<_>>();
 		if let Some(local_id) = self.key_store.authority_id(validator_set.validators()) {
 			if offender_ids.contains(&local_id) {
 				debug!(target: LOG_TARGET, "🥩 Skip equivocation report for own equivocation");
@@ -132,26 +144,31 @@ where
 		let runtime_api = self.runtime.runtime_api();
 
 		// generate key ownership proof at that block
-		let key_owner_proofs = offender_ids.iter()
-										   .filter_map(|id| {
-											   match runtime_api.generate_key_ownership_proof(hash, set_id, id.clone()) {
-												   Ok(Some(proof)) => Some(Ok(proof)),
-												   Ok(None) => {
-													   debug!(
-														   target: LOG_TARGET,
-														   "🥩 Invalid fork vote offender not part of the authority set."
-													   );
-													   None
-												   },
-												   Err(e) => Some(Err(Error::RuntimeApi(e))),
-											   }
-										   })
-										   .collect::<Result<_, _>>()?;
+		let key_owner_proofs = offender_ids
+			.iter()
+			.filter_map(|id| {
+				match runtime_api.generate_key_ownership_proof(hash, set_id, id.clone()) {
+					Ok(Some(proof)) => Some(Ok(proof)),
+					Ok(None) => {
+						debug!(
+							target: LOG_TARGET,
+							"🥩 Invalid fork vote offender not part of the authority set."
+						);
+						None
+					},
+					Err(e) => Some(Err(Error::RuntimeApi(e))),
+				}
+			})
+			.collect::<Result<_, _>>()?;
 
 		// submit invalid fork vote report at **best** block
 		let best_block_hash = self.backend.blockchain().info().best_hash;
 		runtime_api
-			.submit_report_fork_equivocation_unsigned_extrinsic(best_block_hash, proof, key_owner_proofs)
+			.submit_report_fork_equivocation_unsigned_extrinsic(
+				best_block_hash,
+				proof,
+				key_owner_proofs,
+			)
 			.map_err(Error::RuntimeApi)?;
 
 		Ok(())
@@ -174,7 +191,11 @@ where
 		let number = vote.commitment.block_number;
 		let (correct_header, expected_payload) = self.expected_header_and_payload(number)?;
 		if vote.commitment.payload != expected_payload {
-			let proof = ForkEquivocationProof { commitment: vote.commitment, signatories: vec![(vote.id, vote.signature)], correct_header: correct_header.clone() };
+			let proof = ForkEquivocationProof {
+				commitment: vote.commitment,
+				signatories: vec![(vote.id, vote.signature)],
+				correct_header: correct_header.clone(),
+			};
 			self.report_fork_equivocation(proof)?;
 		}
 		Ok(())
@@ -185,7 +206,7 @@ where
 		&self,
 		signed_commitment: SignedCommitment<NumberFor<B>, Signature>,
 	) -> Result<(), Error> {
-		let SignedCommitment {commitment, signatures} = signed_commitment;
+		let SignedCommitment { commitment, signatures } = signed_commitment;
 		let number = commitment.block_number;
 		let (correct_header, expected_payload) = self.expected_header_and_payload(number)?;
 		if commitment.payload != expected_payload {
@@ -195,10 +216,19 @@ where
 				return Ok(())
 			}
 			// report every signer of the bad justification
-			let signatories = validator_set.validators().iter().cloned().zip(signatures.into_iter())
-																		.filter_map(|(id, signature)| signature.map(|sig| (id, sig))).collect();
+			let signatories = validator_set
+				.validators()
+				.iter()
+				.cloned()
+				.zip(signatures.into_iter())
+				.filter_map(|(id, signature)| signature.map(|sig| (id, sig)))
+				.collect();
 
-			let proof = ForkEquivocationProof { commitment, signatories, correct_header: correct_header.clone() };
+			let proof = ForkEquivocationProof {
+				commitment,
+				signatories,
+				correct_header: correct_header.clone(),
+			};
 			self.report_fork_equivocation(proof)?;
 		}
 		Ok(())
@@ -207,9 +237,8 @@ where
 	/// Check `proof` for contained block against expected payload.
 	fn check_proof(&self, proof: BeefyVersionedFinalityProof<B>) -> Result<(), Error> {
 		match proof {
-			BeefyVersionedFinalityProof::<B>::V1(signed_commitment) => {
-				self.check_signed_commitment(signed_commitment)
-			}
+			BeefyVersionedFinalityProof::<B>::V1(signed_commitment) =>
+				self.check_signed_commitment(signed_commitment),
 		}
 	}
 }

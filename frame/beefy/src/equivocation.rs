@@ -38,7 +38,9 @@ use codec::{self as codec, Decode, Encode};
 use frame_support::traits::{Get, KeyOwnerProofSystem};
 use frame_system::pallet_prelude::BlockNumberFor;
 use log::{error, info};
-use sp_consensus_beefy::{VoteEquivocationProof, ForkEquivocationProof, ValidatorSetId, KEY_TYPE as BEEFY_KEY_TYPE};
+use sp_consensus_beefy::{
+	ForkEquivocationProof, ValidatorSetId, VoteEquivocationProof, KEY_TYPE as BEEFY_KEY_TYPE,
+};
 use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
@@ -125,20 +127,21 @@ pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, 
 pub enum EquivocationEvidenceFor<T: Config> {
 	VoteEquivocationProof(
 		VoteEquivocationProof<
-				BlockNumberFor<T>,
+			BlockNumberFor<T>,
 			<T as Config>::BeefyId,
 			<<T as Config>::BeefyId as RuntimeAppPublic>::Signature,
-			>,
+		>,
 		<T as Config>::KeyOwnerProof,
 	),
 	ForkEquivocationProof(
-		ForkEquivocationProof<BlockNumberFor<T>,
-							  <T as Config>::BeefyId,
-							  <<T as Config>::BeefyId as RuntimeAppPublic>::Signature,
-							  HeaderFor<T>,
-							  >,
+		ForkEquivocationProof<
+			BlockNumberFor<T>,
+			<T as Config>::BeefyId,
+			<<T as Config>::BeefyId as RuntimeAppPublic>::Signature,
+			HeaderFor<T>,
+		>,
 		Vec<<T as Config>::KeyOwnerProof>,
-	)
+	),
 }
 
 impl<T, R, P, L> OffenceReportSystem<Option<T::AccountId>, EquivocationEvidenceFor<T>>
@@ -160,18 +163,18 @@ where
 		use frame_system::offchain::SubmitTransaction;
 
 		let call = match evidence {
-			EquivocationEvidenceFor::VoteEquivocationProof(equivocation_proof, key_owner_proof) => {
+			EquivocationEvidenceFor::VoteEquivocationProof(equivocation_proof, key_owner_proof) =>
 				Call::report_vote_equivocation_unsigned {
 					equivocation_proof: Box::new(equivocation_proof),
 					key_owner_proof,
-				}
-			}
-			EquivocationEvidenceFor::ForkEquivocationProof(equivocation_proof, key_owner_proofs) => {
-				Call::report_fork_equivocation_unsigned {
-					equivocation_proof: Box::new(equivocation_proof),
-					key_owner_proofs,
-				}
-			}
+				},
+			EquivocationEvidenceFor::ForkEquivocationProof(
+				equivocation_proof,
+				key_owner_proofs,
+			) => Call::report_fork_equivocation_unsigned {
+				equivocation_proof: Box::new(equivocation_proof),
+				key_owner_proofs,
+			},
 		};
 
 		let res = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
@@ -187,15 +190,20 @@ where
 	) -> Result<(), TransactionValidityError> {
 		let (offenders, key_owner_proofs, time_slot) = match &evidence {
 			EquivocationEvidenceFor::VoteEquivocationProof(equivocation_proof, key_owner_proof) => {
-				// Check if the offence has already been reported, and if so then we can discard the report.
+				// Check if the offence has already been reported, and if so then we can discard the
+				// report.
 				let time_slot = TimeSlot {
 					set_id: equivocation_proof.set_id(),
 					round: *equivocation_proof.round_number(),
 				};
 				(vec![equivocation_proof.offender_id()], vec![key_owner_proof.clone()], time_slot)
 			},
-			EquivocationEvidenceFor::ForkEquivocationProof(equivocation_proof, key_owner_proofs) => {
-				// Check if the offence has already been reported, and if so then we can discard the report.
+			EquivocationEvidenceFor::ForkEquivocationProof(
+				equivocation_proof,
+				key_owner_proofs,
+			) => {
+				// Check if the offence has already been reported, and if so then we can discard the
+				// report.
 				let time_slot = TimeSlot {
 					set_id: equivocation_proof.set_id(),
 					round: *equivocation_proof.round_number(),
@@ -209,7 +217,9 @@ where
 		let offenders = offenders
 			.into_iter()
 			.zip(key_owner_proofs.iter())
-			.map(|(key, key_owner_proof)| P::check_proof((BEEFY_KEY_TYPE, key.clone()), key_owner_proof.clone()))
+			.map(|(key, key_owner_proof)| {
+				P::check_proof((BEEFY_KEY_TYPE, key.clone()), key_owner_proof.clone())
+			})
 			.collect::<Option<Vec<_>>>()
 			.ok_or(InvalidTransaction::BadProof)?;
 
@@ -227,12 +237,24 @@ where
 		let reporter = reporter.or_else(|| <pallet_authorship::Pallet<T>>::author());
 
 		let (offenders, key_owner_proofs, set_id, round) = match &evidence {
-			EquivocationEvidenceFor::VoteEquivocationProof(equivocation_proof, key_owner_proof) => {
-				(vec![equivocation_proof.offender_id()], vec![key_owner_proof.clone()], equivocation_proof.set_id(), *equivocation_proof.round_number())
-			},
-			EquivocationEvidenceFor::ForkEquivocationProof(equivocation_proof, key_owner_proofs) => {
+			EquivocationEvidenceFor::VoteEquivocationProof(equivocation_proof, key_owner_proof) =>
+				(
+					vec![equivocation_proof.offender_id()],
+					vec![key_owner_proof.clone()],
+					equivocation_proof.set_id(),
+					*equivocation_proof.round_number(),
+				),
+			EquivocationEvidenceFor::ForkEquivocationProof(
+				equivocation_proof,
+				key_owner_proofs,
+			) => {
 				let offenders = equivocation_proof.offender_ids(); // clone data here
-				(offenders, key_owner_proofs.to_owned(), equivocation_proof.set_id(), *equivocation_proof.round_number())
+				(
+					offenders,
+					key_owner_proofs.to_owned(),
+					equivocation_proof.set_id(),
+					*equivocation_proof.round_number(),
+				)
 			},
 		};
 
@@ -247,7 +269,9 @@ where
 		let offenders = offenders
 			.into_iter()
 			.zip(key_owner_proofs.iter())
-			.map(|(key, key_owner_proof)| P::check_proof((BEEFY_KEY_TYPE, key.clone()), key_owner_proof.clone()))
+			.map(|(key, key_owner_proof)| {
+				P::check_proof((BEEFY_KEY_TYPE, key.clone()), key_owner_proof.clone())
+			})
 			.collect::<Option<Vec<_>>>()
 			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
@@ -262,8 +286,12 @@ where
 				let block_number = equivocation_proof.commitment.block_number;
 				let expected_block_hash = <frame_system::Pallet<T>>::block_hash(block_number);
 
-				// Validate equivocation proof (check commitment is to unexpected payload and signatures are valid).
-				if !sp_consensus_beefy::check_fork_equivocation_proof(&equivocation_proof, &expected_block_hash) {
+				// Validate equivocation proof (check commitment is to unexpected payload and
+				// signatures are valid).
+				if !sp_consensus_beefy::check_fork_equivocation_proof(
+					&equivocation_proof,
+					&expected_block_hash,
+				) {
 					return Err(Error::<T>::InvalidForkEquivocationProof.into())
 				}
 			},
@@ -271,8 +299,8 @@ where
 
 		// Check that the session id for the membership proof is within the
 		// bounds of the set id reported in the equivocation.
-		let set_id_session_index =
-			crate::SetIdSession::<T>::get(set_id).ok_or(Error::<T>::InvalidVoteEquivocationProof)?;
+		let set_id_session_index = crate::SetIdSession::<T>::get(set_id)
+			.ok_or(Error::<T>::InvalidVoteEquivocationProof)?;
 		if session_index != set_id_session_index {
 			return Err(Error::<T>::InvalidVoteEquivocationProof.into())
 		}
@@ -292,12 +320,14 @@ where
 }
 
 /// Methods for the `ValidateUnsigned` implementation:
-/// It restricts calls to `report_vote_equivocation_unsigned` to local calls (i.e. extrinsics generated
-/// on this node) or that already in a block. This guarantees that only block authors can include
-/// unsigned equivocation reports.
+/// It restricts calls to `report_vote_equivocation_unsigned` to local calls (i.e. extrinsics
+/// generated on this node) or that already in a block. This guarantees that only block authors can
+/// include unsigned equivocation reports.
 impl<T: Config> Pallet<T> {
 	pub fn validate_unsigned(source: TransactionSource, call: &Call<T>) -> TransactionValidity {
-		if let Call::report_vote_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
+		if let Call::report_vote_equivocation_unsigned { equivocation_proof, key_owner_proof } =
+			call
+		{
 			// discard equivocation report not coming from the local node
 			match source {
 				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },

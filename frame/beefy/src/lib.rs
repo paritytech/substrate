@@ -28,7 +28,7 @@ use frame_support::{
 };
 use frame_system::{
 	ensure_none, ensure_signed,
-	pallet_prelude::{BlockNumberFor, OriginFor, HeaderFor},
+	pallet_prelude::{BlockNumberFor, HeaderFor, OriginFor},
 };
 use log;
 use sp_runtime::{
@@ -41,8 +41,8 @@ use sp_staking::{offence::OffenceReportSystem, SessionIndex};
 use sp_std::prelude::*;
 
 use sp_consensus_beefy::{
-	AuthorityIndex, BeefyAuthorityId, ConsensusLog, VoteEquivocationProof, OnNewValidatorSet,
-	ValidatorSet, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
+	AuthorityIndex, BeefyAuthorityId, ConsensusLog, OnNewValidatorSet, ValidatorSet,
+	VoteEquivocationProof, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
 mod default_weights;
@@ -292,7 +292,7 @@ pub mod pallet {
 					BlockNumberFor<T>,
 					T::BeefyId,
 					<T::BeefyId as RuntimeAppPublic>::Signature,
-					HeaderFor<T>
+					HeaderFor<T>,
 				>,
 			>,
 			key_owner_proofs: Vec<T::KeyOwnerProof>,
@@ -301,7 +301,10 @@ pub mod pallet {
 
 			T::EquivocationReportSystem::process_evidence(
 				Some(reporter),
-				EquivocationEvidenceFor::ForkEquivocationProof(*equivocation_proof, key_owner_proofs),
+				EquivocationEvidenceFor::ForkEquivocationProof(
+					*equivocation_proof,
+					key_owner_proofs,
+				),
 			)?;
 			// Waive the fee since the report is valid and beneficial
 			Ok(Pays::No.into())
@@ -389,9 +392,12 @@ impl<T: Config> Pallet<T> {
 	/// a call to `report_fork_equivocation_unsigned` and will push the transaction
 	/// to the pool. Only useful in an offchain context.
 	pub fn submit_unsigned_fork_equivocation_report(
-		fork_equivocation_proof: sp_consensus_beefy::ForkEquivocationProof<BlockNumberFor<T>, T::BeefyId,
-			<T::BeefyId as RuntimeAppPublic>::Signature, HeaderFor<T>
->,
+		fork_equivocation_proof: sp_consensus_beefy::ForkEquivocationProof<
+			BlockNumberFor<T>,
+			T::BeefyId,
+			<T::BeefyId as RuntimeAppPublic>::Signature,
+			HeaderFor<T>,
+		>,
 		key_owner_proofs: Vec<T::KeyOwnerProof>,
 	) -> Option<()> {
 		T::EquivocationReportSystem::publish_evidence(
