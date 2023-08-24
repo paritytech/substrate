@@ -143,6 +143,7 @@ parameter_types! {
 	pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
 	pub storage AllowMultiAssetPools: bool = true;
 	pub storage LiquidityWithdrawalFee: Permill = Permill::from_percent(0); // should be non-zero if AllowMultiAssetPools is true, otherwise can be zero
+	pub LiquidityPoolFee: Permill = Permill::from_parts(3000); // 0.3%
 }
 
 ord_parameter_types! {
@@ -159,7 +160,7 @@ impl Config for Test {
 	type PoolAssets = PoolAssets;
 	type PalletId = AssetConversionPalletId;
 	type WeightInfo = ();
-	type LPFee = ConstU32<3>; // means 0.3%
+	type LPFee = LiquidityPoolFee;
 	type PoolSetupFee = ConstU128<100>; // should be more or equal to the existential deposit
 	type PoolSetupFeeReceiver = AssetConversionOrigin;
 	type LiquidityWithdrawalFee = LiquidityWithdrawalFee;
