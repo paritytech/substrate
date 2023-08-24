@@ -202,50 +202,50 @@ mod tests {
 		.await;
 	}
 
-    #[test]
-    fn futures_stream_len_is_zsro_for_empty_stream() {
-        let (_tx, stream) = futures_stream::<BoxFuture<()>>("test", 100);
-        assert_eq!(stream.len_lower_bound(), 0);
-    }
+	#[test]
+	fn futures_stream_len_is_zero_for_empty_stream() {
+		let (_tx, stream) = futures_stream::<BoxFuture<()>>("test", 100);
+		assert_eq!(stream.len_lower_bound(), 0);
+	}
 
-    #[tokio::test]
+	#[tokio::test]
 	async fn futures_stream_len_counts_and_discounts_resolved_futures() {
 		let (tx, mut stream) = futures_stream("test", 100);
-        assert_eq!(stream.len_lower_bound(), 0);
+		assert_eq!(stream.len_lower_bound(), 0);
 
-        tx.push(futures::future::ready(17)).unwrap();
-        assert_eq!(stream.len_lower_bound(), 1);
+		tx.push(futures::future::ready(17)).unwrap();
+		assert_eq!(stream.len_lower_bound(), 1);
 
 		futures::future::poll_fn(|cx| {
 			assert_eq!(stream.poll_next_unpin(cx), Poll::Ready(Some(17)));
-            assert_eq!(stream.len_lower_bound(), 0);
+			assert_eq!(stream.len_lower_bound(), 0);
 
 			assert_eq!(stream.poll_next_unpin(cx), Poll::Pending);
-            assert_eq!(stream.len_lower_bound(), 0);
+			assert_eq!(stream.len_lower_bound(), 0);
 
 			Poll::Ready(())
 		})
 		.await;
 	}
 
-    #[tokio::test]
+	#[tokio::test]
 	async fn futures_stream_len_counts_taken_pending_futures() {
 		let (tx, mut stream) = futures_stream("test", 100);
-        assert_eq!(stream.len_lower_bound(), 0);
+		assert_eq!(stream.len_lower_bound(), 0);
 
-        tx.push(futures::future::pending::<()>()).unwrap();
+		tx.push(futures::future::pending::<()>()).unwrap();
 
-        // The future in the unbounded stream is counted.
-        assert_eq!(stream.len_lower_bound(), 1);
+		// The future in the unbounded stream is counted.
+		assert_eq!(stream.len_lower_bound(), 1);
 
-        // Poll once to move the future from unbounded stream into [`FuturesUnordered`].
+		// Poll once to move the future from unbounded stream into [`FuturesUnordered`].
 		futures::future::poll_fn(|cx| {
 			assert_eq!(stream.poll_next_unpin(cx), Poll::Pending);
 			Poll::Ready(())
 		})
 		.await;
 
-        // The future is still counted in [`FuturesUnordered`].
-        assert_eq!(stream.len_lower_bound(), 1);
+		// The future is still counted in [`FuturesUnordered`].
+		assert_eq!(stream.len_lower_bound(), 1);
 	}
 }
