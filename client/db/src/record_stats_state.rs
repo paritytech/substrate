@@ -26,7 +26,7 @@ use sp_runtime::{
 };
 use sp_state_machine::{
 	backend::{AsTrieBackend, Backend as StateBackend},
-	IterArgs, StorageIterator, StorageKey, StorageValue, TrieBackend,
+	BackendTransaction, IterArgs, StorageIterator, StorageKey, StorageValue, TrieBackend,
 };
 use std::sync::Arc;
 
@@ -109,7 +109,6 @@ impl<S: StateBackend<HashingFor<B>>, B: BlockT> StateBackend<HashingFor<B>>
 	for RecordStatsState<S, B>
 {
 	type Error = S::Error;
-	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
 	type RawIter = RawIter<S, B>;
 
@@ -173,7 +172,7 @@ impl<S: StateBackend<HashingFor<B>>, B: BlockT> StateBackend<HashingFor<B>>
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, Self::Transaction) {
+	) -> (B::Hash, BackendTransaction<HashingFor<B>>) {
 		self.state.storage_root(delta, state_version)
 	}
 
@@ -182,7 +181,7 @@ impl<S: StateBackend<HashingFor<B>>, B: BlockT> StateBackend<HashingFor<B>>
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, Self::Transaction) {
+	) -> (B::Hash, bool, BackendTransaction<HashingFor<B>>) {
 		self.state.child_storage_root(child_info, delta, state_version)
 	}
 

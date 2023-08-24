@@ -18,8 +18,5 @@ log = { version = "0.4.17", default-features = false }
 sp-arithmetic = { version = "16.0.0", default-features = false, path = "../../../primitives/arithmetic" }
 
 [features]
-default = ["std"]
-std = [
-	"log/std",
-	"sp-arithmetic/std",
-]
+default = [ "std" ]
+std = [ "log/std", "sp-arithmetic/std" ]

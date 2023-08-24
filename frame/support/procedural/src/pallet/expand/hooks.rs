@@ -38,7 +38,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 	let log_runtime_upgrade = if has_runtime_upgrade {
 		// a migration is defined here.
 		quote::quote! {
-			#frame_support::log::info!(
+			#frame_support::__private::log::info!(
 				target: #frame_support::LOG_TARGET,
 				"⚠️ {} declares internal migrations (which *might* execute). \
 				 On-chain `{:?}` vs current storage version `{:?}`",
@@ -50,7 +50,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 	} else {
 		// default.
 		quote::quote! {
-			#frame_support::log::debug!(
+			#frame_support::__private::log::debug!(
 				target: #frame_support::LOG_TARGET,
 				"✅ no migration for {}",
 				pallet_name,
@@ -64,7 +64,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			as
 			#frame_support::traits::PalletInfo
 		>::name::<Self>().expect("No name found for the pallet! This usually means that the pallet wasn't added to `construct_runtime!`.");
-		#frame_support::log::debug!(
+		#frame_support::__private::log::debug!(
 			target: #frame_support::LOG_TARGET,
 			"🩺 try-state pallet {:?}",
 			pallet_name,
@@ -97,7 +97,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 					#frame_support::traits::PalletInfo
 				>::name::<Self>().unwrap_or("<unknown pallet name>");
 
-				#frame_support::log::error!(
+				#frame_support::__private::log::error!(
 					target: #frame_support::LOG_TARGET,
 					"{}: On chain storage version {:?} doesn't match current storage version {:?}.",
 					pallet_name,
@@ -119,7 +119,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 					#frame_support::traits::PalletInfo
 				>::name::<Self>().unwrap_or("<unknown pallet name>");
 
-				#frame_support::log::error!(
+				#frame_support::__private::log::error!(
 					target: #frame_support::LOG_TARGET,
 					"{}: On chain storage version {:?} is set to non zero, \
 					 while the pallet is missing the `#[pallet::storage_version(VERSION)]` attribute.",
@@ -141,8 +141,8 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
 			fn on_finalize(n: #frame_system::pallet_prelude::BlockNumberFor::<T>) {
-				#frame_support::sp_tracing::enter_span!(
-					#frame_support::sp_tracing::trace_span!("on_finalize")
+				#frame_support::__private::sp_tracing::enter_span!(
+					#frame_support::__private::sp_tracing::trace_span!("on_finalize")
 				);
 				<
 					Self as #frame_support::traits::Hooks<
@@ -175,8 +175,8 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			fn on_initialize(
 				n: #frame_system::pallet_prelude::BlockNumberFor::<T>
 			) -> #frame_support::weights::Weight {
-				#frame_support::sp_tracing::enter_span!(
-					#frame_support::sp_tracing::trace_span!("on_initialize")
+				#frame_support::__private::sp_tracing::enter_span!(
+					#frame_support::__private::sp_tracing::trace_span!("on_initialize")
 				);
 				<
 					Self as #frame_support::traits::Hooks<
@@ -191,8 +191,8 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
 			fn on_runtime_upgrade() -> #frame_support::weights::Weight {
-				#frame_support::sp_tracing::enter_span!(
-					#frame_support::sp_tracing::trace_span!("on_runtime_update")
+				#frame_support::__private::sp_tracing::enter_span!(
+					#frame_support::__private::sp_tracing::trace_span!("on_runtime_update")
 				);
 
 				// log info about the upgrade.
@@ -211,7 +211,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<#frame_support::sp_std::vec::Vec<u8>, #frame_support::sp_runtime::TryRuntimeError> {
+			fn pre_upgrade() -> Result<#frame_support::__private::sp_std::vec::Vec<u8>, #frame_support::sp_runtime::TryRuntimeError> {
 				<
 					Self
 					as
@@ -220,7 +220,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade(state: #frame_support::sp_std::vec::Vec<u8>) -> Result<(), #frame_support::sp_runtime::TryRuntimeError> {
+			fn post_upgrade(state: #frame_support::__private::sp_std::vec::Vec<u8>) -> Result<(), #frame_support::sp_runtime::TryRuntimeError> {
 				#post_storage_version_check
 
 				<
@@ -251,7 +251,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			for #pallet_ident<#type_use_gen> #where_clause
 			{
 				fn integrity_test() {
-					#frame_support::sp_io::TestExternalities::default().execute_with(|| {
+					#frame_support::__private::sp_io::TestExternalities::default().execute_with(|| {
 						<
 							Self as #frame_support::traits::Hooks<
 								#frame_system::pallet_prelude::BlockNumberFor::<T>

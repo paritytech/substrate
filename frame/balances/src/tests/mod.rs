@@ -30,7 +30,6 @@ use frame_support::{
 		StorageMapShim, StoredMap, WhitelistedStorageKeys,
 	},
 	weights::{IdentityFee, Weight},
-	RuntimeDebug,
 };
 use frame_system::{self as system, RawOrigin};
 use pallet_transaction_payment::{ChargeTransactionPayment, CurrencyAdapter, Multiplier};
@@ -39,7 +38,8 @@ use sp_core::{hexdisplay::HexDisplay, H256};
 use sp_io;
 use sp_runtime::{
 	traits::{BadOrigin, IdentityLookup, SignedExtension, Zero},
-	ArithmeticError, BuildStorage, DispatchError, DispatchResult, FixedPointNumber, TokenError,
+	ArithmeticError, BuildStorage, DispatchError, DispatchResult, FixedPointNumber, RuntimeDebug,
+	TokenError,
 };
 use std::collections::BTreeSet;
 

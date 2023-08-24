@@ -15,6 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! This module contains helper methods to perform functionality associated with creating and
+//! destroying collections for the NFTs pallet.
+
 use crate::*;
 use frame_support::pallet_prelude::*;
 

@@ -22,7 +22,7 @@ sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = ".
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",
@@ -35,5 +35,5 @@ runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-election-provider-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks"
+	"sp-runtime/runtime-benchmarks",
 ]

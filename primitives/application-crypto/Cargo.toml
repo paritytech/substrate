@@ -25,40 +25,33 @@ sp-io = { version = "23.0.0", default-features = false, path = "../io" }
 [features]
 default = [ "std" ]
 std = [
-	"full_crypto",
-	"sp-core/std",
 	"codec/std",
+	"full_crypto",
 	"scale-info/std",
 	"serde/std",
-	"sp-std/std",
+	"sp-core/std",
 	"sp-io/std",
+	"sp-std/std",
 ]
 
 # Serde support without relying on std features.
-serde = [
-	"dep:serde",
-	"sp-core/serde",
-	"scale-info/serde",
-]
+serde = [ "dep:serde", "scale-info/serde", "sp-core/serde" ]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers
 # or Intel SGX.
 # For the regular wasm runtime builds this should not be used.
 full_crypto = [
 	"sp-core/full_crypto",
+	"sp-io/disable_oom",
 	# Don't add `panic_handler` and `alloc_error_handler` since they are expected to be provided
 	# by the user anyway.
 	"sp-io/disable_panic_handler",
-	"sp-io/disable_oom",
 ]
 
 # This feature adds BLS crypto primitives.
 # It should not be used in production since the implementation and interface may still
 # be subject to significant changes.
-bls-experimental = [
-	 "sp-core/bls-experimental",
-	 "sp-io/bls-experimental",
-]
+bls-experimental = [ "sp-core/bls-experimental", "sp-io/bls-experimental" ]
 
 # This feature adds Bandersnatch crypto primitives.
 # It should not be used in production since the implementation and interface may still

@@ -21,6 +21,10 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_std::{cmp::Ordering, marker::PhantomData};
 
+/// Pool ID.
+///
+/// The pool's `AccountId` is derived from this type. Any changes to the type may necessitate a
+/// migration.
 pub(super) type PoolIdOf<T> = (<T as Config>::MultiAssetId, <T as Config>::MultiAssetId);
 
 /// Stores the lp_token asset id a particular pool has been assigned.

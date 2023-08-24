@@ -344,6 +344,54 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// ```
 /// In this case `Balance` api version 3 is being implemented for `Runtime`. The `impl` block
 /// must contain all methods declared in version 3 and below.
+///
+/// # Conditional version implementation
+///
+/// `impl_runtime_apis!` supports `cfg_attr` attribute for conditional compilation. For example
+/// let's say you want to implement a staging version of the runtime api and put it behind a
+/// feature flag. You can do it this way:
+/// ```ignore
+/// pub struct Runtime {}
+/// sp_api::decl_runtime_apis! {
+///     pub trait ApiWithStagingMethod {
+///         fn stable_one(data: u64);
+///
+///         #[api_version(99)]
+///         fn staging_one();
+///     }
+/// }
+///
+/// sp_api::impl_runtime_apis! {
+///     #[cfg_attr(feature = "enable-staging-api", api_version(99))]
+///     impl self::ApiWithStagingMethod<Block> for Runtime {
+///         fn stable_one(_: u64) {}
+///
+///         #[cfg(feature = "enable-staging-api")]
+///         fn staging_one() {}
+///     }
+/// }
+/// ```
+///
+/// [`decl_runtime_apis!`] declares two version of the api - 1 (the default one, which is
+/// considered stable in our example) and 99 (which is considered staging). In
+/// `impl_runtime_apis!` a `cfg_attr` attribute is attached to the `ApiWithStagingMethod`
+/// implementation. If the code is compiled with  `enable-staging-api` feature a version 99 of
+/// the runtime api will be built which will include `staging_one`. Note that `staging_one`
+/// implementation is feature gated by `#[cfg(feature = ... )]` attribute.
+///
+/// If the code is compiled without `enable-staging-api` version 1 (the default one) will be
+/// built which doesn't include `staging_one`.
+///
+/// `cfg_attr` can also be used together with `api_version`. For the next snippet will build
+/// version 99 if `enable-staging-api` is enabled and version 2 otherwise because both
+/// `cfg_attr` and `api_version` are attached to the impl block:
+/// ```ignore
+/// #[cfg_attr(feature = "enable-staging-api", api_version(99))]
+/// #[api_version(2)]
+/// impl self::ApiWithStagingAndVersionedMethods<Block> for Runtime {
+///  // impl skipped
+/// }
+/// ```
 pub use sp_api_proc_macro::impl_runtime_apis;
 
 /// Mocks given trait implementations as runtime apis.
@@ -456,28 +504,8 @@ pub use sp_api_proc_macro::mock_impl_runtime_apis;
 #[cfg(feature = "std")]
 pub type ProofRecorder<B> = sp_trie::recorder::Recorder<HashingFor<B>>;
 
-/// A type that is used as cache for the storage transactions.
 #[cfg(feature = "std")]
-pub type StorageTransactionCache<Block, Backend> = sp_state_machine::StorageTransactionCache<
-	<Backend as StateBackend<HashingFor<Block>>>::Transaction,
-	HashingFor<Block>,
->;
-
-#[cfg(feature = "std")]
-pub type StorageChanges<SBackend, Block> = sp_state_machine::StorageChanges<
-	<SBackend as StateBackend<HashingFor<Block>>>::Transaction,
-	HashingFor<Block>,
->;
-
-/// Extract the state backend type for a type that implements `ProvideRuntimeApi`.
-#[cfg(feature = "std")]
-pub type StateBackendFor<P, Block> =
-	<<P as ProvideRuntimeApi<Block>>::Api as ApiExt<Block>>::StateBackend;
-
-/// Extract the state backend transaction type for a type that implements `ProvideRuntimeApi`.
-#[cfg(feature = "std")]
-pub type TransactionFor<P, Block> =
-	<StateBackendFor<P, Block> as StateBackend<HashingFor<Block>>>::Transaction;
+pub type StorageChanges<Block> = sp_state_machine::StorageChanges<HashingFor<Block>>;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
@@ -531,9 +559,6 @@ pub enum ApiError {
 /// Extends the runtime api implementation with some common functionality.
 #[cfg(feature = "std")]
 pub trait ApiExt<Block: BlockT> {
-	/// The state backend that is used to store the block states.
-	type StateBackend: StateBackend<HashingFor<Block>>;
-
 	/// Execute the given closure inside a new transaction.
 	///
 	/// Depending on the outcome of the closure, the transaction is committed or rolled-back.
@@ -582,11 +607,11 @@ pub trait ApiExt<Block: BlockT> {
 	/// api functions.
 	///
 	/// After executing this function, all collected changes are reset.
-	fn into_storage_changes(
+	fn into_storage_changes<B: StateBackend<HashingFor<Block>>>(
 		&self,
-		backend: &Self::StateBackend,
+		backend: &B,
 		parent_hash: Block::Hash,
-	) -> Result<StorageChanges<Self::StateBackend, Block>, String>
+	) -> Result<StorageChanges<Block>, String>
 	where
 		Self: Sized;
 
@@ -599,7 +624,7 @@ pub trait ApiExt<Block: BlockT> {
 
 /// Parameters for [`CallApiAt::call_api_at`].
 #[cfg(feature = "std")]
-pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashingFor<Block>>> {
+pub struct CallApiAtParams<'a, Block: BlockT> {
 	/// The block id that determines the state that should be setup when calling the function.
 	pub at: Block::Hash,
 	/// The name of the function that should be called.
@@ -607,9 +632,7 @@ pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashingFor<B
 	/// The encoded arguments of the function.
 	pub arguments: Vec<u8>,
 	/// The overlayed changes that are on top of the state.
-	pub overlayed_changes: &'a RefCell<OverlayedChanges>,
-	/// The cache for storage transactions.
-	pub storage_transaction_cache: &'a RefCell<StorageTransactionCache<Block, Backend>>,
+	pub overlayed_changes: &'a RefCell<OverlayedChanges<HashingFor<Block>>>,
 	/// The call context of this call.
 	pub call_context: CallContext,
 	/// The optional proof recorder for recording storage accesses.
@@ -626,10 +649,7 @@ pub trait CallApiAt<Block: BlockT> {
 
 	/// Calls the given api function with the given encoded arguments at the given block and returns
 	/// the encoded result.
-	fn call_api_at(
-		&self,
-		params: CallApiAtParams<Block, Self::StateBackend>,
-	) -> Result<Vec<u8>, ApiError>;
+	fn call_api_at(&self, params: CallApiAtParams<Block>) -> Result<Vec<u8>, ApiError>;
 
 	/// Returns the runtime version at the given block.
 	fn runtime_version_at(&self, at_hash: Block::Hash) -> Result<RuntimeVersion, ApiError>;

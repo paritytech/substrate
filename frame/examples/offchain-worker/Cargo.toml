@@ -26,7 +26,7 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../../../pr
 sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-support/std",
@@ -36,12 +36,12 @@ std = [
 	"scale-info/std",
 	"sp-core/std",
 	"sp-io/std",
- 	"sp-keystore/std",
- 	"sp-runtime/std",
- 	"sp-std/std"
+	"sp-keystore/std",
+	"sp-runtime/std",
+	"sp-std/std",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

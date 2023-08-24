@@ -41,6 +41,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
 
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::Saturating;
 use sp_runtime::{
@@ -51,7 +52,6 @@ use sp_runtime::{
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
-	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResultWithPostInfo, PostDispatchInfo},
 	ensure, impl_ensure_origin_with_arg_ignoring_arg,
 	traits::{EnsureOrigin, EnsureOriginWithArg, PollStatus, Polling, RankedMembers, VoteTally},

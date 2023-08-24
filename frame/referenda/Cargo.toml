@@ -36,34 +36,34 @@ pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }
 sp-core = { version = "21.0.0", path = "../../primitives/core" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",
 	"frame-support/std",
-	"sp-runtime/std",
-	"sp-arithmetic/std",
 	"frame-system/std",
-	"scale-info/std",
-	"serde",
-	"sp-io/std",
-	"sp-runtime/std",
-	"sp-std/std",
 	"pallet-balances/std",
 	"pallet-preimage/std",
 	"pallet-scheduler/std",
-	"sp-core/std"
+	"scale-info/std",
+	"serde",
+	"sp-arithmetic/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-runtime/std",
+	"sp-std/std",
 ]
 runtime-benchmarks = [
 	"assert_matches",
 	"frame-benchmarking",
+	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks",
-	"frame-benchmarking/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
 	"pallet-preimage/runtime-benchmarks",
-	"pallet-scheduler/runtime-benchmarks"
+	"pallet-scheduler/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
@@ -71,5 +71,5 @@ try-runtime = [
 	"pallet-balances/try-runtime",
 	"pallet-preimage/try-runtime",
 	"pallet-scheduler/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

@@ -29,8 +29,8 @@ std = [
 	"scale-info/std",
 	"sp-api/std",
 	"sp-core/std",
+	"sp-keystore/std",
 	"sp-runtime/std",
 	"sp-staking/std",
 	"sp-std/std",
- 	"sp-keystore/std"
 ]

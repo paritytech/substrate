@@ -23,12 +23,13 @@ use super::*;
 use crate::mock::*;
 
 use frame_support::{
-	assert_err, assert_noop, assert_ok, assert_storage_noop, bounded_vec,
+	assert_err, assert_noop, assert_ok, assert_storage_noop,
 	traits::{Bounded, BoundedInline, Hash as PreimageHash},
 	StorageNoopGuard,
 };
 use pallet_balances::Error as BalancesError;
 use sp_core::{blake2_256, H256};
+use sp_runtime::bounded_vec;
 
 /// Returns one `Inline`, `Lookup` and `Legacy` item each with different data and hash.
 pub fn make_bounded_values() -> (Bounded<Vec<u8>>, Bounded<Vec<u8>>, Bounded<Vec<u8>>) {
