@@ -205,7 +205,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(pivot > region_id.begin, Error::<T>::PivotTooEarly);
 
 		region.paid = None;
-		let new_region_ids = (region_id, RegionId { begin: pivot, ..region_id.clone() });
+		let new_region_ids = (region_id, RegionId { begin: pivot, ..region_id });
 
 		Regions::<T>::insert(&new_region_ids.0, &RegionRecord { end: pivot, ..region.clone() });
 		Regions::<T>::insert(&new_region_ids.1, &region);
