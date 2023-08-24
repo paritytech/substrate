@@ -202,6 +202,7 @@ impl<T: Config> Pallet<T> {
 		}
 		let pivot = region_id.begin.saturating_add(pivot_offset);
 		ensure!(pivot < region.end, Error::<T>::PivotTooLate);
+		ensure!(pivot > region_id.begin, Error::<T>::PivotTooEarly);
 
 		region.paid = None;
 		let new_region_ids = (region_id, RegionId { begin: pivot, ..region_id.clone() });

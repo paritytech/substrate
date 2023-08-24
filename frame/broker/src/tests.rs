@@ -830,6 +830,7 @@ fn cannot_partition_invalid_offset() {
 		assert_ok!(Broker::do_start_sales(100, 1));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		assert_noop!(Broker::do_partition(region, None, 0), Error::<Test>::PivotTooEarly);
 		assert_noop!(Broker::do_partition(region, None, 5), Error::<Test>::PivotTooLate);
 	});
 }

@@ -419,6 +419,8 @@ pub mod pallet {
 		NotOwner,
 		/// The pivot point of the partition at or after the end of the region.
 		PivotTooLate,
+		/// The pivot point of the partition at the beginning of the region.
+		PivotTooEarly,
 		/// The pivot mask for the interlacing is not contained within the region's interlace mask.
 		ExteriorPivot,
 		/// The pivot mask for the interlacing is void (and therefore unschedulable).
