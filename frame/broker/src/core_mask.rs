@@ -84,12 +84,9 @@ impl From<CoreMask> for u128 {
 }
 impl BitAnd<Self> for CoreMask {
 	type Output = Self;
-	fn bitand(self, rhs: Self) -> Self {
-		let mut result = [0u8; 10];
-		for i in 0..10 {
-			result[i] = self.0[i].bitand(rhs.0[i]);
-		}
-		Self(result)
+	fn bitand(mut self, rhs: Self) -> Self {
+		self.bitand_assign(rhs);
+		self
 	}
 }
 impl BitAndAssign<Self> for CoreMask {
@@ -101,12 +98,9 @@ impl BitAndAssign<Self> for CoreMask {
 }
 impl BitOr<Self> for CoreMask {
 	type Output = Self;
-	fn bitor(self, rhs: Self) -> Self {
-		let mut result = [0u8; 10];
-		for i in 0..10 {
-			result[i] = self.0[i].bitor(rhs.0[i]);
-		}
-		Self(result)
+	fn bitor(mut self, rhs: Self) -> Self {
+		self.bitor_assign(rhs);
+		self
 	}
 }
 impl BitOrAssign<Self> for CoreMask {
@@ -118,12 +112,9 @@ impl BitOrAssign<Self> for CoreMask {
 }
 impl BitXor<Self> for CoreMask {
 	type Output = Self;
-	fn bitxor(self, rhs: Self) -> Self {
-		let mut result = [0u8; 10];
-		for i in 0..10 {
-			result[i] = self.0[i].bitxor(rhs.0[i]);
-		}
-		Self(result)
+	fn bitxor(mut self, rhs: Self) -> Self {
+		self.bitxor_assign(rhs);
+		self
 	}
 }
 impl BitXorAssign<Self> for CoreMask {
