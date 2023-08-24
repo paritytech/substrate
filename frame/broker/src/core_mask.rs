@@ -179,4 +179,49 @@ mod tests {
 	fn chunk_works() {
 		assert_eq!(CoreMask::from_chunk(40, 60), CoreMask::from(0x00000_00000_fffff_00000),);
 	}
+
+	#[test]
+	fn bit_or_works() {
+		assert_eq!(
+			CoreMask::from(0x02040_a0c0e_d0a0b_0ffff) | CoreMask::from(0x10305_0b0d0_0e0d0_e0000),
+			CoreMask::from(0x12345_abcde_deadb_effff),
+		);
+	}
+
+	#[test]
+	fn bit_or_assign_works() {
+		let mut a = CoreMask::from(0x02040_a0c0e_d0a0b_0ffff);
+		a |= CoreMask::from(0x10305_0b0d0_0e0d0_e0000);
+		assert_eq!(a, CoreMask::from(0x12345_abcde_deadb_effff));
+	}
+
+	#[test]
+	fn bit_and_works() {
+		assert_eq!(
+			CoreMask::from(0x00000_abcde_deadb_efff0) & CoreMask::from(0x02040_00000_d0a0b_0ff0f),
+			CoreMask::from(0x00000_00000_d0a0b_0ff00),
+		);
+	}
+
+	#[test]
+	fn bit_and_assign_works() {
+		let mut a = CoreMask::from(0x00000_abcde_deadb_efff0);
+		a &= CoreMask::from(0x02040_00000_d0a0b_0ff0f);
+		assert_eq!(a, CoreMask::from(0x00000_00000_d0a0b_0ff00));
+	}
+
+	#[test]
+	fn bit_xor_works() {
+		assert_eq!(
+			CoreMask::from(0x10010_10010_10010_10010) ^ CoreMask::from(0x01110_01110_01110_01110),
+			CoreMask::from(0x11100_11100_11100_11100),
+		);
+	}
+
+	#[test]
+	fn bit_xor_assign_works() {
+		let mut a = CoreMask::from(0x10010_10010_10010_10010);
+		a ^= CoreMask::from(0x01110_01110_01110_01110);
+		assert_eq!(a, CoreMask::from(0x11100_11100_11100_11100));
+	}
 }
