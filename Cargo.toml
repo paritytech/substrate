@@ -44,9 +44,9 @@ sc-keystore = { path = "client/keystore" }
 
 # Feature to unlock "Sassafras" experimental crates
 [features]
-sassafras-experimental = [ 
-	"sp-consensus-sassafras",
+sassafras-experimental = [
 	"sc-keystore/bandersnatch-experimental",
+	"sp-consensus-sassafras",
 ]
 
 # Exists here to be backwards compatible and to support `cargo run` in the workspace.

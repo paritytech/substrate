@@ -26,17 +26,17 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../../runti
 sp-std = { version = "8.0.0", default-features = false, path = "../../std" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
- 	"scale-codec/std",
- 	"scale-info/std",
- 	"serde/std",
- 	"sp-api/std",
- 	"sp-application-crypto/std",
+	"scale-codec/std",
+	"scale-info/std",
+	"serde/std",
+	"sp-api/std",
+	"sp-application-crypto/std",
 	"sp-consensus-slots/std",
- 	"sp-core/std",
- 	"sp-runtime/std",
- 	"sp-std/std",
+	"sp-core/std",
+	"sp-runtime/std",
+	"sp-std/std",
 ]
 
 # Serde support without relying on std features.
