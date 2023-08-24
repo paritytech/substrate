@@ -28,7 +28,7 @@ pub trait AdaptPrice {
 	/// performance.
 	///
 	/// - `sold`: The number of cores sold.
-	/// - `target`: The target number of cores to be sold.
+	/// - `target`: The target number of cores to be sold (must be larger than zero).
 	/// - `limit`: The maximum number of cores to be sold.
 	fn adapt_price(sold: CoreIndex, target: CoreIndex, limit: CoreIndex) -> FixedU64;
 }
@@ -50,11 +50,33 @@ impl AdaptPrice for Linear {
 		FixedU64::from(2) - when
 	}
 	fn adapt_price(sold: CoreIndex, target: CoreIndex, limit: CoreIndex) -> FixedU64 {
-		if sold < target {
+		if sold <= target {
 			FixedU64::from_rational(sold.into(), target.into())
 		} else {
 			FixedU64::one() +
 				FixedU64::from_rational((sold - target).into(), (limit - target).into())
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn linear_no_panic() {
+		for limit in 0..10 {
+			for target in 1..10 {
+				for sold in 0..=limit {
+					let price = Linear::adapt_price(sold, target, limit);
+
+					if sold > target {
+						assert!(price > FixedU64::one());
+					} else {
+						assert!(price <= FixedU64::one());
+					}
+				}
+			}
 		}
 	}
 }
