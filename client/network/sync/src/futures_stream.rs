@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Async channel that receives futures as input, processes them in unordered manner, and
-//! yield the results once they are resolved. The receiver implements `Stream`.
+//! yields the results once they are resolved via [`Stream`] interface.
 
 use futures::{stream::FuturesUnordered, Future, Stream, StreamExt};
 use sc_utils::mpsc::{
