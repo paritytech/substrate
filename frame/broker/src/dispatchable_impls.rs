@@ -331,13 +331,11 @@ impl<T: Config> Pallet<T> {
 			region.begin = r + 1;
 			contribution.length.saturating_dec();
 
-			let mut pool_record = match InstaPoolHistory::<T>::get(r) {
-				Some(x) => x,
-				None => continue,
+			let Some(mut pool_record) = InstaPoolHistory::<T>::get(r) else {
+				continue;
 			};
-			let total_payout = match pool_record.maybe_payout {
-				Some(x) => x,
-				None => break,
+			let Some(total_payout) = pool_record.maybe_payout else {
+				break;
 			};
 			let p = total_payout
 				.saturating_mul(contributed_parts.into())

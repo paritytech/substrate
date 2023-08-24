@@ -95,9 +95,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub(crate) fn process_revenue() -> bool {
-		let (until, amount) = match T::Coretime::check_notify_revenue_info() {
-			Some(x) => x,
-			None => return false,
+		let Some((until, amount)) = T::Coretime::check_notify_revenue_info() else {
+			return false;
 		};
 		let when: Timeslice =
 			(until / T::TimeslicePeriod::get()).saturating_sub(One::one()).saturated_into();
@@ -290,9 +289,8 @@ impl<T: Config> Pallet<T> {
 		rc_begin: RelayBlockNumberOf<T>,
 		core: CoreIndex,
 	) {
-		let workplan = match Workplan::<T>::take((timeslice, core)) {
-			Some(w) => w,
-			None => return,
+		let Some(workplan) = Workplan::<T>::take((timeslice, core)) else {
+			return;
 		};
 		let workload = Workload::<T>::get(core);
 		let parts_used = workplan.iter().map(|i| i.mask).fold(CoreMask::void(), |a, i| a | i);
