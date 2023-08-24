@@ -27,7 +27,7 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 sp-io = { version = "23.0.0", path = "../../primitives/io" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 
 std = [
 	"codec/std",
@@ -35,10 +35,10 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"scale-info/std",
-	"sp-runtime/std",
 	"sp-arithmetic/std",
 	"sp-core/std",
 	"sp-io/std",
+	"sp-runtime/std",
 	"sp-std/std",
 ]
 
@@ -52,5 +52,5 @@ runtime-benchmarks = [
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]
