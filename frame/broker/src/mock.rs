@@ -34,7 +34,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Identity, IdentityLookup},
 	BuildStorage, Saturating,
 };
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
