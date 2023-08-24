@@ -21,6 +21,7 @@
 
 mod benchmark;
 mod construct_runtime;
+mod construct_runtime_v2;
 mod crate_version;
 mod derive_impl;
 mod dummy_part_checker;
@@ -184,6 +185,11 @@ fn counter_prefix(prefix: &str) -> String {
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
+}
+
+#[proc_macro_attribute]
+pub fn construct_runtime_v2(attr: TokenStream, item: TokenStream) -> TokenStream {
+	construct_runtime_v2::construct_runtime(attr, item)
 }
 
 /// The pallet struct placeholder `#[pallet::pallet]` is mandatory and allows you to specify

@@ -279,8 +279,23 @@ impl pallet_template::Config for Runtime {
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
-construct_runtime!(
-	pub struct Runtime {
+#[frame_support::construct_runtime_v2]
+mod runtime {
+	#[frame::runtime]
+	pub struct Runtime;
+
+	#[frame::pallets]
+	#[frame::derive(
+		RuntimeCall,
+		RuntimeEvent,
+		RuntimeError,
+		RuntimeOrigin,
+		RuntimeFreezeReason,
+		RuntimeHoldReason,
+		RuntimeSlashReason,
+		RuntimeLockId
+	)]
+	pub struct Pallets {
 		System: frame_system,
 		Timestamp: pallet_timestamp,
 		Aura: pallet_aura,
@@ -289,9 +304,11 @@ construct_runtime!(
 		TransactionPayment: pallet_transaction_payment,
 		Sudo: pallet_sudo,
 		// Include the custom logic from the pallet-template in the runtime.
+		#[frame::pallet_index(8)]
+		#[frame::disable_call]
 		TemplateModule: pallet_template,
 	}
-);
+}
 
 /// The address format for describing accounts.
 pub type Address = sp_runtime::MultiAddress<AccountId, ()>;

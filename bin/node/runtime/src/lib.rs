@@ -28,7 +28,6 @@ use frame_election_provider_support::{
 	onchain, BalancingConfig, ElectionDataProvider, SequentialPhragmen, VoteWeight,
 };
 use frame_support::{
-	construct_runtime,
 	dispatch::DispatchClass,
 	instances::{Instance1, Instance2},
 	ord_parameter_types,
@@ -1877,9 +1876,13 @@ impl pallet_statement::Config for Runtime {
 	type MaxAllowedBytes = MaxAllowedBytes;
 }
 
-construct_runtime!(
-	pub struct Runtime
-	{
+#[frame_support::construct_runtime_v2]
+mod runtime {
+	#[frame::runtime]
+	pub struct Runtime;
+
+	#[frame::pallets]
+	pub struct Pallets {
 		System: frame_system,
 		Utility: pallet_utility,
 		Babe: pallet_babe,
@@ -1896,10 +1899,10 @@ construct_runtime!(
 		Staking: pallet_staking,
 		Session: pallet_session,
 		Democracy: pallet_democracy,
-		Council: pallet_collective::<Instance1>,
-		TechnicalCommittee: pallet_collective::<Instance2>,
+		Council: pallet_collective<Instance1>,
+		TechnicalCommittee: pallet_collective<Instance2>,
 		Elections: pallet_elections_phragmen,
-		TechnicalMembership: pallet_membership::<Instance1>,
+		TechnicalMembership: pallet_membership<Instance1>,
 		Grandpa: pallet_grandpa,
 		Treasury: pallet_treasury,
 		AssetRate: pallet_asset_rate,
@@ -1908,7 +1911,7 @@ construct_runtime!(
 		ImOnline: pallet_im_online,
 		AuthorityDiscovery: pallet_authority_discovery,
 		Offences: pallet_offences,
-		Historical: pallet_session_historical::{Pallet},
+		Historical: pallet_session_historical + Pallet,
 		RandomnessCollectiveFlip: pallet_insecure_randomness_collective_flip,
 		Identity: pallet_identity,
 		Society: pallet_society,
@@ -1921,8 +1924,8 @@ construct_runtime!(
 		Multisig: pallet_multisig,
 		Bounties: pallet_bounties,
 		Tips: pallet_tips,
-		Assets: pallet_assets::<Instance1>,
-		PoolAssets: pallet_assets::<Instance2>,
+		Assets: pallet_assets<Instance1>,
+		PoolAssets: pallet_assets<Instance2>,
 		Mmr: pallet_mmr,
 		Lottery: pallet_lottery,
 		Nis: pallet_nis,
@@ -1932,7 +1935,7 @@ construct_runtime!(
 		Salary: pallet_salary,
 		CoreFellowship: pallet_core_fellowship,
 		TransactionStorage: pallet_transaction_storage,
-		VoterList: pallet_bags_list::<Instance1>,
+		VoterList: pallet_bags_list<Instance1>,
 		StateTrieMigration: pallet_state_trie_migration,
 		ChildBounties: pallet_child_bounties,
 		Referenda: pallet_referenda,
@@ -1940,10 +1943,10 @@ construct_runtime!(
 		RootTesting: pallet_root_testing,
 		ConvictionVoting: pallet_conviction_voting,
 		Whitelist: pallet_whitelist,
-		AllianceMotion: pallet_collective::<Instance3>,
+		AllianceMotion: pallet_collective<Instance3>,
 		Alliance: pallet_alliance,
 		NominationPools: pallet_nomination_pools,
-		RankedPolls: pallet_referenda::<Instance2>,
+		RankedPolls: pallet_referenda<Instance2>,
 		RankedCollective: pallet_ranked_collective,
 		AssetConversion: pallet_asset_conversion,
 		FastUnstake: pallet_fast_unstake,
@@ -1951,7 +1954,7 @@ construct_runtime!(
 		Pov: frame_benchmarking_pallet_pov,
 		Statement: pallet_statement,
 	}
-);
+}
 
 /// The address format for describing accounts.
 pub type Address = sp_runtime::MultiAddress<AccountId, AccountIndex>;
