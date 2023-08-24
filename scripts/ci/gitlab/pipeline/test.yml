@@ -237,6 +237,8 @@ test-linux-stable:
       --features runtime-benchmarks,try-runtime,experimental
       --manifest-path ./bin/node/cli/Cargo.toml
       --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
+    # run runtime-api tests with `enable-staging-api` feature
+    - time cargo nextest run -p sp-api-test --features enable-staging-api
     # we need to update cache only from one job
     - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
     # Upload tests results to Elasticsearch
