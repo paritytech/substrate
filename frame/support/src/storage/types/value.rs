@@ -135,6 +135,11 @@ where
 		<Self as crate::storage::StorageValue<Value>>::mutate(f)
 	}
 
+	/// Mutate the value under a key iff it exists. Do nothing and return the default value if not.
+	pub fn mutate_extant<R: Default, F: FnOnce(&mut Value) -> R>(f: F) -> R {
+		<Self as crate::storage::StorageValue<Value>>::mutate_extant(f)
+	}
+
 	/// Mutate the value if closure returns `Ok`
 	pub fn try_mutate<R, E, F: FnOnce(&mut QueryKind::Query) -> Result<R, E>>(
 		f: F,
