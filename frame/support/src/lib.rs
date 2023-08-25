@@ -806,10 +806,7 @@ pub mod testing_prelude {
 /// Prelude to be used alongside pallet macro, for ease of use.
 pub mod pallet_prelude {
 	pub use crate::{
-		dispatch::{
-			DispatchClass, DispatchError, DispatchResult, DispatchResultWithPostInfo, Parameter,
-			Pays,
-		},
+		dispatch::{DispatchClass, DispatchResult, DispatchResultWithPostInfo, Parameter, Pays},
 		ensure,
 		inherent::{InherentData, InherentIdentifier, ProvideInherent},
 		storage,
@@ -855,7 +852,7 @@ pub mod pallet_prelude {
 			TransactionTag, TransactionValidity, TransactionValidityError, UnknownTransaction,
 			ValidTransaction,
 		},
-		RuntimeDebug, MAX_MODULE_ERROR_ENCODED_SIZE,
+		DispatchError, RuntimeDebug, MAX_MODULE_ERROR_ENCODED_SIZE,
 	};
 	pub use sp_std::marker::PhantomData;
 	pub use sp_weights::Weight;

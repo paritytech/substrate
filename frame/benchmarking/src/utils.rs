@@ -17,16 +17,12 @@
 
 //! Interfaces, types and utils for benchmarking a FRAME runtime.
 use codec::{Decode, Encode};
-use frame_support::{
-	dispatch::{DispatchError, DispatchErrorWithPostInfo},
-	pallet_prelude::*,
-	traits::StorageInfo,
-};
+use frame_support::{dispatch::DispatchErrorWithPostInfo, pallet_prelude::*, traits::StorageInfo};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::TrailingZeroInput;
+use sp_runtime::{traits::TrailingZeroInput, DispatchError};
 use sp_std::{prelude::Box, vec::Vec};
 use sp_storage::TrackedStorageKey;
 

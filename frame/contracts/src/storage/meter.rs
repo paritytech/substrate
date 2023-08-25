@@ -23,7 +23,6 @@ use crate::{
 };
 
 use frame_support::{
-	dispatch::{fmt::Debug, DispatchError},
 	ensure,
 	traits::{
 		fungible::{Mutate, MutateHold},
@@ -37,9 +36,9 @@ use frame_support::{
 use sp_api::HashT;
 use sp_runtime::{
 	traits::{Saturating, Zero},
-	FixedPointNumber, FixedU128,
+	DispatchError, FixedPointNumber, FixedU128,
 };
-use sp_std::{marker::PhantomData, vec, vec::Vec};
+use sp_std::{fmt::Debug, marker::PhantomData, vec, vec::Vec};
 
 /// Deposit that uses the native fungible's balance type.
 pub type DepositOf<T> = Deposit<BalanceOf<T>>;

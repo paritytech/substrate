@@ -20,7 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
-use frame_support::dispatch::Vec;
+use sp_api::vec::Vec;
 
 sp_api::decl_runtime_apis! {
 	pub trait NftsApi<AccountId, CollectionId, ItemId>

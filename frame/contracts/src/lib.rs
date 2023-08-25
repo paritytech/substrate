@@ -111,10 +111,7 @@ use crate::{
 use codec::{Codec, Decode, Encode, HasCompact, MaxEncodedLen};
 use environmental::*;
 use frame_support::{
-	dispatch::{
-		DispatchError, Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo, RawOrigin,
-		WithPostDispatchInfo,
-	},
+	dispatch::{GetDispatchInfo, Pays, PostDispatchInfo, RawOrigin, WithPostDispatchInfo},
 	ensure,
 	error::BadOrigin,
 	traits::{
@@ -137,8 +134,8 @@ use pallet_contracts_primitives::{
 use scale_info::TypeInfo;
 use smallvec::Array;
 use sp_runtime::{
-	traits::{Convert, Hash, Saturating, StaticLookup, Zero},
-	RuntimeDebug,
+	traits::{Convert, Dispatchable, Hash, Saturating, StaticLookup, Zero},
+	DispatchError, RuntimeDebug,
 };
 use sp_std::{fmt::Debug, prelude::*};
 

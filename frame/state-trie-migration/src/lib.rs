@@ -1268,7 +1268,6 @@ mod mock {
 #[cfg(test)]
 mod test {
 	use super::{mock::*, *};
-	use frame_support::dispatch::*;
 	use sp_runtime::{bounded_vec, traits::Bounded, StateVersion};
 
 	#[test]

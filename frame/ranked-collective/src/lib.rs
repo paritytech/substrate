@@ -47,12 +47,12 @@ use sp_arithmetic::traits::Saturating;
 use sp_runtime::{
 	traits::{Convert, StaticLookup},
 	ArithmeticError::Overflow,
-	Perbill, RuntimeDebug,
+	DispatchError, Perbill, RuntimeDebug,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
-	dispatch::{DispatchError, DispatchResultWithPostInfo, PostDispatchInfo},
+	dispatch::{DispatchResultWithPostInfo, PostDispatchInfo},
 	ensure, impl_ensure_origin_with_arg_ignoring_arg,
 	traits::{EnsureOrigin, EnsureOriginWithArg, PollStatus, Polling, RankedMembers, VoteTally},
 	CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,

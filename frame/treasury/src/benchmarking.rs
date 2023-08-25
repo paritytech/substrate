@@ -23,9 +23,8 @@ use super::{Pallet as Treasury, *};
 
 use frame_benchmarking::v1::{account, benchmarks_instance_pallet, BenchmarkError};
 use frame_support::{
-	dispatch::UnfilteredDispatchable,
 	ensure,
-	traits::{EnsureOrigin, OnInitialize},
+	traits::{EnsureOrigin, OnInitialize, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
 

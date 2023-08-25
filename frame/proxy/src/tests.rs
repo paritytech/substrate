@@ -25,11 +25,10 @@ use crate as proxy;
 use codec::{Decode, Encode};
 use frame_support::{
 	assert_noop, assert_ok, derive_impl,
-	dispatch::DispatchError,
 	traits::{ConstU32, ConstU64, Contains},
 };
 use sp_core::H256;
-use sp_runtime::{traits::BlakeTwo256, BuildStorage, RuntimeDebug};
+use sp_runtime::{traits::BlakeTwo256, BuildStorage, DispatchError, RuntimeDebug};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

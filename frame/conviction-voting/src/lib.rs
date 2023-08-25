@@ -28,7 +28,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
+	dispatch::DispatchResult,
 	ensure,
 	traits::{
 		fungible, Currency, Get, LockIdentifier, LockableCurrency, PollStatus, Polling,
@@ -38,7 +38,7 @@ use frame_support::{
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Saturating, StaticLookup, Zero},
-	ArithmeticError, Perbill,
+	ArithmeticError, DispatchError, Perbill,
 };
 use sp_std::prelude::*;
 
@@ -86,8 +86,15 @@ type ClassOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::C
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::ClassCountOf};
+	use frame_support::{
+		pallet_prelude::{
+			DispatchResultWithPostInfo, IsType, StorageDoubleMap, StorageMap, ValueQuery,
+		},
+		traits::ClassCountOf,
+		Twox64Concat,
+	};
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::BoundedVec;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(_);

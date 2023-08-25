@@ -27,9 +27,9 @@
 //! Implementations of these traits may be converted to implementations of corresponding
 //! `nonfungible` traits by using the `nonfungible::ItemOf` type adapter.
 
-use crate::dispatch::{DispatchError, DispatchResult};
+use crate::dispatch::DispatchResult;
 use codec::{Decode, Encode};
-use sp_runtime::TokenError;
+use sp_runtime::{DispatchError, TokenError};
 use sp_std::prelude::*;
 
 /// Trait for providing an interface to many read-only NFT-like sets of items.

@@ -22,9 +22,10 @@ use sp_core::Get;
 
 use super::{super::misc::BalanceStatus, Currency};
 use crate::{
-	dispatch::{DispatchError, DispatchResult},
+	dispatch::DispatchResult,
 	traits::{ExistenceRequirement, SignedImbalance, WithdrawReasons},
 };
+use sp_runtime::DispatchError;
 
 /// A currency where funds can be reserved from the user.
 pub trait ReservableCurrency<AccountId>: Currency<AccountId> {

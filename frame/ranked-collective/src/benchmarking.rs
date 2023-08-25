@@ -24,7 +24,7 @@ use crate::Pallet as RankedCollective;
 use frame_benchmarking::v1::{
 	account, benchmarks_instance_pallet, whitelisted_caller, BenchmarkError,
 };
-use frame_support::{assert_ok, dispatch::UnfilteredDispatchable};
+use frame_support::{assert_ok, traits::UnfilteredDispatchable};
 use frame_system::RawOrigin as SystemOrigin;
 
 const SEED: u32 = 0;

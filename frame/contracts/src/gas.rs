@@ -17,14 +17,12 @@
 
 use crate::{exec::ExecError, Config, Error};
 use frame_support::{
-	dispatch::{
-		DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo, PostDispatchInfo,
-	},
+	dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo, PostDispatchInfo},
 	weights::Weight,
 	DefaultNoBound,
 };
 use sp_core::Get;
-use sp_runtime::traits::Zero;
+use sp_runtime::{traits::Zero, DispatchError};
 use sp_std::marker::PhantomData;
 
 #[cfg(test)]

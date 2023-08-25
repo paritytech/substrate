@@ -351,7 +351,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 		}
 
-		impl<#type_impl_gen> #frame_support::dispatch::GetCallName for #call_ident<#type_use_gen>
+		impl<#type_impl_gen> #frame_support::traits::GetCallName for #call_ident<#type_use_gen>
 			#where_clause
 		{
 			fn get_call_name(&self) -> &'static str {
@@ -366,7 +366,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 		}
 
-		impl<#type_impl_gen> #frame_support::dispatch::GetCallIndex for #call_ident<#type_use_gen>
+		impl<#type_impl_gen> #frame_support::traits::GetCallIndex for #call_ident<#type_use_gen>
 			#where_clause
 		{
 			fn get_call_index(&self) -> u8 {

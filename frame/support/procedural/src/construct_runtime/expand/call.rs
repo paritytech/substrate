@@ -124,16 +124,16 @@ pub fn expand_outer_dispatch(
 			}
 		}
 
-		impl #scrate::dispatch::GetCallMetadata for RuntimeCall {
-			fn get_call_metadata(&self) -> #scrate::dispatch::CallMetadata {
-				use #scrate::dispatch::GetCallName;
+		impl #scrate::traits::GetCallMetadata for RuntimeCall {
+			fn get_call_metadata(&self) -> #scrate::traits::CallMetadata {
+				use #scrate::traits::GetCallName;
 				match self {
 					#(
 						#pallet_attrs
 						#variant_patterns => {
 							let function_name = call.get_call_name();
 							let pallet_name = stringify!(#pallet_names);
-							#scrate::dispatch::CallMetadata { function_name, pallet_name }
+							#scrate::traits::CallMetadata { function_name, pallet_name }
 						}
 					)*
 				}
@@ -147,7 +147,7 @@ pub fn expand_outer_dispatch(
 			}
 
 			fn get_call_names(module: &str) -> &'static [&'static str] {
-				use #scrate::dispatch::{Callable, GetCallName};
+				use #scrate::{dispatch::Callable, traits::GetCallName};
 				match module {
 					#(
 						#pallet_attrs
@@ -159,7 +159,7 @@ pub fn expand_outer_dispatch(
 				}
 			}
 		}
-		impl #scrate::dispatch::Dispatchable for RuntimeCall {
+		impl #scrate::dispatch::__private::Dispatchable for RuntimeCall {
 			type RuntimeOrigin = RuntimeOrigin;
 			type Config = RuntimeCall;
 			type Info = #scrate::dispatch::DispatchInfo;

@@ -30,10 +30,10 @@ mod tests;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::{Dispatchable, GetDispatchInfo},
+	dispatch::GetDispatchInfo,
 	traits::{Currency, OnUnbalanced, ReservableCurrency},
 };
-use sp_runtime::traits::{BlakeTwo256, Hash, One, Saturating, Zero};
+use sp_runtime::traits::{BlakeTwo256, Dispatchable, Hash, One, Saturating, Zero};
 use sp_std::{prelude::*, result};
 use sp_transaction_storage_proof::{
 	encode_index, random_chunk, InherentError, TransactionStorageProof, CHUNK_SIZE,

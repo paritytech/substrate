@@ -42,7 +42,7 @@ use assert_matches::assert_matches;
 use codec::Encode;
 use frame_support::{
 	assert_err, assert_err_ignore_postinfo, assert_err_with_weight, assert_noop, assert_ok,
-	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
+	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 	parameter_types,
 	storage::child,
 	traits::{
@@ -61,7 +61,7 @@ use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
 	testing::H256,
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
-	AccountId32, BuildStorage, Perbill, TokenError,
+	AccountId32, BuildStorage, DispatchError, Perbill, TokenError,
 };
 
 type Block = frame_system::mocking::MockBlock<Test>;

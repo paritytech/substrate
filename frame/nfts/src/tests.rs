@@ -21,7 +21,6 @@ use crate::{mock::*, Event, *};
 use enumflags2::BitFlags;
 use frame_support::{
 	assert_noop, assert_ok,
-	dispatch::Dispatchable,
 	traits::{
 		tokens::nonfungibles_v2::{Create, Destroy, Mutate},
 		Currency, Get,
@@ -29,7 +28,10 @@ use frame_support::{
 };
 use pallet_balances::Error as BalancesError;
 use sp_core::{bounded::BoundedVec, Pair};
-use sp_runtime::{traits::IdentifyAccount, MultiSignature, MultiSigner};
+use sp_runtime::{
+	traits::{Dispatchable, IdentifyAccount},
+	MultiSignature, MultiSigner,
+};
 use sp_std::prelude::*;
 
 type AccountIdOf<Test> = <Test as frame_system::Config>::AccountId;
