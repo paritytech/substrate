@@ -52,7 +52,23 @@ Consequently, a runtime that wants to include this pallet must implement this tr
 	// impossible consequently.
 	match &config.default_sub_trait {
 		Some(default_sub_trait) if default_sub_trait.items.len() > 0 => {
-			let trait_items = &default_sub_trait.items;
+			let trait_items = &default_sub_trait
+				.items
+				.iter()
+				.map(|item| {
+					if item.1 {
+						if let syn::TraitItem::Type(item) = item.0.clone() {
+							let mut item = item.clone();
+							item.bounds.clear();
+							syn::TraitItem::Type(item)
+						} else {
+							item.0.clone()
+						}
+					} else {
+						item.0.clone()
+					}
+				})
+				.collect::<Vec<_>>();
 
 			let type_param_bounds = if default_sub_trait.has_system {
 				let system = &def.frame_system;
