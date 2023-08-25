@@ -129,6 +129,8 @@ pallet-transaction-storage = { version = "4.0.0-dev", default-features = false, 
 pallet-uniques = { version = "4.0.0-dev", default-features = false, path = "../../../frame/uniques" }
 pallet-vesting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/vesting" }
 pallet-whitelist = { version = "4.0.0-dev", default-features = false, path = "../../../frame/whitelist" }
+pallet-tx-pause = { version = "4.0.0-dev", default-features = false, path = "../../../frame/tx-pause" }
+pallet-safe-mode = { version = "4.0.0-dev", default-features = false, path = "../../../frame/safe-mode" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder", optional = true }
@@ -200,6 +202,7 @@ std = [
 	"pallet-referenda/std",
 	"pallet-remark/std",
 	"pallet-root-testing/std",
+	"pallet-safe-mode/std",
 	"pallet-salary/std",
 	"pallet-scheduler/std",
 	"pallet-session-benchmarking?/std",
@@ -216,6 +219,7 @@ std = [
 	"pallet-transaction-payment/std",
 	"pallet-transaction-storage/std",
 	"pallet-treasury/std",
+	"pallet-tx-pause/std",
 	"pallet-uniques/std",
 	"pallet-utility/std",
 	"pallet-vesting/std",
@@ -290,6 +294,7 @@ runtime-benchmarks = [
 	"pallet-recovery/runtime-benchmarks",
 	"pallet-referenda/runtime-benchmarks",
 	"pallet-remark/runtime-benchmarks",
+	"pallet-safe-mode/runtime-benchmarks",
 	"pallet-salary/runtime-benchmarks",
 	"pallet-scheduler/runtime-benchmarks",
 	"pallet-session-benchmarking/runtime-benchmarks",
@@ -301,6 +306,7 @@ runtime-benchmarks = [
 	"pallet-tips/runtime-benchmarks",
 	"pallet-transaction-storage/runtime-benchmarks",
 	"pallet-treasury/runtime-benchmarks",
+	"pallet-tx-pause/runtime-benchmarks",
 	"pallet-uniques/runtime-benchmarks",
 	"pallet-utility/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",
@@ -360,6 +366,7 @@ try-runtime = [
 	"pallet-referenda/try-runtime",
 	"pallet-remark/try-runtime",
 	"pallet-root-testing/try-runtime",
+	"pallet-safe-mode/try-runtime",
 	"pallet-salary/try-runtime",
 	"pallet-scheduler/try-runtime",
 	"pallet-session/try-runtime",
@@ -373,6 +380,7 @@ try-runtime = [
 	"pallet-transaction-payment/try-runtime",
 	"pallet-transaction-storage/try-runtime",
 	"pallet-treasury/try-runtime",
+	"pallet-tx-pause/try-runtime",
 	"pallet-uniques/try-runtime",
 	"pallet-utility/try-runtime",
 	"pallet-vesting/try-runtime",

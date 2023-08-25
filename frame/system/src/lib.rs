@@ -248,6 +248,14 @@ pub mod pallet {
 
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
+		///
+		/// This works as a filter for each incoming call. The call needs to pass this filter in
+		/// order to dispatch. Otherwise it will be rejected with `CallFiltered`. This can be
+		/// bypassed via `dispatch_bypass_filter` which should only be accessible by root. The
+		/// filter can be composed of sub-filters by nesting for example
+		/// [`frame_support::traits::InsideBoth`], [`frame_support::traits::TheseExcept`] or
+		/// [`frame_support::traits::EverythingBut`] et al. The default would be
+		/// [`frame_support::traits::Everything`].
 		#[pallet::no_default]
 		type BaseCallFilter: Contains<Self::RuntimeCall>;
 
