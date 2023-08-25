@@ -34,7 +34,7 @@ use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
 use sp_runtime::{
 	traits::{AccountIdConversion, BlakeTwo256, IdentityLookup, SaturatedConversion},
-	Permill,
+	Percent, Permill,
 };
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
@@ -225,6 +225,7 @@ parameter_types! {
 	pub storage AllowMultiAssetPools: bool = false;
 	// should be non-zero if AllowMultiAssetPools is true, otherwise can be zero
 	pub storage LiquidityWithdrawalFee: Permill = Permill::from_percent(0);
+	pub LiquidityPoolFee: Permill = Permill::from_parts(3000); // 0.3%
 	pub const MaxSwapPathLength: u32 = 4;
 }
 
@@ -242,7 +243,7 @@ impl pallet_asset_conversion::Config for Runtime {
 	type PoolAssets = PoolAssets;
 	type PalletId = AssetConversionPalletId;
 	type WeightInfo = ();
-	type LPFee = ConstU32<3>; // means 0.3%
+	type LPFee = LiquidityPoolFee;
 	type PoolSetupFee = ConstU64<100>; // should be more or equal to the existential deposit
 	type PoolSetupFeeReceiver = AssetConversionOrigin;
 	type LiquidityWithdrawalFee = LiquidityWithdrawalFee;

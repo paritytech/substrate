@@ -173,7 +173,7 @@ pub mod pallet {
 
 		/// A % the liquidity providers will take of every swap. Represents 10ths of a percent.
 		#[pallet::constant]
-		type LPFee: Get<u32>;
+		type LPFee: Get<Permill>;
 
 		/// A one-time fee to setup the pool.
 		#[pallet::constant]
@@ -1124,9 +1124,12 @@ pub mod pallet {
 				return Err(Error::<T>::ZeroLiquidity.into())
 			}
 
-			let amount_in_with_fee = amount_in
-				.checked_mul(&(T::HigherPrecisionBalance::from(1000u32) - (T::LPFee::get().into())))
-				.ok_or(Error::<T>::Overflow)?;
+			let fee_mult = T::HigherPrecisionBalance::from(
+				(1_000_000u32 - T::LPFee::get().deconstruct()) / 1000, // Reduce to thousand
+			);
+
+			let amount_in_with_fee =
+				amount_in.checked_mul(&fee_mult).ok_or(Error::<T>::Overflow)?;
 
 			let numerator =
 				amount_in_with_fee.checked_mul(&reserve_out).ok_or(Error::<T>::Overflow)?;
@@ -1169,10 +1172,14 @@ pub mod pallet {
 				.checked_mul(&1000u32.into())
 				.ok_or(Error::<T>::Overflow)?;
 
+			let fee_mult = T::HigherPrecisionBalance::from(
+				(1_000_000u32 - T::LPFee::get().deconstruct()) / 1000, // Reduce to thousand
+			);
+
 			let denominator = reserve_out
 				.checked_sub(&amount_out)
 				.ok_or(Error::<T>::Overflow)?
-				.checked_mul(&(T::HigherPrecisionBalance::from(1000u32) - T::LPFee::get().into()))
+				.checked_mul(&fee_mult)
 				.ok_or(Error::<T>::Overflow)?;
 
 			let result = numerator

@@ -1617,6 +1617,7 @@ parameter_types! {
 	pub const PoolSetupFee: Balance = 1 * DOLLARS; // should be more or equal to the existential deposit
 	pub const MintMinLiquidity: Balance = 100;  // 100 is good enough when the main currency has 10-12 decimals.
 	pub const LiquidityWithdrawalFee: Permill = Permill::from_percent(0);  // should be non-zero if AllowMultiAssetPools is true, otherwise can be zero.
+	pub const LiquidityPoolFee: Permill = Permill::from_parts(3000); // 0.3%
 }
 
 impl pallet_asset_conversion::Config for Runtime {
@@ -1631,7 +1632,7 @@ impl pallet_asset_conversion::Config for Runtime {
 	type MultiAssetId = NativeOrAssetId<u32>;
 	type PoolAssetId = <Self as pallet_assets::Config<Instance2>>::AssetId;
 	type PalletId = AssetConversionPalletId;
-	type LPFee = ConstU32<3>; // means 0.3%
+	type LPFee = LiquidityPoolFee;
 	type PoolSetupFee = PoolSetupFee;
 	type PoolSetupFeeReceiver = AssetConversionOrigin;
 	type LiquidityWithdrawalFee = LiquidityWithdrawalFee;
