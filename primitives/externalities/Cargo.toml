@@ -20,10 +20,5 @@ sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 sp-storage = { version = "13.0.0", default-features = false, path = "../storage" }
 
 [features]
-default = ["std"]
-std = [
-	"codec/std",
-	"environmental/std",
-	"sp-std/std",
-	"sp-storage/std",
-]
+default = [ "std" ]
+std = [ "codec/std", "environmental/std", "sp-std/std", "sp-storage/std" ]

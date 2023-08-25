@@ -19,7 +19,6 @@
 //! traits and their methods directly.
 
 use crate::{
-	metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR},
 	storage::{
 		types::{
 			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, OptionQuery, QueryKindTrait,
@@ -30,6 +29,7 @@ use crate::{
 	traits::{Get, GetDefault, StorageInfo, StorageInstance},
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
+use sp_metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR};
 use sp_runtime::SaturatedConversion;
 use sp_std::prelude::*;
 
@@ -620,10 +620,10 @@ mod test {
 	use super::*;
 	use crate::{
 		hash::{StorageHasher as _, *},
-		metadata_ir::{StorageEntryModifierIR, StorageHasherIR},
 		storage::types::{Key as NMapKey, ValueQuery},
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
+	use sp_metadata_ir::{StorageEntryModifierIR, StorageHasherIR};
 
 	struct Prefix;
 	impl StorageInstance for Prefix {

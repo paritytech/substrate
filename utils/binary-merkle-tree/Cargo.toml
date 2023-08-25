@@ -20,13 +20,6 @@ sp-core = { version = "21.0.0", path = "../../primitives/core" }
 sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }
 
 [features]
-debug = ["array-bytes", "log"]
-default = ["debug", "std"]
-std = [
-    
-	"log/std",
-    
-	"hash-db/std",
-	"sp-core/std",
-	"sp-runtime/std"
-]
+debug = [ "array-bytes", "log" ]
+default = [ "debug", "std" ]
+std = [ "hash-db/std", "log/std", "sp-core/std", "sp-runtime/std" ]

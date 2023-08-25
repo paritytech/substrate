@@ -16,11 +16,11 @@
 // limitations under the License.
 
 use super::*;
-use crate::metadata_ir::{
+use sp_io::{MultiRemovalResults, TestExternalities};
+use sp_metadata_ir::{
 	PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR, StorageEntryTypeIR,
 	StorageHasherIR,
 };
-use sp_io::{MultiRemovalResults, TestExternalities};
 use sp_runtime::{generic, traits::BlakeTwo256, BuildStorage};
 
 pub use self::frame_system::{pallet_prelude::*, Config, Pallet};

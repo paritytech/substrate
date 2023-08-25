@@ -18,7 +18,6 @@
 //! Storage value type. Implements StorageValue trait and its method directly.
 
 use crate::{
-	metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR},
 	storage::{
 		generator::StorageValue as StorageValueT,
 		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
@@ -28,6 +27,7 @@ use crate::{
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::SaturatedConversion;
+use sp_metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR};
 use sp_std::prelude::*;
 
 /// A type that allow to store a value.
@@ -133,6 +133,11 @@ where
 	/// Mutate the value
 	pub fn mutate<R, F: FnOnce(&mut QueryKind::Query) -> R>(f: F) -> R {
 		<Self as crate::storage::StorageValue<Value>>::mutate(f)
+	}
+
+	/// Mutate the value under a key iff it exists. Do nothing and return the default value if not.
+	pub fn mutate_extant<R: Default, F: FnOnce(&mut Value) -> R>(f: F) -> R {
+		<Self as crate::storage::StorageValue<Value>>::mutate_extant(f)
 	}
 
 	/// Mutate the value if closure returns `Ok`
@@ -278,8 +283,9 @@ where
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{metadata_ir::StorageEntryModifierIR, storage::types::ValueQuery};
+	use crate::storage::types::ValueQuery;
 	use sp_io::{hashing::twox_128, TestExternalities};
+	use sp_metadata_ir::StorageEntryModifierIR;
 
 	struct Prefix;
 	impl StorageInstance for Prefix {

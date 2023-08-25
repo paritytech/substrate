@@ -39,31 +39,31 @@ pallet-authorship = { version = "4.0.0-dev", path = "../../authorship" }
 pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
-	"scale-info/std",
-	"serde",
 	"codec/std",
-	"sp-std/std",
-	"sp-runtime/std",
+	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
-	"sp-io/std",
-	"sp-core/std",
-	"pallet-transaction-payment/std",
-	"frame-benchmarking?/std",
 	"pallet-assets/std",
 	"pallet-authorship/std",
 	"pallet-balances/std",
-	"sp-storage/std"
+	"pallet-transaction-payment/std",
+	"scale-info/std",
+	"serde",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"sp-storage/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks",
-	"frame-system/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
 	"pallet-assets/runtime-benchmarks",
-	"pallet-balances/runtime-benchmarks"
+	"pallet-balances/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
@@ -72,5 +72,5 @@ try-runtime = [
 	"pallet-authorship/try-runtime",
 	"pallet-balances/try-runtime",
 	"pallet-transaction-payment/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

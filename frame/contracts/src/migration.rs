@@ -69,7 +69,6 @@ include!(concat!(env!("OUT_DIR"), "/migration_codegen.rs"));
 use crate::{weights::WeightInfo, Config, Error, MigrationInProgress, Pallet, Weight, LOG_TARGET};
 use codec::{Codec, Decode};
 use frame_support::{
-	codec,
 	pallet_prelude::*,
 	traits::{ConstU32, OnRuntimeUpgrade},
 };

@@ -22,18 +22,18 @@ pallet-example-split = { default-features = false, path = "./split" }
 [features]
 default = [ "std" ]
 std = [
-    "pallet-example-basic/std",
-    "pallet-default-config-example/std",
-    "pallet-example-offchain-worker/std",
-    "pallet-example-kitchensink/std",
-    "pallet-dev-mode/std",
-    "pallet-example-split/std",
+	"pallet-default-config-example/std",
+	"pallet-dev-mode/std",
+	"pallet-example-basic/std",
+	"pallet-example-kitchensink/std",
+	"pallet-example-offchain-worker/std",
+	"pallet-example-split/std",
 ]
 try-runtime = [
-    "pallet-example-basic/try-runtime",
-    "pallet-default-config-example/try-runtime",
-    "pallet-example-offchain-worker/try-runtime",
-    "pallet-example-kitchensink/try-runtime",
-    "pallet-dev-mode/try-runtime",
-    "pallet-example-split/try-runtime",
+	"pallet-default-config-example/try-runtime",
+	"pallet-dev-mode/try-runtime",
+	"pallet-example-basic/try-runtime",
+	"pallet-example-kitchensink/try-runtime",
+	"pallet-example-offchain-worker/try-runtime",
+	"pallet-example-split/try-runtime",
 ]

@@ -19,7 +19,4 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../runtime"
 
 [features]
 default = [ "std" ]
-std = [
-	"sp-api/std",
-	"sp-runtime/std",
-]
+std = [ "sp-api/std", "sp-runtime/std" ]

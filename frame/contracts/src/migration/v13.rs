@@ -24,7 +24,7 @@ use crate::{
 	AccountIdOf, BalanceOf, CodeHash, Config, Pallet, TrieId, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode};
-use frame_support::{codec, pallet_prelude::*, storage_alias, DefaultNoBound};
+use frame_support::{pallet_prelude::*, storage_alias, DefaultNoBound};
 use sp_runtime::BoundedBTreeMap;
 use sp_std::prelude::*;
 
