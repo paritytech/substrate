@@ -23,11 +23,11 @@ use super::{
 use codec::Encode;
 use sc_service::construct_genesis_block;
 use sp_core::{
-	sr25519,
+	bandersnatch, sr25519,
 	storage::{well_known_keys, StateVersion, Storage},
 	Pair,
 };
-use sp_keyring::{AccountKeyring, Sr25519Keyring};
+use sp_keyring::AccountKeyring;
 use sp_runtime::{
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT},
 	BuildStorage,
@@ -54,9 +54,9 @@ impl Default for GenesisStorageBuilder {
 	fn default() -> Self {
 		Self::new(
 			vec![
-				Sr25519Keyring::Alice.into(),
-				Sr25519Keyring::Bob.into(),
-				Sr25519Keyring::Charlie.into(),
+				AccountKeyring::Alice.into(),
+				AccountKeyring::Bob.into(),
+				AccountKeyring::Charlie.into(),
 			],
 			(0..16_usize)
 				.into_iter()
@@ -109,11 +109,23 @@ impl GenesisStorageBuilder {
 
 	/// A `RuntimeGenesisConfig` from internal configuration
 	pub fn genesis_config(&self) -> RuntimeGenesisConfig {
-		let authorities_sr25519: Vec<_> = self
+		let authorities_sr25519: Vec<sr25519::Public> = self
 			.authorities
-			.clone()
-			.into_iter()
-			.map(|id| sr25519::Public::from(id))
+			.iter()
+			.map(|id| {
+				use std::str::FromStr;
+				let seed: &'static str = AccountKeyring::from_public(id).unwrap().into();
+				sp_keyring::Sr25519Keyring::from_str(&seed).unwrap().into()
+			})
+			.collect();
+		let authorities_bandersnatch: Vec<bandersnatch::Public> = self
+			.authorities
+			.iter()
+			.map(|id| {
+				use std::str::FromStr;
+				let seed: &'static str = AccountKeyring::from_public(id).unwrap().into();
+				sp_keyring::BandersnatchKeyring::from_str(&seed).unwrap().into()
+			})
 			.collect();
 
 		RuntimeGenesisConfig {
@@ -128,6 +140,14 @@ impl GenesisStorageBuilder {
 					.map(|x| (x.into(), 1))
 					.collect(),
 				epoch_config: Some(crate::TEST_RUNTIME_BABE_EPOCH_CONFIGURATION),
+				..Default::default()
+			},
+			sassafras: pallet_sassafras::GenesisConfig {
+				authorities: authorities_bandersnatch.into_iter().map(|x| x.into()).collect(),
+				epoch_config: sp_consensus_sassafras::EpochConfiguration {
+					redundancy_factor: 1,
+					attempts_number: 32,
+				},
 				..Default::default()
 			},
 			substrate_test: substrate_test_pallet::GenesisConfig {

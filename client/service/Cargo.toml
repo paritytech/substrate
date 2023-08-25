@@ -36,7 +36,7 @@ exit-future = "0.2.0"
 pin-project = "1.0.12"
 serde = "1.0.163"
 serde_json = "1.0.85"
-sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
+sc-keystore = { version = "4.0.0-dev", path = "../keystore", features = ["bandersnatch-experimental"] }
 sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }
 sp-trie = { version = "22.0.0", path = "../../primitives/trie" }
 sp-externalities = { version = "0.19.0", path = "../../primitives/externalities" }

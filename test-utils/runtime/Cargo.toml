@@ -17,11 +17,12 @@ sp-application-crypto = { version = "23.0.0", default-features = false, path = "
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura", features = ["serde"] }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe", features = ["serde"] }
 sp-genesis-builder = { version = "0.1.0-dev", default-features = false, path = "../../primitives/genesis-builder" }
+sp-consensus-sassafras = { version = "0.3.4-dev", default-features = false, path = "../../primitives/consensus/sassafras" }
 sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../primitives/block-builder" }
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
-sp-keyring = { version = "24.0.0", optional = true, path = "../../primitives/keyring" }
+sp-keyring = { version = "24.0.0", optional = true, path = "../../primitives/keyring", features = ["bandersnatch-experimental"] }
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../primitives/offchain" }
 sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
@@ -32,6 +33,7 @@ sp-session = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime", features = ["serde"] }
 pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../frame/babe" }
+pallet-sassafras = { version = "0.3.4-dev", default-features = false, path = "../../frame/sassafras" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../frame/balances" }
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../frame/executive" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }
@@ -77,6 +79,7 @@ std = [
 	"log/std",
 	"pallet-babe/std",
 	"pallet-balances/std",
+	"pallet-sassafras/std",
 	"pallet-timestamp/std",
 	"sc-executor/std",
 	"sc-service",
@@ -87,6 +90,7 @@ std = [
 	"sp-consensus-aura/std",
 	"sp-consensus-babe/std",
 	"sp-consensus-grandpa/std",
+	"sp-consensus-sassafras/std",
 	"sp-core/std",
 	"sp-externalities/std",
 	"sp-genesis-builder/std",

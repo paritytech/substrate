@@ -5743,6 +5743,84 @@ dependencies = [
 ]
 
 [[package]]
+name = "node-sassafras"
+version = "0.3.4-dev"
+dependencies = [
+ "clap 4.3.2",
+ "frame-benchmarking",
+ "frame-benchmarking-cli",
+ "frame-system",
+ "futures",
+ "jsonrpsee",
+ "node-sassafras-runtime",
+ "pallet-transaction-payment",
+ "pallet-transaction-payment-rpc",
+ "sc-basic-authorship",
+ "sc-cli",
+ "sc-client-api",
+ "sc-consensus",
+ "sc-consensus-grandpa",
+ "sc-consensus-sassafras",
+ "sc-executor",
+ "sc-keystore",
+ "sc-network",
+ "sc-offchain",
+ "sc-rpc",
+ "sc-rpc-api",
+ "sc-service",
+ "sc-telemetry",
+ "sc-transaction-pool",
+ "sc-transaction-pool-api",
+ "sp-api",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-grandpa",
+ "sp-consensus-sassafras",
+ "sp-core",
+ "sp-inherents",
+ "sp-keyring",
+ "sp-runtime",
+ "sp-timestamp",
+ "substrate-build-script-utils",
+ "substrate-frame-rpc-system",
+]
+
+[[package]]
+name = "node-sassafras-runtime"
+version = "0.3.4-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-executive",
+ "frame-support",
+ "frame-system",
+ "frame-system-benchmarking",
+ "frame-system-rpc-runtime-api",
+ "pallet-balances",
+ "pallet-grandpa",
+ "pallet-sassafras",
+ "pallet-session",
+ "pallet-sudo",
+ "pallet-timestamp",
+ "pallet-transaction-payment",
+ "pallet-transaction-payment-rpc-runtime-api",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-api",
+ "sp-block-builder",
+ "sp-consensus-sassafras",
+ "sp-core",
+ "sp-inherents",
+ "sp-offchain",
+ "sp-runtime",
+ "sp-session",
+ "sp-std",
+ "sp-transaction-pool",
+ "sp-version",
+ "substrate-wasm-builder",
+]
+
+[[package]]
 name = "node-template"
 version = "4.0.0-dev"
 dependencies = [
@@ -7463,6 +7541,27 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-sassafras"
+version = "0.3.4-dev"
+dependencies = [
+ "array-bytes",
+ "env_logger 0.10.0",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-session",
+ "pallet-timestamp",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-consensus-sassafras",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -9761,6 +9860,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-consensus-sassafras"
+version = "0.3.4-dev"
+dependencies = [
+ "async-trait",
+ "env_logger 0.10.0",
+ "fork-tree",
+ "futures",
+ "log",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "sc-block-builder",
+ "sc-client-api",
+ "sc-consensus",
+ "sc-consensus-epochs",
+ "sc-consensus-slots",
+ "sc-keystore",
+ "sc-network-test",
+ "sc-telemetry",
+ "sc-transaction-pool-api",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-sassafras",
+ "sp-consensus-slots",
+ "sp-core",
+ "sp-inherents",
+ "sp-keyring",
+ "sp-keystore",
+ "sp-runtime",
+ "sp-timestamp",
+ "substrate-prometheus-endpoint",
+ "substrate-test-runtime-client",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "sc-consensus-slots"
 version = "0.10.0-dev"
 dependencies = [
@@ -11395,6 +11533,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-consensus-sassafras"
+version = "0.3.4-dev"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-consensus-slots",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "sp-consensus-slots"
 version = "0.10.0-dev"
 dependencies = [
@@ -12357,6 +12510,7 @@ dependencies = [
  "log",
  "pallet-babe",
  "pallet-balances",
+ "pallet-sassafras",
  "pallet-timestamp",
  "parity-scale-codec",
  "sc-block-builder",
@@ -12373,6 +12527,7 @@ dependencies = [
  "sp-consensus-aura",
  "sp-consensus-babe",
  "sp-consensus-grandpa",
+ "sp-consensus-sassafras",
  "sp-core",
  "sp-externalities",
  "sp-genesis-builder",

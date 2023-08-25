@@ -23,6 +23,8 @@ use sp_application_crypto::{AppCrypto, AppPair, IsWrappedBy};
 use sp_core::bandersnatch;
 #[cfg(feature = "bls-experimental")]
 use sp_core::{bls377, bls381};
+#[cfg(feature = "bls-experimental")]
+use sp_core::{bls377, bls381};
 use sp_core::{
 	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString, VrfSecret},
 	ecdsa, ed25519, sr25519,
