@@ -231,6 +231,7 @@ fn tip_new_cannot_be_used_twice() {
 			Tips::tip_new(RuntimeOrigin::signed(11), b"awesome.dot".to_vec(), 3, 10),
 			Error::<Test>::AlreadyKnown
 		);
+		Tips::do_try_state().unwrap();
 	});
 }
 
@@ -254,6 +255,7 @@ fn report_awesome_and_tip_works() {
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(12), h, 10));
 		assert_noop!(Tips::tip(RuntimeOrigin::signed(9), h, 10), BadOrigin);
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(100), h.into()));
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 102);
@@ -273,6 +275,7 @@ fn report_awesome_from_beneficiary_and_tip_works() {
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 10));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(12), h, 10));
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(100), h.into()));
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 110);
@@ -304,6 +307,8 @@ fn close_tip_works() {
 		assert_noop!(Tips::close_tip(RuntimeOrigin::signed(0), h.into()), Error::<Test>::Premature);
 
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
+
 		assert_noop!(Tips::close_tip(RuntimeOrigin::none(), h.into()), BadOrigin);
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
@@ -339,6 +344,7 @@ fn slash_tip_works() {
 		assert_noop!(Tips::slash_tip(RuntimeOrigin::signed(0), h), BadOrigin);
 
 		// can remove from root.
+		Tips::do_try_state().unwrap();
 		assert_ok!(Tips::slash_tip(RuntimeOrigin::root(), h));
 		assert_eq!(last_event(), TipEvent::TipSlashed { tip_hash: h, finder: 0, deposit: 12 });
 
@@ -358,9 +364,15 @@ fn retract_tip_works() {
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(10), h, 10));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 10));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(12), h, 10));
+		Tips::do_try_state().unwrap();
+
 		assert_noop!(Tips::retract_tip(RuntimeOrigin::signed(10), h), Error::<Test>::NotFinder);
 		assert_ok!(Tips::retract_tip(RuntimeOrigin::signed(0), h));
+		Tips::do_try_state().unwrap();
+
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
+
 		assert_noop!(
 			Tips::close_tip(RuntimeOrigin::signed(0), h.into()),
 			Error::<Test>::UnknownTip
@@ -372,9 +384,15 @@ fn retract_tip_works() {
 		let h = tip_hash();
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 10));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(12), h, 10));
+		Tips::do_try_state().unwrap();
+
 		assert_noop!(Tips::retract_tip(RuntimeOrigin::signed(0), h), Error::<Test>::NotFinder);
 		assert_ok!(Tips::retract_tip(RuntimeOrigin::signed(10), h));
+		Tips::do_try_state().unwrap();
+
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
+
 		assert_noop!(
 			Tips::close_tip(RuntimeOrigin::signed(10), h.into()),
 			Error::<Test>::UnknownTip
@@ -390,7 +408,11 @@ fn tip_median_calculation_works() {
 		let h = tip_hash();
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 10));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(12), h, 1000000));
+		Tips::do_try_state().unwrap();
+
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
+
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
 	});
@@ -409,7 +431,11 @@ fn tip_changing_works() {
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(12), h, 1000));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 100));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(10), h, 10));
+		Tips::do_try_state().unwrap();
+
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
+
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
 	});
@@ -603,8 +629,10 @@ fn report_awesome_and_tip_works_second_instance() {
 		assert_ok!(Tips1::tip(RuntimeOrigin::signed(11), h, 10));
 		assert_ok!(Tips1::tip(RuntimeOrigin::signed(12), h, 10));
 		assert_noop!(Tips1::tip(RuntimeOrigin::signed(9), h, 10), BadOrigin);
+		Tips::do_try_state().unwrap();
 
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
 
 		assert_ok!(Tips1::close_tip(RuntimeOrigin::signed(100), h.into()));
 		// Treasury 1 unchanged
