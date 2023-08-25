@@ -44,7 +44,7 @@ impl StakingMock {
 		BondedBalanceMap::set(&x)
 	}
 
-	pub(crate) fn slash_to(pool_id: PoolId, amount: Balance) {
+	pub fn slash_to(pool_id: PoolId, amount: Balance) {
 		let acc = Pools::create_bonded_account(pool_id);
 		let bonded = BondedBalanceMap::get();
 		let pre_total = bonded.get(&acc).unwrap();

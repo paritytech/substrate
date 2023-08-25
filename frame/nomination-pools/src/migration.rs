@@ -730,17 +730,21 @@ pub mod v5 {
 	impl<T: Config> OnRuntimeUpgrade for VersionUncheckedMigrateV5ToV6<T> {
 		fn on_runtime_upgrade() -> Weight {
 			let migrated = BondedPools::<T>::count();
+			// The TVL should be the sum of all the funds that are actively staked and in the
+			// unbonding process of the account of each pool.
 			let tvl: BalanceOf<T> = BondedPools::<T>::iter()
 				.map(|(id, inner)| {
-					T::Staking::total_stake(&BondedPool { id, inner }.bonded_account())
-						.unwrap_or_default()
+					T::Staking::total_stake(
+						&BondedPool { id, inner: inner.clone() }.bonded_account(),
+					)
+					.unwrap_or_default()
 				})
-				.reduce(|acc, balance| acc + balance)
+				.reduce(|acc, total_balance| acc + total_balance)
 				.unwrap_or_default();
 
 			TotalValueLocked::<T>::set(tvl);
 
-			log!(info, "Upgraded {} pools", migrated);
+			log!(info, "Upgraded {} pools with a TVL of {:?}", migrated, tvl);
 
 			// reads: migrated * (BondedPools +  Staking::total_stake) + count + onchain
 			// version

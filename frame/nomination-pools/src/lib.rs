@@ -996,9 +996,6 @@ impl<T: Config> BondedPool<T> {
 	fn issue(&mut self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
 		let points_to_issue = self.balance_to_point(new_funds);
 		self.points = self.points.saturating_add(points_to_issue);
-		TotalValueLocked::<T>::mutate(|tvl| {
-			tvl.saturating_accrue(new_funds);
-		});
 		points_to_issue
 	}
 
@@ -1248,6 +1245,9 @@ impl<T: Config> BondedPool<T> {
 			// found, we exit early.
 			BondType::Later => T::Staking::bond_extra(&bonded_account, amount)?,
 		}
+		TotalValueLocked::<T>::mutate(|tvl| {
+			tvl.saturating_accrue(amount);
+		});
 
 		Ok(points_issued)
 	}
@@ -1458,10 +1458,6 @@ impl<T: Config> UnbondPool<T> {
 		let balance_to_unbond = self.point_to_balance(points);
 		self.points = self.points.saturating_sub(points);
 		self.balance = self.balance.saturating_sub(balance_to_unbond);
-
-		TotalValueLocked::<T>::mutate(|tvl| {
-			tvl.saturating_reduce(balance_to_unbond);
-		});
 
 		balance_to_unbond
 	}
@@ -2228,6 +2224,10 @@ pub mod pallet {
 				ExistenceRequirement::AllowDeath,
 			)
 			.defensive()?;
+
+			TotalValueLocked::<T>::mutate(|tvl| {
+				tvl.saturating_reduce(balance_to_unbond);
+			});
 
 			Self::deposit_event(Event::<T>::Withdrawn {
 				member: member_account.clone(),
@@ -3217,14 +3217,20 @@ impl<T: Config> Pallet<T> {
 				pool is being destroyed and the depositor is the last member",
 			);
 
-			let mut expected_tvl: BalanceOf<T> = Zero::zero();
-			PoolMembers::<T>::iter().for_each(|(_, member)| {
-				expected_tvl = expected_tvl.saturating_add(member.clone().total_balance())
-			});
+			let expected_tvl: BalanceOf<T> = BondedPools::<T>::iter()
+				.map(|(id, inner)| {
+					T::Staking::total_stake(
+						&BondedPool { id, inner: inner.clone() }.bonded_account(),
+					)
+					.unwrap_or_default()
+				})
+				.reduce(|acc, total_balance| acc + total_balance)
+				.unwrap_or_default();
 
-			ensure!(
-				TotalValueLocked::<T>::get() == expected_tvl,
-				"TVL deviates from the actual sum of funds of all PoolMembers."
+			assert_eq!(
+				TotalValueLocked::<T>::get(),
+				expected_tvl,
+				"TVL deviates from the actual sum of funds of all Pools."
 			);
 
 			Ok(())

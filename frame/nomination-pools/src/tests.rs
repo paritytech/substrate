@@ -4585,9 +4585,7 @@ mod set_state {
 			let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 			bonded_pool.points = 100;
 			bonded_pool.put();
-			// This unsafe_set_state leads to an error in the try-runtime check for the
-			// [`TotalValueLocked`]. Needs to be artificaliiy decreased aswell.
-			TotalValueLocked::<T>::mutate(|tvl| tvl.saturating_reduce(9));
+
 			// When
 			assert_ok!(Pools::set_state(RuntimeOrigin::signed(11), 1, PoolState::Destroying));
 			// Then
