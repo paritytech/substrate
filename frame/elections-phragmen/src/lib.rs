@@ -98,7 +98,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	traits::{
 		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency, Get,
@@ -106,6 +106,7 @@ use frame_support::{
 		SortedMembers, WithdrawReasons,
 	},
 	weights::Weight,
+	BoundedVec,
 };
 use log;
 use scale_info::TypeInfo;
@@ -147,10 +148,11 @@ pub enum Renouncing {
 }
 
 /// An active voter.
-#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, TypeInfo)]
-pub struct Voter<AccountId, Balance> {
+#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(MaxVotesPerVoter))]
+pub struct Voter<AccountId, Balance, MaxVotesPerVoter: Get<u32>> {
 	/// The members being backed.
-	pub votes: Vec<AccountId>,
+	pub votes: BoundedVec<AccountId, MaxVotesPerVoter>,
 	/// The amount of stake placed on this vote.
 	pub stake: Balance,
 	/// The amount of deposit reserved for this vote.
@@ -159,14 +161,20 @@ pub struct Voter<AccountId, Balance> {
 	pub deposit: Balance,
 }
 
-impl<AccountId, Balance: Default> Default for Voter<AccountId, Balance> {
+impl<AccountId, Balance: Default, MaxVotesPerVoter: Get<u32>> Default
+	for Voter<AccountId, Balance, MaxVotesPerVoter>
+{
 	fn default() -> Self {
-		Self { votes: vec![], stake: Default::default(), deposit: Default::default() }
+		Self {
+			votes: BoundedVec::default(),
+			stake: Default::default(),
+			deposit: Default::default(),
+		}
 	}
 }
 
 /// A holder of a seat as either a member or a runner-up.
-#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq, TypeInfo, MaxEncodedLen)]
 pub struct SeatHolder<AccountId, Balance> {
 	/// The holder.
 	pub who: AccountId,
@@ -193,7 +201,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -366,15 +373,11 @@ pub mod pallet {
 		)]
 		pub fn vote(
 			origin: OriginFor<T>,
-			votes: Vec<T::AccountId>,
+			votes: BoundedVec<T::AccountId, T::MaxVotesPerVoter>,
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			ensure!(
-				votes.len() <= T::MaxVotesPerVoter::get() as usize,
-				Error::<T>::MaximumVotesExceeded
-			);
 			ensure!(!votes.is_empty(), Error::<T>::NoVotes);
 
 			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0);
@@ -457,10 +460,6 @@ pub mod pallet {
 
 			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0) as u32;
 			ensure!(actual_count <= candidate_count, Error::<T>::InvalidWitnessData);
-			ensure!(
-				actual_count <= <T as Config>::MaxCandidates::get(),
-				Error::<T>::TooManyCandidates
-			);
 
 			let index = Self::is_candidate(&who).err().ok_or(Error::<T>::DuplicatedCandidate)?;
 
@@ -470,8 +469,11 @@ pub mod pallet {
 			T::Currency::reserve(&who, T::CandidacyBond::get())
 				.map_err(|_| Error::<T>::InsufficientCandidateFunds)?;
 
-			<Candidates<T>>::mutate(|c| c.insert(index, (who, T::CandidacyBond::get())));
-			Ok(())
+			<Candidates<T>>::mutate(|c| -> Result<(), DispatchError> {
+				c.try_insert(index, (who, T::CandidacyBond::get()))
+					.map_err(|_| Error::<T>::TooManyCandidates)?;
+				Ok(())
+			})
 		}
 
 		/// Renounce one's intention to be a candidate for the next election round. 3 potential
@@ -680,8 +682,11 @@ pub mod pallet {
 	/// Invariant: Always sorted based on account id.
 	#[pallet::storage]
 	#[pallet::getter(fn members)]
-	pub type Members<T: Config> =
-		StorageValue<_, Vec<SeatHolder<T::AccountId, BalanceOf<T>>>, ValueQuery>;
+	pub type Members<T: Config> = StorageValue<
+		_,
+		BoundedVec<SeatHolder<T::AccountId, BalanceOf<T>>, T::DesiredMembers>,
+		ValueQuery,
+	>;
 
 	/// The current reserved runners-up.
 	///
@@ -689,8 +694,11 @@ pub mod pallet {
 	/// last (i.e. _best_) runner-up will be replaced.
 	#[pallet::storage]
 	#[pallet::getter(fn runners_up)]
-	pub type RunnersUp<T: Config> =
-		StorageValue<_, Vec<SeatHolder<T::AccountId, BalanceOf<T>>>, ValueQuery>;
+	pub type RunnersUp<T: Config> = StorageValue<
+		_,
+		BoundedVec<SeatHolder<T::AccountId, BalanceOf<T>>, T::DesiredRunnersUp>,
+		ValueQuery,
+	>;
 
 	/// The present candidate list. A current member or runner-up can never enter this vector
 	/// and is always implicitly assumed to be a candidate.
@@ -700,7 +708,8 @@ pub mod pallet {
 	/// Invariant: Always sorted based on account id.
 	#[pallet::storage]
 	#[pallet::getter(fn candidates)]
-	pub type Candidates<T: Config> = StorageValue<_, Vec<(T::AccountId, BalanceOf<T>)>, ValueQuery>;
+	pub type Candidates<T: Config> =
+		StorageValue<_, BoundedVec<(T::AccountId, BalanceOf<T>), T::MaxCandidates>, ValueQuery>;
 
 	/// The total number of vote rounds that have happened, excluding the upcoming one.
 	#[pallet::storage]
@@ -712,13 +721,18 @@ pub mod pallet {
 	/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash.
 	#[pallet::storage]
 	#[pallet::getter(fn voting)]
-	pub type Voting<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, Voter<T::AccountId, BalanceOf<T>>, ValueQuery>;
+	pub type Voting<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		Voter<T::AccountId, BalanceOf<T>, T::MaxVotesPerVoter>,
+		ValueQuery,
+	>;
 
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
-		pub members: Vec<(T::AccountId, BalanceOf<T>)>,
+		pub members: BoundedVec<(T::AccountId, BalanceOf<T>), T::DesiredMembers>,
 	}
 
 	#[pallet::genesis_build]
@@ -750,14 +764,16 @@ pub mod pallet {
 									member
 								)
 							},
-							Err(pos) => members.insert(
-								pos,
-								SeatHolder {
-									who: member.clone(),
-									stake: *stake,
-									deposit: Zero::zero(),
-								},
-							),
+							Err(pos) => members
+								.try_insert(
+									pos,
+									SeatHolder {
+										who: member.clone(),
+										stake: *stake,
+										deposit: Zero::zero(),
+									},
+								)
+								.expect("Cannot accept more than DesiredMembers genesis member."),
 						}
 					});
 
@@ -767,7 +783,13 @@ pub mod pallet {
 					// remove_lock is noop if lock is not there.
 					<Voting<T>>::insert(
 						&member,
-						Voter { votes: vec![member.clone()], stake: *stake, deposit: Zero::zero() },
+						Voter {
+							votes: vec![member.clone()]
+								.try_into()
+								.expect("Cannot expect more votes than there are candidates."),
+							stake: *stake,
+							deposit: Zero::zero(),
+						},
 					);
 
 					member.clone()
@@ -832,7 +854,13 @@ impl<T: Config> Pallet<T> {
 				// defensive-only: Members and runners-up are disjoint. This will always be err and
 				// give us an index to insert.
 				if let Err(index) = members.binary_search_by(|m| m.who.cmp(&next_best.who)) {
-					members.insert(index, next_best.clone());
+					let _ = members.try_insert(index, next_best.clone()).map_err(|_| {
+						// This can never happen.
+						log::error!(
+							target: "runtime::elections-phragmen",
+							"There must be an empty place for a new member since we just removed one.",
+						);
+					});
 				} else {
 					// overlap. This can never happen. If so, it seems like our intended replacement
 					// is already a member, so not much more to do.
@@ -951,7 +979,13 @@ impl<T: Config> Pallet<T> {
 
 		let mut candidates_and_deposit = Self::candidates();
 		// add all the previous members and runners-up as candidates as well.
-		candidates_and_deposit.append(&mut Self::implicit_candidates_with_deposit());
+		match candidates_and_deposit
+			.try_append(&mut Self::implicit_candidates_with_deposit())
+			.map_err(|_| T::DbWeight::get().reads(3))
+		{
+			Ok(_) => (),
+			Err(weight) => return weight,
+		}
 
 		if candidates_and_deposit.len().is_zero() {
 			Self::deposit_event(Event::EmptyTerm);
@@ -1119,25 +1153,35 @@ impl<T: Config> Pallet<T> {
 					// fetch deposits from the one recorded one. This will make sure that a
 					// candidate who submitted candidacy before a change to candidacy deposit will
 					// have the correct amount recorded.
-					<Members<T>>::put(
+					<Members<T>>::put::<BoundedVec<_, T::DesiredMembers>>(
 						new_members_sorted_by_id
 							.iter()
+							.take(T::DesiredMembers::get() as usize)
 							.map(|(who, stake)| SeatHolder {
 								deposit: deposit_of_candidate(who),
 								who: who.clone(),
 								stake: *stake,
 							})
-							.collect::<Vec<_>>(),
+							.take(T::DesiredMembers::get() as usize)
+							.collect::<Vec<_>>()
+							.try_into()
+							.expect("number members will never exceed T::DesiredMembers. qed."),
 					);
-					<RunnersUp<T>>::put(
+					<RunnersUp<T>>::put::<BoundedVec<_, T::DesiredRunnersUp>>(
 						new_runners_up_sorted_by_rank
 							.into_iter()
+							.take(T::DesiredRunnersUp::get() as usize)
 							.map(|(who, stake)| SeatHolder {
 								deposit: deposit_of_candidate(&who),
 								who,
 								stake,
 							})
-							.collect::<Vec<_>>(),
+							.take(T::DesiredRunnersUp::get() as usize)
+							.collect::<Vec<_>>()
+							.try_into()
+							.expect(
+								"number runners up will never exceed T::DesiredRunnersUp. qed.",
+							),
 					);
 
 					// clean candidates.
@@ -1182,7 +1226,7 @@ impl<T: Config> SortedMembers<T::AccountId> for Pallet<T> {
 					stake: Default::default(),
 					deposit: Default::default(),
 				};
-				members.insert(pos, s)
+				members.try_insert(pos, s).expect("Cannot accept more than DesiredMembers.")
 			},
 		})
 	}
@@ -1513,7 +1557,10 @@ mod tests {
 					],
 				},
 				elections: elections_phragmen::GenesisConfig::<Test> {
-					members: self.genesis_members,
+					members: self
+						.genesis_members
+						.try_into()
+						.expect("Cannot accept more than DesiredMembers genesis member."),
 				},
 			}
 			.build_storage()
@@ -1602,10 +1649,10 @@ mod tests {
 		// call was changing. Currently it is a wrapper for the original call and does not do much.
 		// Nonetheless, totally harmless.
 		ensure_signed(origin.clone()).expect("vote origin must be signed");
-		Elections::vote(origin, votes, stake)
+		Elections::vote(origin, votes.try_into().unwrap(), stake)
 	}
 
-	fn votes_of(who: &u64) -> Vec<u64> {
+	fn votes_of(who: &u64) -> BoundedVec<u64, <Test as Config>::MaxVotesPerVoter> {
 		Voting::<Test>::get(who).votes
 	}
 
@@ -1648,11 +1695,11 @@ mod tests {
 
 				assert_eq!(
 					Elections::voting(1),
-					Voter { stake: 10u64, votes: vec![1], deposit: 0 }
+					Voter { stake: 10u64, votes: vec![1].try_into().unwrap(), deposit: 0 }
 				);
 				assert_eq!(
 					Elections::voting(2),
-					Voter { stake: 20u64, votes: vec![2], deposit: 0 }
+					Voter { stake: 20u64, votes: vec![2].try_into().unwrap(), deposit: 0 }
 				);
 
 				// they will persist since they have self vote.
@@ -1672,11 +1719,11 @@ mod tests {
 
 				assert_eq!(
 					Elections::voting(1),
-					Voter { stake: 10u64, votes: vec![1], deposit: 0 }
+					Voter { stake: 10u64, votes: vec![1].try_into().unwrap(), deposit: 0 }
 				);
 				assert_eq!(
 					Elections::voting(2),
-					Voter { stake: 20u64, votes: vec![2], deposit: 0 }
+					Voter { stake: 20u64, votes: vec![2].try_into().unwrap(), deposit: 0 }
 				);
 
 				assert_ok!(Elections::remove_voter(RuntimeOrigin::signed(1)));
@@ -1703,11 +1750,11 @@ mod tests {
 
 				assert_eq!(
 					Elections::voting(1),
-					Voter { stake: 10u64, votes: vec![1], deposit: 0 }
+					Voter { stake: 10u64, votes: vec![1].try_into().unwrap(), deposit: 0 }
 				);
 				assert_eq!(
 					Elections::voting(2),
-					Voter { stake: 20u64, votes: vec![2], deposit: 0 }
+					Voter { stake: 20u64, votes: vec![2].try_into().unwrap(), deposit: 0 }
 				);
 
 				// they will persist since they have self vote.
