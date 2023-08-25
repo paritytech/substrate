@@ -1263,6 +1263,19 @@ impl<T: Config> BondedPool<T> {
 			});
 		};
 	}
+
+	fn withdraw_from_staking(&self, num_slashing_spans: u32) -> Result<bool, DispatchError> {
+		let bonded_account = self.bonded_account();
+
+		let prev_total = T::Staking::total_stake(&bonded_account.clone()).unwrap_or_default();
+		let outcome = T::Staking::withdraw_unbonded(bonded_account.clone(), num_slashing_spans);
+		let diff =
+			prev_total.saturating_sub(T::Staking::total_stake(&bonded_account).unwrap_or_default());
+		TotalValueLocked::<T>::mutate(|tvl| {
+			tvl.saturating_reduce(diff);
+		});
+		outcome
+	}
 }
 
 /// A reward pool.
@@ -2127,10 +2140,12 @@ pub mod pallet {
 		) -> DispatchResult {
 			let _ = ensure_signed(origin)?;
 			let pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+
 			// For now we only allow a pool to withdraw unbonded if its not destroying. If the pool
 			// is destroying then `withdraw_unbonded` can be used.
 			ensure!(pool.state != PoolState::Destroying, Error::<T>::NotDestroying);
-			T::Staking::withdraw_unbonded(pool.bonded_account(), num_slashing_spans)?;
+			pool.withdraw_from_staking(num_slashing_spans)?;
+
 			Ok(())
 		}
 
@@ -2181,8 +2196,7 @@ pub mod pallet {
 
 			// Before calculating the `balance_to_unbond`, we call withdraw unbonded to ensure the
 			// `transferrable_balance` is correct.
-			let stash_killed =
-				T::Staking::withdraw_unbonded(bonded_pool.bonded_account(), num_slashing_spans)?;
+			let stash_killed = bonded_pool.withdraw_from_staking(num_slashing_spans)?;
 
 			// defensive-only: the depositor puts enough funds into the stash so that it will only
 			// be destroyed when they are leaving.
@@ -2224,10 +2238,6 @@ pub mod pallet {
 				ExistenceRequirement::AllowDeath,
 			)
 			.defensive()?;
-
-			TotalValueLocked::<T>::mutate(|tvl| {
-				tvl.saturating_reduce(balance_to_unbond);
-			});
 
 			Self::deposit_event(Event::<T>::Withdrawn {
 				member: member_account.clone(),
