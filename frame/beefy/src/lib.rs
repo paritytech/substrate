@@ -62,7 +62,7 @@ const LOG_TARGET: &str = "runtime::beefy";
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_system::pallet_prelude::BlockNumberFor;
+	use frame_system::{ensure_root, pallet_prelude::BlockNumberFor};
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -152,8 +152,8 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, sp_consensus_beefy::ValidatorSetId, SessionIndex>;
 
 	/// Block number where BEEFY consensus is enabled/started.
-	/// By changing this (through governance or sudo), BEEFY consensus is effectively
-	/// restarted from the new block number.
+	/// By changing this (through privileged `set_new_genesis()`), BEEFY consensus is effectively
+	/// restarted from the newly set block number.
 	#[pallet::storage]
 	#[pallet::getter(fn genesis_block)]
 	pub(super) type GenesisBlock<T: Config> =
@@ -198,6 +198,8 @@ pub mod pallet {
 		InvalidEquivocationProof,
 		/// A given equivocation report is valid but already previously reported.
 		DuplicateOffenceReport,
+		/// Submitted configuration is invalid.
+		InvalidConfiguration,
 	}
 
 	#[pallet::call]
@@ -265,6 +267,24 @@ pub mod pallet {
 			)?;
 			Ok(Pays::No.into())
 		}
+
+		/// Reset BEEFY consensus by setting a new BEEFY genesis block.
+		///
+		/// Note: new genesis cannot be set to a past block.
+		#[pallet::call_index(2)]
+		#[pallet::weight(<T as Config>::WeightInfo::set_new_genesis())]
+		pub fn set_new_genesis(
+			origin: OriginFor<T>,
+			genesis_block: BlockNumberFor<T>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			ensure!(
+				genesis_block >= frame_system::Pallet::<T>::block_number(),
+				Error::<T>::InvalidConfiguration
+			);
+			GenesisBlock::<T>::put(Some(genesis_block));
+			Ok(())
+		}
 	}
 
 	#[pallet::validate_unsigned]
@@ -277,6 +297,30 @@ pub mod pallet {
 
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			Self::validate_unsigned(source, call)
+		}
+	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
+			// weight used by `on_finalize()` hook
+			frame_support::weights::constants::RocksDbWeight::get().reads(1)
+		}
+
+		fn on_finalize(n: BlockNumberFor<T>) {
+			// this check is only true when consensus is reset, so we can safely
+			// estimate the average weight is just one Db read.
+			if GenesisBlock::<T>::get() == Some(n) {
+				let validators = Authorities::<T>::get();
+				let set_id = ValidatorSetId::<T>::get();
+				if let Some(validator_set) = ValidatorSet::<T::BeefyId>::new(validators, set_id) {
+					let log = DigestItem::Consensus(
+						BEEFY_ENGINE_ID,
+						ConsensusLog::ConsensusReset(validator_set).encode(),
+					);
+					<frame_system::Pallet<T>>::deposit_log(log);
+				}
+			}
 		}
 	}
 }
@@ -452,4 +496,5 @@ impl<T: Config> IsMember<T::BeefyId> for Pallet<T> {
 
 pub trait WeightInfo {
 	fn report_equivocation(validator_count: u32, max_nominators_per_validator: u32) -> Weight;
+	fn set_new_genesis() -> Weight;
 }

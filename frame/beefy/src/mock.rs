@@ -300,31 +300,34 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<BeefyId>) -> TestExternalit
 	t.into()
 }
 
+pub fn push_block(i: u32) {
+	System::on_finalize(System::block_number());
+	Session::on_finalize(System::block_number());
+	Staking::on_finalize(System::block_number());
+	Beefy::on_finalize(System::block_number());
+
+	let parent_hash = if System::block_number() > 1 {
+		let hdr = System::finalize();
+		hdr.hash()
+	} else {
+		System::parent_hash()
+	};
+
+	System::reset_events();
+	System::initialize(&(i as u64 + 1), &parent_hash, &Default::default());
+	System::set_block_number((i + 1).into());
+	Timestamp::set_timestamp(System::block_number() * 6000);
+
+	System::on_initialize(System::block_number());
+	Session::on_initialize(System::block_number());
+	Staking::on_initialize(System::block_number());
+	Beefy::on_initialize(System::block_number());
+}
+
 pub fn start_session(session_index: SessionIndex) {
 	for i in Session::current_index()..session_index {
-		System::on_finalize(System::block_number());
-		Session::on_finalize(System::block_number());
-		Staking::on_finalize(System::block_number());
-		Beefy::on_finalize(System::block_number());
-
-		let parent_hash = if System::block_number() > 1 {
-			let hdr = System::finalize();
-			hdr.hash()
-		} else {
-			System::parent_hash()
-		};
-
-		System::reset_events();
-		System::initialize(&(i as u64 + 1), &parent_hash, &Default::default());
-		System::set_block_number((i + 1).into());
-		Timestamp::set_timestamp(System::block_number() * 6000);
-
-		System::on_initialize(System::block_number());
-		Session::on_initialize(System::block_number());
-		Staking::on_initialize(System::block_number());
-		Beefy::on_initialize(System::block_number());
+		push_block(i);
 	}
-
 	assert_eq!(Session::current_index(), session_index);
 }
 

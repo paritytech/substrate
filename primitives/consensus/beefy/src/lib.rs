@@ -209,6 +209,9 @@ pub enum ConsensusLog<AuthorityId: Codec> {
 	/// MMR root hash.
 	#[codec(index = 3)]
 	MmrRoot(MmrRootHash),
+	/// BEEFY consensus has been reset.
+	#[codec(index = 4)]
+	ConsensusReset(ValidatorSet<AuthorityId>),
 }
 
 /// BEEFY vote message.

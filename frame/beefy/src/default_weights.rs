@@ -49,4 +49,8 @@ impl crate::WeightInfo for () {
 			// fetching set id -> session index mappings
 			.saturating_add(DbWeight::get().reads(2))
 	}
+
+	fn set_new_genesis() -> Weight {
+		DbWeight::get().writes(1)
+	}
 }
