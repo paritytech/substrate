@@ -27,7 +27,7 @@ use frame_support::{
 	BoundedSlice, BoundedVec, Parameter,
 };
 use frame_system::{
-	ensure_none, ensure_signed,
+	ensure_unsigned, ensure_signed,
 	pallet_prelude::{BlockNumberFor, OriginFor},
 };
 use log;
@@ -257,7 +257,7 @@ pub mod pallet {
 			>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
-			ensure_none(origin)?;
+			ensure_unsigned(origin)?;
 
 			T::EquivocationReportSystem::process_evidence(
 				None,

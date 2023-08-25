@@ -263,7 +263,7 @@ pub mod pallet {
 			price: u32,
 		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned transaction.
-			ensure_none(origin)?;
+			ensure_unsigned(origin)?;
 			// Add the price to the on-chain list, but mark it as coming from an empty address.
 			Self::add_price(None, price);
 			// now increment the block number at which we expect next unsigned transaction.
@@ -280,7 +280,7 @@ pub mod pallet {
 			_signature: T::Signature,
 		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned transaction.
-			ensure_none(origin)?;
+			ensure_unsigned(origin)?;
 			// Add the price to the on-chain list, but mark it as coming from an empty address.
 			Self::add_price(None, price_payload.price);
 			// now increment the block number at which we expect next unsigned transaction.

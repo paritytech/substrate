@@ -398,7 +398,7 @@ pub mod pallet {
 			// we can skip doing it here again.
 			_signature: <T::AuthorityId as RuntimeAppPublic>::Signature,
 		) -> DispatchResult {
-			ensure_none(origin)?;
+			ensure_unsigned(origin)?;
 
 			let current_session = T::ValidatorSet::session_index();
 			let exists =

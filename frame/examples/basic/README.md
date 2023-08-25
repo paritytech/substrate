@@ -99,7 +99,7 @@ Copy and paste this template from frame/examples/basic/src/lib.rs into file
 
 // What origins are used and supported in this pallet (root, signed, none)
 // i.e. root when <code>\`ensure_root\`</code> used
-// i.e. none when <code>\`ensure_none\`</code> used
+// i.e. none when <code>\`ensure_unsigned\`</code> used
 // i.e. signed when <code>\`ensure_signed\`</code> used
 
 <code>\`inherent\`</code> <INSERT_DESCRIPTION>

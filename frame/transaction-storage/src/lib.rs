@@ -284,7 +284,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			proof: TransactionStorageProof,
 		) -> DispatchResultWithPostInfo {
-			ensure_none(origin)?;
+			ensure_unsigned(origin)?;
 			ensure!(!ProofChecked::<T>::get(), Error::<T>::DoubleCheck);
 			let number = <frame_system::Pallet<T>>::block_number();
 			let period = <StoragePeriod<T>>::get();

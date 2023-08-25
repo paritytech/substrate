@@ -242,7 +242,7 @@ use frame_support::{
 	weights::Weight,
 	DefaultNoBound, EqNoBound, PartialEqNoBound,
 };
-use frame_system::{ensure_none, offchain::SendTransactionTypes, pallet_prelude::BlockNumberFor};
+use frame_system::{ensure_unsigned, offchain::SendTransactionTypes, pallet_prelude::BlockNumberFor};
 use scale_info::TypeInfo;
 use sp_arithmetic::{
 	traits::{CheckedAdd, Zero},
@@ -918,7 +918,7 @@ pub mod pallet {
 			raw_solution: Box<RawSolution<SolutionOf<T::MinerConfig>>>,
 			witness: SolutionOrSnapshotSize,
 		) -> DispatchResult {
-			ensure_none(origin)?;
+			ensure_unsigned(origin)?;
 			let error_message = "Invalid unsigned submission must produce invalid block and \
 				 deprive validator from their authoring reward.";
 
