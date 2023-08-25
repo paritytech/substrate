@@ -29,6 +29,26 @@ frame-support = { path = "frame/support" }
 
 node-cli = { path = "bin/node/cli" }
 
+# Dependencies necessary to optionaly build Sassafras related crates.
+#
+# Sassafras requires to enable `bandersnatch-experimental` feature and this ends up
+# being transitively enabled in:
+#  sp-consensus-sassafras → sp-application-crypto → sp-io → sp-keystore
+# Bandersnatch experimental api is thus exposed in the `Keystore` trait and we require
+# to expose these functions implementations in the client keystore as well.
+# At this stage, by default, we don't want this.
+# We prefer instead to keep sassafras crates (and thus bandersnatch feature) out of
+# workspace and optionally enabled via the `sassafras-experimental` feature.
+sp-consensus-sassafras = { path = "primitives/consensus/sassafras", optional = true }
+sc-keystore = { path = "client/keystore" }
+
+# Feature to unlock "Sassafras" experimental crates
+[features]
+sassafras-experimental = [
+	"sc-keystore/bandersnatch-experimental",
+	"sp-consensus-sassafras",
+]
+
 # Exists here to be backwards compatible and to support `cargo run` in the workspace.
 #
 # Just uses the `node-cli` main binary. `node-cli` itself also again exposes the node as
@@ -313,6 +333,10 @@ members = [
 	"utils/prometheus",
 	"utils/wasm-builder",
 	"utils/binary-merkle-tree",
+]
+
+exclude = [
+	"primitives/consensus/sassafras",
 ]
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates

@@ -1,0 +1,50 @@
+[package]
+name = "sp-consensus-sassafras"
+version = "0.3.4-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Primitives for Sassafras consensus"
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+documentation = "https://docs.rs/sp-consensus-sassafras"
+readme = "README.md"
+publish = false
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+scale-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+serde = { version = "1.0.163", default-features = false, features = ["derive"], optional = true }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../api" }
+sp-application-crypto = { version = "23.0.0", default-features = false, path = "../../application-crypto", features = ["bandersnatch-experimental"] }
+sp-consensus-slots = { version = "0.10.0-dev", default-features = false, path = "../slots" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../core", features = ["bandersnatch-experimental"] }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../std" }
+
+[features]
+default = [ "std" ]
+std = [
+	"scale-codec/std",
+	"scale-info/std",
+	"serde/std",
+	"sp-api/std",
+	"sp-application-crypto/std",
+	"sp-consensus-slots/std",
+	"sp-core/std",
+	"sp-runtime/std",
+	"sp-std/std",
+]
+
+# Serde support without relying on std features.
+serde = [
+	"dep:serde",
+	"scale-info/serde",
+	"sp-application-crypto/serde",
+	"sp-consensus-slots/serde",
+	"sp-core/serde",
+	"sp-runtime/serde",
+]

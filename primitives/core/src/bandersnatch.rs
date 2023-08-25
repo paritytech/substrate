@@ -31,7 +31,7 @@ use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretString
 use bandersnatch_vrfs::CanonicalSerialize;
 #[cfg(feature = "full_crypto")]
 use bandersnatch_vrfs::SecretKey;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use sp_runtime_interface::pass_by::PassByInner;
@@ -294,7 +294,7 @@ impl TraitPair for Pair {
 	fn verify<M: AsRef<[u8]>>(signature: &Signature, data: M, public: &Public) -> bool {
 		let data = vrf::VrfSignData::new_unchecked(SIGNING_CTX, &[data.as_ref()], None);
 		let signature =
-			vrf::VrfSignature { signature: *signature, vrf_outputs: vrf::VrfIosVec::default() };
+			vrf::VrfSignature { signature: *signature, outputs: vrf::VrfIosVec::default() };
 		public.vrf_verify(&data, &signature)
 	}
 
@@ -463,7 +463,7 @@ pub mod vrf {
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 	pub struct VrfSignature {
 		/// VRF (pre)outputs.
-		pub vrf_outputs: VrfIosVec<VrfOutput>,
+		pub outputs: VrfIosVec<VrfOutput>,
 		/// VRF signature.
 		pub signature: Signature,
 	}
@@ -506,12 +506,12 @@ pub mod vrf {
 	impl VrfPublic for Public {
 		fn vrf_verify(&self, data: &Self::VrfSignData, signature: &Self::VrfSignature) -> bool {
 			const _: () = assert!(MAX_VRF_IOS == 3, "`MAX_VRF_IOS` expected to be 3");
-			let preouts_len = signature.vrf_outputs.len();
-			if preouts_len != data.vrf_inputs.len() {
+			let outputs_len = signature.outputs.len();
+			if outputs_len != data.vrf_inputs.len() {
 				return false
 			}
 			// Workaround to overcome backend signature generic over the number of IOs.
-			match preouts_len {
+			match outputs_len {
 				0 => self.vrf_verify_gen::<0>(data, signature),
 				1 => self.vrf_verify_gen::<1>(data, signature),
 				2 => self.vrf_verify_gen::<2>(data, signature),
@@ -541,7 +541,7 @@ pub mod vrf {
 
 			let outputs: Vec<_> = signature.preoutputs.into_iter().map(VrfOutput).collect();
 			let outputs = VrfIosVec::truncate_from(outputs);
-			VrfSignature { signature: Signature(sign_bytes), vrf_outputs: outputs }
+			VrfSignature { signature: Signature(sign_bytes), outputs }
 		}
 
 		/// Generate an arbitrary number of bytes from the given `context` and VRF `input`.
@@ -567,7 +567,7 @@ pub mod vrf {
 			};
 
 			let Ok(preouts) = signature
-				.vrf_outputs
+				.outputs
 				.iter()
 				.map(|o| o.0.clone())
 				.collect::<arrayvec::ArrayVec<bandersnatch_vrfs::VrfPreOut, N>>()
@@ -674,6 +674,8 @@ pub mod ring_vrf {
 			Ok(RingContext(kzg))
 		}
 	}
+
+	impl EncodeLike for RingContext {}
 
 	impl MaxEncodedLen for RingContext {
 		fn max_encoded_len() -> usize {
@@ -910,11 +912,11 @@ mod tests {
 		let signature = pair.vrf_sign(&data);
 
 		let o10 = pair.make_bytes::<32>(b"ctx1", &i1);
-		let o11 = signature.vrf_outputs[0].make_bytes::<32>(b"ctx1", &i1);
+		let o11 = signature.outputs[0].make_bytes::<32>(b"ctx1", &i1);
 		assert_eq!(o10, o11);
 
 		let o20 = pair.make_bytes::<48>(b"ctx2", &i2);
-		let o21 = signature.vrf_outputs[1].make_bytes::<48>(b"ctx2", &i2);
+		let o21 = signature.outputs[1].make_bytes::<48>(b"ctx2", &i2);
 		assert_eq!(o20, o21);
 	}
 
@@ -991,6 +993,35 @@ mod tests {
 
 		let verifier = ring_ctx.verifier(&pks).unwrap();
 		assert!(!signature.verify(&data, &verifier));
+	}
+
+	#[test]
+	fn ring_vrf_make_bytes_matches() {
+		let ring_ctx = RingContext::new_testing();
+
+		let mut pks: Vec<_> = (0..16).map(|i| Pair::from_seed(&[i as u8; 32]).public()).collect();
+		assert!(pks.len() <= ring_ctx.max_keyset_size());
+
+		let pair = Pair::from_seed(DEV_SEED);
+
+		// Just pick one index to patch with the actual public key
+		let prover_idx = 3;
+		pks[prover_idx] = pair.public();
+
+		let i1 = VrfInput::new(b"dom1", b"foo");
+		let i2 = VrfInput::new(b"dom2", b"bar");
+		let data = VrfSignData::new_unchecked(b"mydata", &[b"tdata"], [i1.clone(), i2.clone()]);
+
+		let prover = ring_ctx.prover(&pks, prover_idx).unwrap();
+		let signature = pair.ring_vrf_sign(&data, &prover);
+
+		let o10 = pair.make_bytes::<32>(b"ctx1", &i1);
+		let o11 = signature.outputs[0].make_bytes::<32>(b"ctx1", &i1);
+		assert_eq!(o10, o11);
+
+		let o20 = pair.make_bytes::<48>(b"ctx2", &i2);
+		let o21 = signature.outputs[1].make_bytes::<48>(b"ctx2", &i2);
+		assert_eq!(o20, o21);
 	}
 
 	#[test]
