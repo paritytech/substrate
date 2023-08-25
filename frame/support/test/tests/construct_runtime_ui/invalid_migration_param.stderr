@@ -1,0 +1,203 @@
+error[E0599]: the function or associated item `execute_block` exists for struct `Executive<Runtime, Block<Header<u64, BlakeTwo256>, ...>, ..., ..., ..., ...>`, but its trait bounds were not satisfied
+  --> tests/construct_runtime_ui/invalid_migration_param.rs:19:1
+   |
+17 |    struct Dummy;
+   |    ------------ doesn't satisfy `Dummy: OnRuntimeUpgrade`
+18 |
+19 |    construct_runtime! {
+   |  __^
+   | | _|
+   | ||
+20 | ||     type Migrations = (Dummy);
+21 | ||     pub struct Runtime
+22 | ||     {
+23 | ||         System: frame_system
+24 | ||     }
+25 | || }
+   | ||_- in this macro invocation
+...  |
+   |
+  ::: $WORKSPACE/primitives/runtime/src/generic/unchecked_extrinsic.rs
+   |
+   |    pub struct UncheckedExtrinsic<Address, Call, Signature, Extra>
+   |    -------------------------------------------------------------- doesn't satisfy `_: Checkable<ChainContext<Runtime>>`
+   |
+   = note: the following trait bounds were not satisfied:
+           `Dummy: OnRuntimeUpgrade`
+           `UncheckedExtrinsic<u64, RuntimeCall, (), ()>: Checkable<ChainContext<Runtime>>`
+note: the trait `OnRuntimeUpgrade` must be implemented
+  --> $WORKSPACE/frame/support/src/traits/hooks.rs
+   |
+   | pub trait OnRuntimeUpgrade {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: this error originates in the macro `frame_support::construct_runtime` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: the function or associated item `initialize_block` exists for struct `Executive<Runtime, Block<Header<u64, BlakeTwo256>, ...>, ..., ..., ..., ...>`, but its trait bounds were not satisfied
+  --> tests/construct_runtime_ui/invalid_migration_param.rs:19:1
+   |
+17 |    struct Dummy;
+   |    ------------ doesn't satisfy `Dummy: OnRuntimeUpgrade`
+18 |
+19 |    construct_runtime! {
+   |  __^
+   | | _|
+   | ||
+20 | ||     type Migrations = (Dummy);
+21 | ||     pub struct Runtime
+22 | ||     {
+23 | ||         System: frame_system
+24 | ||     }
+25 | || }
+   | ||_- in this macro invocation
+...  |
+   |
+  ::: $WORKSPACE/primitives/runtime/src/generic/unchecked_extrinsic.rs
+   |
+   |    pub struct UncheckedExtrinsic<Address, Call, Signature, Extra>
+   |    -------------------------------------------------------------- doesn't satisfy `_: Checkable<ChainContext<Runtime>>`
+   |
+   = note: the following trait bounds were not satisfied:
+           `Dummy: OnRuntimeUpgrade`
+           `UncheckedExtrinsic<u64, RuntimeCall, (), ()>: Checkable<ChainContext<Runtime>>`
+note: the trait `OnRuntimeUpgrade` must be implemented
+  --> $WORKSPACE/frame/support/src/traits/hooks.rs
+   |
+   | pub trait OnRuntimeUpgrade {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: this error originates in the macro `frame_support::construct_runtime` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: the function or associated item `apply_extrinsic` exists for struct `Executive<Runtime, Block<Header<u64, BlakeTwo256>, ...>, ..., ..., ..., ...>`, but its trait bounds were not satisfied
+  --> tests/construct_runtime_ui/invalid_migration_param.rs:19:1
+   |
+17 |    struct Dummy;
+   |    ------------ doesn't satisfy `Dummy: OnRuntimeUpgrade`
+18 |
+19 |    construct_runtime! {
+   |  __^
+   | | _|
+   | ||
+20 | ||     type Migrations = (Dummy);
+21 | ||     pub struct Runtime
+22 | ||     {
+23 | ||         System: frame_system
+24 | ||     }
+25 | || }
+   | ||_- in this macro invocation
+...  |
+   |
+  ::: $WORKSPACE/primitives/runtime/src/generic/unchecked_extrinsic.rs
+   |
+   |    pub struct UncheckedExtrinsic<Address, Call, Signature, Extra>
+   |    -------------------------------------------------------------- doesn't satisfy `_: Checkable<ChainContext<Runtime>>`
+   |
+   = note: the following trait bounds were not satisfied:
+           `Dummy: OnRuntimeUpgrade`
+           `UncheckedExtrinsic<u64, RuntimeCall, (), ()>: Checkable<ChainContext<Runtime>>`
+note: the trait `OnRuntimeUpgrade` must be implemented
+  --> $WORKSPACE/frame/support/src/traits/hooks.rs
+   |
+   | pub trait OnRuntimeUpgrade {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: this error originates in the macro `frame_support::construct_runtime` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: the function or associated item `finalize_block` exists for struct `Executive<Runtime, Block<Header<u64, BlakeTwo256>, ...>, ..., ..., ..., ...>`, but its trait bounds were not satisfied
+  --> tests/construct_runtime_ui/invalid_migration_param.rs:19:1
+   |
+17 |    struct Dummy;
+   |    ------------ doesn't satisfy `Dummy: OnRuntimeUpgrade`
+18 |
+19 |    construct_runtime! {
+   |  __^
+   | | _|
+   | ||
+20 | ||     type Migrations = (Dummy);
+21 | ||     pub struct Runtime
+22 | ||     {
+23 | ||         System: frame_system
+24 | ||     }
+25 | || }
+   | ||_- in this macro invocation
+...  |
+   |
+  ::: $WORKSPACE/primitives/runtime/src/generic/unchecked_extrinsic.rs
+   |
+   |    pub struct UncheckedExtrinsic<Address, Call, Signature, Extra>
+   |    -------------------------------------------------------------- doesn't satisfy `_: Checkable<ChainContext<Runtime>>`
+   |
+   = note: the following trait bounds were not satisfied:
+           `Dummy: OnRuntimeUpgrade`
+           `UncheckedExtrinsic<u64, RuntimeCall, (), ()>: Checkable<ChainContext<Runtime>>`
+note: the trait `OnRuntimeUpgrade` must be implemented
+  --> $WORKSPACE/frame/support/src/traits/hooks.rs
+   |
+   | pub trait OnRuntimeUpgrade {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: this error originates in the macro `frame_support::construct_runtime` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: the function or associated item `validate_transaction` exists for struct `Executive<Runtime, Block<Header<u64, BlakeTwo256>, ...>, ..., ..., ..., ...>`, but its trait bounds were not satisfied
+  --> tests/construct_runtime_ui/invalid_migration_param.rs:19:1
+   |
+17 |    struct Dummy;
+   |    ------------ doesn't satisfy `Dummy: OnRuntimeUpgrade`
+18 |
+19 |    construct_runtime! {
+   |  __^
+   | | _|
+   | ||
+20 | ||     type Migrations = (Dummy);
+21 | ||     pub struct Runtime
+22 | ||     {
+23 | ||         System: frame_system
+24 | ||     }
+25 | || }
+   | ||_- in this macro invocation
+...  |
+   |
+  ::: $WORKSPACE/primitives/runtime/src/generic/unchecked_extrinsic.rs
+   |
+   |    pub struct UncheckedExtrinsic<Address, Call, Signature, Extra>
+   |    -------------------------------------------------------------- doesn't satisfy `_: Checkable<ChainContext<Runtime>>`
+   |
+   = note: the following trait bounds were not satisfied:
+           `Dummy: OnRuntimeUpgrade`
+           `UncheckedExtrinsic<u64, RuntimeCall, (), ()>: Checkable<ChainContext<Runtime>>`
+note: the trait `OnRuntimeUpgrade` must be implemented
+  --> $WORKSPACE/frame/support/src/traits/hooks.rs
+   |
+   | pub trait OnRuntimeUpgrade {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: this error originates in the macro `frame_support::construct_runtime` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: the function or associated item `offchain_worker` exists for struct `Executive<Runtime, Block<Header<u64, BlakeTwo256>, ...>, ..., ..., ..., ...>`, but its trait bounds were not satisfied
+  --> tests/construct_runtime_ui/invalid_migration_param.rs:19:1
+   |
+17 |    struct Dummy;
+   |    ------------ doesn't satisfy `Dummy: OnRuntimeUpgrade`
+18 |
+19 |    construct_runtime! {
+   |  __^
+   | | _|
+   | ||
+20 | ||     type Migrations = (Dummy);
+21 | ||     pub struct Runtime
+22 | ||     {
+23 | ||         System: frame_system
+24 | ||     }
+25 | || }
+   | ||_- in this macro invocation
+...  |
+   |
+  ::: $WORKSPACE/primitives/runtime/src/generic/unchecked_extrinsic.rs
+   |
+   |    pub struct UncheckedExtrinsic<Address, Call, Signature, Extra>
+   |    -------------------------------------------------------------- doesn't satisfy `_: Checkable<ChainContext<Runtime>>`
+   |
+   = note: the following trait bounds were not satisfied:
+           `Dummy: OnRuntimeUpgrade`
+           `UncheckedExtrinsic<u64, RuntimeCall, (), ()>: Checkable<ChainContext<Runtime>>`
+note: the trait `OnRuntimeUpgrade` must be implemented
+  --> $WORKSPACE/frame/support/src/traits/hooks.rs
+   |
+   | pub trait OnRuntimeUpgrade {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: this error originates in the macro `frame_support::construct_runtime` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)

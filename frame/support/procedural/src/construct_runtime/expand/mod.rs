@@ -17,6 +17,7 @@
 
 mod call;
 mod config;
+mod executive;
 mod freeze_reason;
 mod hold_reason;
 mod inherent;
@@ -29,6 +30,7 @@ mod unsigned;
 
 pub use call::expand_outer_dispatch;
 pub use config::expand_outer_config;
+pub use executive::expand_executive;
 pub use freeze_reason::expand_outer_freeze_reason;
 pub use hold_reason::expand_outer_hold_reason;
 pub use inherent::expand_outer_inherent;

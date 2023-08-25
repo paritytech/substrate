@@ -226,14 +226,6 @@ decl_runtime_apis! {
 	}
 }
 
-pub type Executive = frame_executive::Executive<
-	Runtime,
-	Block,
-	frame_system::ChainContext<Runtime>,
-	Runtime,
-	AllPalletsWithSystem,
->;
-
 #[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct CheckSubstrateCall;
 
@@ -297,6 +289,7 @@ impl sp_runtime::traits::SignedExtension for CheckSubstrateCall {
 }
 
 construct_runtime!(
+	type Migrations = ();
 	pub enum Runtime
 	{
 		System: frame_system,
@@ -478,12 +471,12 @@ impl_runtime_apis! {
 
 		fn execute_block(block: Block) {
 			log::trace!(target: LOG_TARGET, "execute_block: {block:#?}");
-			Executive::execute_block(block);
+			Runtime::api_impl_core_execute_block(block);
 		}
 
 		fn initialize_block(header: &<Block as BlockT>::Header) {
 			log::trace!(target: LOG_TARGET, "initialize_block: {header:#?}");
-			Executive::initialize_block(header);
+			Runtime::api_impl_core_initialize_block(header)
 		}
 	}
 
@@ -506,7 +499,7 @@ impl_runtime_apis! {
 			utx: <Block as BlockT>::Extrinsic,
 			block_hash: <Block as BlockT>::Hash,
 		) -> TransactionValidity {
-			let validity = Executive::validate_transaction(source, utx.clone(), block_hash);
+			let validity = Runtime::api_impl_validate_transaction(source, utx.clone(), block_hash);
 			log::trace!(target: LOG_TARGET, "validate_transaction {:?} {:?}", utx, validity);
 			validity
 		}
@@ -514,12 +507,12 @@ impl_runtime_apis! {
 
 	impl sp_block_builder::BlockBuilder<Block> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
-			Executive::apply_extrinsic(extrinsic)
+			Runtime::api_impl_builder_apply_extrinsic(extrinsic)
 		}
 
 		fn finalize_block() -> <Block as BlockT>::Header {
 			log::trace!(target: LOG_TARGET, "finalize_block");
-			Executive::finalize_block()
+			Runtime::api_impl_builder_finalize_block()
 		}
 
 		fn inherent_extrinsics(_data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {

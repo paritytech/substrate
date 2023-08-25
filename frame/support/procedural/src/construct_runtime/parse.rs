@@ -24,7 +24,7 @@ use syn::{
 	parse::{Parse, ParseStream},
 	punctuated::Punctuated,
 	spanned::Spanned,
-	token, Attribute, Error, Ident, Path, Result, Token,
+	token, Attribute, Error, Ident, Path, Result, Token, Type,
 };
 
 mod keyword {
@@ -67,6 +67,7 @@ pub struct ImplicitRuntimeDeclaration {
 	pub name: Ident,
 	pub where_section: Option<WhereSection>,
 	pub pallets: Vec<PalletDeclaration>,
+	pub executive_section: Option<ExecutiveSection>,
 }
 
 /// Declaration of a runtime with all pallet having explicit declaration of parts.
@@ -76,10 +77,13 @@ pub struct ExplicitRuntimeDeclaration {
 	pub where_section: Option<WhereSection>,
 	pub pallets: Vec<Pallet>,
 	pub pallets_token: token::Brace,
+	pub executive_section: Option<ExecutiveSection>,
 }
 
 impl Parse for RuntimeDeclaration {
 	fn parse(input: ParseStream) -> Result<Self> {
+		let executive_section = if input.peek(Token![type]) { Some(input.parse()?) } else { None };
+
 		input.parse::<Token![pub]>()?;
 
 		// Support either `enum` or `struct`.
@@ -90,6 +94,7 @@ impl Parse for RuntimeDeclaration {
 		}
 
 		let name = input.parse::<syn::Ident>()?;
+
 		let where_section = if input.peek(token::Where) { Some(input.parse()?) } else { None };
 		let pallets =
 			input.parse::<ext::Braces<ext::Punctuated<PalletDeclaration, Token![,]>>>()?;
@@ -101,6 +106,7 @@ impl Parse for RuntimeDeclaration {
 					name,
 					where_section,
 					pallets,
+					executive_section,
 				})),
 			PalletsConversion::Explicit(pallets) =>
 				Ok(RuntimeDeclaration::Explicit(ExplicitRuntimeDeclaration {
@@ -108,6 +114,7 @@ impl Parse for RuntimeDeclaration {
 					where_section,
 					pallets,
 					pallets_token,
+					executive_section,
 				})),
 			PalletsConversion::ExplicitExpanded(pallets) =>
 				Ok(RuntimeDeclaration::ExplicitExpanded(ExplicitRuntimeDeclaration {
@@ -115,8 +122,74 @@ impl Parse for RuntimeDeclaration {
 					where_section,
 					pallets,
 					pallets_token,
+					executive_section,
 				})),
 		}
+	}
+}
+
+#[derive(Debug)]
+pub struct ExecutiveSection {
+	pub span: Span,
+	pub migration_section: Option<Migrations>,
+}
+
+impl Parse for ExecutiveSection {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let _ = input.parse::<Token![type]>()?;
+		let name = input.parse::<syn::Ident>()?;
+
+		let migration_section = if name.to_string() == "Migrations" {
+			Some(input.parse::<Migrations>()?)
+		} else {
+			None
+		};
+
+		Ok(Self { span: input.span(), migration_section })
+	}
+}
+
+#[derive(Debug)]
+pub struct Migrations {
+	pub span: Span,
+	pub migrations: Punctuated<Migration, token::Comma>,
+}
+
+impl Parse for Migrations {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let _ = input.parse::<Token![=]>()?;
+
+		let content;
+		syn::parenthesized!(content in input);
+
+		let migrations = content.parse_terminated(Migration::parse, Token![,])?;
+		let _ = input.parse::<Token![;]>()?;
+		Ok(Self { span: input.span(), migrations })
+	}
+}
+
+impl ToTokens for Migrations {
+	fn to_tokens(&self, tokens: &mut TokenStream) {
+		self.migrations.to_tokens(tokens);
+	}
+}
+
+#[derive(Debug)]
+pub struct Migration {
+	pub span: Span,
+	pub ident: Type,
+}
+
+impl Parse for Migration {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let name = input.parse::<Type>()?;
+		Ok(Self { span: input.span(), ident: name })
+	}
+}
+
+impl ToTokens for Migration {
+	fn to_tokens(&self, tokens: &mut TokenStream) {
+		self.ident.to_tokens(tokens);
 	}
 }
 
