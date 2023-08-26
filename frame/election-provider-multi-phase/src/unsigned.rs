@@ -254,9 +254,9 @@ impl<T: Config> Pallet<T> {
 			.map_err(|_| MinerError::PoolSubmissionFailed)
 	}
 
-	// perform basic checks of a solution's validity
-	//
-	// Performance: note that it internally clones the provided solution.
+	/// Perform basic checks on the validity of a solution.
+	///
+	/// Performance: note that it internally clones the provided solution.
 	pub fn basic_checks(
 		raw_solution: &RawSolution<SolutionOf<T::MinerConfig>>,
 		solution_type: &str,

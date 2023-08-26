@@ -227,6 +227,7 @@
 //! account the weight of encode/decode in the `submit_unsigned` given its priority. Nonetheless,
 //! all operations on the solution and the snapshot are worthy of taking this into account.
 
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
@@ -385,7 +386,7 @@ pub enum ElectionCompute {
 	Signed,
 	/// Election was computed with an unsigned submission.
 	Unsigned,
-	/// Election was computed using the fallback
+	/// Election was computed using the fallback.
 	Fallback,
 	/// Election was computed with emergency status.
 	Emergency,
@@ -574,6 +575,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
+		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>
 			+ TryInto<Event<Self>>;
@@ -1136,30 +1138,49 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A solution was stored with the given compute.
 		///
-		/// The `origin` indicates the origin of the solution. If `origin` is `Some(AccountId)`,
-		/// the stored solution was submited in the signed phase by a miner with the `AccountId`.
-		/// Otherwise, the solution was stored either during the unsigned phase or by
-		/// `T::ForceOrigin`. The `bool` is `true` when a previous solution was ejected to make
-		/// room for this one.
+		/// If `origin` is `Some(AccountId)`, the stored solution was submitted in the signed phase
+		/// by a miner with the `AccountId`. Otherwise, the solution was stored either during the
+		/// unsigned phase or by `T::ForceOrigin`.
 		SolutionStored {
+			/// How the election was computed.
 			compute: ElectionCompute,
+			/// The origin of the solution.
 			origin: Option<T::AccountId>,
+			/// The previous solution was ejected to make room for this one.
 			prev_ejected: bool,
 		},
 		/// The election has been finalized, with the given computation and score.
-		ElectionFinalized { compute: ElectionCompute, score: ElectionScore },
+		ElectionFinalized {
+			/// How the election was computed.
+			compute: ElectionCompute,
+			/// The final election score.
+			score: ElectionScore,
+		},
 		/// An election failed.
 		///
 		/// Not much can be said about which computes failed in the process.
 		ElectionFailed,
 		/// An account has been rewarded for their signed submission being finalized.
-		Rewarded { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
+		Rewarded {
+			/// The account being rewarded.
+			account: <T as frame_system::Config>::AccountId,
+			/// The amount being rewarded.
+			value: BalanceOf<T>,
+		},
 		/// An account has been slashed for submitting an invalid signed submission.
-		Slashed { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
+		Slashed {
+			/// The account that has been slashed.
+			account: <T as frame_system::Config>::AccountId,
+			/// The amount being slashed.
+			value: BalanceOf<T>,
+		},
 		/// There was a phase transition in a given round.
 		PhaseTransitioned {
+			/// The previous phase.
 			from: Phase<BlockNumberFor<T>>,
+			/// The current phase.
 			to: Phase<BlockNumberFor<T>>,
+			/// The current round.
 			round: u32,
 		},
 	}
@@ -1246,6 +1267,7 @@ pub mod pallet {
 	}
 
 	#[pallet::type_value]
+	/// The default value for the round.
 	pub fn DefaultForRound() -> u32 {
 		1
 	}
