@@ -27,7 +27,7 @@ use frame_support::{
 };
 use sp_core::{Get, H256};
 use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup, ReduceBy},
+	traits::{BlakeTwo256, IdentityLookup, Ignore, ReduceBy},
 	BuildStorage,
 };
 
@@ -176,6 +176,8 @@ parameter_types! {
 impl Config for Test {
 	type WeightInfo = ();
 	type RuntimeEvent = RuntimeEvent;
+	type AddOrigin = MapSuccess<Self::PromoteOrigin, Ignore>;
+	type RemoveOrigin = Self::DemoteOrigin;
 	type PromoteOrigin = EitherOf<
 		// Root can promote arbitrarily.
 		frame_system::EnsureRootWithSuccess<Self::AccountId, ConstU16<65535>>,
