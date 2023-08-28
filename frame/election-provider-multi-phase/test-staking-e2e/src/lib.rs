@@ -338,7 +338,7 @@ fn ledger_consistency_active_balance_below_ed() {
 		ExtBuilder::default().staking(StakingExtBuilder::default()).build_offchainify();
 
 	ext.execute_with(|| {
-		assert_eq!(Staking::ledger(&11).unwrap().active, 1000);
+		assert_eq!(Staking::ledger(11.into()).unwrap().active, 1000);
 
 		// unbonding total of active stake fails because the active ledger balance would fall
 		// below the `MinNominatorBond`.
@@ -356,13 +356,13 @@ fn ledger_consistency_active_balance_below_ed() {
 
 		// the active balance of the ledger entry is 0, while total balance is 1000 until
 		// `withdraw_unbonded` is called.
-		assert_eq!(Staking::ledger(&11).unwrap().active, 0);
-		assert_eq!(Staking::ledger(&11).unwrap().total, 1000);
+		assert_eq!(Staking::ledger(11.into()).unwrap().active, 0);
+		assert_eq!(Staking::ledger(11.into()).unwrap().total, 1000);
 
 		// trying to withdraw the unbonded balance won't work yet because not enough bonding
 		// eras have passed.
 		assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(11), 0));
-		assert_eq!(Staking::ledger(&11).unwrap().total, 1000);
+		assert_eq!(Staking::ledger(11.into()).unwrap().total, 1000);
 
 		// tries to reap stash after chilling, which fails since the stash total balance is
 		// above ED.
@@ -384,6 +384,6 @@ fn ledger_consistency_active_balance_below_ed() {
 			pool_state,
 		);
 		assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(11), 0));
-		assert_eq!(Staking::ledger(&11), None);
+		assert!(Staking::ledger(11.into()).is_err());
 	});
 }

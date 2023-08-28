@@ -597,15 +597,11 @@ pub fn do_slash<T: Config>(
 	slashed_imbalance: &mut NegativeImbalanceOf<T>,
 	slash_era: EraIndex,
 ) {
-	let controller = match <Pallet<T>>::bonded(stash).defensive() {
-		None => return,
-		Some(c) => c,
-	};
-
-	let mut ledger = match <Pallet<T>>::ledger(&controller) {
-		Some(ledger) => ledger,
-		None => return, // nothing to do.
-	};
+	let mut ledger =
+		match Pallet::<T>::ledger(sp_staking::StakingAccount::Stash(stash.clone())).defensive() {
+			Ok(ledger) => ledger,
+			Err(_) => return, // nothing to do.
+		};
 
 	let value = ledger.slash(value, T::Currency::minimum_balance(), slash_era);
 
@@ -618,7 +614,9 @@ pub fn do_slash<T: Config>(
 			*reward_payout = reward_payout.saturating_sub(missing);
 		}
 
-		<Pallet<T>>::update_ledger(&controller, &ledger);
+		let _ = ledger
+			.update()
+			.defensive_proof("ledger fetched from storage so it exists in storage; qed.");
 
 		// trigger the event
 		<Pallet<T>>::deposit_event(super::Event::<T>::Slashed {

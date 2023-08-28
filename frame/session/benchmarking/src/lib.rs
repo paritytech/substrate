@@ -134,7 +134,7 @@ fn check_membership_proof_setup<T: Config>(
 		use rand::{RngCore, SeedableRng};
 
 		let validator = T::Lookup::lookup(who).unwrap();
-		let controller = pallet_staking::Pallet::<T>::bonded(validator).unwrap();
+		let controller = pallet_staking::Pallet::<T>::bonded(&validator).unwrap();
 
 		let keys = {
 			let mut keys = [0u8; 128];

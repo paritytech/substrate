@@ -25,8 +25,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		Currency, Defensive, DefensiveResult, DefensiveSaturating, EnsureOrigin,
-		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, TryCollect,
-		UnixTime,
+		EstimateNextNewSession, Get, LockableCurrency, OnUnbalanced, TryCollect, UnixTime,
 	},
 	weights::Weight,
 	BoundedVec,
@@ -36,7 +35,10 @@ use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
 	ArithmeticError, Perbill, Percent,
 };
-use sp_staking::{EraIndex, SessionIndex};
+use sp_staking::{
+	EraIndex, SessionIndex,
+	StakingAccount::{self, Controller, Stash},
+};
 use sp_std::prelude::*;
 
 mod impls;
@@ -50,7 +52,6 @@ use crate::{
 	UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
 
-const STAKING_ID: LockIdentifier = *b"staking ";
 // The speculative number of spans are used as an input of the weight annotation of
 // [`Call::unbond`], as the post dipatch weight may depend on the number of slashing span on the
 // account which is not provided as an input. The value set should be conservative but sensible.
@@ -295,7 +296,6 @@ pub mod pallet {
 	///
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
-	#[pallet::getter(fn bonded)]
 	pub type Bonded<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, T::AccountId>;
 
 	/// The minimum active bond to become and maintain the role of a nominator.
@@ -317,15 +317,16 @@ pub mod pallet {
 	pub type MinCommission<T: Config> = StorageValue<_, Perbill, ValueQuery>;
 
 	/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
+	///
+	/// Note: All the reads and mutations to this storage *MUST* be done through the methods exposed
+	/// by [`StakingLedger`] to ensure data and lock consistency.
 	#[pallet::storage]
-	#[pallet::getter(fn ledger)]
 	pub type Ledger<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, StakingLedger<T>>;
 
 	/// Where the reward payment should be made. Keyed by stash.
 	///
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
-	#[pallet::getter(fn payee)]
 	pub type Payee<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, RewardDestination<T::AccountId>, ValueQuery>;
 
@@ -837,14 +838,9 @@ pub mod pallet {
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
-			let controller_to_be_deprecated = stash.clone();
 
-			if <Bonded<T>>::contains_key(&stash) {
+			if StakingLedger::<T>::is_bonded(StakingAccount::Stash(stash.clone())) {
 				return Err(Error::<T>::AlreadyBonded.into())
-			}
-
-			if <Ledger<T>>::contains_key(&controller_to_be_deprecated) {
-				return Err(Error::<T>::AlreadyPaired.into())
 			}
 
 			// Reject a bond which is considered to be _dust_.
@@ -854,11 +850,6 @@ pub mod pallet {
 
 			frame_system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
 
-			// You're auto-bonded forever, here. We might improve this by only bonding when
-			// you actually validate/nominate and remove once you unbond __everything__.
-			<Bonded<T>>::insert(&stash, &stash);
-			<Payee<T>>::insert(&stash, payee);
-
 			let current_era = CurrentEra::<T>::get().unwrap_or(0);
 			let history_depth = T::HistoryDepth::get();
 			let last_reward_era = current_era.saturating_sub(history_depth);
@@ -866,19 +857,23 @@ pub mod pallet {
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
 			Self::deposit_event(Event::<T>::Bonded { stash: stash.clone(), amount: value });
-			let item = StakingLedger {
-				stash: stash.clone(),
-				total: value,
-				active: value,
-				unlocking: Default::default(),
-				claimed_rewards: (last_reward_era..current_era)
+			let ledger = StakingLedger::<T>::new(
+				stash.clone(),
+				value,
+				value,
+				Default::default(),
+				(last_reward_era..current_era)
 					.try_collect()
 					// Since last_reward_era is calculated as `current_era -
 					// HistoryDepth`, following bound is always expected to be
 					// satisfied.
 					.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
-			};
-			Self::update_ledger(&controller_to_be_deprecated, &item);
+			);
+
+			// You're auto-bonded forever, here. We might improve this by only bonding when
+			// you actually validate/nominate and remove once you unbond __everything__.
+			ledger.bond(payee)?;
+
 			Ok(())
 		}
 
@@ -904,8 +899,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 
-			let controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
-			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let mut ledger = Self::ledger(StakingAccount::Stash(stash.clone()))?;
 
 			let stash_balance = T::Currency::free_balance(&stash);
 			if let Some(extra) = stash_balance.checked_sub(&ledger.total) {
@@ -919,11 +913,10 @@ pub mod pallet {
 				);
 
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
-				Self::update_ledger(&controller, &ledger);
+				ledger.update()?;
 				// update this staker in the sorted list, if they exist in it.
 				if T::VoterList::contains(&stash) {
-					let _ =
-						T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash)).defensive();
+					let _ = T::VoterList::on_update(&stash, Self::weight_of(&stash)).defensive();
 				}
 
 				Self::deposit_event(Event::<T>::Bonded { stash, amount: extra });
@@ -959,9 +952,8 @@ pub mod pallet {
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
-			let unlocking = Self::ledger(&controller)
-				.map(|l| l.unlocking.len())
-				.ok_or(Error::<T>::NotController)?;
+			let unlocking =
+				Self::ledger(Controller(controller.clone())).map(|l| l.unlocking.len())?;
 
 			// if there are no unlocking chunks available, try to withdraw chunks older than
 			// `BondingDuration` to proceed with the unbonding.
@@ -977,8 +969,9 @@ pub mod pallet {
 
 			// we need to fetch the ledger again because it may have been mutated in the call
 			// to `Self::do_withdraw_unbonded` above.
-			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let mut ledger = Self::ledger(Controller(controller))?;
 			let mut value = value.min(ledger.active);
+			let stash = ledger.stash.clone();
 
 			ensure!(
 				ledger.unlocking.len() < T::MaxUnlockingChunks::get() as usize,
@@ -994,9 +987,9 @@ pub mod pallet {
 					ledger.active = Zero::zero();
 				}
 
-				let min_active_bond = if Nominators::<T>::contains_key(&ledger.stash) {
+				let min_active_bond = if Nominators::<T>::contains_key(&stash) {
 					MinNominatorBond::<T>::get()
-				} else if Validators::<T>::contains_key(&ledger.stash) {
+				} else if Validators::<T>::contains_key(&stash) {
 					MinValidatorBond::<T>::get()
 				} else {
 					Zero::zero()
@@ -1020,15 +1013,14 @@ pub mod pallet {
 						.map_err(|_| Error::<T>::NoMoreChunks)?;
 				};
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
-				Self::update_ledger(&controller, &ledger);
+				ledger.update()?;
 
 				// update this staker in the sorted list, if they exist in it.
-				if T::VoterList::contains(&ledger.stash) {
-					let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
-						.defensive();
+				if T::VoterList::contains(&stash) {
+					let _ = T::VoterList::on_update(&stash, Self::weight_of(&stash)).defensive();
 				}
 
-				Self::deposit_event(Event::<T>::Unbonded { stash: ledger.stash, amount: value });
+				Self::deposit_event(Event::<T>::Unbonded { stash, amount: value });
 			}
 
 			let actual_weight = if let Some(withdraw_weight) = maybe_withdraw_weight {
@@ -1085,7 +1077,7 @@ pub mod pallet {
 		pub fn validate(origin: OriginFor<T>, prefs: ValidatorPrefs) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let ledger = Self::ledger(Controller(controller))?;
 
 			ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientBond);
 			let stash = &ledger.stash;
@@ -1131,7 +1123,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let ledger = Self::ledger(StakingAccount::Controller(controller.clone()))?;
+
 			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
 			let stash = &ledger.stash;
 
@@ -1198,7 +1191,9 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::chill())]
 		pub fn chill(origin: OriginFor<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+
+			let ledger = Self::ledger(StakingAccount::Controller(controller))?;
+
 			Self::chill_stash(&ledger.stash);
 			Ok(())
 		}
@@ -1222,9 +1217,11 @@ pub mod pallet {
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			let stash = &ledger.stash;
-			<Payee<T>>::insert(stash, payee);
+			let ledger = Self::ledger(Controller(controller))?;
+			let _ = ledger
+				.set_payee(payee)
+				.defensive_proof("ledger was retrieved from storage, thus its bonded; qed.");
+
 			Ok(())
 		}
 
@@ -1246,18 +1243,24 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_controller())]
 		pub fn set_controller(origin: OriginFor<T>) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
-			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
 
-			if <Ledger<T>>::contains_key(&stash) {
-				return Err(Error::<T>::AlreadyPaired.into())
-			}
-			if old_controller != stash {
-				<Bonded<T>>::insert(&stash, &stash);
-				if let Some(l) = <Ledger<T>>::take(&old_controller) {
-					<Ledger<T>>::insert(&stash, l);
+			// the bonded map and ledger are mutated directly as this extrinsic is related to a
+			// (temporary) passive migration.
+			Self::ledger(StakingAccount::Stash(stash.clone())).map(|ledger| {
+				let controller = ledger.controller()
+                    .defensive_proof("ledger was fetched used the StakingInterface, so controller field must exist; qed.")
+                    .ok_or(Error::<T>::NotController)?;
+
+				if controller == stash {
+					// stash is already its own controller.
+					return Err(Error::<T>::AlreadyPaired.into())
 				}
-			}
-			Ok(())
+				// update bond and ledger.
+				<Ledger<T>>::remove(controller);
+				<Bonded<T>>::insert(&stash, &stash);
+				<Ledger<T>>::insert(&stash, ledger);
+				Ok(())
+			})?
 		}
 
 		/// Sets the ideal number of validators.
@@ -1405,11 +1408,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			// Remove all staking-related information.
+			// Remove all staking-related information and lock.
 			Self::kill_stash(&stash, num_slashing_spans)?;
 
-			// Remove the lock.
-			T::Currency::remove_lock(STAKING_ID, &stash);
 			Ok(())
 		}
 
@@ -1498,7 +1499,7 @@ pub mod pallet {
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let ledger = Self::ledger(Controller(controller))?;
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
 			let initial_unlocking = ledger.unlocking.len() as u32;
@@ -1511,16 +1512,18 @@ pub mod pallet {
 				amount: rebonded_value,
 			});
 
+			let stash = ledger.stash.clone();
+			let final_unlocking = ledger.unlocking.len();
+
 			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
-			Self::update_ledger(&controller, &ledger);
-			if T::VoterList::contains(&ledger.stash) {
-				let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
-					.defensive();
+			ledger.update()?;
+			if T::VoterList::contains(&stash) {
+				let _ = T::VoterList::on_update(&stash, Self::weight_of(&stash)).defensive();
 			}
 
 			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
 				.saturating_add(initial_unlocking)
-				.saturating_sub(ledger.unlocking.len() as u32);
+				.saturating_sub(final_unlocking as u32);
 			Ok(Some(T::WeightInfo::rebond(removed_chunks)).into())
 		}
 
@@ -1552,13 +1555,11 @@ pub mod pallet {
 
 			let ed = T::Currency::minimum_balance();
 			let reapable = T::Currency::total_balance(&stash) < ed ||
-				Self::ledger(Self::bonded(stash.clone()).ok_or(Error::<T>::NotStash)?)
-					.map(|l| l.total)
-					.unwrap_or_default() < ed;
+				Self::ledger(Stash(stash.clone())).map(|l| l.total).unwrap_or_default() < ed;
 			ensure!(reapable, Error::<T>::FundedTarget);
 
+			// Remove all staking-related information and lock.
 			Self::kill_stash(&stash, num_slashing_spans)?;
-			T::Currency::remove_lock(STAKING_ID, &stash);
 
 			Ok(Pays::No.into())
 		}
@@ -1578,7 +1579,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::kick(who.len() as u32))]
 		pub fn kick(origin: OriginFor<T>, who: Vec<AccountIdLookupOf<T>>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let ledger = Self::ledger(Controller(controller))?;
 			let stash = &ledger.stash;
 
 			for nom_stash in who
@@ -1687,7 +1688,7 @@ pub mod pallet {
 		pub fn chill_other(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
 			// Anyone can call this function.
 			let caller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let ledger = Self::ledger(Controller(controller.clone()))?;
 			let stash = ledger.stash;
 
 			// In order for one user to chill another user, the following conditions must be met:

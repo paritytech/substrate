@@ -39,7 +39,10 @@ use sp_runtime::{
 	traits::{IdentityLookup, Zero},
 	BuildStorage,
 };
-use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
+use sp_staking::{
+	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
+	OnStakingUpdate,
+};
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -77,7 +80,7 @@ impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
 }
 
 pub fn is_disabled(controller: AccountId) -> bool {
-	let stash = Staking::ledger(&controller).unwrap().stash;
+	let stash = Ledger::<Test>::get(&controller).unwrap().stash;
 	let validator_index = match Session::validators().iter().position(|v| *v == stash) {
 		Some(index) => index as u32,
 		None => return false,
@@ -775,6 +778,16 @@ pub(crate) fn make_all_reward_payment(era: EraIndex) {
 		let ledger = <Ledger<Test>>::get(&validator_controller).unwrap();
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), ledger.stash, era));
 	}
+}
+
+pub(crate) fn bond_controller_stash(controller: AccountId, stash: AccountId) -> Result<(), String> {
+	<Bonded<Test>>::get(&stash).map_or(Ok(()), |_| Err("stash already bonded"))?;
+	<Ledger<Test>>::get(&controller).map_or(Ok(()), |_| Err("controller already bonded"))?;
+
+	<Bonded<Test>>::insert(stash, controller);
+	<Ledger<Test>>::insert(controller, StakingLedger::<Test>::default_from(stash));
+
+	Ok(())
 }
 
 #[macro_export]

@@ -30,7 +30,7 @@ use frame_support::{
 };
 use sp_runtime::{
 	traits::{Bounded, One, StaticLookup, TrailingZeroInput, Zero},
-	Perbill, Percent,
+	Perbill, Percent, Saturating,
 };
 use sp_staking::{currency_to_vote::CurrencyToVote, SessionIndex};
 use sp_std::prelude::*;
@@ -685,13 +685,13 @@ benchmarks! {
 		let stash = scenario.origin_stash1;
 
 		add_slashing_spans::<T>(&stash, s);
-		let l = StakingLedger {
-			stash: stash.clone(),
-			active: T::Currency::minimum_balance() - One::one(),
-			total: T::Currency::minimum_balance() - One::one(),
-			unlocking: Default::default(),
-			claimed_rewards: Default::default(),
-		};
+		let l = StakingLedger::<T>::new(
+			stash.clone(),
+			T::Currency::minimum_balance() - One::one(),
+			T::Currency::minimum_balance() - One::one(),
+			Default::default(),
+			Default::default(),
+		);
 		Ledger::<T>::insert(&controller, l);
 
 		assert!(Bonded::<T>::contains_key(&stash));
