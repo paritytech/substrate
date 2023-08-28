@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Tests for Multisig Pallet
+//! Tests for Multisig Pallet
 
 #![cfg(test)]
 
@@ -86,16 +86,33 @@ impl Config for Test {
 
 use pallet_balances::Call as BalancesCall;
 
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
-	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2)],
+pub struct ExtBuilder {}
+
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self {}
 	}
-	.assimilate_storage(&mut t)
-	.unwrap();
-	let mut ext = sp_io::TestExternalities::new(t);
-	ext.execute_with(|| System::set_block_number(1));
-	ext
+}
+
+impl ExtBuilder {
+	pub fn build(self) -> sp_io::TestExternalities {
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		pallet_balances::GenesisConfig::<Test> {
+			balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2)],
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
+		let mut ext = sp_io::TestExternalities::new(t);
+		ext.execute_with(|| System::set_block_number(1));
+		ext
+	}
+
+	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		self.build().execute_with(|| {
+			test();
+			Multisig::do_try_state().unwrap();
+		})
+	}
 }
 
 fn now() -> Timepoint<u32> {
@@ -108,7 +125,7 @@ fn call_transfer(dest: u64, value: u64) -> Box<RuntimeCall> {
 
 #[test]
 fn multisig_deposit_is_taken_and_returned() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -142,7 +159,7 @@ fn multisig_deposit_is_taken_and_returned() {
 
 #[test]
 fn cancel_multisig_returns_deposit() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let call = call_transfer(6, 15).encode();
 		let hash = blake2_256(&call);
 		assert_ok!(Multisig::approve_as_multi(
@@ -151,7 +168,8 @@ fn cancel_multisig_returns_deposit() {
 			vec![2, 3],
 			None,
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_ok!(Multisig::approve_as_multi(
 			RuntimeOrigin::signed(2),
@@ -159,7 +177,8 @@ fn cancel_multisig_returns_deposit() {
 			vec![1, 3],
 			Some(now()),
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_eq!(Balances::free_balance(1), 6);
 		assert_eq!(Balances::reserved_balance(1), 4);
@@ -171,7 +190,7 @@ fn cancel_multisig_returns_deposit() {
 
 #[test]
 fn timepoint_checking_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -187,7 +206,8 @@ fn timepoint_checking_works() {
 				vec![1, 3],
 				Some(now()),
 				hash,
-				Weight::zero()
+				Weight::zero(),
+				None
 			),
 			Error::<Test>::UnexpectedTimepoint,
 		);
@@ -198,7 +218,8 @@ fn timepoint_checking_works() {
 			vec![2, 3],
 			None,
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 
 		assert_noop!(
@@ -228,8 +249,8 @@ fn timepoint_checking_works() {
 }
 
 #[test]
-fn multisig_2_of_3_works() {
-	new_test_ext().execute_with(|| {
+fn mutlisig_with_expiry_works() {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -244,7 +265,147 @@ fn multisig_2_of_3_works() {
 			vec![2, 3],
 			None,
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			Some(5), // expiry is set to block five.
+		));
+
+		assert_eq!(Balances::free_balance(1), 2);
+		assert_eq!(Balances::reserved_balance(1), 3);
+		assert_eq!(Balances::free_balance(6), 0);
+
+		let timepoint = now();
+
+		assert_eq!(MultisigExpiries::<Test>::get(multi, hash), Some(5));
+
+		// The expiry is at block 5, so at block 3 the multisig won't be expired.
+		System::set_block_number(3);
+
+		// Cannot clear the multisig operation since it has not expired yet.
+		assert_noop!(
+			Multisig::clear_expired_multi(
+				RuntimeOrigin::signed(42),
+				2,
+				vec![1, 2, 3],
+				timepoint,
+				hash
+			),
+			Error::<Test>::MultisigNotExpired
+		);
+
+		assert_ok!(Multisig::as_multi(
+			RuntimeOrigin::signed(2),
+			2,
+			vec![1, 3],
+			Some(timepoint),
+			call,
+			call_weight
+		),);
+
+		assert!(MultisigExpiries::<Test>::get(multi, hash).is_none());
+		assert!(Multisigs::<Test>::get(multi, hash).is_none());
+
+		// The deposit got undreserved after clearing the multisig.
+		assert_eq!(Balances::free_balance(1), 5);
+		assert_eq!(Balances::reserved_balance(1), 0);
+
+		assert_eq!(Balances::free_balance(6), 15);
+	})
+}
+
+#[test]
+fn mutlisig_wont_get_executed_when_expired() {
+	ExtBuilder::default().build_and_execute(|| {
+		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(3), multi, 5));
+
+		let call = call_transfer(6, 15);
+		let call_weight = call.get_dispatch_info().weight;
+		let hash = blake2_256(&call.encode());
+		assert_ok!(Multisig::approve_as_multi(
+			RuntimeOrigin::signed(1),
+			2,
+			vec![2, 3],
+			None,
+			hash,
+			Weight::zero(),
+			Some(5), // expiry is set to block five.
+		));
+
+		assert_eq!(Balances::free_balance(1), 2);
+		assert_eq!(Balances::reserved_balance(1), 3);
+		assert_eq!(Balances::free_balance(6), 0);
+
+		let timepoint = now();
+
+		assert_eq!(MultisigExpiries::<Test>::get(multi, hash), Some(5));
+
+		// The expiry is at block 5, so at block 6 the multisig will get expired.
+		System::set_block_number(6);
+
+		assert_noop!(
+			Multisig::as_multi(
+				RuntimeOrigin::signed(2),
+				2,
+				vec![1, 3],
+				Some(timepoint),
+				call,
+				call_weight
+			),
+			Error::<Test>::MultisigExpired
+		);
+
+		assert_ok!(Multisig::clear_expired_multi(
+			RuntimeOrigin::signed(42),
+			2,
+			vec![1, 2, 3],
+			timepoint,
+			hash
+		));
+
+		assert!(MultisigExpiries::<Test>::get(multi, hash).is_none());
+		assert!(Multisigs::<Test>::get(multi, hash).is_none());
+
+		// The deposit got undreserved after clearing the multisig.
+		assert_eq!(Balances::free_balance(1), 5);
+		assert_eq!(Balances::reserved_balance(1), 0);
+
+		assert_eq!(Balances::free_balance(6), 0);
+
+		// Cannot clear the multisig operation since it does not longer exist.
+		assert_noop!(
+			Multisig::clear_expired_multi(
+				RuntimeOrigin::signed(42),
+				2,
+				vec![1, 2, 3],
+				timepoint,
+				hash
+			),
+			Error::<Test>::NotFound
+		);
+	})
+}
+
+#[test]
+fn multisig_2_of_3_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(3), multi, 5));
+
+		let call = call_transfer(6, 15);
+		let call_weight = call.get_dispatch_info().weight;
+		let hash = blake2_256(&call.encode());
+		assert_ok!(Multisig::approve_as_multi(
+			RuntimeOrigin::signed(1),
+			2,
+			vec![2, 3],
+			None,
+			hash,
+			Weight::zero(),
+			None
 		));
 		assert_eq!(Balances::free_balance(6), 0);
 
@@ -262,7 +423,7 @@ fn multisig_2_of_3_works() {
 
 #[test]
 fn multisig_3_of_3_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 3);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -277,7 +438,8 @@ fn multisig_3_of_3_works() {
 			vec![2, 3],
 			None,
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_ok!(Multisig::approve_as_multi(
 			RuntimeOrigin::signed(2),
@@ -285,7 +447,8 @@ fn multisig_3_of_3_works() {
 			vec![1, 3],
 			Some(now()),
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_eq!(Balances::free_balance(6), 0);
 
@@ -303,7 +466,7 @@ fn multisig_3_of_3_works() {
 
 #[test]
 fn cancel_multisig_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let call = call_transfer(6, 15).encode();
 		let hash = blake2_256(&call);
 		assert_ok!(Multisig::approve_as_multi(
@@ -312,7 +475,8 @@ fn cancel_multisig_works() {
 			vec![2, 3],
 			None,
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_ok!(Multisig::approve_as_multi(
 			RuntimeOrigin::signed(2),
@@ -320,7 +484,8 @@ fn cancel_multisig_works() {
 			vec![1, 3],
 			Some(now()),
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_noop!(
 			Multisig::cancel_as_multi(RuntimeOrigin::signed(2), 3, vec![1, 3], now(), hash),
@@ -332,7 +497,7 @@ fn cancel_multisig_works() {
 
 #[test]
 fn multisig_2_of_3_as_multi_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -364,7 +529,7 @@ fn multisig_2_of_3_as_multi_works() {
 
 #[test]
 fn multisig_2_of_3_as_multi_with_many_calls_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -415,7 +580,7 @@ fn multisig_2_of_3_as_multi_with_many_calls_works() {
 
 #[test]
 fn multisig_2_of_3_cannot_reissue_same_call() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -474,7 +639,7 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 
 #[test]
 fn minimum_threshold_check_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let call = call_transfer(6, 15);
 		assert_noop!(
 			Multisig::as_multi(
@@ -503,7 +668,7 @@ fn minimum_threshold_check_works() {
 
 #[test]
 fn too_many_signatories_fails() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let call = call_transfer(6, 15);
 		assert_noop!(
 			Multisig::as_multi(
@@ -521,7 +686,7 @@ fn too_many_signatories_fails() {
 
 #[test]
 fn duplicate_approvals_are_ignored() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let call = call_transfer(6, 15).encode();
 		let hash = blake2_256(&call);
 		assert_ok!(Multisig::approve_as_multi(
@@ -530,7 +695,8 @@ fn duplicate_approvals_are_ignored() {
 			vec![2, 3],
 			None,
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_noop!(
 			Multisig::approve_as_multi(
@@ -539,7 +705,8 @@ fn duplicate_approvals_are_ignored() {
 				vec![2, 3],
 				Some(now()),
 				hash,
-				Weight::zero()
+				Weight::zero(),
+				None
 			),
 			Error::<Test>::AlreadyApproved,
 		);
@@ -549,7 +716,8 @@ fn duplicate_approvals_are_ignored() {
 			vec![1, 3],
 			Some(now()),
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_noop!(
 			Multisig::approve_as_multi(
@@ -558,7 +726,8 @@ fn duplicate_approvals_are_ignored() {
 				vec![1, 2],
 				Some(now()),
 				hash,
-				Weight::zero()
+				Weight::zero(),
+				None
 			),
 			Error::<Test>::AlreadyApproved,
 		);
@@ -567,7 +736,7 @@ fn duplicate_approvals_are_ignored() {
 
 #[test]
 fn multisig_1_of_3_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 1);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -582,7 +751,8 @@ fn multisig_1_of_3_works() {
 				vec![2, 3],
 				None,
 				hash,
-				Weight::zero()
+				Weight::zero(),
+				None
 			),
 			Error::<Test>::MinimumThreshold,
 		);
@@ -609,7 +779,7 @@ fn multisig_1_of_3_works() {
 
 #[test]
 fn multisig_filters() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let call = Box::new(RuntimeCall::System(frame_system::Call::set_code { code: vec![] }));
 		assert_noop!(
 			Multisig::as_multi_threshold_1(RuntimeOrigin::signed(1), vec![2], call.clone()),
@@ -620,7 +790,7 @@ fn multisig_filters() {
 
 #[test]
 fn weight_check_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -656,7 +826,7 @@ fn multisig_handles_no_preimage_after_all_approve() {
 	// This test checks the situation where everyone approves a multi-sig, but no-one provides the
 	// call data. In the end, any of the multisig callers can approve again with the call data and
 	// the call will go through.
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 3);
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
@@ -671,7 +841,8 @@ fn multisig_handles_no_preimage_after_all_approve() {
 			vec![2, 3],
 			None,
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_ok!(Multisig::approve_as_multi(
 			RuntimeOrigin::signed(2),
@@ -679,7 +850,8 @@ fn multisig_handles_no_preimage_after_all_approve() {
 			vec![1, 3],
 			Some(now()),
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_ok!(Multisig::approve_as_multi(
 			RuntimeOrigin::signed(3),
@@ -687,7 +859,8 @@ fn multisig_handles_no_preimage_after_all_approve() {
 			vec![1, 2],
 			Some(now()),
 			hash,
-			Weight::zero()
+			Weight::zero(),
+			None
 		));
 		assert_eq!(Balances::free_balance(6), 0);
 

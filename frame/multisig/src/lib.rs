@@ -186,6 +186,18 @@ pub mod pallet {
 		Multisig<BlockNumberFor<T>, BalanceOf<T>, T::AccountId, T::MaxSignatories>,
 	>;
 
+	/// A mapping containing information on whether a multisig has an expiry
+	/// time or not.
+	#[pallet::storage]
+	pub type MultisigExpiries<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		Blake2_128Concat,
+		[u8; 32],
+		BlockNumberFor<T>,
+	>;
+
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Threshold must be 2 or greater.
@@ -216,13 +228,24 @@ pub mod pallet {
 		MaxWeightTooLow,
 		/// The data to be stored is already stored.
 		AlreadyStored,
+		/// The expiry cannot be specified for a multisig that is yet to be created.
+		UnexpectedExpiry,
+		/// The multisig operation got expired.
+		MultisigExpired,
+		/// The multisig has not expired.
+		MultisigNotExpired,
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A new multisig operation has begun.
-		NewMultisig { approving: T::AccountId, multisig: T::AccountId, call_hash: CallHash },
+		NewMultisig {
+			approving: T::AccountId,
+			multisig: T::AccountId,
+			call_hash: CallHash,
+			expiry: Option<BlockNumberFor<T>>,
+		},
 		/// A multisig operation has been approved by someone.
 		MultisigApproval {
 			approving: T::AccountId,
@@ -240,7 +263,6 @@ pub mod pallet {
 		},
 		/// A multisig operation has been cancelled.
 		MultisigCancelled {
-			cancelling: T::AccountId,
 			timepoint: Timepoint<BlockNumberFor<T>>,
 			multisig: T::AccountId,
 			call_hash: CallHash,
@@ -248,7 +270,12 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), sp_runtime::TryRuntimeError> {
+			Self::do_try_state()
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -378,9 +405,15 @@ pub mod pallet {
 				maybe_timepoint,
 				CallOrHash::Call(*call),
 				max_weight,
+				None,
 			)
 		}
 
+		/// DEPRECATED: Use the `approve_as_multi` extrinsic instead.
+		///
+		/// This extrinsic sets the expiry to `None`, while the `approve_as_multi` will allow you
+		/// to set it to a certain block number.
+		///
 		/// Register approval for a dispatch to be made from a deterministic composite account if
 		/// approved by a total of `threshold - 1` of `other_signatories`.
 		///
@@ -419,7 +452,7 @@ pub mod pallet {
 				.max(T::WeightInfo::approve_as_multi_approve(s))
 				.saturating_add(*max_weight)
 		})]
-		pub fn approve_as_multi(
+		pub fn approve_as_multi_deprecated(
 			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
@@ -435,6 +468,7 @@ pub mod pallet {
 				maybe_timepoint,
 				CallOrHash::Hash(call_hash),
 				max_weight,
+				None,
 			)
 		}
 
@@ -481,16 +515,121 @@ pub mod pallet {
 			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 			ensure!(m.depositor == who, Error::<T>::NotOwner);
 
-			let err_amount = T::Currency::unreserve(&m.depositor, m.deposit);
-			debug_assert!(err_amount.is_zero());
-			<Multisigs<T>>::remove(&id, &call_hash);
+			let maybe_expiry = <MultisigExpiries<T>>::get(&id, call_hash);
 
-			Self::deposit_event(Event::MultisigCancelled {
-				cancelling: who,
-				timepoint,
-				multisig: id,
-				call_hash,
-			});
+			Self::remove_multisig(&id, call_hash, &m.depositor, m.deposit, maybe_expiry);
+
+			Self::deposit_event(Event::MultisigCancelled { timepoint, multisig: id, call_hash });
+			Ok(())
+		}
+
+		/// Register approval for a dispatch to be made from a deterministic composite account if
+		/// approved by a total of `threshold - 1` of `other_signatories`.
+		///
+		/// Payment: `DepositBase` will be reserved if this is the first approval, plus
+		/// `threshold` times `DepositFactor`. It is returned once this dispatch happens or
+		/// is cancelled.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `threshold`: The total number of approvals for this dispatch before it is executed.
+		/// - `other_signatories`: The accounts (other than the sender) who can approve this
+		/// dispatch. May not be empty.
+		/// - `maybe_timepoint`: If this is the first approval, then this must be `None`. If it is
+		/// not the first approval, then it must be `Some`, with the timepoint (block number and
+		/// transaction index) of the first approval transaction.
+		/// - `call_hash`: The hash of the call to be executed.
+		/// - `expiry`: An optional expiry of the multisig operation defined in block number.
+		///
+		/// ## Complexity
+		/// - `O(S)`.
+		/// - Up to one balance-reserve or unreserve operation.
+		/// - One passthrough operation, one insert, both `O(S)` where `S` is the number of
+		///   signatories. `S` is capped by `MaxSignatories`, with weight being proportional.
+		/// - One encode & hash, both of complexity `O(S)`.
+		/// - Up to one binary search and insert (`O(logS + S)`).
+		/// - I/O: 1 read `O(S)`, up to 1 mutate `O(S)`. Up to one remove.
+		/// - One event.
+		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a deposit
+		///   taken for its lifetime of `DepositBase + threshold * DepositFactor`.
+		#[pallet::call_index(4)]
+		#[pallet::weight({
+			let s = other_signatories.len() as u32;
+
+			T::WeightInfo::approve_as_multi_create(s)
+				.max(T::WeightInfo::approve_as_multi_approve(s))
+				.saturating_add(*max_weight)
+		})]
+		pub fn approve_as_multi(
+			origin: OriginFor<T>,
+			threshold: u16,
+			other_signatories: Vec<T::AccountId>,
+			maybe_timepoint: Option<Timepoint<BlockNumberFor<T>>>,
+			call_hash: [u8; 32],
+			max_weight: Weight,
+			maybe_expiry: Option<BlockNumberFor<T>>,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			Self::operate(
+				who,
+				threshold,
+				other_signatories,
+				maybe_timepoint,
+				CallOrHash::Hash(call_hash),
+				max_weight,
+				maybe_expiry,
+			)
+		}
+
+		/// Clear up all the state of an expired multisig operation. Any deposit reserved previously
+		/// for this operation will be unreserved on success.
+		///
+		/// Anyone can call this and free up the not needed state of the expired multisig.
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `threshold`: The total number of approvals for this dispatch before it is executed.
+		/// - `signatories`: The accounts who can approve this dispatch.
+		/// - `timepoint`: The timepoint (block number and transaction index) of the first approval
+		/// transaction for this dispatch.
+		/// - `call_hash`: The hash of the call to be executed.
+		///
+		/// ## Complexity
+		/// - `O(S)`.
+		/// - Up to one balance-reserve or unreserve operation.
+		/// - One passthrough operation, one insert, both `O(S)` where `S` is the number of
+		///   signatories. `S` is capped by `MaxSignatories`, with weight being proportional.
+		/// - One encode & hash, both of complexity `O(S)`.
+		/// - One event.
+		/// - I/O: 1 read `O(S)`, one remove.
+		/// - Storage: removes one item.
+		#[pallet::call_index(5)]
+		#[pallet::weight(T::WeightInfo::cancel_as_multi(signatories.len() as u32))]
+		pub fn clear_expired_multi(
+			origin: OriginFor<T>,
+			threshold: u16,
+			signatories: Vec<T::AccountId>,
+			timepoint: Timepoint<BlockNumberFor<T>>,
+			call_hash: [u8; 32],
+		) -> DispatchResult {
+			let _ = ensure_signed(origin)?;
+
+			let id = Self::multi_account_id(&signatories, threshold);
+
+			let m = <Multisigs<T>>::get(&id, call_hash).ok_or(Error::<T>::NotFound)?;
+			let expiry =
+				<MultisigExpiries<T>>::get(&id, call_hash).ok_or(Error::<T>::MultisigNotExpired)?;
+
+			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
+			ensure!(
+				expiry < <frame_system::Pallet<T>>::block_number(),
+				Error::<T>::MultisigNotExpired
+			);
+
+			// Clean up all the state that is not needed anymore since the multisig expired.
+			Self::remove_multisig(&id, call_hash, &m.depositor, m.deposit, Some(expiry));
+
+			Self::deposit_event(Event::MultisigCancelled { timepoint, multisig: id, call_hash });
+
 			Ok(())
 		}
 	}
@@ -514,6 +653,7 @@ impl<T: Config> Pallet<T> {
 		maybe_timepoint: Option<Timepoint<BlockNumberFor<T>>>,
 		call_or_hash: CallOrHash<T>,
 		max_weight: Weight,
+		maybe_expiry: Option<BlockNumberFor<T>>,
 	) -> DispatchResultWithPostInfo {
 		ensure!(threshold >= 2, Error::<T>::MinimumThreshold);
 		let max_sigs = T::MaxSignatories::get() as usize;
@@ -539,6 +679,18 @@ impl<T: Config> Pallet<T> {
 			let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
 			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 
+			let maybe_expiry = <MultisigExpiries<T>>::get(&id, call_hash);
+			// Ensure that the mutlisig did not expire.
+			match maybe_expiry {
+				Some(expiry) if expiry < <frame_system::Pallet<T>>::block_number() => {
+					// If the multisig is expired we will take the chance to remove it now so that
+					// the multisig creator does not have to make a separate call to clean it up.
+					Self::remove_multisig(&id, call_hash, &m.depositor, m.deposit, maybe_expiry);
+					return Err(Error::<T>::MultisigExpired.into())
+				},
+				_ => {},
+			};
+
 			// Ensure that either we have not yet signed or that it is at threshold.
 			let mut approvals = m.approvals.len() as u16;
 			// We only bother with the approval if we're below threshold.
@@ -558,8 +710,7 @@ impl<T: Config> Pallet<T> {
 
 				// Clean up storage before executing call to avoid an possibility of reentrancy
 				// attack.
-				<Multisigs<T>>::remove(&id, call_hash);
-				T::Currency::unreserve(&m.depositor, m.deposit);
+				Self::remove_multisig(&id, call_hash, &m.depositor, m.deposit, maybe_expiry);
 
 				let result = call.dispatch(RawOrigin::Signed(id.clone()).into());
 				Self::deposit_event(Event::MultisigExecuted {
@@ -609,6 +760,13 @@ impl<T: Config> Pallet<T> {
 			// Not yet started; there should be no timepoint given.
 			ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
 
+			// Not yet started; The expiry for this multisig cannot already be specified
+			// in `MultisigExpiries`.
+			ensure!(
+				<MultisigExpiries<T>>::get(&id, call_hash).is_none(),
+				Error::<T>::UnexpectedExpiry
+			);
+
 			// Just start the operation by recording it in storage.
 			let deposit = T::DepositBase::get() + T::DepositFactor::get() * threshold.into();
 
@@ -627,12 +785,44 @@ impl<T: Config> Pallet<T> {
 					approvals: initial_approvals,
 				},
 			);
-			Self::deposit_event(Event::NewMultisig { approving: who, multisig: id, call_hash });
+
+			// If an expiry is specified insert it into `MultisigExpiries` for
+			// this specific multisig.
+			if let Some(expiry) = maybe_expiry {
+				<MultisigExpiries<T>>::insert(&id, call_hash, expiry);
+			}
+
+			Self::deposit_event(Event::NewMultisig {
+				approving: who,
+				multisig: id,
+				call_hash,
+				expiry: maybe_expiry,
+			});
 
 			let final_weight =
 				T::WeightInfo::as_multi_create(other_signatories_len as u32, call_len as u32);
 			// Call is not made, so the actual weight does not include call
 			Ok(Some(final_weight).into())
+		}
+	}
+
+	/// Removes a multisig operation from the state.
+	///
+	/// If the multisig had an expiry it will also get removed from the
+	/// `MultisigExpiries` storage map.
+	fn remove_multisig(
+		id: &T::AccountId,
+		call_hash: [u8; 32],
+		depositor: &T::AccountId,
+		deposit: BalanceOf<T>,
+		expiry: Option<BlockNumberFor<T>>,
+	) {
+		let err_amount = T::Currency::unreserve(&depositor, deposit);
+		debug_assert!(err_amount.is_zero());
+		<Multisigs<T>>::remove(id, call_hash);
+
+		if expiry.is_some() {
+			<MultisigExpiries<T>>::remove(id, call_hash);
 		}
 	}
 
@@ -664,6 +854,24 @@ impl<T: Config> Pallet<T> {
 		}
 		signatories.insert(index, who);
 		Ok(signatories)
+	}
+
+	/// Ensure the correctness of the state of this pallet.
+	///
+	/// This should be valid before or after each state transition of this pallet.
+	///
+	/// ## Invariants:
+	///
+	/// * Each multisig in `MultisigExpiries` must have an entry inside the `Multisigs` storage map.
+	#[cfg(any(feature = "try-runtime", test))]
+	fn do_try_state() -> Result<(), sp_runtime::TryRuntimeError> {
+		<MultisigExpiries<T>>::iter_keys().try_for_each(|(id, call_hash)| {
+			ensure!(<Multisigs<T>>::get(id, call_hash).is_some(), Error::<T>::NotFound);
+
+			Ok(())
+		})
+
+		// TODO: Come up with more invariants: https://github.com/paritytech/substrate/issues/12831
 	}
 }
 
