@@ -1,5 +1,5 @@
-error[E0220]: associated type `RuntimeCall` not found for `Self`
+error[E0220]: associated type `Block` not found for `Self`
  --> tests/pallet_ui/default_config_with_no_default_in_system.rs:8:31
   |
-8 |         type MyGetParam2: Get<Self::RuntimeCall>;
-  |                                     ^^^^^^^^^^^ associated type `RuntimeCall` not found
+8 |         type MyGetParam2: Get<Self::Block>;
+  |                                     ^^^^^ there is a similarly named associated type `Block` in the trait `frame_system::Config`

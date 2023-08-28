@@ -38,7 +38,7 @@ use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use std::{cell::RefCell, str::FromStr};
-use syn::{parse_macro_input, Error, ItemImpl, ItemMod};
+use syn::{parse_macro_input, Error, ItemImpl, ItemMod, TraitItemType};
 
 pub(crate) const INHERENT_INSTANCE_NAME: &str = "__InherentHiddenInstance";
 
@@ -596,6 +596,19 @@ pub fn storage_alias(attributes: TokenStream, input: TokenStream) -> TokenStream
 ///
 /// Conversely, the `default_impl_path` argument is required and cannot be omitted.
 ///
+/// Optionally, `no_aggregated_types` can be specified as follows:
+///
+/// ```ignore
+/// #[derive_impl(default_impl_path as disambiguation_path, no_aggregated_types)]
+/// impl SomeTrait for SomeStruct {
+///     ...
+/// }
+/// ```
+///
+/// If specified, this indicates that the aggregated types (as denoted by impl items
+/// attached with [`#[inject_runtime_type]`]) should not be injected with the respective concrete
+/// types. By default, all such types are injected.
+///
 /// You can also make use of `#[pallet::no_default]` on specific items in your default impl that you
 /// want to ensure will not be copied over but that you nonetheless want to use locally in the
 /// context of the foreign impl and the pallet (or context) in which it is defined.
@@ -759,6 +772,7 @@ pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> TokenStream {
 		attrs.into(),
 		input.into(),
 		custom_attrs.disambiguation_path,
+		custom_attrs.no_aggregated_types,
 	)
 	.unwrap_or_else(|r| r.into_compile_error())
 	.into()
@@ -771,6 +785,19 @@ pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> TokenStream {
 /// default with the [`#[derive_impl(..)]`](`macro@derive_impl`) attribute macro.
 #[proc_macro_attribute]
 pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The optional attribute `#[pallet::no_default_bounds]` can be attached to trait items within a
+/// `Config` trait impl that has [`#[pallet::config(with_default)]`](`macro@config`) attached.
+///
+/// Attaching this attribute to a trait item ensures that the generated trait `DefaultConfig`
+/// will not have any bounds for this trait item.
+///
+/// As an example, if you have a trait item `type AccountId: SomeTrait;` in your `Config` trait,
+/// the generated `DefaultConfig` will only have `type AccountId;` with no trait bound.
+#[proc_macro_attribute]
+pub fn no_default_bounds(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
@@ -841,6 +868,25 @@ pub fn register_default_impl(attrs: TokenStream, tokens: TokenStream) -> TokenSt
 		Ok(tokens) => tokens.into(),
 		Err(err) => err.to_compile_error().into(),
 	}
+}
+
+#[proc_macro_attribute]
+pub fn inject_runtime_type(_: TokenStream, tokens: TokenStream) -> TokenStream {
+	let item = tokens.clone();
+	let item = syn::parse_macro_input!(item as TraitItemType);
+	if item.ident != "RuntimeCall" &&
+		item.ident != "RuntimeEvent" &&
+		item.ident != "RuntimeOrigin" &&
+		item.ident != "PalletInfo"
+	{
+		return syn::Error::new_spanned(
+			item,
+			"`#[inject_runtime_type]` can only be attached to `RuntimeCall`, `RuntimeEvent`, `RuntimeOrigin` or `PalletInfo`",
+		)
+		.to_compile_error()
+		.into();
+	}
+	tokens
 }
 
 /// Used internally to decorate pallet attribute macro stubs when they are erroneously used

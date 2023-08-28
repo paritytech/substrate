@@ -35,11 +35,11 @@ use frame_support::{
 	pallet_prelude::Get,
 	parameter_types,
 	traits::{
-		fungible::ItemOf,
+		fungible::{Balanced, Credit, ItemOf},
 		tokens::{nonfungibles_v2::Inspect, GetSalary, PayFromAccount},
-		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
-		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
-		LockIdentifier, Nothing, OnUnbalanced, WithdrawReasons,
+		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Contains, Currency,
+		EitherOfDiverse, EqualPrivilegeOnly, Imbalance, InsideBoth, InstanceFilter,
+		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, WithdrawReasons,
 	},
 	weights::{
 		constants::{
@@ -56,6 +56,7 @@ use frame_system::{
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Moment, Nonce};
 use pallet_asset_conversion::{NativeOrAssetId, NativeOrAssetIdConverter};
+use pallet_broker::{CoreAssignment, CoreIndex, CoretimeInterface, PartsOf57600};
 use pallet_election_provider_multi_phase::SolutionAccuracyOf;
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use pallet_nfts::PalletFeatures;
@@ -63,6 +64,7 @@ use pallet_nis::WithMaximumOf;
 use pallet_session::historical as pallet_session_historical;
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
+use pallet_tx_pause::RuntimeCallNameOf;
 use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
@@ -219,8 +221,67 @@ parameter_types! {
 
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 
+/// Calls that can bypass the safe-mode pallet.
+pub struct SafeModeWhitelistedCalls;
+impl Contains<RuntimeCall> for SafeModeWhitelistedCalls {
+	fn contains(call: &RuntimeCall) -> bool {
+		match call {
+			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) | RuntimeCall::TxPause(_) => true,
+			_ => false,
+		}
+	}
+}
+
+/// Calls that cannot be paused by the tx-pause pallet.
+pub struct TxPauseWhitelistedCalls;
+/// Whitelist `Balances::transfer_keep_alive`, all others are pauseable.
+impl Contains<RuntimeCallNameOf<Runtime>> for TxPauseWhitelistedCalls {
+	fn contains(full_name: &RuntimeCallNameOf<Runtime>) -> bool {
+		match (full_name.0.as_slice(), full_name.1.as_slice()) {
+			(b"Balances", b"transfer_keep_alive") => true,
+			_ => false,
+		}
+	}
+}
+
+impl pallet_tx_pause::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type PauseOrigin = EnsureRoot<AccountId>;
+	type UnpauseOrigin = EnsureRoot<AccountId>;
+	type WhitelistedCalls = TxPauseWhitelistedCalls;
+	type MaxNameLen = ConstU32<256>;
+	type WeightInfo = pallet_tx_pause::weights::SubstrateWeight<Runtime>;
+}
+
+parameter_types! {
+	pub const EnterDuration: BlockNumber = 4 * HOURS;
+	pub const EnterDepositAmount: Balance = 2_000_000 * DOLLARS;
+	pub const ExtendDuration: BlockNumber = 2 * HOURS;
+	pub const ExtendDepositAmount: Balance = 1_000_000 * DOLLARS;
+	pub const ReleaseDelay: u32 = 2 * DAYS;
+}
+
+impl pallet_safe_mode::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+	type RuntimeHoldReason = RuntimeHoldReason;
+	type WhitelistedCalls = SafeModeWhitelistedCalls;
+	type EnterDuration = EnterDuration;
+	type EnterDepositAmount = EnterDepositAmount;
+	type ExtendDuration = ExtendDuration;
+	type ExtendDepositAmount = ExtendDepositAmount;
+	type ForceEnterOrigin = EnsureRootWithSuccess<AccountId, ConstU32<9>>;
+	type ForceExtendOrigin = EnsureRootWithSuccess<AccountId, ConstU32<11>>;
+	type ForceExitOrigin = EnsureRoot<AccountId>;
+	type ForceDepositOrigin = EnsureRoot<AccountId>;
+	type ReleaseDelay = ReleaseDelay;
+	type Notify = ();
+	type WeightInfo = pallet_safe_mode::weights::SubstrateWeight<Runtime>;
+}
+
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = Everything;
+	type BaseCallFilter = InsideBoth<SafeMode, TxPause>;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type DbWeight = RocksDbWeight;
@@ -1681,8 +1742,8 @@ impl pallet_core_fellowship::Config for Runtime {
 	type Balance = Balance;
 	type ParamsOrigin = frame_system::EnsureRoot<AccountId>;
 	type InductOrigin = pallet_core_fellowship::EnsureInducted<Runtime, (), 1>;
-	type ApproveOrigin = frame_system::EnsureRootWithSuccess<AccountId, ConstU16<9>>;
-	type PromoteOrigin = frame_system::EnsureRootWithSuccess<AccountId, ConstU16<9>>;
+	type ApproveOrigin = EnsureRootWithSuccess<AccountId, ConstU16<9>>;
+	type PromoteOrigin = EnsureRootWithSuccess<AccountId, ConstU16<9>>;
 	type EvidenceSize = ConstU32<16_384>;
 }
 
@@ -1877,6 +1938,77 @@ impl pallet_statement::Config for Runtime {
 	type MaxAllowedBytes = MaxAllowedBytes;
 }
 
+parameter_types! {
+	pub const BrokerPalletId: PalletId = PalletId(*b"py/broke");
+}
+
+pub struct IntoAuthor;
+impl OnUnbalanced<Credit<AccountId, Balances>> for IntoAuthor {
+	fn on_nonzero_unbalanced(credit: Credit<AccountId, Balances>) {
+		if let Some(author) = Authorship::author() {
+			let _ = <Balances as Balanced<_>>::resolve(&author, credit);
+		}
+	}
+}
+
+parameter_types! {
+	pub storage CoreCount: Option<CoreIndex> = None;
+	pub storage CoretimeRevenue: Option<(BlockNumber, Balance)> = None;
+}
+
+pub struct CoretimeProvider;
+impl CoretimeInterface for CoretimeProvider {
+	type AccountId = AccountId;
+	type Balance = Balance;
+	type BlockNumber = BlockNumber;
+	fn latest() -> Self::BlockNumber {
+		System::block_number()
+	}
+	fn request_core_count(_count: CoreIndex) {}
+	fn request_revenue_info_at(_when: Self::BlockNumber) {}
+	fn credit_account(_who: Self::AccountId, _amount: Self::Balance) {}
+	fn assign_core(
+		_core: CoreIndex,
+		_begin: Self::BlockNumber,
+		_assignment: Vec<(CoreAssignment, PartsOf57600)>,
+		_end_hint: Option<Self::BlockNumber>,
+	) {
+	}
+	fn check_notify_core_count() -> Option<u16> {
+		let count = CoreCount::get();
+		CoreCount::set(&None);
+		count
+	}
+	fn check_notify_revenue_info() -> Option<(Self::BlockNumber, Self::Balance)> {
+		let revenue = CoretimeRevenue::get();
+		CoretimeRevenue::set(&None);
+		revenue
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_notify_core_count(count: u16) {
+		CoreCount::set(&Some(count));
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_notify_revenue_info(when: Self::BlockNumber, revenue: Self::Balance) {
+		CoretimeRevenue::set(&Some((when, revenue)));
+	}
+}
+
+impl pallet_broker::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+	type OnRevenue = IntoAuthor;
+	type TimeslicePeriod = ConstU32<2>;
+	type MaxLeasedCores = ConstU32<5>;
+	type MaxReservedCores = ConstU32<5>;
+	type Coretime = CoretimeProvider;
+	type ConvertBalance = traits::Identity;
+	type WeightInfo = ();
+	type PalletId = BrokerPalletId;
+	type AdminOrigin = EnsureRoot<AccountId>;
+	type PriceAdapter = pallet_broker::Linear;
+}
+
 construct_runtime!(
 	pub struct Runtime
 	{
@@ -1949,7 +2081,10 @@ construct_runtime!(
 		FastUnstake: pallet_fast_unstake,
 		MessageQueue: pallet_message_queue,
 		Pov: frame_benchmarking_pallet_pov,
+		TxPause: pallet_tx_pause,
+		SafeMode: pallet_safe_mode,
 		Statement: pallet_statement,
+		Broker: pallet_broker,
 	}
 );
 
@@ -2030,6 +2165,7 @@ mod benches {
 		[pallet_bags_list, VoterList]
 		[pallet_balances, Balances]
 		[pallet_bounties, Bounties]
+		[pallet_broker, Broker]
 		[pallet_child_bounties, ChildBounties]
 		[pallet_collective, Council]
 		[pallet_conviction_voting, ConvictionVoting]
@@ -2079,6 +2215,8 @@ mod benches {
 		[pallet_utility, Utility]
 		[pallet_vesting, Vesting]
 		[pallet_whitelist, Whitelist]
+		[pallet_tx_pause, TxPause]
+		[pallet_safe_mode, SafeMode]
 	);
 }
 
@@ -2570,7 +2708,8 @@ impl_runtime_apis! {
 		fn dispatch_benchmark(
 			config: frame_benchmarking::BenchmarkConfig
 		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
-			use frame_benchmarking::{baseline, Benchmarking, BenchmarkBatch,  TrackedStorageKey};
+			use frame_benchmarking::{baseline, Benchmarking, BenchmarkBatch};
+			use sp_storage::TrackedStorageKey;
 
 			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency
 			// issues. To get around that, we separated the Session benchmarks into its own crate,

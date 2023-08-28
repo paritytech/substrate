@@ -24,7 +24,7 @@ use std::collections::{HashMap, VecDeque};
 
 /// Report specifying a reputation change for a given peer.
 #[derive(Debug, PartialEq)]
-pub(crate) struct PeerReport {
+pub struct PeerReport {
 	pub who: PeerId,
 	pub cost_benefit: ReputationChange,
 }
