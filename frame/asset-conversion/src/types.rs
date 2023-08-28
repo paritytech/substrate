@@ -18,6 +18,8 @@
 use super::*;
 
 use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::traits::fungibles::Credit;
+use frame_system::Account;
 use scale_info::TypeInfo;
 use sp_std::{cmp::Ordering, marker::PhantomData};
 
@@ -83,6 +85,12 @@ where
 	}
 }
 
+/// Representation of the final credit imbalance after a swap for exact.
+pub struct CreditPair<AccountId, Balance: Balanced<AccountId>> {
+	pub in_leftover: Credit<AccountId, Balance>,
+	pub out_credit: Credit<AccountId, Balance>,
+}
+
 /// Trait for providing methods to swap between the various asset classes.
 pub trait Swap<AccountId, Balance, MultiAssetId> {
 	/// Swap exactly `amount_in` of asset `path[0]` for asset `path[1]`.
@@ -102,6 +110,33 @@ pub trait Swap<AccountId, Balance, MultiAssetId> {
 		keep_alive: bool,
 	) -> Result<Balance, DispatchError>;
 
+	// /// Swap `amount_in_max` of asset `path[0]` for asset `path[1]` declared in `amount_out`.
+	// /// It will return an error if acquiring `amount_out` would be too costly.
+	// ///
+	// /// Thus it is on the RPC side to ensure that `amount_in` is enough to acquire `amount_out`.
+	// ///
+	// /// Uses the `amount_in` imbalance to offset into the pool account.
+	// ///
+	// /// If successful, returns the amount of `path[1]` acquired for the `amount_in`
+	// /// along with the leftovers from `amount_in` as an imbalance.
+	// /// They could be credited somewhere as the type implies, but can also be dropped.
+	// ///
+	// /// Note: This method effectively prevents overswapping, so that the
+	// /// returned `CreditPair::in_leftover` can then be directly refunded in the initial asset
+	// /// without swapping back from the `path[1]` asset.
+	// ///
+	// /// `amount_in` is not optional due to the fact that it is a balance to be offset
+	// /// (credited to the pool), and not an amount to be acquired from a sender.
+	// ///
+	// /// If this function returns an error, no credit will be taken from amount_in, like a no-op.
+	// fn swap_tokens_for_exact_tokens_credit(
+	// 	path: Vec<MultiAssetId>,
+	// 	amount_out: Balance,
+	// 	credit_in: Credit<AccountId, Balance>,
+	// ) -> Result<CreditPair<AccountId, Balance>, DispatchError>
+	// where
+	// 	Balance: Balanced<AccountId>;
+
 	/// Take the `path[0]` asset and swap some amount for `amount_out` of the `path[1]`. If an
 	/// `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
 	/// too costly.
@@ -118,6 +153,37 @@ pub trait Swap<AccountId, Balance, MultiAssetId> {
 		send_to: AccountId,
 		keep_alive: bool,
 	) -> Result<Balance, DispatchError>;
+}
+
+pub trait SwapCredit<AccountId, MultiAssetId, Balance, Fungible, Fungibles>
+where
+	Fungible: BalancedFungible<AccountId>,
+	Fungibles: Balanced<AccountId>,
+{
+	// fn swap_exact_native_tokens_for_tokens(
+	// 	path: Vec<MultiAssetId>,
+	// 	credit_in: CreditFungible<AccountId, Fungible>,
+	// 	amount_out_min: Option<AssetBalance>,
+	// ) -> Result<Credit<AccountId, Fungibles>, DispatchError>;
+
+	// fn swap_native_tokens_for_exact_tokens(
+	// 	path: Vec<MultiAssetId>,
+	// 	amount_out: AssetBalance,
+	// 	credit_in: CreditFungible<AccountId, Fungible>,
+	// ) -> Result<(CreditFungible<AccountId, Fungible>, Credit<AccountId, Fungibles>),
+	//   DispatchError>;
+
+	// fn swap_exact_tokens_for_native_tokens(
+	// 	path: Vec<MultiAssetId>,
+	// 	credit_in: Credit<AccountId, Fungibles>,
+	// 	amount_out_min: Option<Balance>,
+	// ) -> Result<CreditFungible<AccountId, Fungible>, DispatchError>;
+
+	fn swap_tokens_for_exact_native_tokens(
+		path: Vec<MultiAssetId>,
+		amount_out: Balance,
+		credit_in: Credit<AccountId, Fungibles>,
+	) -> Result<(Credit<AccountId, Fungibles>, CreditFungible<AccountId, Fungible>), DispatchError>;
 }
 
 /// An implementation of MultiAssetId that can be either Native or an asset.
