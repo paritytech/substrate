@@ -21,12 +21,12 @@
 use crate::keyring::*;
 use kitchensink_runtime::{
 	constants::currency::*, wasm_binary_unwrap, AccountId, AssetsConfig, BabeConfig,
-	BalancesConfig, GluttonConfig, GrandpaConfig, IndicesConfig, RuntimeGenesisConfig,
-	SessionConfig, SocietyConfig, StakerStatus, StakingConfig, SystemConfig,
+	BalancesConfig, GluttonConfig, GrandpaConfig, IdentityConfig, IndicesConfig,
+	RuntimeGenesisConfig, SessionConfig, SocietyConfig, StakerStatus, StakingConfig, SystemConfig,
 	BABE_GENESIS_EPOCH_CONFIG,
 };
 use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
-use sp_runtime::Perbill;
+use sp_runtime::{BoundedVec, Perbill};
 
 /// Create genesis runtime configuration for tests.
 pub fn config(code: Option<&[u8]>) -> RuntimeGenesisConfig {
@@ -51,6 +51,12 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Run
 		system: SystemConfig {
 			code: code.map(|x| x.to_vec()).unwrap_or_else(|| wasm_binary_unwrap().to_vec()),
 			..Default::default()
+		},
+		identity: IdentityConfig {
+			identities: vec![
+				(alice(), BoundedVec::try_from("Alice".to_string().as_bytes().to_vec()).unwrap()),
+				(bob(), BoundedVec::try_from("Bob".to_string().as_bytes().to_vec()).unwrap()),
+			],
 		},
 		indices: IndicesConfig { indices: vec![] },
 		balances: BalancesConfig { balances: endowed },
