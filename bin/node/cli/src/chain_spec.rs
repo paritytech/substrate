@@ -298,7 +298,7 @@ pub fn testnet_genesis(
 		balances: BalancesConfig {
 			balances: endowed_accounts.iter().cloned().map(|x| (x, ENDOWMENT)).collect(),
 		},
-		identity: IdentityConfig { identities: vec![] },
+		identity: IdentityConfig { registrars: vec![] },
 		indices: IndicesConfig { indices: vec![] },
 		session: SessionConfig {
 			keys: initial_authorities

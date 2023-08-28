@@ -99,6 +99,7 @@ type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use enumflags2::BitFlags;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -203,37 +204,49 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub identities: Vec<(T::AccountId, BoundedVec<u8, ConstU32<32>>)>,
+		pub registrars: Vec<(T::AccountId, Vec<(T::AccountId, BoundedVec<u8, ConstU32<32>>)>)>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			GenesisConfig { identities: Default::default() }
+			GenesisConfig { registrars: Default::default() }
 		}
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			for (account, name) in &self.identities {
-				<IdentityOf<T>>::insert(
-					account,
-					Registration {
-						info: IdentityInfo {
-							display: Data::Raw(name.clone()),
-							twitter: Data::None,
-							riot: Data::None,
-							email: Data::None,
-							pgp_fingerprint: None,
-							image: Data::None,
-							legal: Data::None,
-							web: Data::None,
-							additional: BoundedVec::default(),
-						},
-						judgements: BoundedVec::default(),
-						deposit: Zero::zero(),
-					},
+			for (registrar, identities) in &self.registrars {
+				<Registrars<T>>::put(
+					BoundedVec::try_from(vec![Some(RegistrarInfo {
+						account: registrar.clone(),
+						fee: Zero::zero(),
+						fields: IdentityFields(<BitFlags<IdentityField>>::all()),
+					})])
+					.unwrap(),
 				);
+				for (account, name) in identities {
+					let judgements =
+						BoundedVec::try_from(vec![(0, Judgement::KnownGood); 1]).unwrap();
+					<IdentityOf<T>>::insert(
+						account,
+						Registration {
+							info: IdentityInfo {
+								display: Data::Raw(name.clone()),
+								twitter: Data::None,
+								riot: Data::None,
+								email: Data::None,
+								pgp_fingerprint: None,
+								image: Data::None,
+								legal: Data::None,
+								web: Data::None,
+								additional: BoundedVec::default(),
+							},
+							judgements,
+							deposit: Zero::zero(),
+						},
+					);
+				}
 			}
 		}
 	}
