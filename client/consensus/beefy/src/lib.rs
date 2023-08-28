@@ -139,9 +139,7 @@ pub fn beefy_block_import_and_links<B, BE, RuntimeApi, I>(
 where
 	B: Block,
 	BE: Backend<B>,
-	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<RuntimeApi, B>>
-		+ Send
-		+ Sync,
+	I: BlockImport<B, Error = ConsensusError> + Send + Sync,
 	RuntimeApi: ProvideRuntimeApi<B> + Send + Sync,
 	RuntimeApi::Api: BeefyApi<B, AuthorityId>,
 {
@@ -223,7 +221,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE> + BlockBackend<B>,
-	P: PayloadProvider<B>,
+	P: PayloadProvider<B> + Clone,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B, AuthorityId> + MmrApi<B, MmrRootHash, NumberFor<B>>,
 	N: GossipNetwork<B> + NetworkRequest + Send + Sync + 'static,
@@ -239,7 +237,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 		min_block_delta,
 		prometheus_registry,
 		links,
-		on_demand_justifications_handler,
+		mut on_demand_justifications_handler,
 	} = beefy_params;
 
 	let BeefyNetworkParams {
@@ -250,83 +248,105 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 		..
 	} = network_params;
 
-	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
-	// Default votes filter is to discard everything.
-	// Validator is updated later with correct starting round and set id.
-	let (gossip_validator, gossip_report_stream) =
-		communication::gossip::GossipValidator::new(known_peers.clone());
-	let gossip_validator = Arc::new(gossip_validator);
-	let mut gossip_engine = GossipEngine::new(
-		network.clone(),
-		sync.clone(),
-		gossip_protocol_name,
-		gossip_validator.clone(),
-		None,
-	);
 	let metrics = register_metrics(prometheus_registry.clone());
-
-	// The `GossipValidator` adds and removes known peers based on valid votes and network events.
-	let on_demand_justifications = OnDemandJustificationsEngine::new(
-		network.clone(),
-		justifications_protocol_name,
-		known_peers,
-		prometheus_registry.clone(),
-	);
 
 	// Subscribe to finality notifications and justifications before waiting for runtime pallet and
 	// reuse the streams, so we don't miss notifications while waiting for pallet to be available.
 	let mut finality_notifications = client.finality_notification_stream().fuse();
-	let block_import_justif = links.from_block_import_justif_stream.subscribe(100_000).fuse();
+	let mut block_import_justif = links.from_block_import_justif_stream.subscribe(100_000).fuse();
 
-	// Wait for BEEFY pallet to be active before starting voter.
-	let persisted_state =
-		match wait_for_runtime_pallet(&*runtime, &mut gossip_engine, &mut finality_notifications)
-			.await
-			.and_then(|(beefy_genesis, best_grandpa)| {
-				load_or_init_voter_state(
-					&*backend,
-					&*runtime,
-					beefy_genesis,
-					best_grandpa,
-					min_block_delta,
-				)
-			}) {
+	// We re-create and re-run the worker in this loop in order to quickly reinit and resume after
+	// select recoverable errors.
+	loop {
+		let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
+		// Default votes filter is to discard everything.
+		// Validator is updated later with correct starting round and set id.
+		let (gossip_validator, gossip_report_stream) =
+			communication::gossip::GossipValidator::new(known_peers.clone());
+		let gossip_validator = Arc::new(gossip_validator);
+		let mut gossip_engine = GossipEngine::new(
+			network.clone(),
+			sync.clone(),
+			gossip_protocol_name.clone(),
+			gossip_validator.clone(),
+			None,
+		);
+
+		// The `GossipValidator` adds and removes known peers based on valid votes and network
+		// events.
+		let on_demand_justifications = OnDemandJustificationsEngine::new(
+			network.clone(),
+			justifications_protocol_name.clone(),
+			known_peers,
+			prometheus_registry.clone(),
+		);
+
+		// Wait for BEEFY pallet to be active before starting voter.
+		let persisted_state = match wait_for_runtime_pallet(
+			&*runtime,
+			&mut gossip_engine,
+			&mut finality_notifications,
+		)
+		.await
+		.and_then(|(beefy_genesis, best_grandpa)| {
+			load_or_init_voter_state(
+				&*backend,
+				&*runtime,
+				beefy_genesis,
+				best_grandpa,
+				min_block_delta,
+			)
+		}) {
 			Ok(state) => state,
 			Err(e) => {
 				error!(target: LOG_TARGET, "Error: {:?}. Terminating.", e);
 				return
 			},
 		};
-	// Update the gossip validator with the right starting round and set id.
-	if let Err(e) = persisted_state
-		.gossip_filter_config()
-		.map(|f| gossip_validator.update_filter(f))
-	{
-		error!(target: LOG_TARGET, "Error: {:?}. Terminating.", e);
+		// Update the gossip validator with the right starting round and set id.
+		if let Err(e) = persisted_state
+			.gossip_filter_config()
+			.map(|f| gossip_validator.update_filter(f))
+		{
+			error!(target: LOG_TARGET, "Error: {:?}. Terminating.", e);
+			return
+		}
+
+		let worker = worker::BeefyWorker {
+			backend: backend.clone(),
+			payload_provider: payload_provider.clone(),
+			runtime: runtime.clone(),
+			sync: sync.clone(),
+			key_store: key_store.clone().into(),
+			gossip_engine,
+			gossip_validator,
+			gossip_report_stream,
+			on_demand_justifications,
+			links: links.clone(),
+			metrics: metrics.clone(),
+			pending_justifications: BTreeMap::new(),
+			persisted_state,
+		};
+
+		match futures::future::select(
+			Box::pin(worker.run(&mut block_import_justif, &mut finality_notifications)),
+			Box::pin(on_demand_justifications_handler.run()),
+		)
+		.await
+		{
+			// On `ConsensusReset` error, just reinit and restart voter.
+			futures::future::Either::Left((error::Error::ConsensusReset, _)) => {
+				error!(target: LOG_TARGET, "🥩 Error: {:?}. Restarting voter.", error::Error::ConsensusReset);
+				continue
+			},
+			// On other errors, bring down / finish the task.
+			futures::future::Either::Left((worker_err, _)) =>
+				error!(target: LOG_TARGET, "🥩 Error: {:?}. Terminating.", worker_err),
+			futures::future::Either::Right((odj_handler_err, _)) =>
+				error!(target: LOG_TARGET, "🥩 Error: {:?}. Terminating.", odj_handler_err),
+		};
 		return
 	}
-
-	let worker = worker::BeefyWorker {
-		backend,
-		payload_provider,
-		runtime,
-		sync,
-		key_store: key_store.into(),
-		gossip_engine,
-		gossip_validator,
-		gossip_report_stream,
-		on_demand_justifications,
-		links,
-		metrics,
-		pending_justifications: BTreeMap::new(),
-		persisted_state,
-	};
-
-	futures::future::select(
-		Box::pin(worker.run(block_import_justif, finality_notifications)),
-		Box::pin(on_demand_justifications_handler.run()),
-	)
-	.await;
 }
 
 fn load_or_init_voter_state<B, BE, R>(
@@ -404,7 +424,7 @@ where
 			let best_beefy = *header.number();
 			// If no session boundaries detected so far, just initialize new rounds here.
 			if sessions.is_empty() {
-				let active_set = expect_validator_set(runtime, header.hash())?;
+				let active_set = expect_validator_set(runtime, backend, &header, beefy_genesis)?;
 				let mut rounds = Rounds::new(best_beefy, active_set);
 				// Mark the round as already finalized.
 				rounds.conclude(best_beefy);
@@ -423,7 +443,7 @@ where
 
 		if *header.number() == beefy_genesis {
 			// We've reached BEEFY genesis, initialize voter here.
-			let genesis_set = expect_validator_set(runtime, header.hash())?;
+			let genesis_set = expect_validator_set(runtime, backend, &header, beefy_genesis)?;
 			info!(
 				target: LOG_TARGET,
 				"🥩 Loading BEEFY voter state from genesis on what appears to be first startup. \
@@ -452,16 +472,8 @@ where
 			sessions.push_front(Rounds::new(*header.number(), active));
 		}
 
-		// Check if state is still available if we move up the chain.
-		let parent_hash = *header.parent_hash();
-		runtime.runtime_api().validator_set(parent_hash).ok().flatten().ok_or_else(|| {
-			let msg = format!("{}. Could not initialize BEEFY voter.", parent_hash);
-			error!(target: LOG_TARGET, "🥩 {}", msg);
-			ClientError::Consensus(sp_consensus::Error::StateUnavailable(msg))
-		})?;
-
 		// Move up the chain.
-		header = blockchain.expect_header(parent_hash)?;
+		header = blockchain.expect_header(*header.parent_hash())?;
 	};
 
 	aux_schema::write_current_version(backend)?;
@@ -512,19 +524,36 @@ where
 	Err(ClientError::Backend(err_msg))
 }
 
-fn expect_validator_set<B, R>(
+fn expect_validator_set<B, BE, R>(
 	runtime: &R,
-	at_hash: B::Hash,
+	backend: &BE,
+	at_header: &B::Header,
+	beefy_genesis: NumberFor<B>,
 ) -> ClientResult<ValidatorSet<AuthorityId>>
 where
 	B: Block,
+	BE: Backend<B>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B, AuthorityId>,
 {
 	runtime
 		.runtime_api()
-		.validator_set(at_hash)
+		.validator_set(at_header.hash())
 		.ok()
 		.flatten()
-		.ok_or_else(|| ClientError::Backend("BEEFY pallet expected to be active.".into()))
+		.or_else(|| {
+			// if state unavailable, fallback to walking up the chain looking for the header
+			// Digest emitted when validator set active 'at_header' was enacted.
+			let blockchain = backend.blockchain();
+			let mut header = at_header.clone();
+			while *header.number() >= beefy_genesis {
+				match worker::find_authorities_change::<B>(&header) {
+					Some(active) => return Some(active),
+					// Move up the chain.
+					None => header = blockchain.expect_header(*header.parent_hash()).ok()?,
+				}
+			}
+			None
+		})
+		.ok_or_else(|| ClientError::Backend("Could not find initial validator set".into()))
 }

@@ -32,7 +32,7 @@ sp-core = { version = "21.0.0", path = "../../primitives/core" }
 sp-io = { version = "23.0.0", path = "../../primitives/io" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-support/std",
@@ -41,14 +41,14 @@ std = [
 	"scale-info/std",
 	"sp-application-crypto/std",
 	"sp-authority-discovery/std",
+	"sp-core/std",
+	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"sp-core/std",
-	"sp-io/std"
 ]
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"pallet-session/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

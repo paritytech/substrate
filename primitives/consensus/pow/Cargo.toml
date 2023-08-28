@@ -20,7 +20,7 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../../runti
 sp-std = { version = "8.0.0", default-features = false, path = "../../std" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"sp-api/std",

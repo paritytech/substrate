@@ -101,6 +101,8 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Run
 		alliance: Default::default(),
 		alliance_motion: Default::default(),
 		nomination_pools: Default::default(),
+		safe_mode: Default::default(),
+		tx_pause: Default::default(),
 		glutton: GluttonConfig {
 			compute: Default::default(),
 			storage: Default::default(),

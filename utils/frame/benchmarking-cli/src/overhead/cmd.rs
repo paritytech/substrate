@@ -111,7 +111,7 @@ impl OverheadCmd {
 		C: BlockBuilderProvider<BA, Block, C>
 			+ ProvideRuntimeApi<Block>
 			+ sp_blockchain::HeaderBackend<Block>,
-		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
+		C::Api: ApiExt<Block> + BlockBuilderApi<Block>,
 	{
 		if ext_builder.pallet() != "system" || ext_builder.extrinsic() != "remark" {
 			return Err(format!("The extrinsic builder is required to build `System::Remark` extrinsics but builds `{}` extrinsics instead", ext_builder.name()).into());

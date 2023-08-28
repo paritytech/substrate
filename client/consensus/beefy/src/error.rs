@@ -34,8 +34,18 @@ pub enum Error {
 	Signature(String),
 	#[error("Session uninitialized")]
 	UninitSession,
-	#[error("pallet-beefy was reset, please restart voter")]
+	#[error("pallet-beefy was reset")]
 	ConsensusReset,
+	#[error("Block import stream terminated")]
+	BlockImportStreamTerminated,
+	#[error("Gossip Engine terminated")]
+	GossipEngineTerminated,
+	#[error("Finality proofs gossiping stream terminated")]
+	FinalityProofGossipStreamTerminated,
+	#[error("Finality stream terminated")]
+	FinalityStreamTerminated,
+	#[error("Votes gossiping stream terminated")]
+	VotesGossipStreamTerminated,
 }
 
 #[cfg(test)]

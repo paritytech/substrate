@@ -33,20 +33,20 @@ sp-io = { version = "23.0.0", path = "../../primitives/io" }
 pallet-utility = { version = "4.0.0-dev", path = "../utility" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
-	"frame-benchmarking?/std",
 	"codec/std",
+	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-balances/std",
+	"pallet-utility/std",
 	"scale-info/std",
 	"serde",
+	"sp-core/std",
+	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"pallet-utility/std",
-	"sp-core/std",
-	"sp-io/std"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
@@ -54,12 +54,12 @@ runtime-benchmarks = [
 	"frame-system/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
 	"pallet-utility/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks"
+	"sp-runtime/runtime-benchmarks",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"pallet-balances/try-runtime",
 	"pallet-utility/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

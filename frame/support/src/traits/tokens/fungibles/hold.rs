@@ -52,12 +52,14 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	/// restrictions on the minimum amount of the account. Note: This cannot bring the account into
 	/// an inconsistent state with regards any required existential deposit.
 	///
-	/// Always less than `total_balance_on_hold()`.
+	/// Never more than `total_balance_on_hold()`.
 	fn reducible_total_balance_on_hold(
 		asset: Self::AssetId,
 		who: &AccountId,
-		force: Fortitude,
-	) -> Self::Balance;
+		_force: Fortitude,
+	) -> Self::Balance {
+		Self::total_balance_on_hold(asset, who)
+	}
 
 	/// Amount of funds on hold (for the given reason) of `who`.
 	fn balance_on_hold(
@@ -73,7 +75,9 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	/// NOTE: This does not take into account changes which could be made to the account of `who`
 	/// (such as removing a provider reference) after this call is made. Any usage of this should
 	/// therefore ensure the account is already in the appropriate state prior to calling it.
-	fn hold_available(asset: Self::AssetId, reason: &Self::Reason, who: &AccountId) -> bool;
+	fn hold_available(_asset: Self::AssetId, _reason: &Self::Reason, _who: &AccountId) -> bool {
+		true
+	}
 
 	/// Check to see if some `amount` of funds of `who` may be placed on hold with the given
 	/// `reason`. Reasons why this may not be true:
@@ -332,7 +336,7 @@ pub trait Mutate<AccountId>:
 
 	/// Transfer held funds into a destination account.
 	///
-	/// If `on_hold` is `true`, then the destination account must already exist and the assets
+	/// If `mode` is `OnHold`, then the destination account must already exist and the assets
 	/// transferred will still be on hold in the destination account. If not, then the destination
 	/// account need not already exist, but must be creatable.
 	///

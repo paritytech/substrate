@@ -106,7 +106,16 @@ pub trait OnRuntimeUpgrade {
 		Weight::zero()
 	}
 
-	/// See [`Hooks::on_runtime_upgrade`].
+	/// The expected and default behavior of this method is to handle executing `pre_upgrade` ->
+	/// `on_runtime_upgrade` -> `post_upgrade` hooks for a migration.
+	///
+	/// Internally, the default implementation
+	/// - Handles passing data from `pre_upgrade` to `post_upgrade`
+	/// - Ensure storage is not modified in `pre_upgrade` and `post_upgrade` hooks.
+	///
+	/// Combining the `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` logic flow into a
+	/// single method call is helpful for scenarios like testing a tuple of migrations, where the
+	/// tuple contains order-dependent migrations.
 	#[cfg(feature = "try-runtime")]
 	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
 		let maybe_state = if checks {
@@ -128,13 +137,13 @@ pub trait OnRuntimeUpgrade {
 		Ok(weight)
 	}
 
-	/// See [`Hooks::on_runtime_upgrade`].
+	/// See [`Hooks::pre_upgrade`].
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		Ok(Vec::new())
 	}
 
-	/// See [`Hooks::on_runtime_upgrade`].
+	/// See [`Hooks::post_upgrade`].
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		Ok(())
@@ -151,18 +160,17 @@ impl OnRuntimeUpgrade for Tuple {
 		weight
 	}
 
-	// We are executing pre- and post-checks sequentially in order to be able to test several
-	// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
-	// hooks for tuples are a noop.
+	/// Implements the default behavior of `try_on_runtime_upgrade` for tuples, logging any errors
+	/// that occur.
 	#[cfg(feature = "try-runtime")]
 	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
-		let mut weight = Weight::zero();
+		let mut cumulative_weight = Weight::zero();
 
 		let mut errors = Vec::new();
 
 		for_tuples!(#(
 			match Tuple::try_on_runtime_upgrade(checks) {
-				Ok(weight) => { weight.saturating_add(weight); },
+				Ok(weight) => { cumulative_weight.saturating_accrue(weight); },
 				Err(err) => { errors.push(err); },
 			}
 		)*);
@@ -186,7 +194,27 @@ impl OnRuntimeUpgrade for Tuple {
 			return Err("Detected multiple errors while executing `try_on_runtime_upgrade`, check the logs!".into())
 		}
 
-		Ok(weight)
+		Ok(cumulative_weight)
+	}
+
+	/// [`OnRuntimeUpgrade::pre_upgrade`] should not be used on a tuple.
+	///
+	/// Instead, implementors should use [`OnRuntimeUpgrade::try_on_runtime_upgrade`] which
+	/// internally calls `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` for each tuple
+	/// member in sequence, enabling testing of order-dependent migrations.
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
+		Err("Usage of `pre_upgrade` with Tuples is not expected. Please use `try_on_runtime_upgrade` instead, which internally calls `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` for each tuple member.".into())
+	}
+
+	/// [`OnRuntimeUpgrade::post_upgrade`] should not be used on a tuple.
+	///
+	/// Instead, implementors should use [`OnRuntimeUpgrade::try_on_runtime_upgrade`] which
+	/// internally calls `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` for each tuple
+	/// member in sequence, enabling testing of order-dependent migrations.
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
+		Err("Usage of `post_upgrade` with Tuples is not expected. Please use `try_on_runtime_upgrade` instead, which internally calls `pre_upgrade` -> `on_runtime_upgrade` -> `post_upgrade` for each tuple member.".into())
 	}
 }
 
@@ -270,8 +298,13 @@ pub trait Hooks<BlockNumber> {
 	/// Must return the non-negotiable weight of both itself and whatever [`Hooks::on_finalize`]
 	/// wishes to consume.
 	///
+	/// ## Warning
+	///
 	/// The weight returned by this is treated as `DispatchClass::Mandatory`, meaning that
 	/// it MUST BE EXECUTED. If this is not the case, consider using [`Hooks::on_idle`] instead.
+	///
+	/// Try to keep any arbitrary execution __deterministic__ and within __minimal__ time
+	/// complexity. For example, do not execute any unbounded iterations.
 	///
 	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied, including inherent
 	/// extrinsics. Hence for instance, if you runtime includes `pallet-timestamp`, the `timestamp`
@@ -492,6 +525,7 @@ mod tests {
 		impl_test_type!(Baz);
 
 		TestExternalities::default().execute_with(|| {
+			// try_on_runtime_upgrade works
 			Foo::try_on_runtime_upgrade(true).unwrap();
 			assert_eq!(Pre::take(), vec!["Foo"]);
 			assert_eq!(Post::take(), vec!["Foo"]);
@@ -507,6 +541,10 @@ mod tests {
 			<(Foo, (Bar, Baz))>::try_on_runtime_upgrade(true).unwrap();
 			assert_eq!(Pre::take(), vec!["Foo", "Bar", "Baz"]);
 			assert_eq!(Post::take(), vec!["Foo", "Bar", "Baz"]);
+
+			// calling pre_upgrade and post_upgrade directly on tuple of pallets fails
+			assert!(<(Foo, (Bar, Baz))>::pre_upgrade().is_err());
+			assert!(<(Foo, (Bar, Baz))>::post_upgrade(vec![]).is_err());
 		});
 	}
 

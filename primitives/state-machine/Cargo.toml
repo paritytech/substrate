@@ -50,10 +50,10 @@ std = [
 	"sp-core/std",
 	"sp-externalities/std",
 	"sp-panic-handler",
+	"sp-runtime/std",
 	"sp-std/std",
 	"sp-trie/std",
-	"trie-db/std",
 	"thiserror",
 	"tracing",
-	"sp-runtime/std"
+	"trie-db/std",
 ]

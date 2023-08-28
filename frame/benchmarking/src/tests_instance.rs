@@ -19,7 +19,6 @@
 
 #![cfg(test)]
 
-use super::*;
 use frame_support::traits::ConstU32;
 use sp_runtime::{
 	testing::H256,

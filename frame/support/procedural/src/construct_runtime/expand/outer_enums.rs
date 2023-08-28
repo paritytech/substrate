@@ -159,10 +159,10 @@ pub fn expand_outer_enum(
 
 		#[derive(
 			#event_custom_derives
-			#scrate::codec::Encode,
-			#scrate::codec::Decode,
-			#scrate::scale_info::TypeInfo,
-			#scrate::RuntimeDebug,
+			#scrate::__private::codec::Encode,
+			#scrate::__private::codec::Decode,
+			#scrate::__private::scale_info::TypeInfo,
+			#scrate::__private::RuntimeDebug,
 		)]
 		#[allow(non_camel_case_types)]
 		pub enum #enum_name_ident {
@@ -247,7 +247,7 @@ fn expand_enum_conversion(
 		impl TryInto<#pallet_enum> for #enum_name_ident {
 			type Error = ();
 
-			fn try_into(self) -> #scrate::sp_std::result::Result<#pallet_enum, Self::Error> {
+			fn try_into(self) -> #scrate::__private::sp_std::result::Result<#pallet_enum, Self::Error> {
 				match self {
 					Self::#variant_name(evt) => Ok(evt),
 					_ => Err(()),
@@ -273,8 +273,8 @@ fn generate_error_impl(scrate: &TokenStream, enum_ty: OuterEnumType) -> TokenStr
 			pub fn from_dispatch_error(err: #scrate::sp_runtime::DispatchError) -> Option<Self> {
 				let #scrate::sp_runtime::DispatchError::Module(module_error) = err else { return None };
 
-				let bytes = #scrate::codec::Encode::encode(&module_error);
-				#scrate::codec::Decode::decode(&mut &bytes[..]).ok()
+				let bytes = #scrate::__private::codec::Encode::encode(&module_error);
+				#scrate::__private::codec::Decode::decode(&mut &bytes[..]).ok()
 			}
 		}
 	}

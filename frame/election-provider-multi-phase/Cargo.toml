@@ -48,46 +48,43 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
-	"pallet-election-provider-support-benchmarking?/std",
 	"codec/std",
-	"scale-info/std",
-	"log/std",
-
+	"frame-benchmarking?/std",
+	"frame-election-provider-support/std",
 	"frame-support/std",
 	"frame-system/std",
-
-	"sp-io/std",
-	"sp-std/std",
-	"sp-core/std",
-	"sp-runtime/std",
-	"sp-npos-elections/std",
-	"sp-arithmetic/std",
-	"frame-election-provider-support/std",
 	"log/std",
-
-	"frame-benchmarking?/std",
-	"rand/std",
-	"strum/std",
+	"log/std",
 	"pallet-balances/std",
-	"sp-tracing/std"
+	"pallet-election-provider-support-benchmarking?/std",
+	"rand/std",
+	"scale-info/std",
+	"sp-arithmetic/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-npos-elections/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"sp-tracing/std",
+	"strum/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-election-provider-support/runtime-benchmarks",
-	"rand",
-	"strum",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
 	"pallet-election-provider-support-benchmarking?/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks"
+	"rand",
+	"sp-runtime/runtime-benchmarks",
+	"strum",
 ]
 try-runtime = [
-	"frame-support/try-runtime",
 	"frame-election-provider-support/try-runtime",
+	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 	"pallet-balances/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

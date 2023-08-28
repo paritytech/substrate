@@ -42,7 +42,7 @@ substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/ru
 [features]
 runtime-benchmarks = []
 try-runtime = []
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"either/use_std",
@@ -51,15 +51,15 @@ std = [
 	"rand",
 	"scale-info/std",
 	"serde/std",
+	"sp-api/std",
 	"sp-application-crypto/std",
 	"sp-arithmetic/std",
 	"sp-core/std",
 	"sp-io/std",
-	"sp-std/std",
-	"sp-weights/std",
-	"sp-api/std",
 	"sp-state-machine/std",
-	"sp-tracing/std"
+	"sp-std/std",
+	"sp-tracing/std",
+	"sp-weights/std",
 ]
 
 # Serde support without relying on std features.

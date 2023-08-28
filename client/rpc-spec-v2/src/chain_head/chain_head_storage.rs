@@ -18,24 +18,24 @@
 
 //! Implementation of the `chainHead_storage` method.
 
-use std::{marker::PhantomData, sync::Arc};
+use std::{collections::VecDeque, marker::PhantomData, sync::Arc};
 
-use jsonrpsee::SubscriptionSink;
 use sc_client_api::{Backend, ChildInfo, StorageKey, StorageProvider};
+use sc_utils::mpsc::TracingUnboundedSender;
 use sp_api::BlockT;
 use sp_core::storage::well_known_keys;
 
+use crate::chain_head::event::OperationStorageItems;
+
 use super::{
 	event::{
-		ChainHeadStorageEvent, ItemsEvent, StorageQuery, StorageQueryType, StorageResult,
+		OperationError, OperationId, StorageQuery, StorageQueryType, StorageResult,
 		StorageResultType,
 	},
-	hex_string, ErrorEvent,
+	hex_string,
+	subscription::BlockGuard,
+	FollowEvent,
 };
-
-/// The maximum number of items the `chainHead_storage` can return
-/// before paginations is required.
-const MAX_ITER_ITEMS: usize = 10;
 
 /// The query type of an interation.
 enum IterQueryType {
@@ -49,14 +49,32 @@ enum IterQueryType {
 pub struct ChainHeadStorage<Client, Block, BE> {
 	/// Substrate client.
 	client: Arc<Client>,
-	_phantom: PhantomData<(Block, BE)>,
+	/// Queue of operations that may require pagination.
+	iter_operations: VecDeque<QueryIter>,
+	/// The maximum number of items reported by the `chainHead_storage` before
+	/// pagination is required.
+	operation_max_storage_items: usize,
+	_phandom: PhantomData<(BE, Block)>,
 }
 
 impl<Client, Block, BE> ChainHeadStorage<Client, Block, BE> {
 	/// Constructs a new [`ChainHeadStorage`].
-	pub fn new(client: Arc<Client>) -> Self {
-		Self { client, _phantom: PhantomData }
+	pub fn new(client: Arc<Client>, operation_max_storage_items: usize) -> Self {
+		Self {
+			client,
+			iter_operations: VecDeque::new(),
+			operation_max_storage_items,
+			_phandom: PhantomData,
+		}
 	}
+}
+
+/// Query to iterate over storage.
+struct QueryIter {
+	/// The next key from which the iteration should continue.
+	next_key: StorageKey,
+	/// The type of the query (either value or hash).
+	ty: IterQueryType,
 }
 
 /// Checks if the provided key (main or child key) is valid
@@ -70,10 +88,10 @@ fn is_key_queryable(key: &[u8]) -> bool {
 }
 
 /// The result of making a query call.
-type QueryResult = Result<Option<StorageResult>, ChainHeadStorageEvent>;
+type QueryResult = Result<Option<StorageResult>, String>;
 
 /// The result of iterating over keys.
-type QueryIterResult = Result<Vec<StorageResult>, ChainHeadStorageEvent>;
+type QueryIterResult = Result<(Vec<StorageResult>, Option<QueryIter>), String>;
 
 impl<Client, Block, BE> ChainHeadStorage<Client, Block, BE>
 where
@@ -101,11 +119,7 @@ where
 					result: StorageResultType::Value(hex_string(&storage_data.0)),
 				}))
 			})
-			.unwrap_or_else(|err| {
-				QueryResult::Err(ChainHeadStorageEvent::Error(ErrorEvent {
-					error: err.to_string(),
-				}))
-			})
+			.unwrap_or_else(|error| QueryResult::Err(error.to_string()))
 	}
 
 	/// Fetch the hash of a value from storage.
@@ -128,55 +142,120 @@ where
 					result: StorageResultType::Hash(hex_string(&storage_data.as_ref())),
 				}))
 			})
-			.unwrap_or_else(|err| {
-				QueryResult::Err(ChainHeadStorageEvent::Error(ErrorEvent {
-					error: err.to_string(),
-				}))
-			})
+			.unwrap_or_else(|error| QueryResult::Err(error.to_string()))
 	}
 
-	/// Handle iterating over (key, value) or (key, hash) pairs.
-	fn query_storage_iter(
+	/// Iterate over at most `operation_max_storage_items` keys.
+	///
+	/// Returns the storage result with a potential next key to resume iteration.
+	fn query_storage_iter_pagination(
 		&self,
+		query: QueryIter,
 		hash: Block::Hash,
-		key: &StorageKey,
 		child_key: Option<&ChildInfo>,
-		ty: IterQueryType,
 	) -> QueryIterResult {
-		let keys_iter = if let Some(child_key) = child_key {
-			self.client.child_storage_keys(hash, child_key.to_owned(), Some(key), None)
-		} else {
-			self.client.storage_keys(hash, Some(key), None)
-		}
-		.map_err(|err| ChainHeadStorageEvent::Error(ErrorEvent { error: err.to_string() }))?;
+		let QueryIter { next_key, ty } = query;
 
-		let mut ret = Vec::with_capacity(MAX_ITER_ITEMS);
-		let mut keys_iter = keys_iter.take(MAX_ITER_ITEMS);
-		while let Some(key) = keys_iter.next() {
+		let mut keys_iter = if let Some(child_key) = child_key {
+			self.client
+				.child_storage_keys(hash, child_key.to_owned(), Some(&next_key), None)
+		} else {
+			self.client.storage_keys(hash, Some(&next_key), None)
+		}
+		.map_err(|err| err.to_string())?;
+
+		let mut ret = Vec::with_capacity(self.operation_max_storage_items);
+		for _ in 0..self.operation_max_storage_items {
+			let Some(key) = keys_iter.next() else { break };
+
 			let result = match ty {
 				IterQueryType::Value => self.query_storage_value(hash, &key, child_key),
 				IterQueryType::Hash => self.query_storage_hash(hash, &key, child_key),
 			}?;
 
-			if let Some(result) = result {
-				ret.push(result);
+			if let Some(value) = result {
+				ret.push(value);
 			}
 		}
 
-		QueryIterResult::Ok(ret)
+		// Save the next key if any to continue the iteration.
+		let maybe_next_query = keys_iter.next().map(|next_key| QueryIter { next_key, ty });
+		Ok((ret, maybe_next_query))
+	}
+
+	/// Iterate over (key, hash) and (key, value) generating the `WaitingForContinue` event if
+	/// necessary.
+	async fn generate_storage_iter_events(
+		&mut self,
+		mut block_guard: BlockGuard<Block, BE>,
+		hash: Block::Hash,
+		child_key: Option<ChildInfo>,
+	) {
+		let sender = block_guard.response_sender();
+		let operation = block_guard.operation();
+
+		while let Some(query) = self.iter_operations.pop_front() {
+			if operation.was_stopped() {
+				return
+			}
+
+			let result = self.query_storage_iter_pagination(query, hash, child_key.as_ref());
+			let (events, maybe_next_query) = match result {
+				QueryIterResult::Ok(result) => result,
+				QueryIterResult::Err(error) => {
+					send_error::<Block>(&sender, operation.operation_id(), error.to_string());
+					return
+				},
+			};
+
+			if !events.is_empty() {
+				// Send back the results of the iteration produced so far.
+				let _ = sender.unbounded_send(FollowEvent::<Block::Hash>::OperationStorageItems(
+					OperationStorageItems { operation_id: operation.operation_id(), items: events },
+				));
+			}
+
+			if let Some(next_query) = maybe_next_query {
+				let _ =
+					sender.unbounded_send(FollowEvent::<Block::Hash>::OperationWaitingForContinue(
+						OperationId { operation_id: operation.operation_id() },
+					));
+
+				// The operation might be continued or cancelled only after the
+				// `OperationWaitingForContinue` is generated above.
+				operation.wait_for_continue().await;
+
+				// Give a chance for the other items to advance next time.
+				self.iter_operations.push_back(next_query);
+			}
+		}
+
+		if operation.was_stopped() {
+			return
+		}
+
+		let _ =
+			sender.unbounded_send(FollowEvent::<Block::Hash>::OperationStorageDone(OperationId {
+				operation_id: operation.operation_id(),
+			}));
 	}
 
 	/// Generate the block events for the `chainHead_storage` method.
-	pub fn generate_events(
-		&self,
-		mut sink: SubscriptionSink,
+	pub async fn generate_events(
+		&mut self,
+		mut block_guard: BlockGuard<Block, BE>,
 		hash: Block::Hash,
 		items: Vec<StorageQuery<StorageKey>>,
 		child_key: Option<ChildInfo>,
 	) {
+		let sender = block_guard.response_sender();
+		let operation = block_guard.operation();
+
 		if let Some(child_key) = child_key.as_ref() {
 			if !is_key_queryable(child_key.storage_key()) {
-				let _ = sink.send(&ChainHeadStorageEvent::Done);
+				let _ = sender.unbounded_send(FollowEvent::<Block::Hash>::OperationStorageDone(
+					OperationId { operation_id: operation.operation_id() },
+				));
 				return
 			}
 		}
@@ -192,8 +271,8 @@ where
 					match self.query_storage_value(hash, &item.key, child_key.as_ref()) {
 						Ok(Some(value)) => storage_results.push(value),
 						Ok(None) => continue,
-						Err(err) => {
-							let _ = sink.send(&err);
+						Err(error) => {
+							send_error::<Block>(&sender, operation.operation_id(), error);
 							return
 						},
 					}
@@ -202,44 +281,42 @@ where
 					match self.query_storage_hash(hash, &item.key, child_key.as_ref()) {
 						Ok(Some(value)) => storage_results.push(value),
 						Ok(None) => continue,
-						Err(err) => {
-							let _ = sink.send(&err);
+						Err(error) => {
+							send_error::<Block>(&sender, operation.operation_id(), error);
 							return
 						},
 					},
-				StorageQueryType::DescendantsValues => match self.query_storage_iter(
-					hash,
-					&item.key,
-					child_key.as_ref(),
-					IterQueryType::Value,
-				) {
-					Ok(values) => storage_results.extend(values),
-					Err(err) => {
-						let _ = sink.send(&err);
-						return
-					},
-				},
-				StorageQueryType::DescendantsHashes => match self.query_storage_iter(
-					hash,
-					&item.key,
-					child_key.as_ref(),
-					IterQueryType::Hash,
-				) {
-					Ok(values) => storage_results.extend(values),
-					Err(err) => {
-						let _ = sink.send(&err);
-						return
-					},
-				},
+				StorageQueryType::DescendantsValues => self
+					.iter_operations
+					.push_back(QueryIter { next_key: item.key, ty: IterQueryType::Value }),
+				StorageQueryType::DescendantsHashes => self
+					.iter_operations
+					.push_back(QueryIter { next_key: item.key, ty: IterQueryType::Hash }),
 				_ => continue,
 			};
 		}
 
 		if !storage_results.is_empty() {
-			let event = ChainHeadStorageEvent::Items(ItemsEvent { items: storage_results });
-			let _ = sink.send(&event);
+			let _ = sender.unbounded_send(FollowEvent::<Block::Hash>::OperationStorageItems(
+				OperationStorageItems {
+					operation_id: operation.operation_id(),
+					items: storage_results,
+				},
+			));
 		}
 
-		let _ = sink.send(&ChainHeadStorageEvent::Done);
+		self.generate_storage_iter_events(block_guard, hash, child_key).await
 	}
+}
+
+/// Build and send the opaque error back to the `chainHead_follow` method.
+fn send_error<Block: BlockT>(
+	sender: &TracingUnboundedSender<FollowEvent<Block::Hash>>,
+	operation_id: String,
+	error: String,
+) {
+	let _ = sender.unbounded_send(FollowEvent::<Block::Hash>::OperationError(OperationError {
+		operation_id,
+		error,
+	}));
 }

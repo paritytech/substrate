@@ -38,9 +38,9 @@ pub fn expand_outer_hold_reason(pallet_decls: &[Pallet], scrate: &TokenStream) -
 		/// A reason for placing a hold on funds.
 		#[derive(
 			Copy, Clone, Eq, PartialEq, Ord, PartialOrd,
-			#scrate::codec::Encode, #scrate::codec::Decode, #scrate::codec::MaxEncodedLen,
-			#scrate::scale_info::TypeInfo,
-			#scrate::RuntimeDebug,
+			#scrate::__private::codec::Encode, #scrate::__private::codec::Decode, #scrate::__private::codec::MaxEncodedLen,
+			#scrate::__private::scale_info::TypeInfo,
+			#scrate::__private::RuntimeDebug,
 		)]
 		pub enum RuntimeHoldReason {
 			#( #hold_reason_variants )*

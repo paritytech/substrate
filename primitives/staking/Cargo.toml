@@ -23,15 +23,13 @@ sp-runtime = { default-features = false, path = "../runtime" }
 sp-std = { default-features = false, path = "../std" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
-	"serde/std",
 	"codec/std",
 	"scale-info/std",
+	"serde/std",
 	"sp-core/std",
 	"sp-runtime/std",
 	"sp-std/std",
 ]
-runtime-benchmarks = [
-	"sp-runtime/runtime-benchmarks"
-]
+runtime-benchmarks = [ "sp-runtime/runtime-benchmarks" ]

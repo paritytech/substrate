@@ -17,9 +17,9 @@
 
 use super::*;
 use crate::{mock::*, Event};
-use frame_support::{assert_err, assert_noop, assert_ok, assert_storage_noop, bounded_btree_map};
+use frame_support::{assert_err, assert_noop, assert_ok, assert_storage_noop};
 use pallet_balances::Event as BEvent;
-use sp_runtime::{traits::Dispatchable, FixedU128};
+use sp_runtime::{bounded_btree_map, traits::Dispatchable, FixedU128};
 
 macro_rules! unbonding_pools_with_era {
 	($($k:expr => $v:expr),* $(,)?) => {{
@@ -3260,7 +3260,7 @@ mod pool_withdraw_unbonded {
 
 mod withdraw_unbonded {
 	use super::*;
-	use frame_support::bounded_btree_map;
+	use sp_runtime::bounded_btree_map;
 
 	#[test]
 	fn withdraw_unbonded_works_against_slashed_no_era_sub_pool() {
