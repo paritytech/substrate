@@ -10233,8 +10233,10 @@ name = "sc-rpc-server"
 version = "4.0.0-dev"
 dependencies = [
  "http",
+ "hyper",
  "jsonrpsee",
  "log",
+ "serde",
  "serde_json",
  "substrate-prometheus-endpoint",
  "tokio",

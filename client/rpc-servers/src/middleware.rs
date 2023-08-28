@@ -18,12 +18,25 @@
 
 //! RPC middleware to collect prometheus metrics on RPC calls.
 
-use jsonrpsee::server::logger::{HttpRequest, Logger, MethodKind, Params, TransportProtocol};
+use std::{
+	error::Error,
+	future::Future,
+	net::SocketAddr,
+	pin::Pin,
+	task::{Context, Poll},
+};
+
+use http::{HeaderValue, Method, Request, Response, StatusCode, Uri};
+use hyper::Body;
+use jsonrpsee::{
+	server::logger::{HttpRequest, Logger, MethodKind, Params, TransportProtocol},
+	types::Response as RpcResponse,
+};
 use prometheus_endpoint::{
 	register, Counter, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry,
 	U64,
 };
-use std::net::SocketAddr;
+use tower::Service;
 
 /// Histogram time buckets in microseconds.
 const HISTOGRAM_BUCKETS: [f64; 11] = [
@@ -39,6 +52,9 @@ const HISTOGRAM_BUCKETS: [f64; 11] = [
 	1_000_000.0,
 	10_000_000.0,
 ];
+
+const RPC_SYSTEM_HEALTH_CALL: &str = r#"{"jsonrpc":"2.0","method":"system_health","id":0}"#;
+const HEADER_VALUE_JSON: HeaderValue = HeaderValue::from_static("application/json; charset=utf-8");
 
 /// Metrics for RPC middleware storing information about the number of requests started/completed,
 /// calls started/completed and their timings.
@@ -220,5 +236,157 @@ fn transport_label_str(t: TransportProtocol) -> &'static str {
 	match t {
 		TransportProtocol::Http => "http",
 		TransportProtocol::WebSocket => "ws",
+	}
+}
+
+/// Layer that applies [`NodeHealthProxy`] which
+/// proxies `/health` and `/health/readiness` endpoints.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct NodeHealthProxyLayer;
+
+impl NodeHealthProxyLayer {
+	pub fn new() -> Self {
+		Self
+	}
+}
+
+impl<S> tower::Layer<S> for NodeHealthProxyLayer {
+	type Service = NodeHealthProxy<S>;
+
+	fn layer(&self, service: S) -> Self::Service {
+		NodeHealthProxy::new(service)
+	}
+}
+
+pub(crate) struct NodeHealthProxy<S>(S);
+
+impl<S> NodeHealthProxy<S> {
+	/// Creates a new [`NodeHealthProxy`].
+	pub fn new(service: S) -> Self {
+		Self(service)
+	}
+}
+
+impl<S> tower::Service<http::Request<Body>> for NodeHealthProxy<S>
+where
+	S: Service<http::Request<Body>, Response = Response<Body>>,
+	S::Response: 'static,
+	S::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
+	S::Future: Send + 'static,
+{
+	type Response = S::Response;
+	type Error = Box<dyn Error + Send + Sync + 'static>;
+	type Future =
+		Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
+
+	fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+		self.0.poll_ready(cx).map_err(Into::into)
+	}
+
+	fn call(&mut self, mut req: Request<Body>) -> Self::Future {
+		let maybe_intercept = InterceptRequest::from_http(&req);
+
+		// Modify the request and proxy it to `system_health`
+		if let InterceptRequest::Health | InterceptRequest::Readiness = maybe_intercept {
+			// RPC methods are accessed with `POST`.
+			*req.method_mut() = Method::POST;
+			// Precautionary remove the URI.
+			*req.uri_mut() = Uri::from_static("/");
+
+			// Requests must have the following headers:
+			req.headers_mut().insert(http::header::CONTENT_TYPE, HEADER_VALUE_JSON);
+			req.headers_mut().insert(http::header::ACCEPT, HEADER_VALUE_JSON);
+
+			// Adjust the body to reflect the method call.
+			req = req.map(|_| Body::from(RPC_SYSTEM_HEALTH_CALL));
+		}
+
+		// Call the inner service and get a future that resolves to the response.
+		let fut = self.0.call(req);
+
+		let res_fut = async move {
+			let res = fut.await.map_err(|err| err.into())?;
+
+			Ok(match maybe_intercept {
+				InterceptRequest::No => res,
+				InterceptRequest::Health => {
+					let health = parse_rpc_response(res.into_body()).await?;
+					http_ok_response(serde_json::to_string(&health)?)
+				},
+				InterceptRequest::Readiness => {
+					let health = parse_rpc_response(res.into_body()).await?;
+					if !health.is_syncing && health.peers > 0 {
+						http_ok_response(Body::empty())
+					} else {
+						http_internal_error()
+					}
+				},
+			})
+		};
+
+		Box::pin(res_fut)
+	}
+}
+
+// NOTE: This is duplicated here to avoid dependency to the `RPC API`.
+#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Health {
+	/// Number of connected peers
+	pub peers: usize,
+	/// Is the node syncing
+	pub is_syncing: bool,
+	/// Should this node have any peers
+	///
+	/// Might be false for local chains or when running without discovery.
+	pub should_have_peers: bool,
+}
+
+fn http_ok_response<S: Into<hyper::Body>>(body: S) -> hyper::Response<hyper::Body> {
+	http_response(StatusCode::OK, body)
+}
+
+fn http_response<S: Into<hyper::Body>>(
+	status_code: StatusCode,
+	body: S,
+) -> hyper::Response<hyper::Body> {
+	hyper::Response::builder()
+		.status(status_code)
+		.header(http::header::CONTENT_TYPE, HEADER_VALUE_JSON)
+		.body(body.into())
+		.expect("Header is valid; qed")
+}
+
+fn http_internal_error() -> hyper::Response<hyper::Body> {
+	http_response(hyper::StatusCode::INTERNAL_SERVER_ERROR, Body::empty())
+}
+
+async fn parse_rpc_response(body: Body) -> Result<Health, Box<dyn Error + Send + Sync + 'static>> {
+	let bytes = hyper::body::to_bytes(body).await?;
+
+	serde_json::from_slice::<RpcResponse<Health>>(&bytes)
+		.map(|r| r.result)
+		.map_err(Into::into)
+}
+
+/// Whether the request should be treated as ordinary RPC call or be modified.
+enum InterceptRequest {
+	/// Proxy `/health` to `system_health`.
+	Health,
+	/// Checks if node has at least one peer and is not doing major syncing.
+	///
+	/// Returns HTTP status code 200 on success otherwise HTTP status code 500 is returned.
+	Readiness,
+	/// Treat as a ordinary RPC call and don't modify the request or response.
+	No,
+}
+
+impl InterceptRequest {
+	fn from_http(req: &Request<Body>) -> Self {
+		match req.uri().path() {
+			"/health" if req.method() == http::Method::GET => InterceptRequest::Health,
+			"/health/readiness" if req.method() == http::Method::GET => InterceptRequest::Readiness,
+			_ => InterceptRequest::No,
+		}
 	}
 }
