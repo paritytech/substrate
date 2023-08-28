@@ -238,7 +238,7 @@ where
 		+ From<ChargeAssetLiquidityOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
 {
-	const IDENTIFIER: &'static str = "ChargeAssetTxPayment";
+	const IDENTIFIER: &'static str = "ChargeAndConvertAssetTxPayment";
 	type AccountId = T::AccountId;
 	type Call = T::RuntimeCall;
 	type AdditionalSigned = ();
