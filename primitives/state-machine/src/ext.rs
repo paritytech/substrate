@@ -22,7 +22,7 @@ use crate::overlayed_changes::OverlayedExtensions;
 use crate::{
 	backend::Backend, IndexOperation, IterArgs, OverlayedChanges, StorageKey, StorageValue,
 };
-use codec::{Encode, EncodeAppend};
+use codec::{Compact, CompactLen, Decode, Encode};
 use hash_db::Hasher;
 #[cfg(feature = "std")]
 use sp_core::hexdisplay::HexDisplay;
@@ -31,12 +31,11 @@ use sp_core::storage::{
 };
 use sp_externalities::{Extension, ExtensionStore, Externalities, MultiRemovalResults};
 
-use crate::{log_error, trace, warn};
+use crate::{trace, warn};
 use sp_std::{
 	any::{Any, TypeId},
 	boxed::Box,
 	cmp::Ordering,
-	vec,
 	vec::Vec,
 };
 #[cfg(feature = "std")]
@@ -141,7 +140,7 @@ where
 	H::Out: Ord + 'static,
 	B: 'a + Backend<H>,
 {
-	pub fn storage_pairs(&self) -> Vec<(StorageKey, StorageValue)> {
+	pub fn storage_pairs(&mut self) -> Vec<(StorageKey, StorageValue)> {
 		use std::collections::HashMap;
 
 		self.backend
@@ -167,7 +166,7 @@ where
 		self.overlay.set_offchain_storage(key, value)
 	}
 
-	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
+	fn storage(&mut self, key: &[u8]) -> Option<StorageValue> {
 		let _guard = guard();
 		let result = self
 			.overlay
@@ -193,7 +192,7 @@ where
 		result
 	}
 
-	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
+	fn storage_hash(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = guard();
 		let result = self
 			.overlay
@@ -211,7 +210,7 @@ where
 		result.map(|r| r.encode())
 	}
 
-	fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageValue> {
+	fn child_storage(&mut self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageValue> {
 		let _guard = guard();
 		let result = self
 			.overlay
@@ -233,7 +232,7 @@ where
 		result
 	}
 
-	fn child_storage_hash(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage_hash(&mut self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = guard();
 		let result = self
 			.overlay
@@ -255,7 +254,7 @@ where
 		result.map(|r| r.encode())
 	}
 
-	fn exists_storage(&self, key: &[u8]) -> bool {
+	fn exists_storage(&mut self, key: &[u8]) -> bool {
 		let _guard = guard();
 		let result = match self.overlay.storage(key) {
 			Some(x) => x.is_some(),
@@ -273,7 +272,7 @@ where
 		result
 	}
 
-	fn exists_child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> bool {
+	fn exists_child_storage(&mut self, child_info: &ChildInfo, key: &[u8]) -> bool {
 		let _guard = guard();
 
 		let result = match self.overlay.child_storage(child_info, key) {
@@ -295,7 +294,7 @@ where
 		result
 	}
 
-	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
+	fn next_storage_key(&mut self, key: &[u8]) -> Option<StorageKey> {
 		let mut next_backend_key =
 			self.backend.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		let mut overlay_changes = self.overlay.iter_after(key).peekable();
@@ -333,7 +332,7 @@ where
 		}
 	}
 
-	fn next_child_storage_key(&self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageKey> {
+	fn next_child_storage_key(&mut self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageKey> {
 		let mut next_backend_key = self
 			.backend
 			.next_child_storage_key(child_info, key)
@@ -503,10 +502,9 @@ where
 		let _guard = guard();
 
 		let backend = &mut self.backend;
-		let current_value = self.overlay.value_mut_or_insert_with(&key, || {
+		self.overlay.append_storage_init(key.clone(), value, || {
 			backend.storage(&key).expect(EXT_NOT_ALLOWED_TO_FAIL).unwrap_or_default()
 		});
-		StorageAppend::new(current_value).append(value);
 	}
 
 	fn storage_root(&mut self, state_version: StateVersion) -> Vec<u8> {
@@ -733,10 +731,36 @@ impl<'a> StorageAppend<'a> {
 		Self(storage)
 	}
 
+	/// Extract current length if defined.
+	pub fn extract_nb_appends(&self) -> Option<u32> {
+		let len = u32::from(Compact::<u32>::decode(&mut &self.0[..]).ok()?);
+		Some(len)
+	}
+
+	/// Replace current length if defined.
+	pub fn replace_nb_appends(&mut self, old_length: Option<u32>, new_length: u32) {
+		let encoded_len = old_length.map(|l| Compact::<u32>::compact_len(&l)).unwrap_or(0);
+		let encoded_new = Compact::<u32>(new_length).encode();
+		if encoded_len > encoded_new.len() {
+			let diff = encoded_len - encoded_new.len();
+			*self.0 = self.0.split_off(diff);
+		} else if encoded_len < encoded_new.len() {
+			let diff = encoded_new.len() - encoded_len;
+			// Non constant change
+			for _ in 0..diff {
+				self.0.insert(0, 0);
+			}
+		}
+		self.0[0..encoded_new.len()].copy_from_slice(&encoded_new);
+	}
+
 	/// Append the given `value` to the storage item.
 	///
-	/// If appending fails, `[value]` is stored in the storage item.
-	pub fn append(&mut self, value: Vec<u8>) {
+	/// If appending fails, `[value]` is stored in the storage item and we return false.
+	#[cfg(any(test, feature = "fuzzing"))]
+	pub fn append(&mut self, value: Vec<u8>) -> bool {
+		use codec::EncodeAppend;
+		let mut result = true;
 		let value = vec![EncodeOpaqueValue(value)];
 
 		let item = sp_std::mem::take(self.0);
@@ -744,13 +768,34 @@ impl<'a> StorageAppend<'a> {
 		*self.0 = match Vec::<EncodeOpaqueValue>::append_or_new(item, &value) {
 			Ok(item) => item,
 			Err(_) => {
-				log_error!(
+				result = false;
+				crate::log_error!(
 					target: "runtime",
 					"Failed to append value, resetting storage item to `[value]`.",
 				);
 				value.encode()
 			},
 		};
+		result
+	}
+
+	/// Append to current buffer, do not touch the prefixed size.
+	pub fn append_raw(&mut self, mut value: Vec<u8>) {
+		self.0.append(&mut value)
+	}
+
+	/// Compare two size, return difference of encoding length.
+	/// Bool indicate if first size is bigger than second (unusual case
+	/// where append does reduce materialized size: this can happen
+	/// under certain access and transaction conditions).
+	pub fn diff_materialized(previous: Option<u32>, new: Option<u32>) -> (usize, bool) {
+		let prev = previous.map(|l| Compact::<u32>::compact_len(&l)).unwrap_or(0);
+		let new = new.map(|l| Compact::<u32>::compact_len(&l)).unwrap_or(0);
+		if new > prev {
+			(new - prev, false)
+		} else {
+			(prev - new, true)
+		}
 	}
 }
 
@@ -851,7 +896,7 @@ mod tests {
 		)
 			.into();
 
-		let ext = TestExt::new(&mut overlay, &backend, None);
+		let mut ext = TestExt::new(&mut overlay, &backend, None);
 
 		// next_backend < next_overlay
 		assert_eq!(ext.next_storage_key(&[5]), Some(vec![10]));
@@ -867,7 +912,7 @@ mod tests {
 
 		drop(ext);
 		overlay.set_storage(vec![50], Some(vec![50]));
-		let ext = TestExt::new(&mut overlay, &backend, None);
+		let mut ext = TestExt::new(&mut overlay, &backend, None);
 
 		// next_overlay exist but next_backend doesn't exist
 		assert_eq!(ext.next_storage_key(&[40]), Some(vec![50]));
@@ -897,7 +942,7 @@ mod tests {
 		)
 			.into();
 
-		let ext = TestExt::new(&mut overlay, &backend, None);
+		let mut ext = TestExt::new(&mut overlay, &backend, None);
 
 		assert_eq!(ext.next_storage_key(&[5]), Some(vec![30]));
 
@@ -930,7 +975,7 @@ mod tests {
 		)
 			.into();
 
-		let ext = TestExt::new(&mut overlay, &backend, None);
+		let mut ext = TestExt::new(&mut overlay, &backend, None);
 
 		// next_backend < next_overlay
 		assert_eq!(ext.next_child_storage_key(child_info, &[5]), Some(vec![10]));
@@ -946,7 +991,7 @@ mod tests {
 
 		drop(ext);
 		overlay.set_child_storage(child_info, vec![50], Some(vec![50]));
-		let ext = TestExt::new(&mut overlay, &backend, None);
+		let mut ext = TestExt::new(&mut overlay, &backend, None);
 
 		// next_overlay exist but next_backend doesn't exist
 		assert_eq!(ext.next_child_storage_key(child_info, &[40]), Some(vec![50]));
@@ -977,7 +1022,7 @@ mod tests {
 		)
 			.into();
 
-		let ext = TestExt::new(&mut overlay, &backend, None);
+		let mut ext = TestExt::new(&mut overlay, &backend, None);
 
 		assert_eq!(ext.child_storage(child_info, &[10]), Some(vec![10]));
 		assert_eq!(

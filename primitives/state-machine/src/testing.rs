@@ -209,7 +209,7 @@ where
 	///
 	/// In contrast to [`commit_all`](Self::commit_all) this will not panic if there are open
 	/// transactions.
-	pub fn as_backend(&self) -> InMemoryBackend<H> {
+	pub fn as_backend(&mut self) -> InMemoryBackend<H> {
 		let top: Vec<_> =
 			self.overlay.changes().map(|(k, v)| (k.clone(), v.value().cloned())).collect();
 		let mut transaction = vec![(None, top)];
@@ -293,13 +293,14 @@ where
 	}
 }
 
-impl<H: Hasher> PartialEq for TestExternalities<H>
+impl<H> TestExternalities<H>
 where
+	H: Hasher,
 	H::Out: Ord + 'static + codec::Codec,
 {
 	/// This doesn't test if they are in the same state, only if they contains the
 	/// same data at this state
-	fn eq(&self, other: &TestExternalities<H>) -> bool {
+	pub fn eq(&mut self, other: &mut TestExternalities<H>) -> bool {
 		self.as_backend().eq(&other.as_backend())
 	}
 }

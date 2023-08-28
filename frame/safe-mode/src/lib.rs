@@ -398,7 +398,7 @@ pub mod pallet {
 		/// [`EnteredUntil`].
 		fn on_initialize(current: BlockNumberFor<T>) -> Weight {
 			let Some(limit) = EnteredUntil::<T>::get() else {
-				return T::WeightInfo::on_initialize_noop();
+				return T::WeightInfo::on_initialize_noop()
 			};
 
 			if current > limit {

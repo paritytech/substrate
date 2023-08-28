@@ -166,9 +166,7 @@ where
 
 		let mut ret = Vec::with_capacity(self.operation_max_storage_items);
 		for _ in 0..self.operation_max_storage_items {
-			let Some(key) = keys_iter.next() else {
-				break
-			};
+			let Some(key) = keys_iter.next() else { break };
 
 			let result = match ty {
 				IterQueryType::Value => self.query_storage_value(hash, &key, child_key),

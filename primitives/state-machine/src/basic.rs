@@ -60,7 +60,8 @@ impl BasicExternalities {
 	}
 
 	/// Consume self and returns inner storages
-	pub fn into_storages(self) -> Storage {
+	#[cfg(feature = "std")]
+	pub fn into_storages(mut self) -> Storage {
 		Storage {
 			top: self
 				.overlay
@@ -88,6 +89,7 @@ impl BasicExternalities {
 	/// Execute the given closure `f` with the externalities set and initialized with `storage`.
 	///
 	/// Returns the result of the closure and updates `storage` with all changes.
+	#[cfg(feature = "std")]
 	pub fn execute_with_storage<R>(
 		storage: &mut sp_core::storage::Storage,
 		f: impl FnOnce() -> R,
@@ -119,8 +121,9 @@ impl BasicExternalities {
 	}
 }
 
-impl PartialEq for BasicExternalities {
-	fn eq(&self, other: &BasicExternalities) -> bool {
+impl BasicExternalities {
+	/// Same as `Eq` trait but on mutable references.
+	pub fn eq(&mut self, other: &mut BasicExternalities) -> bool {
 		self.overlay.changes().map(|(k, v)| (k, v.value())).collect::<BTreeMap<_, _>>() ==
 			other.overlay.changes().map(|(k, v)| (k, v.value())).collect::<BTreeMap<_, _>>() &&
 			self.overlay
@@ -160,27 +163,27 @@ impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
 impl Externalities for BasicExternalities {
 	fn set_offchain_storage(&mut self, _key: &[u8], _value: Option<&[u8]>) {}
 
-	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
+	fn storage(&mut self, key: &[u8]) -> Option<StorageValue> {
 		self.overlay.storage(key).and_then(|v| v.map(|v| v.to_vec()))
 	}
 
-	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
+	fn storage_hash(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		self.storage(key).map(|v| Blake2Hasher::hash(&v).encode())
 	}
 
-	fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageValue> {
+	fn child_storage(&mut self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageValue> {
 		self.overlay.child_storage(child_info, key).and_then(|v| v.map(|v| v.to_vec()))
 	}
 
-	fn child_storage_hash(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage_hash(&mut self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>> {
 		self.child_storage(child_info, key).map(|v| Blake2Hasher::hash(&v).encode())
 	}
 
-	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
+	fn next_storage_key(&mut self, key: &[u8]) -> Option<StorageKey> {
 		self.overlay.iter_after(key).find_map(|(k, v)| v.value().map(|_| k.to_vec()))
 	}
 
-	fn next_child_storage_key(&self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageKey> {
+	fn next_child_storage_key(&mut self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageKey> {
 		self.overlay
 			.child_iter_after(child_info.storage_key(), key)
 			.find_map(|(k, v)| v.value().map(|_| k.to_vec()))
@@ -245,8 +248,7 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn storage_append(&mut self, key: Vec<u8>, value: Vec<u8>) {
-		let current_value = self.overlay.value_mut_or_insert_with(&key, || Default::default());
-		crate::ext::StorageAppend::new(current_value).append(value);
+		self.overlay.append_storage(key, value);
 	}
 
 	fn storage_root(&mut self, state_version: StateVersion) -> Vec<u8> {

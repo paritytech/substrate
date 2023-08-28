@@ -333,12 +333,8 @@ impl<T: Config> Pallet<T> {
 			region.begin = r + 1;
 			contribution.length.saturating_dec();
 
-			let Some(mut pool_record) = InstaPoolHistory::<T>::get(r) else {
-				continue;
-			};
-			let Some(total_payout) = pool_record.maybe_payout else {
-				break;
-			};
+			let Some(mut pool_record) = InstaPoolHistory::<T>::get(r) else { continue };
+			let Some(total_payout) = pool_record.maybe_payout else { break };
 			let p = total_payout
 				.saturating_mul(contributed_parts.into())
 				.checked_div(&pool_record.private_contributions.into())

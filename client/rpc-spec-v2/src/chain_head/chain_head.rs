@@ -462,7 +462,8 @@ where
 		follow_subscription: String,
 		operation_id: String,
 	) -> RpcResult<()> {
-		let Some(operation) = self.subscriptions.get_operation(&follow_subscription, &operation_id) else {
+		let Some(operation) = self.subscriptions.get_operation(&follow_subscription, &operation_id)
+		else {
 			return Ok(())
 		};
 
@@ -479,7 +480,8 @@ where
 		follow_subscription: String,
 		operation_id: String,
 	) -> RpcResult<()> {
-		let Some(operation) = self.subscriptions.get_operation(&follow_subscription, &operation_id) else {
+		let Some(operation) = self.subscriptions.get_operation(&follow_subscription, &operation_id)
+		else {
 			return Ok(())
 		};
 

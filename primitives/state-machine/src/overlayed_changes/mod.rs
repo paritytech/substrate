@@ -287,7 +287,7 @@ impl<H: Hasher> OverlayedChanges<H> {
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be referred
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
-	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
+	pub fn storage(&mut self, key: &[u8]) -> Option<Option<&[u8]>> {
 		self.top.get(key).map(|x| {
 			let value = x.value();
 			let size_read = value.map(|x| x.len() as u64).unwrap_or(0);
@@ -302,30 +302,11 @@ impl<H: Hasher> OverlayedChanges<H> {
 		self.storage_transaction_cache = None;
 	}
 
-	/// Returns mutable reference to current value.
-	/// If there is no value in the overlay, the given callback is used to initiate the value.
-	/// Warning this function registers a change, so the mutable reference MUST be modified.
-	///
-	/// Can be rolled back or committed when called inside a transaction.
-	#[must_use = "A change was registered, so this value MUST be modified."]
-	pub fn value_mut_or_insert_with(
-		&mut self,
-		key: &[u8],
-		init: impl Fn() -> StorageValue,
-	) -> &mut StorageValue {
-		self.mark_dirty();
-
-		let value = self.top.modify(key.to_vec(), init, self.extrinsic_index());
-
-		// if the value was deleted initialise it back with an empty vec
-		value.get_or_insert_with(StorageValue::default)
-	}
-
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be referred
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
-	pub fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Option<&[u8]>> {
-		let map = self.children.get(child_info.storage_key())?;
+	pub fn child_storage(&mut self, child_info: &ChildInfo, key: &[u8]) -> Option<Option<&[u8]>> {
+		let map = self.children.get_mut(child_info.storage_key())?;
 		let value = map.0.get(key)?.value();
 		let size_read = value.map(|x| x.len() as u64).unwrap_or(0);
 		self.stats.tally_read_modified(size_read);
@@ -340,7 +321,29 @@ impl<H: Hasher> OverlayedChanges<H> {
 
 		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
 		self.stats.tally_write_overlay(size_write);
-		self.top.set(key, val, self.extrinsic_index());
+		let extrinsic_index = self.extrinsic_index();
+		self.top.set(key, val, extrinsic_index);
+	}
+
+	/// Append a value to encoded storage.
+	pub fn append_storage(&mut self, key: StorageKey, val: StorageValue) {
+		let extrinsic_index = self.extrinsic_index();
+		let size_write = val.len() as u64;
+		self.stats.tally_write_overlay(size_write);
+		self.top.append_storage(key, val, extrinsic_index);
+	}
+
+	/// Append a value to storage, init with existing value if first write.
+	pub fn append_storage_init(
+		&mut self,
+		key: StorageKey,
+		val: StorageValue,
+		init: impl Fn() -> StorageValue,
+	) {
+		let extrinsic_index = self.extrinsic_index();
+		let size_write = val.len() as u64;
+		self.stats.tally_write_overlay(size_write);
+		self.top.append_storage_init(key, val, init, extrinsic_index);
 	}
 
 	/// Set a new value for the specified key and child.
@@ -394,7 +397,8 @@ impl<H: Hasher> OverlayedChanges<H> {
 	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) -> u32 {
 		self.mark_dirty();
 
-		self.top.clear_where(|key, _| key.starts_with(prefix), self.extrinsic_index())
+		let extrinsic_index = self.extrinsic_index();
+		self.top.clear_where(|key, _| key.starts_with(prefix), extrinsic_index)
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
@@ -455,7 +459,7 @@ impl<H: Hasher> OverlayedChanges<H> {
 		});
 		self.offchain
 			.overlay_mut()
-			.rollback_transaction()
+			.rollback_transaction_offchain()
 			.expect("Top and offchain changesets are started in lockstep; qed");
 		Ok(())
 	}
@@ -473,7 +477,7 @@ impl<H: Hasher> OverlayedChanges<H> {
 		}
 		self.offchain
 			.overlay_mut()
-			.commit_transaction()
+			.commit_transaction_offchain()
 			.expect("Top and offchain changesets are started in lockstep; qed");
 		Ok(())
 	}
@@ -509,7 +513,7 @@ impl<H: Hasher> OverlayedChanges<H> {
 		}
 		self.offchain
 			.overlay_mut()
-			.exit_runtime()
+			.exit_runtime_offchain()
 			.expect("Top and offchain changesets are started in lockstep; qed");
 		Ok(())
 	}
@@ -528,22 +532,23 @@ impl<H: Hasher> OverlayedChanges<H> {
 
 	/// Get an iterator over all child changes as seen by the current transaction.
 	pub fn children(
-		&self,
-	) -> impl Iterator<Item = (impl Iterator<Item = (&StorageKey, &OverlayedValue)>, &ChildInfo)> {
-		self.children.values().map(|v| (v.0.changes(), &v.1))
+		&mut self,
+	) -> impl Iterator<Item = (impl Iterator<Item = (&StorageKey, &mut OverlayedValue)>, &ChildInfo)>
+	{
+		self.children.values_mut().map(|v| (v.0.changes(), &v.1))
 	}
 
 	/// Get an iterator over all top changes as been by the current transaction.
-	pub fn changes(&self) -> impl Iterator<Item = (&StorageKey, &OverlayedValue)> {
+	pub fn changes(&mut self) -> impl Iterator<Item = (&StorageKey, &mut OverlayedValue)> {
 		self.top.changes()
 	}
 
 	/// Get an optional iterator over all child changes stored under the supplied key.
 	pub fn child_changes(
-		&self,
+		&mut self,
 		key: &[u8],
-	) -> Option<(impl Iterator<Item = (&StorageKey, &OverlayedValue)>, &ChildInfo)> {
-		self.children.get(key).map(|(overlay, info)| (overlay.changes(), info))
+	) -> Option<(impl Iterator<Item = (&StorageKey, &mut OverlayedValue)>, &ChildInfo)> {
+		self.children.get_mut(key).map(|(overlay, info)| (overlay.changes(), &*info))
 	}
 
 	/// Get an list of all index operations.
@@ -573,11 +578,12 @@ impl<H: Hasher> OverlayedChanges<H> {
 		};
 
 		use sp_std::mem::take;
-		let main_storage_changes = take(&mut self.top).drain_commited();
-		let child_storage_changes = take(&mut self.children)
-			.into_iter()
-			.map(|(key, (val, info))| (key, (val.drain_commited(), info)));
-
+		let main_storage_changes =
+			take(&mut self.top).drain_commited().map(|(k, v)| (k, v.to_option()));
+		let child_storage_changes =
+			take(&mut self.children).into_iter().map(|(key, (val, info))| {
+				(key, (val.drain_commited().map(|(k, v)| (k, v.to_option())), info))
+			});
 		let offchain_storage_changes = self.offchain_drain_committed().collect();
 
 		#[cfg(feature = "std")]
@@ -608,7 +614,7 @@ impl<H: Hasher> OverlayedChanges<H> {
 	/// set this index before first and unset after last extrinsic is executed.
 	/// Changes that are made outside of extrinsics, are marked with
 	/// `NO_EXTRINSIC_INDEX` index.
-	fn extrinsic_index(&self) -> Option<u32> {
+	fn extrinsic_index(&mut self) -> Option<u32> {
 		self.collect_extrinsics.then(|| {
 			self.storage(EXTRINSIC_INDEX)
 				.and_then(|idx| idx.and_then(|idx| Decode::decode(&mut &*idx).ok()))
@@ -632,10 +638,12 @@ impl<H: Hasher> OverlayedChanges<H> {
 			return (cache.transaction_storage_root, true)
 		}
 
-		let delta = self.changes().map(|(k, v)| (&k[..], v.value().map(|v| &v[..])));
-		let child_delta = self.children().map(|(changes, info)| {
-			(info, changes.map(|(k, v)| (&k[..], v.value().map(|v| &v[..]))))
-		});
+		let delta = self.top.changes().map(|(k, v)| (&k[..], v.value().map(|v| &v[..])));
+
+		let child_delta = self
+			.children
+			.values_mut()
+			.map(|v| (&v.1, v.0.changes().map(|(k, v)| (&k[..], v.value().map(|v| &v[..])))));
 
 		let (root, transaction) = backend.full_storage_root(delta, child_delta, state_version);
 
@@ -709,19 +717,19 @@ impl<H: Hasher> OverlayedChanges<H> {
 
 	/// Returns an iterator over the keys (in lexicographic order) following `key` (excluding `key`)
 	/// alongside its value.
-	pub fn iter_after(&self, key: &[u8]) -> impl Iterator<Item = (&[u8], &OverlayedValue)> {
+	pub fn iter_after(&mut self, key: &[u8]) -> impl Iterator<Item = (&[u8], &mut OverlayedValue)> {
 		self.top.changes_after(key)
 	}
 
 	/// Returns an iterator over the keys (in lexicographic order) following `key` (excluding `key`)
 	/// alongside its value for the given `storage_key` child.
 	pub fn child_iter_after(
-		&self,
+		&mut self,
 		storage_key: &[u8],
 		key: &[u8],
-	) -> impl Iterator<Item = (&[u8], &OverlayedValue)> {
+	) -> impl Iterator<Item = (&[u8], &mut OverlayedValue)> {
 		self.children
-			.get(storage_key)
+			.get_mut(storage_key)
 			.map(|(overlay, _)| overlay.changes_after(key))
 			.into_iter()
 			.flatten()
@@ -856,7 +864,11 @@ mod tests {
 	use sp_core::{traits::Externalities, Blake2Hasher};
 	use std::collections::BTreeMap;
 
-	fn assert_extrinsics(overlay: &OverlayedChangeSet, key: impl AsRef<[u8]>, expected: Vec<u32>) {
+	fn assert_extrinsics(
+		overlay: &mut OverlayedChangeSet,
+		key: impl AsRef<[u8]>,
+		expected: Vec<u32>,
+	) {
 		assert_eq!(
 			overlay.get(key.as_ref()).unwrap().extrinsics().into_iter().collect::<Vec<_>>(),
 			expected
@@ -1047,9 +1059,9 @@ mod tests {
 		overlay.set_extrinsic_index(2);
 		overlay.set_storage(vec![1], Some(vec![6]));
 
-		assert_extrinsics(&overlay.top, vec![1], vec![0, 2]);
-		assert_extrinsics(&overlay.top, vec![3], vec![1]);
-		assert_extrinsics(&overlay.top, vec![100], vec![NO_EXTRINSIC_INDEX]);
+		assert_extrinsics(&mut overlay.top, vec![1], vec![0, 2]);
+		assert_extrinsics(&mut overlay.top, vec![3], vec![1]);
+		assert_extrinsics(&mut overlay.top, vec![100], vec![NO_EXTRINSIC_INDEX]);
 
 		overlay.start_transaction();
 
@@ -1059,15 +1071,15 @@ mod tests {
 		overlay.set_extrinsic_index(4);
 		overlay.set_storage(vec![1], Some(vec![8]));
 
-		assert_extrinsics(&overlay.top, vec![1], vec![0, 2, 4]);
-		assert_extrinsics(&overlay.top, vec![3], vec![1, 3]);
-		assert_extrinsics(&overlay.top, vec![100], vec![NO_EXTRINSIC_INDEX]);
+		assert_extrinsics(&mut overlay.top, vec![1], vec![0, 2, 4]);
+		assert_extrinsics(&mut overlay.top, vec![3], vec![1, 3]);
+		assert_extrinsics(&mut overlay.top, vec![100], vec![NO_EXTRINSIC_INDEX]);
 
 		overlay.rollback_transaction().unwrap();
 
-		assert_extrinsics(&overlay.top, vec![1], vec![0, 2]);
-		assert_extrinsics(&overlay.top, vec![3], vec![1]);
-		assert_extrinsics(&overlay.top, vec![100], vec![NO_EXTRINSIC_INDEX]);
+		assert_extrinsics(&mut overlay.top, vec![1], vec![0, 2]);
+		assert_extrinsics(&mut overlay.top, vec![3], vec![1]);
+		assert_extrinsics(&mut overlay.top, vec![100], vec![NO_EXTRINSIC_INDEX]);
 	}
 
 	#[test]
