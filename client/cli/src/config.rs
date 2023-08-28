@@ -546,6 +546,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(self.shared_params().disable_log_color())
 	}
 
+	/// Should use UTC time in log output?
+	fn use_utc_log_time(&self) -> Result<bool> {
+		Ok(self.shared_params().use_utc_log_time())
+	}
+
 	/// Initialize substrate. This must be done only once per process.
 	///
 	/// This method:
@@ -598,6 +603,10 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 
 		if self.disable_log_color()? {
 			logger.with_colors(false);
+		}
+
+		if self.use_utc_log_time()? {
+			logger.with_utc(true);
 		}
 
 		// Call hook for custom profiling setup.
