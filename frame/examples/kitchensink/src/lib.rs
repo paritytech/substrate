@@ -25,6 +25,7 @@
 //! clauses on `T`. These will both incur additional complexity to the syntax, but are not discussed
 //! here.
 
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // Re-export pallet items so that they can be accessed from the crate namespace.
@@ -129,6 +130,7 @@ pub mod pallet {
 	pub type Foo<T> = StorageValue<Value = u32>;
 
 	#[pallet::type_value]
+	/// The default value for when `Foo` is queried and has no value assigned to it.
 	pub fn DefaultForFoo() -> u32 {
 		1
 	}
@@ -182,7 +184,9 @@ pub mod pallet {
 	/// It can be generic over `T` or not, depending on whether it is or not.
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
+		/// A u32 value to be initialized in genesis.
 		pub foo: u32,
+		/// A block number value to be initialized in genesis.
 		pub bar: BlockNumberFor<T>,
 	}
 
@@ -204,6 +208,8 @@ pub mod pallet {
 	/// macro takes care of the marshalling of arguments and dispatch.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// A simple dispatchable that takes a single `u32` argument, writes it to storage, emits an
+		/// event.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::set_foo_benchmark())]
 		pub fn set_foo(
@@ -217,11 +223,11 @@ pub mod pallet {
 		}
 	}
 
-	/// The event type. This exactly like a normal Rust enum.
+	/// The event type. This is exactly like a normal Rust enum.
 	///
-	/// It can or cannot be generic over `<T: Config>`. Note that unlike a normal enum, if none of
-	/// the variants actually use `<T: Config>`, the macro will generate a hidden `PhantomData`
-	/// variant.
+	/// It can be generic over `<T: Config>` but does not have to be. Note that unlike a normal
+	/// enum, if none of the variants actually use `<T: Config>`, the macro will generate a hidden
+	/// `PhantomData` variant.
 	///
 	/// The `generate_deposit` macro generates a function on `Pallet` called `deposit_event` which
 	/// will properly convert the error type of your pallet into `RuntimeEvent` (recall `type
@@ -234,7 +240,12 @@ pub mod pallet {
 		SomethingHappened(u32),
 		/// A simple struct-style variant. Note that we use `AccountId` from `T` because `T:
 		/// Config`, which by extension implies `T: frame_system::Config`.
-		SomethingDetailedHappened { at: u32, to: T::AccountId },
+		SomethingDetailedHappened {
+			/// Some number.
+			at: u32,
+			/// Some account.
+			to: T::AccountId,
+		},
 		/// Another variant.
 		SomeoneJoined(T::AccountId),
 	}
@@ -242,7 +253,9 @@ pub mod pallet {
 	/// The error enum. Must always be generic over `<T>`, which is expanded to `<T: Config>`.
 	#[pallet::error]
 	pub enum Error<T> {
+		/// Indicates that something did not go as expected.
 		SomethingWentWrong,
+		/// Indicates that something broke.
 		SomethingBroke,
 	}
 
@@ -293,6 +306,7 @@ pub mod pallet {
 	/// pallets into an aggregate enum.
 	#[pallet::composite_enum]
 	pub enum HoldReason {
+		/// The hold reason.
 		Staking,
 	}
 
@@ -301,11 +315,14 @@ pub mod pallet {
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
-		fn validate_unsigned(_: TransactionSource, _: &Self::Call) -> TransactionValidity {
+
+		/// Validates an unsigned transaction.
+		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			unimplemented!()
 		}
 
-		fn pre_dispatch(_: &Self::Call) -> Result<(), TransactionValidityError> {
+		/// Pre-dispatch checks for an unsigned call.
+		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 			unimplemented!()
 		}
 	}
@@ -317,13 +334,16 @@ pub mod pallet {
 		type Call = Call<T>;
 		type Error = MakeFatalError<()>;
 
+		/// The inherent identifier used to recognize the inherent in the runtime.
 		const INHERENT_IDENTIFIER: [u8; 8] = *b"test1234";
 
-		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+		/// Creates an inherent call based on the given inherent data.
+		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
 			unimplemented!();
 		}
 
-		fn is_inherent(_call: &Self::Call) -> bool {
+		/// Checks if the given call is an inherent call for this pallet.
+		fn is_inherent(call: &Self::Call) -> bool {
 			unimplemented!()
 		}
 	}

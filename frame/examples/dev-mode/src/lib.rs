@@ -25,6 +25,7 @@
 //!
 //! **Dev mode is not meant to be used in production.**
 
+#![deny(missing_docs)]
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -62,6 +63,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		// No need to define a `call_index` attribute here because of `dev_mode`.
 		// No need to define a `weight` attribute here because of `dev_mode`.
+		/// Add an account ID to our Dummy storage.
 		pub fn add_dummy(origin: OriginFor<T>, id: T::AccountId) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -80,6 +82,7 @@ pub mod pallet {
 
 		// No need to define a `call_index` attribute here because of `dev_mode`.
 		// No need to define a `weight` attribute here because of `dev_mode`.
+		/// Set a new balance value into our Bar storage map.
 		pub fn set_bar(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance,
@@ -98,8 +101,18 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		AddDummy { account: T::AccountId },
-		SetBar { account: T::AccountId, balance: BalanceOf<T> },
+		/// An account ID has been added to our Dummy storage.
+		AddDummy {
+			/// The account ID to put in storage.
+			account: T::AccountId,
+		},
+		/// A new balance has been added to our Bar storage map.
+		SetBar {
+			/// The account ID put in storage.
+			account: T::AccountId,
+			/// The balance value.
+			balance: BalanceOf<T>,
+		},
 	}
 
 	/// The MEL requirement for bounded pallets is skipped by `dev_mode`.

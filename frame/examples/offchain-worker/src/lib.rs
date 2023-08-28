@@ -43,6 +43,7 @@
 //! and unsigned transactions, and custom `UnsignedValidator` makes sure that there is only
 //! one unsigned transaction floating in the network.
 
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
@@ -94,6 +95,7 @@ pub mod crypto {
 	};
 	app_crypto!(sr25519, KEY_TYPE);
 
+	/// A struct to generate the signatures for the authorities.
 	pub struct TestAuthId;
 
 	impl frame_system::offchain::AppCrypto<MultiSigner, MultiSignature> for TestAuthId {
@@ -242,19 +244,18 @@ pub mod pallet {
 		/// Submit new price to the list via unsigned transaction.
 		///
 		/// Works exactly like the `submit_price` function, but since we allow sending the
-		/// transaction without a signature, and hence without paying any fees,
-		/// we need a way to make sure that only some transactions are accepted.
-		/// This function can be called only once every `T::UnsignedInterval` blocks.
-		/// Transactions that call that function are de-duplicated on the pool level
-		/// via `validate_unsigned` implementation and also are rendered invalid if
-		/// the function has already been called in current "session".
+		/// transaction without a signature, and hence without paying any fees, we need a way to
+		/// make sure that only some transactions are accepted. This function can be called only
+		/// once every `T::UnsignedInterval` blocks. Transactions that call that function are
+		/// de-duplicated on the pool level via `validate_unsigned` implementation and also are
+		/// rendered invalid if the function has already been called in current "session".
 		///
-		/// It's important to specify `weight` for unsigned calls as well, because even though
-		/// they don't charge fees, we still don't want a single block to contain unlimited
-		/// number of such transactions.
+		/// It's important to specify `weight` for unsigned calls as well,
+		/// because even though they don't charge fees, we still don't want a single block to
+		/// contain unlimited number of such transactions.
 		///
-		/// This example is not focused on correctness of the oracle itself, but rather its
-		/// purpose is to showcase offchain worker capabilities.
+		/// This example is not focused on correctness of the oracle itself, but rather its purpose
+		/// is to showcase offchain worker capabilities.
 		#[pallet::call_index(1)]
 		#[pallet::weight({0})]
 		pub fn submit_price_unsigned(
@@ -272,6 +273,27 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Submit a new price to the list via an unsigned transaction with a signed payload.
+		///
+		/// This function is similar to the `submit_price` function but allows for sending
+		/// transactions without a signature. It is designed to handle cases where some transactions
+		/// are allowed to bypass signature verification and fees. Transactions calling this
+		/// function are de-duplicated at the pool level through the `validate_unsigned`
+		/// implementation and are also rendered invalid if the function has already been called in
+		/// the current "session".
+		///
+		/// The weight of this function is specified in the `#[pallet::weight(...)]` attribute. Even
+		/// though unsigned calls don't charge fees, a weight is assigned to limit the number of
+		/// such transactions per block.
+		///
+		/// # Note
+		///
+		/// - This example is not focused on the correctness of the oracle itself but rather its
+		///   purpose is to showcase offchain worker capabilities.
+		/// - In this example, the `origin` must be `None` to ensure that the function is called via
+		///   an unsigned transaction. The `price_payload` is used to extract the new price and the
+		///   associated public key for signature verification (which is not performed in this
+		///   example).
 		#[pallet::call_index(2)]
 		#[pallet::weight({0})]
 		pub fn submit_price_unsigned_with_signed_payload(
@@ -295,7 +317,12 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Event generated when new price is accepted to contribute to the average.
-		NewPrice { price: u32, maybe_who: Option<T::AccountId> },
+		NewPrice {
+			/// The new price.
+			price: u32,
+			/// The account who updated the price, if any.
+			maybe_who: Option<T::AccountId>,
+		},
 	}
 
 	#[pallet::validate_unsigned]

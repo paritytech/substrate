@@ -268,6 +268,7 @@
 //! // that the implementation is based on.
 //! </pre></p></details>
 
+#![deny(missing_docs)]
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -365,7 +366,7 @@ pub mod pallet {
 	/// `frame_system::Config` should always be included.
 	#[pallet::config]
 	pub trait Config: pallet_balances::Config + frame_system::Config {
-		// Setting a constant config parameter from the runtime
+		/// A constant config parameter from the runtime.
 		#[pallet::constant]
 		type MagicNumber: Get<Self::Balance>;
 
@@ -411,91 +412,91 @@ pub mod pallet {
 		}
 	}
 
-	// The call declaration. This states the entry points that we handle. The
-	// macro takes care of the marshalling of arguments and dispatch.
-	//
-	// Anyone can have these functions execute by signing and submitting
-	// an extrinsic. Ensure that calls into each of these execute in a time, memory and
-	// using storage space proportional to any costs paid for by the caller or otherwise the
-	// difficulty of forcing the call to happen.
-	//
-	// Generally you'll want to split these into three groups:
-	// - Public calls that are signed by an external account.
-	// - Root calls that are allowed to be made only by the governance system.
-	// - Unsigned calls that can be of two kinds:
-	//   * "Inherent extrinsics" that are opinions generally held by the block authors that build
-	//     child blocks.
-	//   * Unsigned Transactions that are of intrinsic recognizable utility to the network, and are
-	//     validated by the runtime.
-	//
-	// Information about where this dispatch initiated from is provided as the first argument
-	// "origin". As such functions must always look like:
-	//
-	// `fn foo(origin: OriginFor<T>, bar: Bar, baz: Baz) -> DispatchResultWithPostInfo { ... }`
-	//
-	// The `DispatchResultWithPostInfo` is required as part of the syntax (and can be found at
-	// `pallet_prelude::DispatchResultWithPostInfo`).
-	//
-	// There are three entries in the `frame_system::Origin` enum that correspond
-	// to the above bullets: `::Signed(AccountId)`, `::Root` and `::None`. You should always match
-	// against them as the first thing you do in your function. There are three convenience calls
-	// in system that do the matching for you and return a convenient result: `ensure_signed`,
-	// `ensure_root` and `ensure_none`.
+	/// The call declaration. This states the entry points that we handle. The
+	/// macro takes care of the marshalling of arguments and dispatch.
+	///
+	/// Anyone can have these functions execute by signing and submitting
+	/// an extrinsic. Ensure that calls into each of these execute in a time, memory and
+	/// using storage space proportional to any costs paid for by the caller or otherwise the
+	/// difficulty of forcing the call to happen.
+	///
+	/// Generally you'll want to split these into three groups:
+	/// - Public calls that are signed by an external account.
+	/// - Root calls that are allowed to be made only by the governance system.
+	/// - Unsigned calls that can be of two kinds:
+	///   * "Inherent extrinsics" that are opinions generally held by the block authors that build
+	///     child blocks.
+	///   * Unsigned Transactions that are of intrinsic recognizable utility to the network, and are
+	///     validated by the runtime.
+	///
+	/// Information about where this dispatch initiated from is provided as the first argument
+	/// "origin". As such functions must always look like:
+	///
+	/// `fn foo(origin: OriginFor<T>, bar: Bar, baz: Baz) -> DispatchResultWithPostInfo { ... }`
+	///
+	/// The `DispatchResultWithPostInfo` is required as part of the syntax (and can be found at
+	/// `pallet_prelude::DispatchResultWithPostInfo`).
+	///
+	/// There are three entries in the `frame_system::Origin` enum that correspond
+	/// to the above bullets: `::Signed(AccountId)`, `::Root` and `::None`. You should always match
+	/// against them as the first thing you do in your function. There are three convenience calls
+	/// in system that do the matching for you and return a convenient result: `ensure_signed`,
+	/// `ensure_root` and `ensure_none`.
 	#[pallet::call(weight(<T as Config>::WeightInfo))]
 	impl<T: Config> Pallet<T> {
 		/// This is your public interface. Be extremely careful.
 		/// This is just a simple example of how to interact with the pallet from the external
 		/// world.
-		// This just increases the value of `Dummy` by `increase_by`.
-		//
-		// Since this is a dispatched function there are two extremely important things to
-		// remember:
-		//
-		// - MUST NOT PANIC: Under no circumstances (save, perhaps, storage getting into an
-		// irreparably damaged state) must this function panic.
-		// - NO SIDE-EFFECTS ON ERROR: This function must either complete totally (and return
-		// `Ok(())` or it must have no side-effects on storage and return `Err('Some reason')`.
-		//
-		// The first is relatively easy to audit for - just ensure all panickers are removed from
-		// logic that executes in production (which you do anyway, right?!). To ensure the second
-		// is followed, you should do all tests for validity at the top of your function. This
-		// is stuff like checking the sender (`origin`) or that state is such that the operation
-		// makes sense.
-		//
-		// Once you've determined that it's all good, then enact the operation and change storage.
-		// If you can't be certain that the operation will succeed without substantial computation
-		// then you have a classic blockchain attack scenario. The normal way of managing this is
-		// to attach a bond to the operation. As the first major alteration of storage, reserve
-		// some value from the sender's account (`Balances` Pallet has a `reserve` function for
-		// exactly this scenario). This amount should be enough to cover any costs of the
-		// substantial execution in case it turns out that you can't proceed with the operation.
-		//
-		// If it eventually transpires that the operation is fine and, therefore, that the
-		// expense of the checks should be borne by the network, then you can refund the reserved
-		// deposit. If, however, the operation turns out to be invalid and the computation is
-		// wasted, then you can burn it or repatriate elsewhere.
-		//
-		// Security bonds ensure that attackers can't game it by ensuring that anyone interacting
-		// with the system either progresses it or pays for the trouble of faffing around with
-		// no progress.
-		//
-		// If you don't respect these rules, it is likely that your chain will be attackable.
-		//
-		// Each transaction must define a `#[pallet::weight(..)]` attribute to convey a set of
-		// static information about its dispatch. FRAME System and FRAME Executive pallet then use
-		// this information to properly execute the transaction, whilst keeping the total load of
-		// the chain in a moderate rate.
-		//
-		// The parenthesized value of the `#[pallet::weight(..)]` attribute can be any type that
-		// implements a set of traits, namely [`WeighData`], [`ClassifyDispatch`], and
-		// [`PaysFee`]. The first conveys the weight (a numeric representation of pure
-		// execution time and difficulty) of the transaction and the second demonstrates the
-		// [`DispatchClass`] of the call, the third gives whereas extrinsic must pay fees or not.
-		// A higher weight means a larger transaction (less of which can be placed in a single
-		// block).
-		//
-		// The weight for this extrinsic we rely on the auto-generated `WeightInfo` from the
-		// benchmark toolchain.
+		/// This just increases the value of `Dummy` by `increase_by`.
+		///
+		/// Since this is a dispatched function there are two extremely important things to
+		/// remember:
+		///
+		/// - MUST NOT PANIC: Under no circumstances (save, perhaps, storage getting into an
+		/// irreparably damaged state) must this function panic.
+		/// - NO SIDE-EFFECTS ON ERROR: This function must either complete totally (and return
+		/// `Ok(())` or it must have no side-effects on storage and return `Err('Some reason')`.
+		///
+		/// The first is relatively easy to audit for - just ensure all panickers are removed from
+		/// logic that executes in production (which you do anyway, right?!). To ensure the second
+		/// is followed, you should do all tests for validity at the top of your function. This
+		/// is stuff like checking the sender (`origin`) or that state is such that the operation
+		/// makes sense.
+		///
+		/// Once you've determined that it's all good, then enact the operation and change storage.
+		/// If you can't be certain that the operation will succeed without substantial computation
+		/// then you have a classic blockchain attack scenario. The normal way of managing this is
+		/// to attach a bond to the operation. As the first major alteration of storage, reserve
+		/// some value from the sender's account (`Balances` Pallet has a `reserve` function for
+		/// exactly this scenario). This amount should be enough to cover any costs of the
+		/// substantial execution in case it turns out that you can't proceed with the operation.
+		///
+		/// If it eventually transpires that the operation is fine and, therefore, that the
+		/// expense of the checks should be borne by the network, then you can refund the reserved
+		/// deposit. If, however, the operation turns out to be invalid and the computation is
+		/// wasted, then you can burn it or repatriate elsewhere.
+		///
+		/// Security bonds ensure that attackers can't game it by ensuring that anyone interacting
+		/// with the system either progresses it or pays for the trouble of faffing around with
+		/// no progress.
+		///
+		/// If you don't respect these rules, it is likely that your chain will be attackable.
+		///
+		/// Each transaction must define a `#[pallet::weight(..)]` attribute to convey a set of
+		/// static information about its dispatch. FRAME System and FRAME Executive pallet then use
+		/// this information to properly execute the transaction, whilst keeping the total load of
+		/// the chain in a moderate rate.
+		///
+		/// The parenthesized value of the `#[pallet::weight(..)]` attribute can be any type that
+		/// implements a set of traits, namely [`WeighData`], [`ClassifyDispatch`], and
+		/// [`PaysFee`]. The first conveys the weight (a numeric representation of pure
+		/// execution time and difficulty) of the transaction and the second demonstrates the
+		/// [`DispatchClass`] of the call, the third gives whereas extrinsic must pay fees or not.
+		/// A higher weight means a larger transaction (less of which can be placed in a single
+		/// block).
+		///
+		/// The weight for this extrinsic we rely on the auto-generated `WeightInfo` from the
+		/// benchmark toolchain.
 		#[pallet::call_index(0)]
 		pub fn accumulate_dummy(origin: OriginFor<T>, increase_by: T::Balance) -> DispatchResult {
 			// This is a public call, so we ensure that the origin is some signed account.
@@ -528,16 +529,16 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// A privileged call; in this case it resets our dummy value to something new.
-		// Implementation of a privileged call. The `origin` parameter is ROOT because
-		// it's not (directly) from an extrinsic, but rather the system as a whole has decided
-		// to execute it. Different runtimes have different reasons for allow privileged
-		// calls to be executed - we don't need to care why. Because it's privileged, we can
-		// assume it's a one-off operation and substantial processing/storage/memory can be used
-		// without worrying about gameability or attack scenarios.
-		//
-		// The weight for this extrinsic we use our own weight object `WeightForSetDummy` to
-		// determine its weight
+		/// A privileged call. In this case, it resets our dummy value to something new.
+		///
+		/// The `origin` parameter is ROOT because it's not (directly) from an extrinsic, but rather
+		/// the system as a whole has decided to execute it. Different runtimes have different
+		/// reasons for allowing privileged calls to be executed - we don't need to care why.
+		/// Because it's privileged, we can assume it's a one-off operation, and substantial
+		/// processing/storage/memory can be used without worrying about gameability or attack
+		/// scenarios.
+		///
+		/// We use our own weight object `WeightForSetDummy` to determine the weight of this call.
 		#[pallet::call_index(1)]
 		#[pallet::weight(WeightForSetDummy::<T>(<BalanceOf<T>>::from(100u32)))]
 		pub fn set_dummy(
@@ -562,24 +563,31 @@ pub mod pallet {
 		}
 	}
 
+	/// The Dummy events enum which is just a normal Rust `enum`.
+	///
 	/// Events are a simple means of reporting specific conditions and
 	/// circumstances that have happened that users, Dapps and/or chain explorers would find
 	/// interesting and otherwise difficult to detect.
 	#[pallet::event]
-	/// This attribute generate the function `deposit_event` to deposit one of this pallet event,
-	/// it is optional, it is also possible to provide a custom implementation.
+	/// This attribute generates the function `deposit_event` to deposit one of this pallet event.
+	/// It is optional and it is also possible to provide a custom implementation.
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		// Just a normal `enum`, here's a dummy event to ensure it compiles.
-		/// Dummy event, just here so there's a generic type that's used.
+		/// A dummy value has been accumulated.
 		AccumulateDummy {
+			/// The balance increase when this event was emitted.
 			balance: BalanceOf<T>,
 		},
+		/// A dummy value has been set.
 		SetDummy {
+			/// The balance that has been set.
 			balance: BalanceOf<T>,
 		},
+		/// A bar value has been set.
 		SetBar {
+			/// The account ID put in storage.
 			account: T::AccountId,
+			/// The balance value.
 			balance: BalanceOf<T>,
 		},
 	}
@@ -620,8 +628,11 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
+		/// The dummy balance value initialized at genesis.
 		pub dummy: T::Balance,
+		/// The bar vector initialized at genesis.
 		pub bar: Vec<(T::AccountId, T::Balance)>,
+		/// The foo balance value initialized at genesis.
 		pub foo: T::Balance,
 	}
 
