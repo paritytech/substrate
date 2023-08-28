@@ -34,20 +34,20 @@
 mod commitment;
 pub mod mmr;
 mod payload;
-#[cfg(feature = "std")]
+#[cfg(all(test, feature = "std"))]
 mod test_utils;
 pub mod witness;
 
 pub use commitment::{Commitment, SignedCommitment, VersionedFinalityProof};
 pub use payload::{known_payloads, BeefyPayloadId, Payload, PayloadProvider};
-#[cfg(feature = "std")]
+#[cfg(all(test, feature = "std"))]
 pub use test_utils::*;
 
 use codec::{Codec, Decode, Encode};
 use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::H256;
-use sp_runtime::traits::{Hash, Keccak256, NumberFor};
+use sp_runtime::traits::{Hash, Header, Keccak256, NumberFor};
 use sp_std::prelude::*;
 
 /// Key type for BEEFY module.
@@ -229,14 +229,14 @@ pub struct VoteMessage<Number, Id, Signature> {
 /// BEEFY happens when a voter votes on the same round/block for different payloads.
 /// Proving is achieved by collecting the signed commitments of conflicting votes.
 #[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
-pub struct EquivocationProof<Number, Id, Signature> {
+pub struct VoteEquivocationProof<Number, Id, Signature> {
 	/// The first vote in the equivocation.
 	pub first: VoteMessage<Number, Id, Signature>,
 	/// The second vote in the equivocation.
 	pub second: VoteMessage<Number, Id, Signature>,
 }
 
-impl<Number, Id, Signature> EquivocationProof<Number, Id, Signature> {
+impl<Number, Id, Signature> VoteEquivocationProof<Number, Id, Signature> {
 	/// Returns the authority id of the equivocator.
 	pub fn offender_id(&self) -> &Id {
 		&self.first.id
@@ -248,6 +248,41 @@ impl<Number, Id, Signature> EquivocationProof<Number, Id, Signature> {
 	/// Returns the set id at which the equivocation occurred.
 	pub fn set_id(&self) -> ValidatorSetId {
 		self.first.commitment.validator_set_id
+	}
+}
+
+/// Proof of authority misbehavior on a given set id.
+/// This proof shows commitment signed on a different fork.
+#[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
+pub struct ForkEquivocationProof<Number, Id, Signature, Header> {
+	/// Commitment for a block on different fork than one at the same height in
+	/// this client's chain.
+	/// TODO: maybe replace {commitment, signatories} with SignedCommitment
+	/// (tradeoff: SignedCommitment not ideal since sigs optional, but fewer
+	/// types to juggle around) - check once usage pattern is clear
+	pub commitment: Commitment<Number>,
+	/// Signatures on this block
+	/// TODO: maybe change to HashMap - check once usage pattern is clear
+	pub signatories: Vec<(Id, Signature)>,
+	/// The proof is valid if
+	/// 1. the header is in our chain
+	/// 2. its digest's payload != commitment.payload
+	/// 3. commitment is signed by signatories
+	pub correct_header: Header,
+}
+
+impl<Number, Id, Signature, H: Header> ForkEquivocationProof<Number, Id, Signature, H> {
+	/// Returns the authority id of the misbehaving voter.
+	pub fn offender_ids(&self) -> Vec<&Id> {
+		self.signatories.iter().map(|(id, _)| id).collect()
+	}
+	/// Returns the round number at which the infringement occurred.
+	pub fn round_number(&self) -> &Number {
+		&self.commitment.block_number
+	}
+	/// Returns the set id at which the infringement occurred.
+	pub fn set_id(&self) -> ValidatorSetId {
+		self.commitment.validator_set_id
 	}
 }
 
@@ -267,10 +302,10 @@ where
 	BeefyAuthorityId::<MsgHash>::verify(authority_id, signature, &encoded_commitment)
 }
 
-/// Verifies the equivocation proof by making sure that both votes target
+/// Verifies the vote equivocation proof by making sure that both votes target
 /// different blocks and that its signatures are valid.
-pub fn check_equivocation_proof<Number, Id, MsgHash>(
-	report: &EquivocationProof<Number, Id, <Id as RuntimeAppPublic>::Signature>,
+pub fn check_vote_equivocation_proof<Number, Id, MsgHash>(
+	report: &VoteEquivocationProof<Number, Id, <Id as RuntimeAppPublic>::Signature>,
 ) -> bool
 where
 	Id: BeefyAuthorityId<MsgHash> + PartialEq,
@@ -302,6 +337,55 @@ where
 	return valid_first && valid_second
 }
 
+/// Validates [ForkEquivocationProof] by checking:
+/// 1. `commitment` is signed,
+/// 2. `correct_header` is valid and matches `commitment.block_number`.
+/// 2. `commitment.payload` != `expected_payload(correct_header)`.
+/// NOTE: GRANDPA finalization proof is not checked, which leads to slashing on forks.
+/// This is fine since honest validators will not be slashed on the chain finalized
+/// by GRANDPA, which is the only chain that ultimately matters.
+/// The only material difference not checking GRANDPA proofs makes is that validators
+/// are not slashed for signing BEEFY commitments prior to the blocks committed to being
+/// finalized by GRANDPA. This is fine too, since the slashing risk of committing to
+/// an incorrect block implies validators will only sign blocks they *know* will be
+/// finalized by GRANDPA.
+pub fn check_fork_equivocation_proof<Number, Id, MsgHash, Header>(
+	proof: &ForkEquivocationProof<Number, Id, <Id as RuntimeAppPublic>::Signature, Header>,
+	expected_header_hash: &Header::Hash,
+) -> bool
+where
+	Id: BeefyAuthorityId<MsgHash> + PartialEq,
+	Number: Clone + Encode + PartialEq,
+	MsgHash: Hash,
+	Header: sp_api::HeaderT,
+{
+	let ForkEquivocationProof { commitment, signatories, correct_header } = proof;
+
+	if correct_header.hash() != *expected_header_hash {
+		return false
+	}
+
+	let expected_mmr_root_digest = mmr::find_mmr_root_digest::<Header>(correct_header);
+	let expected_payload = expected_mmr_root_digest
+		.map(|mmr_root| Payload::from_single_entry(known_payloads::MMR_ROOT_ID, mmr_root.encode()));
+
+	// cheap failfasts:
+	// 1. check that `payload` on the `vote` is different that the `expected_payload`
+	// 2. if the signatories signed a payload when there should be none (for
+	// instance for a block prior to BEEFY activation), then expected_payload =
+	// None, and they will likewise be slashed
+	if Some(&commitment.payload) != expected_payload.as_ref() {
+		// check check each signatory's signature on the commitment.
+		// if any are invalid, equivocation report is invalid
+		// TODO: refactor check_commitment_signature to take a slice of signatories
+		return signatories.iter().all(|(authority_id, signature)| {
+			check_commitment_signature(&commitment, authority_id, signature)
+		})
+	} else {
+		false
+	}
+}
+
 /// New BEEFY validator set notification hook.
 pub trait OnNewValidatorSet<AuthorityId> {
 	/// Function called by the pallet when BEEFY validator set changes.
@@ -322,7 +406,7 @@ impl<AuthorityId> OnNewValidatorSet<AuthorityId> for () {
 /// the runtime API boundary this type is unknown and as such we keep this
 /// opaque representation, implementors of the runtime API will have to make
 /// sure that all usages of `OpaqueKeyOwnershipProof` refer to the same type.
-#[derive(Decode, Encode, PartialEq, TypeInfo)]
+#[derive(Decode, Encode, PartialEq, TypeInfo, Clone)]
 pub struct OpaqueKeyOwnershipProof(Vec<u8>);
 impl OpaqueKeyOwnershipProof {
 	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded
@@ -339,7 +423,8 @@ impl OpaqueKeyOwnershipProof {
 }
 
 sp_api::decl_runtime_apis! {
-	/// API necessary for BEEFY voters.
+	/// API necessary for BEEFY voters. Due to the significant conceptual
+	/// overlap, in large part, this is lifted from the GRANDPA API.
 	#[api_version(3)]
 	pub trait BeefyApi<AuthorityId> where
 		AuthorityId : Codec + RuntimeAppPublic,
@@ -358,10 +443,24 @@ sp_api::decl_runtime_apis! {
 		/// `None` when creation of the extrinsic fails, e.g. if equivocation
 		/// reporting is disabled for the given runtime (i.e. this method is
 		/// hardcoded to return `None`). Only useful in an offchain context.
-		fn submit_report_equivocation_unsigned_extrinsic(
-			equivocation_proof:
-				EquivocationProof<NumberFor<Block>, AuthorityId, <AuthorityId as RuntimeAppPublic>::Signature>,
+		fn submit_report_vote_equivocation_unsigned_extrinsic(
+			vote_equivocation_proof:
+				VoteEquivocationProof<NumberFor<Block>, AuthorityId, <AuthorityId as RuntimeAppPublic>::Signature>,
 			key_owner_proof: OpaqueKeyOwnershipProof,
+		) -> Option<()>;
+
+		/// Submits an unsigned extrinsic to report commitments to an invalid fork.
+		/// The caller must provide the invalid commitments proof and key ownership proofs
+		/// (should be obtained using `generate_key_ownership_proof`) for the offenders. The
+		/// extrinsic will be unsigned and should only be accepted for local
+		/// authorship (not to be broadcast to the network). This method returns
+		/// `None` when creation of the extrinsic fails, e.g. if equivocation
+		/// reporting is disabled for the given runtime (i.e. this method is
+		/// hardcoded to return `None`). Only useful in an offchain context.
+		fn submit_report_fork_equivocation_unsigned_extrinsic(
+			fork_equivocation_proof:
+				ForkEquivocationProof<NumberFor<Block>, AuthorityId, <AuthorityId as RuntimeAppPublic>::Signature, Block::Header>,
+			key_owner_proofs: Vec<OpaqueKeyOwnershipProof>,
 		) -> Option<()>;
 
 		/// Generates a proof of key ownership for the given authority in the

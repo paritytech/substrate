@@ -17,7 +17,10 @@
 
 #![cfg(feature = "std")]
 
-use crate::{ecdsa_crypto, Commitment, EquivocationProof, Payload, ValidatorSetId, VoteMessage};
+use crate::{
+	ecdsa_crypto, Commitment, ForkEquivocationProof, Payload, SignedCommitment, ValidatorSetId,
+	VoteEquivocationProof, VoteMessage,
+};
 use codec::Encode;
 use sp_core::{ecdsa, keccak_256, Pair};
 use std::collections::HashMap;
@@ -91,20 +94,34 @@ impl From<Keyring> for ecdsa_crypto::Public {
 	}
 }
 
-/// Create a new `EquivocationProof` based on given arguments.
-pub fn generate_equivocation_proof(
+/// Create a new `VoteMessage` from commitment primitives and keyring
+fn signed_vote(
+	block_number: u64,
+	payload: Payload,
+	validator_set_id: ValidatorSetId,
+	keyring: &Keyring,
+) -> VoteMessage<u64, ecdsa_crypto::Public, ecdsa_crypto::Signature> {
+	let commitment = Commitment { validator_set_id, block_number, payload };
+	let signature = keyring.sign(&commitment.encode());
+	VoteMessage { commitment, id: keyring.public(), signature }
+}
+
+/// Create a new `VoteEquivocationProof` based on given arguments.
+pub fn generate_vote_equivocation_proof(
 	vote1: (u64, Payload, ValidatorSetId, &Keyring),
 	vote2: (u64, Payload, ValidatorSetId, &Keyring),
-) -> EquivocationProof<u64, ecdsa_crypto::Public, ecdsa_crypto::Signature> {
-	let signed_vote = |block_number: u64,
-	                   payload: Payload,
-	                   validator_set_id: ValidatorSetId,
-	                   keyring: &Keyring| {
-		let commitment = Commitment { validator_set_id, block_number, payload };
-		let signature = keyring.sign(&commitment.encode());
-		VoteMessage { commitment, id: keyring.public(), signature }
-	};
+) -> VoteEquivocationProof<u64, ecdsa_crypto::Public, ecdsa_crypto::Signature> {
 	let first = signed_vote(vote1.0, vote1.1, vote1.2, vote1.3);
 	let second = signed_vote(vote2.0, vote2.1, vote2.2, vote2.3);
-	EquivocationProof { first, second }
+	VoteEquivocationProof { first, second }
+}
+
+/// Create a new `ForkEquivocationProof` based on vote & correct header.
+pub fn generate_fork_equivocation_proof_vote<Header>(
+	vote: (u64, Payload, ValidatorSetId, &Keyring),
+	correct_header: Header,
+) -> ForkEquivocationProof<u64, ecdsa_crypto::Public, ecdsa_crypto::Signature, Header> {
+	let signed_vote = signed_vote(vote.0, vote.1, vote.2, vote.3);
+	let signatories = vec![(signed_vote.id, signed_vote.signature)];
+	ForkEquivocationProof { commitment: signed_vote.commitment, signatories, correct_header }
 }

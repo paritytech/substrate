@@ -28,7 +28,7 @@ use frame_support::{
 };
 use frame_system::{
 	ensure_none, ensure_signed,
-	pallet_prelude::{BlockNumberFor, OriginFor},
+	pallet_prelude::{BlockNumberFor, HeaderFor, OriginFor},
 };
 use log;
 use sp_runtime::{
@@ -41,8 +41,8 @@ use sp_staking::{offence::OffenceReportSystem, SessionIndex};
 use sp_std::prelude::*;
 
 use sp_consensus_beefy::{
-	AuthorityIndex, BeefyAuthorityId, ConsensusLog, EquivocationProof, OnNewValidatorSet,
-	ValidatorSet, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
+	AuthorityIndex, BeefyAuthorityId, ConsensusLog, OnNewValidatorSet, ValidatorSet,
+	VoteEquivocationProof, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
 mod default_weights;
@@ -63,6 +63,7 @@ const LOG_TARGET: &str = "runtime::beefy";
 pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::BlockNumberFor;
+	use sp_consensus_beefy::ForkEquivocationProof;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -194,8 +195,10 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// A key ownership proof provided as part of an equivocation report is invalid.
 		InvalidKeyOwnershipProof,
-		/// An equivocation proof provided as part of an equivocation report is invalid.
-		InvalidEquivocationProof,
+		/// An equivocation proof provided as part of a voter equivocation report is invalid.
+		InvalidVoteEquivocationProof,
+		/// An equivocation proof provided as part of a fork equivocation report is invalid.
+		InvalidForkEquivocationProof,
 		/// A given equivocation report is valid but already previously reported.
 		DuplicateOffenceReport,
 	}
@@ -214,7 +217,7 @@ pub mod pallet {
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
 			equivocation_proof: Box<
-				EquivocationProof<
+				VoteEquivocationProof<
 					BlockNumberFor<T>,
 					T::BeefyId,
 					<T::BeefyId as RuntimeAppPublic>::Signature,
@@ -226,7 +229,10 @@ pub mod pallet {
 
 			T::EquivocationReportSystem::process_evidence(
 				Some(reporter),
-				(*equivocation_proof, key_owner_proof),
+				EquivocationEvidenceFor::VoteEquivocationProof(
+					*equivocation_proof,
+					key_owner_proof,
+				),
 			)?;
 			// Waive the fee since the report is valid and beneficial
 			Ok(Pays::No.into())
@@ -246,10 +252,10 @@ pub mod pallet {
 			key_owner_proof.validator_count(),
 			T::MaxNominators::get(),
 		))]
-		pub fn report_equivocation_unsigned(
+		pub fn report_vote_equivocation_unsigned(
 			origin: OriginFor<T>,
 			equivocation_proof: Box<
-				EquivocationProof<
+				VoteEquivocationProof<
 					BlockNumberFor<T>,
 					T::BeefyId,
 					<T::BeefyId as RuntimeAppPublic>::Signature,
@@ -261,8 +267,80 @@ pub mod pallet {
 
 			T::EquivocationReportSystem::process_evidence(
 				None,
-				(*equivocation_proof, key_owner_proof),
+				EquivocationEvidenceFor::<T>::VoteEquivocationProof(
+					*equivocation_proof,
+					key_owner_proof,
+				),
 			)?;
+			Ok(Pays::No.into())
+		}
+
+		/// Report voter voting on invalid fork. This method will verify the
+		/// invalid fork proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence
+		/// will be reported.
+		// TODO: fix key_owner_proofs[0].validator_count()
+		#[pallet::call_index(2)]
+		#[pallet::weight(T::WeightInfo::report_equivocation(
+			key_owner_proofs[0].validator_count(),
+			T::MaxNominators::get(),
+		))]
+		pub fn report_fork_equivocation(
+			origin: OriginFor<T>,
+			equivocation_proof: Box<
+				ForkEquivocationProof<
+					BlockNumberFor<T>,
+					T::BeefyId,
+					<T::BeefyId as RuntimeAppPublic>::Signature,
+					HeaderFor<T>,
+				>,
+			>,
+			key_owner_proofs: Vec<T::KeyOwnerProof>,
+		) -> DispatchResultWithPostInfo {
+			let reporter = ensure_signed(origin)?;
+
+			T::EquivocationReportSystem::process_evidence(
+				Some(reporter),
+				EquivocationEvidenceFor::ForkEquivocationProof(
+					*equivocation_proof,
+					key_owner_proofs,
+				),
+			)?;
+			// Waive the fee since the report is valid and beneficial
+			Ok(Pays::No.into())
+		}
+
+		/// Report commitment on invalid fork. This method will verify the
+		/// invalid fork proof and validate the given key ownership proof
+		/// against the extracted offenders. If both are valid, the offence
+		/// will be reported.
+		///
+		/// This extrinsic must be called unsigned and it is expected that only
+		/// block authors will call it (validated in `ValidateUnsigned`), as such
+		/// if the block author is defined it will be defined as the equivocation
+		/// reporter.
+		// TODO: fix key_owner_proofs[0].validator_count()
+		#[pallet::call_index(3)]
+		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proofs[0].validator_count(), T::MaxNominators::get(),))]
+		pub fn report_fork_equivocation_unsigned(
+			origin: OriginFor<T>,
+			equivocation_proof: Box<
+				ForkEquivocationProof<
+					BlockNumberFor<T>,
+					T::BeefyId,
+					<T::BeefyId as RuntimeAppPublic>::Signature,
+					HeaderFor<T>,
+				>,
+			>,
+			key_owner_proofs: Vec<T::KeyOwnerProof>,
+		) -> DispatchResultWithPostInfo {
+			ensure_none(origin)?;
+
+			// TODO:
+			// T::EquivocationReportSystem::process_evidence(
+			// 	None,
+			// 	(*fork_equivocation_proof, key_owner_proof),
+			// )?;
 			Ok(Pays::No.into())
 		}
 	}
@@ -292,15 +370,43 @@ impl<T: Config> Pallet<T> {
 	/// Submits an extrinsic to report an equivocation. This method will create
 	/// an unsigned extrinsic with a call to `report_equivocation_unsigned` and
 	/// will push the transaction to the pool. Only useful in an offchain context.
-	pub fn submit_unsigned_equivocation_report(
-		equivocation_proof: EquivocationProof<
+	pub fn submit_unsigned_vote_equivocation_report(
+		equivocation_proof: VoteEquivocationProof<
 			BlockNumberFor<T>,
 			T::BeefyId,
 			<T::BeefyId as RuntimeAppPublic>::Signature,
 		>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::EquivocationReportSystem::publish_evidence((equivocation_proof, key_owner_proof)).ok()
+		T::EquivocationReportSystem::publish_evidence(
+			EquivocationEvidenceFor::<T>::VoteEquivocationProof(
+				equivocation_proof,
+				key_owner_proof,
+			),
+		)
+		.ok()
+	}
+
+	/// Submits an extrinsic to report an invalid fork signed by potentially
+	/// multiple signatories. This method will create an unsigned extrinsic with
+	/// a call to `report_fork_equivocation_unsigned` and will push the transaction
+	/// to the pool. Only useful in an offchain context.
+	pub fn submit_unsigned_fork_equivocation_report(
+		fork_equivocation_proof: sp_consensus_beefy::ForkEquivocationProof<
+			BlockNumberFor<T>,
+			T::BeefyId,
+			<T::BeefyId as RuntimeAppPublic>::Signature,
+			HeaderFor<T>,
+		>,
+		key_owner_proofs: Vec<T::KeyOwnerProof>,
+	) -> Option<()> {
+		T::EquivocationReportSystem::publish_evidence(
+			EquivocationEvidenceFor::<T>::ForkEquivocationProof(
+				fork_equivocation_proof,
+				key_owner_proofs,
+			),
+		)
+		.ok()
 	}
 
 	fn change_authorities(

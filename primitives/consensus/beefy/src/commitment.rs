@@ -81,7 +81,7 @@ where
 	}
 }
 
-/// A commitment with matching GRANDPA validators' signatures.
+/// A commitment with matching BEEFY validators' signatures.
 ///
 /// Note that SCALE-encoding of the structure is optimized for size efficiency over the wire,
 /// please take a look at custom [`Encode`] and [`Decode`] implementations and
@@ -90,7 +90,7 @@ where
 pub struct SignedCommitment<TBlockNumber, TSignature> {
 	/// The commitment signatures are collected for.
 	pub commitment: Commitment<TBlockNumber>,
-	/// GRANDPA validators' signatures for the commitment.
+	/// BEEFY validators' signatures for the commitment.
 	///
 	/// The length of this `Vec` must match number of validators in the current set (see
 	/// [Commitment::validator_set_id]).
@@ -244,6 +244,21 @@ pub enum VersionedFinalityProof<N, S> {
 impl<N, S> From<SignedCommitment<N, S>> for VersionedFinalityProof<N, S> {
 	fn from(commitment: SignedCommitment<N, S>) -> Self {
 		VersionedFinalityProof::V1(commitment)
+	}
+}
+
+impl<N, S> VersionedFinalityProof<N, S> {
+	/// Provide reference to inner `Payload`.
+	pub fn payload(&self) -> &Payload {
+		match self {
+			VersionedFinalityProof::V1(inner) => &inner.commitment.payload,
+		}
+	}
+	/// Block number this proof is for.
+	pub fn number(&self) -> &N {
+		match self {
+			VersionedFinalityProof::V1(inner) => &inner.commitment.block_number,
+		}
 	}
 }
 

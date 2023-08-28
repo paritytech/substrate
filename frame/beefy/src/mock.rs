@@ -43,7 +43,7 @@ use crate as pallet_beefy;
 
 pub use sp_consensus_beefy::{
 	ecdsa_crypto::{AuthorityId as BeefyId, AuthoritySignature as BeefySignature},
-	ConsensusLog, EquivocationProof, BEEFY_ENGINE_ID,
+	ConsensusLog, VoteEquivocationProof, BEEFY_ENGINE_ID,
 };
 
 impl_opaque_keys! {
