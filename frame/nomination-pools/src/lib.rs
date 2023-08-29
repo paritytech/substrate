@@ -3243,6 +3243,15 @@ impl<T: Config> Pallet<T> {
 				"TVL deviates from the actual sum of funds of all Pools."
 			);
 
+			let total_balance_members: BalanceOf<T> = PoolMembers::<T>::iter()
+				.map(|(_, mut member)| member.total_balance())
+				.reduce(|acc, total_balance| acc + total_balance)
+				.unwrap_or_default();
+
+			assert!(
+				TotalValueLocked::<T>::get() <= total_balance_members,
+				"TVL must be equal to or less than the total balance of all PoolMembers."
+			);
 			Ok(())
 		})?;
 

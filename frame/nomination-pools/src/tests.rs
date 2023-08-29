@@ -4582,9 +4582,9 @@ mod set_state {
 
 			// Given
 			unsafe_set_state(1, PoolState::Open);
-			let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
-			bonded_pool.points = 100;
-			bonded_pool.put();
+			// slash the pool to the point that `max_points_to_balance` ratio is
+			// surpassed. Making this pool destroyable by anyone.
+			StakingMock::slash_to(1, 10);
 
 			// When
 			assert_ok!(Pools::set_state(RuntimeOrigin::signed(11), 1, PoolState::Destroying));
@@ -4611,6 +4611,7 @@ mod set_state {
 				pool_events_since_last_call(),
 				vec![
 					Event::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
+					Event::PoolSlashed { pool_id: 1, balance: 0 },
 					Event::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
 					Event::StateChanged { pool_id: 1, new_state: PoolState::Destroying }
 				]
