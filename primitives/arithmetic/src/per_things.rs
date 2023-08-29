@@ -19,8 +19,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::traits::{
-	BaseArithmetic, Bounded, CheckedAdd, CheckedMul, CheckedSub, One, SaturatedConversion,
-	Saturating, UniqueSaturatedInto, Unsigned, Zero,
+	BaseArithmetic, Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, One,
+	SaturatedConversion, Saturating, UniqueSaturatedInto, Unsigned, Zero,
 };
 use codec::{CompactAs, Encode};
 use num_traits::{Pow, SaturatingAdd, SaturatingSub};
@@ -496,11 +496,34 @@ where
 	(x / maximum) * part_n + c
 }
 
+/// Checked compute of the error due to integer division in the expression `x / denom * numer`.
+fn checked_rational_mul_correction<N, P>(
+	x: N,
+	numer: P::Inner,
+	denom: P::Inner,
+	rounding: Rounding,
+) -> Result<N, &'static str>
+where
+	N: MultiplyArg + UniqueSaturatedInto<P::Inner>,
+	P: PerThing,
+	P::Inner: Into<N>,
+{
+	if P::Inner::is_zero(&denom) {
+		return Err("Division by zero")
+	}
+	Ok(rational_mul_correction::<N, P>(x, numer, denom, rounding))
+}
+
 /// Compute the error due to integer division in the expression `x / denom * numer`.
 ///
 /// Take the remainder of `x / denom` and multiply by  `numer / denom`. The result can be added
 /// to `x / denom * numer` for an accurate result.
-fn rational_mul_correction<N, P>(x: N, numer: P::Inner, denom: P::Inner, rounding: Rounding) -> N
+fn rational_mul_correction<N, P>(
+	x: N,
+	numer: P::Inner,
+	denom: P::Inner,
+	rounding: Rounding,
+) -> N
 where
 	N: MultiplyArg + UniqueSaturatedInto<P::Inner>,
 	P: PerThing,
@@ -1018,6 +1041,21 @@ macro_rules! implement_per_thing {
 			#[inline]
 			fn checked_mul(&self, rhs: &Self) -> Option<Self> {
 				Some(*self * *rhs)
+			}
+		}
+
+		/// # Note
+		/// I am not sure if this is the best way to div safely for PerThings
+		impl CheckedDiv for $name {
+			#[inline]
+			fn checked_div(&self, rhs: &Self) -> Option<Self> {
+				let q = rhs.0;
+
+				if q.is_zero() {
+					return None
+				}
+
+				Some(*self / *rhs)
 			}
 		}
 
@@ -1545,6 +1583,77 @@ macro_rules! implement_per_thing {
 			}
 
 			#[test]
+			fn checked_rational_mul_correction_works() {
+				assert_eq!(
+					super::checked_rational_mul_correction::<$type, $name>(
+						<$type>::max_value(),
+						<$type>::max_value(),
+						<$type>::max_value(),
+						super::Rounding::NearestPrefDown,
+					),
+					Ok(0),
+				);
+				assert_eq!(
+					super::checked_rational_mul_correction::<$type, $name>(
+						<$type>::max_value() - 1,
+						<$type>::max_value(),
+						<$type>::max_value(),
+						super::Rounding::NearestPrefDown,
+					),
+					Ok(<$type>::max_value() - 1),
+				);
+				assert_eq!(
+					super::checked_rational_mul_correction::<$upper_type, $name>(
+						((<$type>::max_value() - 1) as $upper_type).pow(2),
+						<$type>::max_value(),
+						<$type>::max_value(),
+						super::Rounding::NearestPrefDown,
+					),
+					Ok(1),
+				);
+				// ((max^2 - 1) % max) * max / max == max - 1
+				assert_eq!(
+					super::checked_rational_mul_correction::<$upper_type, $name>(
+						(<$type>::max_value() as $upper_type).pow(2) - 1,
+						<$type>::max_value(),
+						<$type>::max_value(),
+						super::Rounding::NearestPrefDown,
+					),
+					Ok(<$upper_type>::from((<$type>::max_value() - 1))),
+				);
+				// (max % 2) * max / 2 == max / 2
+				assert_eq!(
+					super::checked_rational_mul_correction::<$upper_type, $name>(
+						(<$type>::max_value() as $upper_type).pow(2),
+						<$type>::max_value(),
+						2 as $type,
+						super::Rounding::NearestPrefDown,
+					),
+					Ok(<$type>::max_value() as $upper_type / 2),
+				);
+				// ((max^2 - 1) % max) * 2 / max == 2 (rounded up)
+				assert_eq!(
+					super::checked_rational_mul_correction::<$upper_type, $name>(
+						(<$type>::max_value() as $upper_type).pow(2) - 1,
+						2 as $type,
+						<$type>::max_value(),
+						super::Rounding::NearestPrefDown,
+					),
+					Ok(2),
+				);
+				// ((max^2 - 1) % max) * 2 / max == 1 (rounded down)
+				assert_eq!(
+					super::checked_rational_mul_correction::<$upper_type, $name>(
+						(<$type>::max_value() as $upper_type).pow(2) - 1,
+						2 as $type,
+						<$type>::max_value(),
+						super::Rounding::Down,
+					),
+					Ok(1),
+				);
+			}
+
+			#[test]
 			fn rational_mul_correction_works() {
 				assert_eq!(
 					super::rational_mul_correction::<$type, $name>(
@@ -1737,6 +1846,22 @@ macro_rules! implement_per_thing {
 					Some($name::from_percent(0))
 				);
 			}
+
+            #[test]
+            fn test_basic_checked_div() {
+                assert_eq!(
+                    $name::from_parts($max).checked_div(&$name::from_parts($max)),
+                    Some($name::from_percent(100))
+                );
+				assert_eq!(
+					$name::from_percent(100).checked_div(&$name::from_percent(100)),
+					Some($name::from_percent(100))
+				);
+                assert_eq!(
+                    $name::from_percent(0).checked_div(&$name::from_percent(0)),
+                    None
+                );
+            }
 		}
 	};
 }
