@@ -23,7 +23,7 @@ use frame_election_provider_support::{
 };
 pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
-	bounded_vec, parameter_types,
+	parameter_types,
 	traits::{ConstU32, Hooks},
 	weights::{constants, Weight},
 	BoundedVec,
@@ -42,6 +42,7 @@ use sp_npos_elections::{
 	ElectionResult, EvaluateSupport,
 };
 use sp_runtime::{
+	bounded_vec,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage, PerU16,

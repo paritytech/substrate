@@ -66,7 +66,11 @@ fn pool_assets() -> Vec<u32> {
 
 fn create_tokens(owner: u128, tokens: Vec<NativeOrAssetId<u32>>) {
 	for token_id in tokens {
-		let MultiAssetIdConversionResult::Converted(asset_id) = NativeOrAssetIdConverter::try_convert(&token_id) else { unreachable!("invalid token") };
+		let MultiAssetIdConversionResult::Converted(asset_id) =
+			NativeOrAssetIdConverter::try_convert(&token_id)
+		else {
+			unreachable!("invalid token")
+		};
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), asset_id, owner, false, 1));
 	}
 }

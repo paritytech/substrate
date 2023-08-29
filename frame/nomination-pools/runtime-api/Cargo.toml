@@ -19,10 +19,5 @@ sp-std = { version = "8.0.0", default-features = false, path = "../../../primiti
 pallet-nomination-pools = { version = "1.0.0", default-features = false, path = "../" }
 
 [features]
-default = ["std"]
-std = [
-	"codec/std",
-	"sp-api/std",
-	"sp-std/std",
-	"pallet-nomination-pools/std",
-]
+default = [ "std" ]
+std = [ "codec/std", "pallet-nomination-pools/std", "sp-api/std", "sp-std/std" ]

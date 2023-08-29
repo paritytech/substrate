@@ -34,12 +34,16 @@ mod keyword {
 	syn::custom_keyword!(frame_system);
 	syn::custom_keyword!(disable_frame_system_supertrait_check);
 	syn::custom_keyword!(no_default);
+	syn::custom_keyword!(no_default_bounds);
 	syn::custom_keyword!(constant);
 }
 
 #[derive(Default)]
 pub struct DefaultTrait {
-	pub items: Vec<syn::TraitItem>,
+	/// A bool for each sub-trait item indicates whether the item has
+	/// `#[pallet::no_default_bounds]` attached to it. If true, the item will not have any bounds
+	/// in the generated default sub-trait.
+	pub items: Vec<(syn::TraitItem, bool)>,
 	pub has_system: bool,
 }
 
@@ -142,6 +146,8 @@ impl syn::parse::Parse for DisableFrameSystemSupertraitCheck {
 pub enum PalletAttrType {
 	#[peek(keyword::no_default, name = "no_default")]
 	NoDefault(keyword::no_default),
+	#[peek(keyword::no_default_bounds, name = "no_default_bounds")]
+	NoBounds(keyword::no_default_bounds),
 	#[peek(keyword::constant, name = "constant")]
 	Constant(keyword::constant),
 }
@@ -366,6 +372,7 @@ impl ConfigDef {
 
 			let mut already_no_default = false;
 			let mut already_constant = false;
+			let mut already_no_default_bounds = false;
 
 			while let Ok(Some(pallet_attr)) =
 				helper::take_first_item_pallet_attr::<PalletAttr>(trait_item)
@@ -403,15 +410,31 @@ impl ConfigDef {
 
 						already_no_default = true;
 					},
+					(PalletAttrType::NoBounds(_), _) => {
+						if !enable_default {
+							return Err(syn::Error::new(
+								pallet_attr._bracket.span.join(),
+								"`#[pallet:no_default_bounds]` can only be used if `#[pallet::config(with_default)]` \
+								has been specified"
+							))
+						}
+						if already_no_default_bounds {
+							return Err(syn::Error::new(
+								pallet_attr._bracket.span.join(),
+								"Duplicate #[pallet::no_default_bounds] attribute not allowed.",
+							))
+						}
+						already_no_default_bounds = true;
+					},
 				}
 			}
 
-			if !already_no_default && !is_event && enable_default {
+			if !already_no_default && enable_default {
 				default_sub_trait
 					.as_mut()
 					.expect("is 'Some(_)' if 'enable_default'; qed")
 					.items
-					.push(trait_item.clone());
+					.push((trait_item.clone(), already_no_default_bounds));
 			}
 		}
 

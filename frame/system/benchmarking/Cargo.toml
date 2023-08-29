@@ -28,7 +28,7 @@ sp-externalities = { version = "0.19.0", path = "../../../primitives/externaliti
 sp-version = { version = "22.0.0", path = "../../../primitives/version" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking/std",
@@ -36,16 +36,16 @@ std = [
 	"frame-system/std",
 	"scale-info/std",
 	"sp-core/std",
-	"sp-runtime/std",
-	"sp-std/std",
 	"sp-externalities/std",
 	"sp-io/std",
-	"sp-version/std"
+	"sp-runtime/std",
+	"sp-std/std",
+	"sp-version/std",
 ]
 
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks"
+	"sp-runtime/runtime-benchmarks",
 ]

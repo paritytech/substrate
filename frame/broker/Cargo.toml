@@ -1,0 +1,56 @@
+[package]
+name = "pallet-broker"
+version = "0.1.0"
+description = "Brokerage tool for managing Polkadot Core scheduling"
+authors = ["Parity Technologies <admin@parity.io>"]
+homepage = "https://substrate.io"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/paritytech/substrate"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [ "derive"] }
+scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
+bitvec = "1"
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
+sp-arithmetic = { version = "16.0.0", default-features = false, path = "../../primitives/arithmetic" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+
+[dev-dependencies]
+sp-io = { version = "23.0.0", path = "../../primitives/io" }
+
+[features]
+default = [ "std" ]
+
+std = [
+	"codec/std",
+	"frame-benchmarking?/std",
+	"frame-support/std",
+	"frame-system/std",
+	"scale-info/std",
+	"sp-arithmetic/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-std/std",
+]
+
+runtime-benchmarks = [
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+]
+
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"sp-runtime/try-runtime",
+]

@@ -25,7 +25,7 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../../primi
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",
@@ -47,5 +47,5 @@ runtime-benchmarks = [
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
-	"sp-runtime/try-runtime"
+	"sp-runtime/try-runtime",
 ]

@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use crate::{self as fast_unstake};
-use frame_benchmarking::frame_support::assert_ok;
 use frame_support::{
+	assert_ok,
 	pallet_prelude::*,
 	parameter_types,
 	traits::{ConstU64, Currency},

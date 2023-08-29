@@ -32,7 +32,6 @@ use environmental::Vec;
 #[cfg(feature = "try-runtime")]
 use frame_support::traits::fungible::{Inspect, InspectHold};
 use frame_support::{
-	codec,
 	pallet_prelude::*,
 	storage_alias,
 	traits::{fungible::MutateHold, ReservableCurrency},

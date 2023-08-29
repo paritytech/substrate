@@ -21,12 +21,13 @@ use super::*;
 use crate as pallet_scored_pool;
 
 use frame_support::{
-	bounded_vec, construct_runtime, ord_parameter_types, parameter_types,
+	construct_runtime, ord_parameter_types, parameter_types,
 	traits::{ConstU32, ConstU64},
 };
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
+	bounded_vec,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };

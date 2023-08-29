@@ -173,7 +173,7 @@ pub async fn run_manual_seal<B, BI, CB, E, C, TP, SC, CS, CIDP, P>(
 	SC: SelectChain<B> + 'static,
 	TP: TransactionPool<Block = B>,
 	CIDP: CreateInherentDataProviders<B, ()>,
-	P: Send + Sync + 'static,
+	P: codec::Encode + Send + Sync + 'static,
 {
 	while let Some(command) = commands_stream.next().await {
 		match command {
@@ -231,7 +231,7 @@ pub async fn run_instant_seal<B, BI, CB, E, C, TP, SC, CIDP, P>(
 	SC: SelectChain<B> + 'static,
 	TP: TransactionPool<Block = B>,
 	CIDP: CreateInherentDataProviders<B, ()>,
-	P: Send + Sync + 'static,
+	P: codec::Encode + Send + Sync + 'static,
 {
 	// instant-seal creates blocks as soon as transactions are imported
 	// into the transaction pool.
@@ -281,7 +281,7 @@ pub async fn run_instant_seal_and_finalize<B, BI, CB, E, C, TP, SC, CIDP, P>(
 	SC: SelectChain<B> + 'static,
 	TP: TransactionPool<Block = B>,
 	CIDP: CreateInherentDataProviders<B, ()>,
-	P: Send + Sync + 'static,
+	P: codec::Encode + Send + Sync + 'static,
 {
 	// Creates and finalizes blocks as soon as transactions are imported
 	// into the transaction pool.
@@ -459,7 +459,8 @@ mod tests {
 					needs_justification: false,
 					bad_justification: false,
 					is_new_best: true,
-				}
+				},
+				proof_size: 0
 			}
 		);
 		// assert that there's a new block in the db.
@@ -549,7 +550,8 @@ mod tests {
 					needs_justification: false,
 					bad_justification: false,
 					is_new_best: true,
-				}
+				},
+				proof_size: created_block.proof_size
 			}
 		);
 		// assert that there's a new block in the db.
@@ -625,7 +627,8 @@ mod tests {
 					needs_justification: false,
 					bad_justification: false,
 					is_new_best: true,
-				}
+				},
+				proof_size: 0
 			}
 		);
 		// assert that there's a new block in the db.
@@ -711,7 +714,8 @@ mod tests {
 					needs_justification: false,
 					bad_justification: false,
 					is_new_best: true
-				}
+				},
+				proof_size: 0
 			}
 		);
 

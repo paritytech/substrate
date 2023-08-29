@@ -19,10 +19,5 @@ pallet-nfts = { version = "4.0.0-dev", default-features = false, path = "../../n
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
 
 [features]
-default = ["std"]
-std = [
-	"codec/std",
-    "frame-support/std",
-	"pallet-nfts/std",
-	"sp-api/std",
-]
+default = [ "std" ]
+std = [ "codec/std", "frame-support/std", "pallet-nfts/std", "sp-api/std" ]

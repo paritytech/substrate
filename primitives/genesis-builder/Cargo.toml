@@ -20,9 +20,4 @@ serde_json = { version = "1.0.85", default-features = false, features = ["alloc"
 
 [features]
 default = [ "std" ]
-std = [
-	"sp-api/std",
-	"sp-std/std",
-	"serde_json/std",
-	"sp-runtime/std"
-]
+std = [ "serde_json/std", "sp-api/std", "sp-runtime/std", "sp-std/std" ]

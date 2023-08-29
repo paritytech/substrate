@@ -18,5 +18,5 @@ sp-core = { version = "21.0.0", default-features = false, path = "../core" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../runtime" }
 
 [features]
-default = ["std"]
-std = ["sp-api/std", "sp-core/std", "sp-runtime/std"]
+default = [ "std" ]
+std = [ "sp-api/std", "sp-core/std", "sp-runtime/std" ]

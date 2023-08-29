@@ -49,9 +49,9 @@ impl syn::parse::Parse for CreateTtReturnMacroDef {
 }
 
 /// A proc macro that accepts a name and any number of key-value pairs, to be used to create a
-/// declarative macro that follows tt-call conventions and simply calls [`tt_call::tt_return`],
-/// accepting an optional `frame-support` argument and returning the key-value pairs that were
-/// supplied to the proc macro.
+/// declarative macro that follows tt-call conventions and simply calls
+/// [`tt_call::tt_return`], accepting an optional `frame-support` argument and returning
+/// the key-value pairs that were supplied to the proc macro.
 ///
 /// # Example
 /// ```ignore
@@ -67,7 +67,7 @@ impl syn::parse::Parse for CreateTtReturnMacroDef {
 ///         $caller:tt
 ///         $(frame_support = [{ $($frame_support:ident)::* }])?
 ///     } => {
-///         frame_support::tt_return! {
+///         frame_support::__private::tt_return! {
 ///             $caller
 ///             foo = [{ bar }]
 ///         }
@@ -94,7 +94,7 @@ pub fn create_tt_return_macro(input: proc_macro::TokenStream) -> proc_macro::Tok
 				$caller:tt
 				$(frame_support = [{ $($frame_support:ident)::* }])?
 			} => {
-				#frame_support::tt_return! {
+				#frame_support::__private::tt_return! {
 					$caller
 					#(
 						#keys = [{ #values }]

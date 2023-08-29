@@ -32,7 +32,7 @@ sp-externalities = { version = "0.19.0", path = "../../primitives/externalities"
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-support/std",
@@ -40,21 +40,18 @@ std = [
 	"scale-info/std",
 	"serde/std",
 	"sp-core/std",
+	"sp-externalities/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-version/std",
 	"sp-weights/std",
-	"sp-externalities/std"
 ]
 runtime-benchmarks = [
 	"frame-support/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 ]
-try-runtime = [
-	"frame-support/try-runtime",
-	"sp-runtime/try-runtime"
-]
+try-runtime = [ "frame-support/try-runtime", "sp-runtime/try-runtime" ]
 
 [[bench]]
 name = "bench"

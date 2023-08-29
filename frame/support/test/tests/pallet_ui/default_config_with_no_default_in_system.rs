@@ -5,7 +5,7 @@ mod pallet {
 	#[pallet::config(with_default)]
 	pub trait Config: frame_system::Config {
 		#[pallet::constant]
-		type MyGetParam2: Get<Self::RuntimeCall>;
+		type MyGetParam2: Get<Self::Block>;
 	}
 
 	#[pallet::pallet]

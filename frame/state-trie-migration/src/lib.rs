@@ -1268,8 +1268,8 @@ mod mock {
 #[cfg(test)]
 mod test {
 	use super::{mock::*, *};
-	use frame_support::{bounded_vec, dispatch::*};
-	use sp_runtime::{traits::Bounded, StateVersion};
+	use frame_support::dispatch::*;
+	use sp_runtime::{bounded_vec, traits::Bounded, StateVersion};
 
 	#[test]
 	fn fails_if_no_migration() {

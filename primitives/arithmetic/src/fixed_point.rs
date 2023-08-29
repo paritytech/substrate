@@ -45,7 +45,7 @@ pub trait FixedPointOperand:
 	+ Bounded
 	+ Zero
 	+ Saturating
-	+ PartialOrd
+	+ PartialOrd<Self>
 	+ UniqueSaturatedInto<u128>
 	+ TryFrom<u128>
 	+ CheckedNeg
@@ -58,7 +58,7 @@ impl<T> FixedPointOperand for T where
 		+ Bounded
 		+ Zero
 		+ Saturating
-		+ PartialOrd
+		+ PartialOrd<Self>
 		+ UniqueSaturatedInto<u128>
 		+ TryFrom<u128>
 		+ CheckedNeg

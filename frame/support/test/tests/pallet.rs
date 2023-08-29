@@ -1378,7 +1378,7 @@ fn migrate_from_pallet_version_to_storage_version() {
 #[test]
 fn metadata() {
 	use codec::Decode;
-	use frame_support::metadata::{v15::*, *};
+	use frame_metadata::{v15::*, *};
 
 	fn maybe_docs(doc: Vec<&'static str>) -> Vec<&'static str> {
 		if cfg!(feature = "no-metadata-docs") {
@@ -1860,7 +1860,7 @@ fn metadata() {
 
 #[test]
 fn metadata_at_version() {
-	use frame_support::metadata::*;
+	use frame_metadata::*;
 	use sp_core::Decode;
 
 	// Metadata always returns the V14.3

@@ -147,22 +147,22 @@ pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
 sc-storage-monitor = { version = "0.1.0", path = "../../../client/storage-monitor" }
 
 [features]
-default = ["cli"]
+default = [ "cli" ]
 cli = [
-	"node-inspect",
-	"sc-cli",
-	"frame-benchmarking-cli",
-	"substrate-frame-cli",
-	"sc-service/rocksdb",
 	"clap",
 	"clap_complete",
+	"frame-benchmarking-cli",
+	"node-inspect",
+	"sc-cli",
+	"sc-service/rocksdb",
 	"substrate-build-script-utils",
+	"substrate-frame-cli",
 	"try-runtime-cli",
 ]
 runtime-benchmarks = [
-	"kitchensink-runtime/runtime-benchmarks",
 	"frame-benchmarking-cli/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"kitchensink-runtime/runtime-benchmarks",
 	"pallet-asset-tx-payment/runtime-benchmarks",
 	"pallet-assets/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
@@ -170,14 +170,13 @@ runtime-benchmarks = [
 	"pallet-timestamp/runtime-benchmarks",
 	"sc-client-db/runtime-benchmarks",
 	"sc-service/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks"
+	"sp-runtime/runtime-benchmarks",
 ]
 # Enable features that allow the runtime to be tried and debugged. Name might be subject to change
 # in the near future.
 try-runtime = [
-	"kitchensink-runtime/try-runtime",
-	"try-runtime-cli/try-runtime",
 	"frame-system/try-runtime",
+	"kitchensink-runtime/try-runtime",
 	"pallet-asset-conversion-tx-payment/try-runtime",
 	"pallet-asset-tx-payment/try-runtime",
 	"pallet-assets/try-runtime",
@@ -185,7 +184,8 @@ try-runtime = [
 	"pallet-im-online/try-runtime",
 	"pallet-timestamp/try-runtime",
 	"sp-runtime/try-runtime",
-	"substrate-cli-test-utils/try-runtime"
+	"substrate-cli-test-utils/try-runtime",
+	"try-runtime-cli/try-runtime",
 ]
 
 [[bench]]
