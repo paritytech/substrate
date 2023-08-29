@@ -406,35 +406,67 @@ where
 		prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<StorageKey>, &'static str> {
+		// number of parts to divide the prefix into
+		const NUM_PARTS: usize = 4;
+
+		let chunks = split_prefix::split_storage_key_prefix(prefix, NUM_PARTS);
+		let tasks = chunks
+			.into_iter()
+			.map(|(start_key, end_key)| self.rpc_get_keys_paged_range(start_key, end_key, at))
+			.collect::<Vec<_>>();
+
+		let all_keys = futures::future::join_all(tasks)
+			.await
+			.into_iter()
+			.collect::<Result<Vec<_>, _>>()?
+			.into_iter()
+			.flatten()
+			.collect::<Vec<_>>();
+
+		Ok(all_keys)
+	}
+
+	/// Retrieves all the storage keys between `start_key` (inclusive) and `end_key` (exclusive),
+	/// using safe RPC methods.
+	async fn rpc_get_keys_paged_range(
+		&self,
+		start_key: StorageKey,
+		end_key: StorageKey,
+		at: B::Hash,
+	) -> Result<Vec<StorageKey>, &'static str> {
 		let mut last_key: Option<StorageKey> = None;
-		let mut all_keys: Vec<StorageKey> = vec![];
-		let keys = loop {
+		let mut keys: Vec<StorageKey> = vec![];
+		loop {
 			// This loop can hit the node with very rapid requests, occasionally causing it to
 			// error out in CI (https://github.com/paritytech/substrate/issues/14129), so we retry.
 			let retry_strategy = FixedInterval::new(Self::KEYS_PAGE_RETRY_INTERVAL)
 				.take(Self::KEYS_PAGE_MAX_RETRIES);
 			let get_page_closure =
-				|| self.get_keys_single_page(Some(prefix.clone()), last_key.clone(), at);
+				|| self.get_keys_single_page(Some(start_key.clone()), last_key.clone(), at);
 			let page = Retry::spawn(retry_strategy, get_page_closure).await?;
 			let page_len = page.len();
 
-			all_keys.extend(page);
+			keys.extend(page);
 
 			if page_len < Self::DEFAULT_KEY_DOWNLOAD_PAGE as usize {
 				log::debug!(target: LOG_TARGET, "last page received: {}", page_len);
-				break all_keys
+				break
 			} else {
-				let new_last_key =
-					all_keys.last().expect("all_keys is populated; has .last(); qed");
+				let new_last_key = keys.last().expect("keys is populated; has .last(); qed");
+
 				log::debug!(
 					target: LOG_TARGET,
 					"new total = {}, full page received: {}",
-					all_keys.len(),
+					keys.len(),
 					HexDisplay::from(new_last_key)
 				);
+
+				if new_last_key > &end_key {
+					break
+				}
 				last_key = Some(new_last_key.clone());
 			};
-		};
+		}
 
 		Ok(keys)
 	}
@@ -1089,6 +1121,55 @@ where
 	}
 }
 
+mod split_prefix {
+	use crate::StorageKey;
+	// This function splits the prefix into `num_parts` equal chunks of ranges represented
+	// by pairs of (start_key, end_key) where start_key is the starting key of each chunk
+	// and end_key is the ending key of each chunk.
+	pub fn split_storage_key_prefix(
+		prefix: StorageKey,
+		num_parts: usize,
+	) -> Vec<(StorageKey, StorageKey)> {
+		let mut start_key = prefix.clone();
+		let mut chunks = vec![];
+
+		// loops `num_parts` times, each time calling the `get_next_wrapping_index` function
+		// with the current `start_key` value, and pushing the result as a tuple
+		// of `(start_key, end_key)` onto the `chunks` vector. The `start_key` value is then
+		// updated to the `end_key` value
+		for _ in 0..num_parts {
+			let end_key = StorageKey(get_next_wrapping_index(&start_key.0));
+			chunks.push((start_key.clone(), end_key.clone()));
+			start_key = end_key;
+		}
+
+		chunks
+	}
+
+	// This function takes a byte slice `key` as input and returns the next wrapping index
+	// of `key`. It iterates over key in reverse order, incrementing each byte by 1
+	// and setting carry to true if the incremented byte overflows.
+	pub fn get_next_wrapping_index(key: &[u8]) -> Vec<u8> {
+		let mut next_index = key.to_vec();
+		let mut carry = true;
+
+		for i in (0..key.len()).rev() {
+			if carry {
+				next_index[i] = key[i].wrapping_add(1);
+				carry = next_index[i] == 0;
+			} else {
+				break
+			}
+		}
+
+		if carry {
+			next_index.insert(0, 1);
+		}
+
+		next_index
+	}
+}
+
 #[cfg(test)]
 mod test_prelude {
 	pub(crate) use super::*;
@@ -1425,5 +1506,51 @@ mod remote_tests {
 			.await
 			.unwrap()
 			.execute_with(|| {});
+	}
+
+	#[test]
+	fn test_split_storage_key_prefix() {
+		// Test case 1: prefix = [0, 0, 0, 0], num_parts = 5
+		let prefix = StorageKey(vec![0, 0, 0, 0]);
+		let num_parts = 5;
+		let result = split_prefix::split_storage_key_prefix(prefix, num_parts);
+		assert_eq!(
+			result,
+			vec![
+				(StorageKey(vec![0, 0, 0, 0]), StorageKey(vec![0, 0, 0, 1])),
+				(StorageKey(vec![0, 0, 0, 1]), StorageKey(vec![0, 0, 0, 2])),
+				(StorageKey(vec![0, 0, 0, 2]), StorageKey(vec![0, 0, 0, 3])),
+				(StorageKey(vec![0, 0, 0, 3]), StorageKey(vec![0, 0, 0, 4])),
+				(StorageKey(vec![0, 0, 0, 4]), StorageKey(vec![0, 0, 0, 5])),
+			]
+		);
+
+		// Test case 2: prefix = [0, 0, 0], num_parts = 4
+		let prefix = StorageKey(vec![0, 0, 0]);
+		let num_parts = 4;
+		let result = split_prefix::split_storage_key_prefix(prefix, num_parts);
+		assert_eq!(
+			result,
+			vec![
+				(StorageKey(vec![0, 0, 0]), StorageKey(vec![0, 0, 1])),
+				(StorageKey(vec![0, 0, 1]), StorageKey(vec![0, 0, 2])),
+				(StorageKey(vec![0, 0, 2]), StorageKey(vec![0, 0, 3])),
+				(StorageKey(vec![0, 0, 3]), StorageKey(vec![0, 0, 4])),
+			]
+		);
+
+		// Test case 3: prefix = [1, 2, 3], num_parts = 4
+		let prefix = StorageKey(vec![1, 2, 3]);
+		let num_parts = 4;
+		let result = split_prefix::split_storage_key_prefix(prefix, num_parts);
+		assert_eq!(
+			result,
+			vec![
+				(StorageKey(vec![1, 2, 3]), StorageKey(vec![1, 2, 4])),
+				(StorageKey(vec![1, 2, 4]), StorageKey(vec![1, 2, 5])),
+				(StorageKey(vec![1, 2, 5]), StorageKey(vec![1, 2, 6])),
+				(StorageKey(vec![1, 2, 6]), StorageKey(vec![1, 2, 7])),
+			]
+		);
 	}
 }
