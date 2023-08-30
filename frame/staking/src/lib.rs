@@ -671,8 +671,14 @@ impl<T: Config> StakingLedger<T> {
 		// clean unlocking chunks that are set to zero.
 		self.unlocking.retain(|c| !c.value.is_zero());
 
-		T::EventListeners::on_slash(&self.stash, self.active, &slashed_unlocking);
-		pre_slash_total.saturating_sub(self.total)
+		let final_slashed_amount = pre_slash_total.saturating_sub(self.total);
+		T::EventListeners::on_slash(
+			&self.stash,
+			self.active,
+			&slashed_unlocking,
+			final_slashed_amount,
+		);
+		final_slashed_amount
 	}
 }
 

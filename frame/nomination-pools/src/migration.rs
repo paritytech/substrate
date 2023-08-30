@@ -724,4 +724,103 @@ pub mod v5 {
 			Ok(())
 		}
 	}
+
+	/// This migration accumulates and initializes the [`TotalValueLocked`] for all pools.
+	pub struct VersionUncheckedMigrateV5ToV6<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> OnRuntimeUpgrade for VersionUncheckedMigrateV5ToV6<T> {
+		fn on_runtime_upgrade() -> Weight {
+			let migrated = BondedPools::<T>::count();
+			// The TVL should be the sum of all the funds that are actively staked and in the
+			// unbonding process of the account of each pool.
+			let tvl: BalanceOf<T> = BondedPools::<T>::iter()
+				.map(|(id, inner)| {
+					T::Staking::total_stake(
+						&BondedPool { id, inner: inner.clone() }.bonded_account(),
+					)
+					.unwrap_or_default()
+				})
+				.reduce(|acc, total_balance| acc + total_balance)
+				.unwrap_or_default();
+
+			TotalValueLocked::<T>::set(tvl);
+
+			log!(info, "Upgraded {} pools with a TVL of {:?}", migrated, tvl);
+
+			// reads: migrated * (BondedPools +  Staking::total_stake) + count + onchain
+			// version
+			//
+			// writes: current version + TVL
+			T::DbWeight::get().reads_writes(migrated.saturating_mul(2).saturating_add(2).into(), 2)
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
+			ensure!(
+				PoolMembers::<T>::iter_keys().count() == PoolMembers::<T>::iter_values().count(),
+				"There are undecodable PoolMembers in storage. This migration will not fix that."
+			);
+			ensure!(
+				BondedPools::<T>::iter_keys().count() == BondedPools::<T>::iter_values().count(),
+				"There are undecodable BondedPools in storage. This migration will not fix that."
+			);
+			ensure!(
+				SubPoolsStorage::<T>::iter_keys().count() ==
+					SubPoolsStorage::<T>::iter_values().count(),
+				"There are undecodable SubPools in storage. This migration will not fix that."
+			);
+			ensure!(
+				Metadata::<T>::iter_keys().count() == Metadata::<T>::iter_values().count(),
+				"There are undecodable Metadata in storage. This migration will not fix that."
+			);
+
+			Ok(Vec::new())
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(_data: Vec<u8>) -> Result<(), TryRuntimeError> {
+			// ensure [`TotalValueLocked`] contains a value greater zero if any instances of
+			// BondedPools exist.
+			if !BondedPools::<T>::count().is_zero() {
+				ensure!(!TotalValueLocked::<T>::get().is_zero(), "tvl written incorrectly");
+			}
+
+			ensure!(
+				Pallet::<T>::on_chain_storage_version() >= 6,
+				"nomination-pools::migration::v6: wrong storage version"
+			);
+
+			// These should not have been touched - just in case.
+			ensure!(
+				PoolMembers::<T>::iter_keys().count() == PoolMembers::<T>::iter_values().count(),
+				"There are undecodable PoolMembers in storage."
+			);
+			ensure!(
+				BondedPools::<T>::iter_keys().count() == BondedPools::<T>::iter_values().count(),
+				"There are undecodable BondedPools in storage."
+			);
+			ensure!(
+				SubPoolsStorage::<T>::iter_keys().count() ==
+					SubPoolsStorage::<T>::iter_values().count(),
+				"There are undecodable SubPools in storage."
+			);
+			ensure!(
+				Metadata::<T>::iter_keys().count() == Metadata::<T>::iter_values().count(),
+				"There are undecodable Metadata in storage."
+			);
+
+			Ok(())
+		}
+	}
+
+	/// [`VersionUncheckedMigrateV5ToV6`] wrapped in a
+	/// [`frame_support::migrations::VersionedRuntimeUpgrade`], ensuring the migration is only
+	/// performed when on-chain version is 5.
+	#[cfg(feature = "experimental")]
+	pub type VersionCheckedMigrateV5ToV6<T> = frame_support::migrations::VersionedRuntimeUpgrade<
+		5,
+		6,
+		VersionUncheckedMigrateV5ToV6<T>,
+		crate::pallet::Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>;
 }
