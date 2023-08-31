@@ -21,9 +21,8 @@
 //!
 //! # Glutton Pallet
 //!
-//! Pallet that consumes `ref_time` and `proof_size` of a block. Based on the
-//! `Compute` and `Storage` parameters the pallet consumes the adequate amount
-//! of weight.
+//! Pallet that consumes `ref_time` and `proof_size` of a block. Based on the `Compute` and
+//! `Storage` parameters the pallet consumes the adequate amount of weight.
 
 #![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]

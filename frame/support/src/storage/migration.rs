@@ -385,6 +385,39 @@ pub fn move_prefix(from_prefix: &[u8], to_prefix: &[u8]) {
 	}
 }
 
+/// A phony migration that does nothing, except executing `TryDecodeEntireStorage` on
+/// `post_upgrade`, which implies it is only available if `try-state` feature is used.
+///
+/// This can be used typically in the top level runtime, where `AllPallets` typically comes from
+/// `construct_runtime!`.
+pub struct EnsureStateDecodes<AllPallets>(sp_std::marker::PhantomData<AllPallets>);
+
+#[cfg(not(feature = "try-runtime"))]
+impl<AllPallets> crate::traits::OnRuntimeUpgrade for EnsureStateDecodes<AllPallets> {
+	fn on_runtime_upgrade() -> crate::weights::Weight {
+		Default::default()
+	}
+}
+
+#[cfg(feature = "try-runtime")]
+impl<AllPallets: crate::traits::TryDecodeEntireStorage> crate::traits::OnRuntimeUpgrade
+	for EnsureStateDecodes<AllPallets>
+{
+	fn on_runtime_upgrade() -> sp_weights::Weight {
+		Default::default()
+	}
+
+	fn post_upgrade(_: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
+		let decoded = AllPallets::try_decode_entire_state()?;
+		crate::log::info!(
+			target: crate::LOG_TARGET,
+			"decoded the entire state, total size = {} bytes",
+			decoded
+		);
+		Ok(())
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::{

@@ -151,7 +151,7 @@ pub enum QueryKind {
 /// `type MyStorage = StorageValue<MyStorageP, u32>`
 /// The keys and values types are parsed in order to get metadata
 pub struct StorageDef {
-	/// The index of error item in pallet module.
+	/// The index of storage item in pallet module.
 	pub index: usize,
 	/// Visibility of the storage type.
 	pub vis: syn::Visibility,

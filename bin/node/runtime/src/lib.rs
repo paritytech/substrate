@@ -2137,6 +2137,8 @@ type Migrations = (
 	pallet_nomination_pools::migration::v2::MigrateToV2<Runtime>,
 	pallet_alliance::migration::Migration<Runtime>,
 	pallet_contracts::Migration<Runtime>,
+	// This should always be the last migration item.
+	frame_support::storage::migration::EnsureStateDecodes<AllPalletsWithSystem>,
 );
 
 type EventRecord = frame_system::EventRecord<

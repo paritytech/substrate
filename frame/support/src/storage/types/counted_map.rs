@@ -74,7 +74,11 @@ impl<P: CountedStorageMapInstance, H, K, V, Q, O, M> MapWrapper
 	type Map = StorageMap<P, H, K, V, Q, O, M>;
 }
 
-type CounterFor<P> = StorageValue<<P as CountedStorageMapInstance>::CounterPrefix, u32, ValueQuery>;
+/// The numeric counter type.
+pub type Counter = u32;
+
+type CounterFor<P> =
+	StorageValue<<P as CountedStorageMapInstance>::CounterPrefix, Counter, ValueQuery>;
 
 /// On removal logic for updating counter while draining upon some prefix with
 /// [`crate::storage::PrefixIterator`].
@@ -378,14 +382,14 @@ where
 	/// can be very heavy, so use with caution.
 	///
 	/// Returns the number of items in the map which is used to set the counter.
-	pub fn initialize_counter() -> u32 {
-		let count = Self::iter_values().count() as u32;
+	pub fn initialize_counter() -> Counter {
+		let count = Self::iter_values().count() as Counter;
 		CounterFor::<Prefix>::set(count);
 		count
 	}
 
 	/// Return the count.
-	pub fn count() -> u32 {
+	pub fn count() -> Counter {
 		CounterFor::<Prefix>::get()
 	}
 }
@@ -1162,7 +1166,7 @@ mod test {
 				StorageEntryMetadataIR {
 					name: "counter_for_foo",
 					modifier: StorageEntryModifierIR::Default,
-					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<Counter>()),
 					default: vec![0, 0, 0, 0],
 					docs: if cfg!(feature = "no-metadata-docs") {
 						vec![]
