@@ -147,6 +147,17 @@ pub mod pallet {
 	}
 }
 
+/// Holds parameters for if paying the transaction fee in the non-native asset.
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[scale_info(skip_type_params(T))]
+pub struct PayByAsset<T: Config> {
+	/// The asset id to pay the fee in rather than the native asset.
+	id: ChargeAssetIdOf<T>,
+	/// Effectively sets the max slippage that the user is willing to accept while allowing the
+	/// transaction to go ahead.
+	max_fee: Option<AssetBalanceOf<T>>,
+}
+
 /// Require payment for transaction inclusion and optionally include a tip to gain additional
 /// priority in the queue. Allows paying via both `Currency` as well as `fungibles::Balanced`.
 ///
@@ -158,7 +169,7 @@ pub mod pallet {
 pub struct ChargeAssetTxPayment<T: Config> {
 	#[codec(compact)]
 	tip: BalanceOf<T>,
-	asset_id: Option<ChargeAssetIdOf<T>>,
+	asset: Option<PayByAsset<T>>,
 }
 
 impl<T: Config> ChargeAssetTxPayment<T>
@@ -169,8 +180,8 @@ where
 	ChargeAssetIdOf<T>: Send + Sync,
 {
 	/// Utility constructor. Used only in client/factory code.
-	pub fn from(tip: BalanceOf<T>, asset_id: Option<ChargeAssetIdOf<T>>) -> Self {
-		Self { tip, asset_id }
+	pub fn from(tip: BalanceOf<T>, asset: Option<PayByAsset<T>>) -> Self {
+		Self { tip, asset }
 	}
 
 	/// Fee withdrawal logic that dispatches to either `OnChargeAssetTransaction` or
@@ -186,12 +197,13 @@ where
 		debug_assert!(self.tip <= fee, "tip should be included in the computed fee");
 		if fee.is_zero() {
 			Ok((fee, InitialPayment::Nothing))
-		} else if let Some(asset_id) = &self.asset_id {
+		} else if let Some(PayByAsset { id, max_fee, .. }) = &self.asset {
 			T::OnChargeAssetTransaction::withdraw_fee(
 				who,
 				call,
 				info,
-				asset_id.clone(),
+				id.clone(),
+				*max_fee,
 				fee.into(),
 				self.tip.into(),
 			)
@@ -218,7 +230,7 @@ where
 impl<T: Config> sp_std::fmt::Debug for ChargeAssetTxPayment<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "ChargeAssetTxPayment<{:?}, {:?}>", self.tip, self.asset_id.encode())
+		write!(f, "ChargeAssetTxPayment<{:?}, {:?}>", self.tip, self.asset.encode())
 	}
 	#[cfg(not(feature = "std"))]
 	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
@@ -250,7 +262,7 @@ where
 		// imbalance resulting from withdrawing the fee
 		InitialPayment<T>,
 		// asset_id for the transaction payment
-		Option<ChargeAssetIdOf<T>>,
+		Option<PayByAsset<T>>,
 	);
 
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
@@ -278,7 +290,7 @@ where
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
 		let (_fee, initial_payment) = self.withdraw_fee(who, call, info, len)?;
-		Ok((self.tip, who.clone(), initial_payment, self.asset_id))
+		Ok((self.tip, who.clone(), initial_payment, self.asset))
 	}
 
 	fn post_dispatch(
@@ -312,7 +324,7 @@ where
 						len as u32, info, post_info, tip,
 					);
 
-					if let Some(asset_id) = asset_id {
+					if let Some(PayByAsset { id, .. }) = asset_id {
 						let (used_for_fee, received_exchanged, asset_consumed) = already_withdrawn;
 						let converted_fee = T::OnChargeAssetTransaction::correct_and_deposit_fee(
 							&who,
@@ -322,7 +334,7 @@ where
 							tip.into(),
 							used_for_fee.into(),
 							received_exchanged.into(),
-							asset_id.clone(),
+							id.clone(),
 							asset_consumed.into(),
 						)?;
 
@@ -330,7 +342,7 @@ where
 							who,
 							actual_fee: converted_fee,
 							tip,
-							asset_id,
+							asset_id: id,
 						});
 					}
 				},

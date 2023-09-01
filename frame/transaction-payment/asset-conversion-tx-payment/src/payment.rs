@@ -47,6 +47,7 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		call: &T::RuntimeCall,
 		dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
 		asset_id: Self::AssetId,
+		max_fee: Option<AssetBalanceOf<T>>,
 		fee: Self::Balance,
 		tip: Self::Balance,
 	) -> Result<
@@ -84,7 +85,8 @@ where
 	T: Config,
 	C: Inspect<<T as frame_system::Config>::AccountId>,
 	CON: Swap<T::AccountId, T::HigherPrecisionBalance, T::MultiAssetId>,
-	T::HigherPrecisionBalance: From<BalanceOf<T>> + TryInto<AssetBalanceOf<T>>,
+	T::HigherPrecisionBalance:
+		From<BalanceOf<T>> + From<AssetBalanceOf<T>> + TryInto<AssetBalanceOf<T>>,
 	T::MultiAssetId: From<AssetIdOf<T>>,
 	BalanceOf<T>: IsType<<C as Inspect<<T as frame_system::Config>::AccountId>>::Balance>,
 {
@@ -103,6 +105,7 @@ where
 		call: &T::RuntimeCall,
 		info: &DispatchInfoOf<T::RuntimeCall>,
 		asset_id: Self::AssetId,
+		max_fee: Option<AssetBalanceOf<T>>,
 		fee: BalanceOf<T>,
 		tip: BalanceOf<T>,
 	) -> Result<
@@ -118,7 +121,7 @@ where
 			who.clone(),
 			vec![asset_id.into(), T::MultiAssetIdConverter::get_native()],
 			T::HigherPrecisionBalance::from(native_asset_required),
-			None,
+			max_fee.map(|fee| fee.into()),
 			who.clone(),
 			true,
 		)
@@ -177,7 +180,7 @@ where
 				],
 				T::HigherPrecisionBalance::from(swap_back), /* amount of the native asset to
 				                                             * convert to `asset_id` */
-				None,        // no minimum amount back
+				None,        // because rate will be similar to pre-dispatch
 				who.clone(), // we will refund to `who`
 				false,       // no need to keep alive
 			)
