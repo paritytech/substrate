@@ -196,6 +196,7 @@ members = [
 	"frame/session",
 	"frame/session/benchmarking",
 	"frame/society",
+	"frame/stake-tracker",
 	"frame/staking",
 	"frame/staking/reward-curve",
 	"frame/staking/reward-fn",
