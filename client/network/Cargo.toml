@@ -26,6 +26,7 @@ futures = "0.3.21"
 futures-timer = "3.0.2"
 ip_network = "0.4.1"
 libp2p = { version = "0.51.3", features = ["dns", "identify", "kad", "macros", "mdns", "noise", "ping", "tcp",  "tokio", "yamux", "websocket", "request-response"] }
+libp2p-quic = { version = "0.7.0-alpha.3", features = ["tokio"] }
 linked_hash_set = "0.1.3"
 log = "0.4.17"
 mockall = "0.11.3"

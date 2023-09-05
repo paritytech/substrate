@@ -9900,6 +9900,7 @@ dependencies = [
  "futures-timer",
  "ip_network",
  "libp2p",
+ "libp2p-quic",
  "linked_hash_set",
  "log",
  "mockall",

@@ -19,6 +19,7 @@
 //! Transport that serves as a common ground for all connections.
 
 use either::Either;
+use futures::future::Either as FutureEither;
 use libp2p::{
 	core::{
 		muxing::StreamMuxerBox,
@@ -27,9 +28,18 @@ use libp2p::{
 	},
 	dns, identity, noise, tcp, websocket, PeerId, Transport, TransportExt,
 };
+use libp2p_quic::{self as quic, Config as QuicConfig, GenTransport as QuicTransport};
 use std::{sync::Arc, time::Duration};
 
 pub use libp2p::bandwidth::BandwidthSinks;
+
+/// Builds the QUIC transport
+fn build_quic_transport(keypair: &identity::Keypair) -> Boxed<(PeerId, quic::Connection)> {
+	let config = QuicConfig::new(&keypair);
+	let transport = QuicTransport::<quic::tokio::Provider>::new(config).boxed();
+
+	transport
+}
 
 /// Builds the transport that serves as a common ground for all connections.
 ///
@@ -51,6 +61,7 @@ pub fn build_transport(
 	memory_only: bool,
 	yamux_window_size: Option<u32>,
 	yamux_maximum_buffer_size: usize,
+	enable_quic: bool,
 ) -> (Boxed<(PeerId, StreamMuxerBox)>, Arc<BandwidthSinks>) {
 	// Build the base layer of the transport.
 	let transport = if !memory_only {
@@ -95,11 +106,25 @@ pub fn build_transport(
 		yamux_config
 	};
 
-	let transport = transport
+	let tcp_transport = transport
 		.upgrade(upgrade::Version::V1Lazy)
 		.authenticate(authentication_config)
 		.multiplex(multiplexing_config)
-		.timeout(Duration::from_secs(20))
+		.timeout(Duration::from_secs(20));
+
+	let quic_transport = if enable_quic {
+		OptionalTransport::some(build_quic_transport(&keypair))
+	} else {
+		OptionalTransport::none()
+	};
+
+	let transport = tcp_transport.or_transport(quic_transport);
+
+	let transport = transport
+		.map(|either_output, _| match either_output {
+			FutureEither::Left((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+			FutureEither::Right((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+		})
 		.boxed();
 
 	transport.with_bandwidth_logging()

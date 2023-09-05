@@ -265,6 +265,7 @@ where
 				config_mem,
 				network_config.yamux_window_size,
 				yamux_maximum_buffer_size,
+				network_config.experimental_quic,
 			)
 		};
 

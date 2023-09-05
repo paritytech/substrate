@@ -67,6 +67,10 @@ pub struct NetworkParams {
 	#[arg(long, value_name = "PORT", conflicts_with_all = &[ "listen_addr" ])]
 	pub port: Option<u16>,
 
+	/// Enable experimental QUIC transport.
+	#[clap(long)]
+	pub experimental_quic: bool,
+
 	/// Always forbid connecting to private IPv4/IPv6 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address was passed with
 	/// `--reserved-nodes` or `--bootnodes`. Enabled by default for chains marked as "live" in
@@ -244,6 +248,7 @@ impl NetworkParams {
 			yamux_window_size: None,
 			ipfs_server: self.ipfs_server,
 			sync_mode: self.sync.into(),
+			experimental_quic: self.experimental_quic,
 		}
 	}
 }

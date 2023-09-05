@@ -608,6 +608,9 @@ pub struct NetworkConfiguration {
 	/// a modification of the way the implementation works. Different nodes with different
 	/// configured values remain compatible with each other.
 	pub yamux_window_size: Option<u32>,
+	/// If true, enables a possibility to accept QUIC connections. Incoming connections
+	/// won't be accepted unless a QUIC `Multiaddr` is passed as part of `listen_addresses`.
+	pub experimental_quic: bool,
 }
 
 impl NetworkConfiguration {
@@ -640,6 +643,7 @@ impl NetworkConfiguration {
 				.expect("value is a constant; constant is non-zero; qed."),
 			yamux_window_size: None,
 			ipfs_server: false,
+			experimental_quic: false,
 		}
 	}
 
