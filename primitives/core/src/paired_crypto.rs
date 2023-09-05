@@ -473,36 +473,17 @@ Seed<LeftPair::Seed, RightPair::Seed, DOUBLE_SEED_LEN>: SeedBound,
 
 	fn sign(&self, message: &[u8]) -> Self::Signature {
 	    let mut mutable_self = self.clone();
-	    let r: [u8; SIGNATURE_LEN] = [0u8; SIGNATURE_LEN];
-	// 		DoublePublicKeyScheme::sign(&mut mutable_self.0, &Message::new(b"", message))
-	// 			.to_bytes()
-	// 			.try_into()
-	// 			.expect("Signature serializer returns vectors of SIGNATURE_SERIALIZED_SIZE size");
+	    let mut r: [u8; SIGNATURE_LEN] = [0u8; SIGNATURE_LEN];
+        r.copy_from_slice(self.left.sign(message).as_ref());
+        r[Self::LEFT_SIGNATURE_LEN..].copy_from_slice(self.right.sign(message).as_ref());
 	    Self::Signature::unchecked_from(r)
 	}
 
-	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
-	// 	let pubkey_array: [u8; PUBLIC_KEY_SERIALIZED_SIZE] =
-	// 		match <[u8; PUBLIC_KEY_SERIALIZED_SIZE]>::try_from(pubkey.as_ref()) {
-	// 			Ok(pk) => pk,
-	// 			Err(_) => return false,
-	// 		};
-	// 	let public_key = match w3f_bls::double::DoublePublicKey::<T>::from_bytes(&pubkey_array) {
-	// 		Ok(pk) => pk,
-	// 		Err(_) => return false,
-	// 	};
+	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool  {
+        let mut vec_message = vec![0u8; message.as_ref().len()];
+        vec_message.clone_from_slice(message.as_ref());
 
-	// 	let sig_array = match sig.inner[..].try_into() {
-	// 		Ok(s) => s,
-	// 		Err(_) => return false,
-	// 	};
-	// 	let sig = match w3f_bls::double::DoubleSignature::from_bytes(sig_array) {
-	// 		Ok(s) => s,
-	// 		Err(_) => return false,
-	// 	};
-
-	    // 	sig.verify(&Message::new(b"", message.as_ref()), &public_key)
-        return false;
+        LeftPair::verify(&sig.left, message, &pubkey.left) && RightPair::verify(&sig.right, vec_message, &pubkey.right)
 	}
 
 	/// Get the seed for this key.
@@ -510,3 +491,4 @@ Seed<LeftPair::Seed, RightPair::Seed, DOUBLE_SEED_LEN>: SeedBound,
 		[self.left.to_raw_vec(), self.left.to_raw_vec()].concat()
 	}
 }
+
