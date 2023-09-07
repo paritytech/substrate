@@ -29,13 +29,14 @@
 //! order to update it.
 
 use crate::{
+	block_relay_protocol::{BlockDownloader, BlockResponseError},
 	blocks::BlockCollection,
 	schema::v1::{StateRequest, StateResponse},
 	state::StateSync,
 	warp::{WarpProofImportResult, WarpSync},
 };
 
-use codec::{Decode, DecodeAll, Encode};
+use codec::Encode;
 use extra_requests::ExtraRequests;
 use futures::{
 	channel::oneshot, stream::FuturesUnordered, task::Poll, Future, FutureExt, StreamExt,
@@ -65,9 +66,8 @@ use sc_network_common::{
 		},
 		warp::{EncodedProof, WarpProofRequest, WarpSyncParams, WarpSyncPhase, WarpSyncProgress},
 		BadPeer, ChainSync as ChainSyncT, ImportResult, Metrics, OnBlockData, OnBlockJustification,
-		OnStateData, OpaqueBlockRequest, OpaqueBlockResponse, OpaqueStateRequest,
-		OpaqueStateResponse, PeerInfo, PeerRequest, PollBlockAnnounceValidation, SyncMode,
-		SyncState, SyncStatus,
+		OnStateData, OpaqueStateRequest, OpaqueStateResponse, PeerInfo, PeerRequest,
+		PollBlockAnnounceValidation, SyncMode, SyncState, SyncStatus,
 	},
 };
 use sp_arithmetic::traits::Saturating;
@@ -97,6 +97,7 @@ pub use service::chain_sync::SyncingService;
 mod extra_requests;
 mod schema;
 
+pub mod block_relay_protocol;
 pub mod block_request_handler;
 pub mod blocks;
 pub mod engine;
@@ -337,8 +338,8 @@ pub struct ChainSync<B: BlockT, Client> {
 	network_service: service::network::NetworkServiceHandle,
 	/// Protocol name used for block announcements
 	block_announce_protocol_name: ProtocolName,
-	/// Protocol name used to send out block requests
-	block_request_protocol_name: ProtocolName,
+	/// Block downloader stub
+	block_downloader: Arc<dyn BlockDownloader<B>>,
 	/// Protocol name used to send out state requests
 	state_request_protocol_name: ProtocolName,
 	/// Protocol name used to send out warp sync requests
@@ -1253,72 +1254,6 @@ where
 		}
 	}
 
-	fn block_response_into_blocks(
-		&self,
-		request: &BlockRequest<B>,
-		response: OpaqueBlockResponse,
-	) -> Result<Vec<BlockData<B>>, String> {
-		let response: Box<schema::v1::BlockResponse> = response.0.downcast().map_err(|_error| {
-			"Failed to downcast opaque block response during encoding, this is an \
-				implementation bug."
-				.to_string()
-		})?;
-
-		response
-			.blocks
-			.into_iter()
-			.map(|block_data| {
-				Ok(BlockData::<B> {
-					hash: Decode::decode(&mut block_data.hash.as_ref())?,
-					header: if !block_data.header.is_empty() {
-						Some(Decode::decode(&mut block_data.header.as_ref())?)
-					} else {
-						None
-					},
-					body: if request.fields.contains(BlockAttributes::BODY) {
-						Some(
-							block_data
-								.body
-								.iter()
-								.map(|body| Decode::decode(&mut body.as_ref()))
-								.collect::<Result<Vec<_>, _>>()?,
-						)
-					} else {
-						None
-					},
-					indexed_body: if request.fields.contains(BlockAttributes::INDEXED_BODY) {
-						Some(block_data.indexed_body)
-					} else {
-						None
-					},
-					receipt: if !block_data.receipt.is_empty() {
-						Some(block_data.receipt)
-					} else {
-						None
-					},
-					message_queue: if !block_data.message_queue.is_empty() {
-						Some(block_data.message_queue)
-					} else {
-						None
-					},
-					justification: if !block_data.justification.is_empty() {
-						Some(block_data.justification)
-					} else if block_data.is_empty_justification {
-						Some(Vec::new())
-					} else {
-						None
-					},
-					justifications: if !block_data.justifications.is_empty() {
-						Some(DecodeAll::decode_all(&mut block_data.justifications.as_ref())?)
-					} else {
-						None
-					},
-				})
-			})
-			.collect::<Result<_, _>>()
-			.map_err(|error: codec::Error| error.to_string())
-	}
-
 	fn poll(
 		&mut self,
 		cx: &mut std::task::Context,
@@ -1347,31 +1282,18 @@ where
 	}
 
 	fn send_block_request(&mut self, who: PeerId, request: BlockRequest<B>) {
-		let (tx, rx) = oneshot::channel();
-		let opaque_req = self.create_opaque_block_request(&request);
-
 		if self.peers.contains_key(&who) {
-			self.pending_responses
-				.insert(who, Box::pin(async move { (who, PeerRequest::Block(request), rx.await) }));
-		}
-
-		match self.encode_block_request(&opaque_req) {
-			Ok(data) => {
-				self.network_service.start_request(
-					who,
-					self.block_request_protocol_name.clone(),
-					data,
-					tx,
-					IfDisconnected::ImmediateError,
-				);
-			},
-			Err(err) => {
-				log::warn!(
-					target: "sync",
-					"Failed to encode block request {:?}: {:?}",
-					opaque_req, err
-				);
-			},
+			let downloader = self.block_downloader.clone();
+			self.pending_responses.insert(
+				who,
+				Box::pin(async move {
+					(
+						who,
+						PeerRequest::Block(request.clone()),
+						downloader.download_block(who, request).await,
+					)
+				}),
+			);
 		}
 	}
 }
@@ -1402,7 +1324,7 @@ where
 		metrics_registry: Option<&Registry>,
 		network_service: service::network::NetworkServiceHandle,
 		import_queue: Box<dyn ImportQueueService<B>>,
-		block_request_protocol_name: ProtocolName,
+		block_downloader: Arc<dyn BlockDownloader<B>>,
 		state_request_protocol_name: ProtocolName,
 		warp_sync_protocol_name: Option<ProtocolName>,
 	) -> Result<(Self, NonDefaultSetConfig), ClientError> {
@@ -1441,7 +1363,7 @@ where
 			import_existing: false,
 			gap_sync: None,
 			network_service,
-			block_request_protocol_name,
+			block_downloader,
 			state_request_protocol_name,
 			warp_sync_params,
 			warp_sync_protocol_name,
@@ -1971,13 +1893,6 @@ where
 		}
 	}
 
-	fn decode_block_response(response: &[u8]) -> Result<OpaqueBlockResponse, String> {
-		let response = schema::v1::BlockResponse::decode(response)
-			.map_err(|error| format!("Failed to decode block response: {error}"))?;
-
-		Ok(OpaqueBlockResponse(Box::new(response)))
-	}
-
 	fn decode_state_response(response: &[u8]) -> Result<OpaqueStateResponse, String> {
 		let response = StateResponse::decode(response)
 			.map_err(|error| format!("Failed to decode state response: {error}"))?;
@@ -2043,17 +1958,8 @@ where
 		&mut self,
 		peer_id: PeerId,
 		request: BlockRequest<B>,
-		response: OpaqueBlockResponse,
+		blocks: Vec<BlockData<B>>,
 	) -> Option<ImportResult<B>> {
-		let blocks = match self.block_response_into_blocks(&request, response) {
-			Ok(blocks) => blocks,
-			Err(err) => {
-				debug!(target: "sync", "Failed to decode block response from {}: {}", peer_id, err);
-				self.network_service.report_peer(peer_id, rep::BAD_MESSAGE);
-				return None
-			},
-		};
-
 		let block_response = BlockResponse::<B> { id: request.id, blocks };
 
 		let blocks_range = || match (
@@ -2173,9 +2079,13 @@ where
 			match response {
 				Ok(Ok(resp)) => match request {
 					PeerRequest::Block(req) => {
-						let response = match Self::decode_block_response(&resp[..]) {
-							Ok(proto) => proto,
-							Err(e) => {
+						match self.block_downloader.block_response_into_blocks(&req, resp) {
+							Ok(blocks) => {
+								if let Some(import) = self.on_block_response(id, req, blocks) {
+									return Poll::Ready(import)
+								}
+							},
+							Err(BlockResponseError::DecodeFailed(e)) => {
 								debug!(
 									target: "sync",
 									"Failed to decode block response from peer {:?}: {:?}.",
@@ -2187,10 +2097,16 @@ where
 									.disconnect_peer(id, self.block_announce_protocol_name.clone());
 								continue
 							},
-						};
-
-						if let Some(import) = self.on_block_response(id, req, response) {
-							return Poll::Ready(import)
+							Err(BlockResponseError::ExtractionFailed(e)) => {
+								debug!(
+									target: "sync",
+									"Failed to extract blocks from peer response {:?}: {:?}.",
+									id,
+									e
+								);
+								self.network_service.report_peer(id, rep::BAD_MESSAGE);
+								continue
+							},
 						}
 					},
 					PeerRequest::State => {
@@ -2271,31 +2187,6 @@ where
 		}
 
 		Poll::Pending
-	}
-
-	/// Create implementation-specific block request.
-	fn create_opaque_block_request(&self, request: &BlockRequest<B>) -> OpaqueBlockRequest {
-		OpaqueBlockRequest(Box::new(schema::v1::BlockRequest {
-			fields: request.fields.to_be_u32(),
-			from_block: match request.from {
-				FromBlock::Hash(h) => Some(schema::v1::block_request::FromBlock::Hash(h.encode())),
-				FromBlock::Number(n) =>
-					Some(schema::v1::block_request::FromBlock::Number(n.encode())),
-			},
-			direction: request.direction as i32,
-			max_blocks: request.max.unwrap_or(0),
-			support_multiple_justifications: true,
-		}))
-	}
-
-	fn encode_block_request(&self, request: &OpaqueBlockRequest) -> Result<Vec<u8>, String> {
-		let request: &schema::v1::BlockRequest = request.0.downcast_ref().ok_or_else(|| {
-			"Failed to downcast opaque block response during encoding, this is an \
-				implementation bug."
-				.to_string()
-		})?;
-
-		Ok(request.encode_to_vec())
 	}
 
 	fn encode_state_request(&self, request: &OpaqueStateRequest) -> Result<Vec<u8>, String> {
@@ -3161,7 +3052,7 @@ fn validate_blocks<Block: BlockT>(
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::service::network::NetworkServiceProvider;
+	use crate::{mock::MockBlockDownloader, service::network::NetworkServiceProvider};
 	use futures::{executor::block_on, future::poll_fn};
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_network_common::{
@@ -3202,7 +3093,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -3269,7 +3160,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -3451,7 +3342,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -3578,7 +3469,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -3736,7 +3627,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -3879,7 +3770,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -4024,7 +3915,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -4070,7 +3961,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -4124,7 +4015,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)

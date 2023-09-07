@@ -20,6 +20,7 @@
 //! to tip and keep the blockchain up to date with network updates.
 
 use crate::{
+	block_relay_protocol::BlockDownloader,
 	service::{self, chain_sync::ToServiceCommand},
 	ChainSync, ClientError, SyncingService,
 };
@@ -283,7 +284,7 @@ where
 		warp_sync_params: Option<WarpSyncParams<B>>,
 		network_service: service::network::NetworkServiceHandle,
 		import_queue: Box<dyn ImportQueueService<B>>,
-		block_request_protocol_name: ProtocolName,
+		block_downloader: Arc<dyn BlockDownloader<B>>,
 		state_request_protocol_name: ProtocolName,
 		warp_sync_protocol_name: Option<ProtocolName>,
 		rx: sc_utils::mpsc::TracingUnboundedReceiver<sc_network::SyncEvent<B>>,
@@ -359,7 +360,7 @@ where
 			metrics_registry,
 			network_service.clone(),
 			import_queue,
-			block_request_protocol_name,
+			block_downloader,
 			state_request_protocol_name,
 			warp_sync_protocol_name,
 		)?;

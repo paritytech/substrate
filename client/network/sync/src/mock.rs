@@ -16,15 +16,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Contains a mock implementation of `ChainSync` that can be used
-//! for testing calls made to `ChainSync`.
+//! Contains mock implementations of `ChainSync` and 'BlockDownloader'
 
-use futures::task::Poll;
+use crate::block_relay_protocol::{BlockDownloader as BlockDownloaderT, BlockResponseError};
+
+use futures::{channel::oneshot, task::Poll};
 use libp2p::PeerId;
+use sc_network::RequestFailure;
 use sc_network_common::sync::{
 	message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse},
-	BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification,
-	OpaqueBlockResponse, PeerInfo, PollBlockAnnounceValidation, SyncStatus,
+	BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification, PeerInfo,
+	PollBlockAnnounceValidation, SyncStatus,
 };
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
@@ -84,11 +86,6 @@ mockall::mock! {
 		) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
 		fn peer_disconnected(&mut self, who: &PeerId);
 		fn metrics(&self) -> Metrics;
-		fn block_response_into_blocks(
-			&self,
-			request: &BlockRequest<Block>,
-			response: OpaqueBlockResponse,
-		) -> Result<Vec<BlockData<Block>>, String>;
 		fn poll<'a>(
 			&mut self,
 			cx: &mut std::task::Context<'a>,
@@ -98,5 +95,23 @@ mockall::mock! {
 			who: PeerId,
 			request: BlockRequest<Block>,
 		);
+	}
+}
+
+mockall::mock! {
+	pub BlockDownloader<Block: BlockT> {}
+
+	#[async_trait::async_trait]
+	impl<Block: BlockT> BlockDownloaderT<Block> for BlockDownloader<Block> {
+		async fn download_block(
+			&self,
+			who: PeerId,
+			request: BlockRequest<Block>,
+		) -> Result<Result<Vec<u8>, RequestFailure>, oneshot::Canceled>;
+		fn block_response_into_blocks(
+			&self,
+			request: &BlockRequest<Block>,
+			response: Vec<u8>,
+		) -> Result<Vec<BlockData<Block>>, BlockResponseError>;
 	}
 }

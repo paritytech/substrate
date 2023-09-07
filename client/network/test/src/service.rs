@@ -156,12 +156,18 @@ impl TestNetworkBuilder {
 		let fork_id = Some(String::from("test-fork-id"));
 		let mut full_net_config = FullNetworkConfiguration::new(&network_config);
 
-		let block_request_protocol_config = {
-			let (handler, protocol_config) =
-				BlockRequestHandler::new(&protocol_id, None, client.clone(), 50);
-			tokio::spawn(handler.run().boxed());
-			protocol_config
-		};
+		let (chain_sync_network_provider, chain_sync_network_handle) =
+			self.chain_sync_network.unwrap_or(NetworkServiceProvider::new());
+		let mut block_relay_params = BlockRequestHandler::new(
+			chain_sync_network_handle.clone(),
+			&protocol_id,
+			None,
+			client.clone(),
+			50,
+		);
+		tokio::spawn(Box::pin(async move {
+			block_relay_params.server.run().await;
+		}));
 
 		let state_request_protocol_config = {
 			let (handler, protocol_config) =
@@ -177,8 +183,6 @@ impl TestNetworkBuilder {
 			protocol_config
 		};
 
-		let (chain_sync_network_provider, chain_sync_network_handle) =
-			self.chain_sync_network.unwrap_or(NetworkServiceProvider::new());
 		let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 		let (engine, chain_sync_service, block_announce_config) = SyncingEngine::new(
 			Roles::from(&config::Role::Full),
@@ -191,7 +195,7 @@ impl TestNetworkBuilder {
 			None,
 			chain_sync_network_handle,
 			import_queue.service(),
-			block_request_protocol_config.name.clone(),
+			block_relay_params.downloader,
 			state_request_protocol_config.name.clone(),
 			None,
 			rx,
@@ -214,7 +218,7 @@ impl TestNetworkBuilder {
 		}
 
 		for config in [
-			block_request_protocol_config,
+			block_relay_params.request_response_config,
 			state_request_protocol_config,
 			light_client_request_protocol_config,
 		] {

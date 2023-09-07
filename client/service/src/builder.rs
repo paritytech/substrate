@@ -50,8 +50,9 @@ use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{role::Roles, sync::warp::WarpSyncParams};
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
-	block_request_handler::BlockRequestHandler, engine::SyncingEngine,
-	service::network::NetworkServiceProvider, state_request_handler::StateRequestHandler,
+	block_relay_protocol::BlockRelayParams, block_request_handler::BlockRequestHandler,
+	engine::SyncingEngine, service::network::NetworkServiceProvider,
+	state_request_handler::StateRequestHandler,
 	warp_request_handler::RequestHandler as WarpSyncRequestHandler, SyncingService,
 };
 use sc_rpc::{
@@ -695,6 +696,9 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 		Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
 	/// Optional warp sync params.
 	pub warp_sync_params: Option<WarpSyncParams<TBl>>,
+	/// User specified block relay params. If not specified, the default
+	/// block request handler will be used.
+	pub block_relay: Option<BlockRelayParams<TBl>>,
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
@@ -733,6 +737,7 @@ where
 		import_queue,
 		block_announce_validator_builder,
 		warp_sync_params,
+		block_relay,
 	} = params;
 
 	if warp_sync_params.is_none() && config.network.sync_mode.is_warp() {
@@ -756,19 +761,26 @@ where
 		Box::new(DefaultBlockAnnounceValidator)
 	};
 
-	let (block_request_protocol_config, block_request_protocol_name) = {
-		// Allow both outgoing and incoming requests.
-		let (handler, protocol_config) = BlockRequestHandler::new(
-			&protocol_id,
-			config.chain_spec.fork_id(),
-			client.clone(),
-			net_config.network_config.default_peers_set.in_peers as usize +
-				net_config.network_config.default_peers_set.out_peers as usize,
-		);
-		let config_name = protocol_config.name.clone();
-		spawn_handle.spawn("block-request-handler", Some("networking"), handler.run());
-		(protocol_config, config_name)
+	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
+	let (mut block_server, block_downloader, block_request_protocol_config) = match block_relay {
+		Some(params) => (params.server, params.downloader, params.request_response_config),
+		None => {
+			// Custom protocol was not specified, use the default block handler.
+			// Allow both outgoing and incoming requests.
+			let params = BlockRequestHandler::new(
+				chain_sync_network_handle.clone(),
+				&protocol_id,
+				config.chain_spec.fork_id(),
+				client.clone(),
+				config.network.default_peers_set.in_peers as usize +
+					config.network.default_peers_set.out_peers as usize,
+			);
+			(params.server, params.downloader, params.request_response_config)
+		},
 	};
+	spawn_handle.spawn("block-request-handler", Some("networking"), async move {
+		block_server.run().await;
+	});
 
 	let (state_request_protocol_config, state_request_protocol_name) = {
 		let num_peer_hint = net_config.network_config.default_peers_set_num_full as usize +
@@ -859,7 +871,6 @@ where
 	spawn_handle.spawn("peer-store", Some("networking"), peer_store.run());
 
 	let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
-	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
 	let (engine, sync_service, block_announce_config) = SyncingEngine::new(
 		Roles::from(&config.role),
 		client.clone(),
@@ -871,7 +882,7 @@ where
 		warp_sync_params,
 		chain_sync_network_handle,
 		import_queue.service(),
-		block_request_protocol_name,
+		block_downloader,
 		state_request_protocol_name,
 		warp_request_protocol_name,
 		rx,
