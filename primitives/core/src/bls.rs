@@ -89,11 +89,11 @@ const SECRET_KEY_SERIALIZED_SIZE: usize =
 	<SecretKey<TinyBLS381> as SerializableToBytes>::SERIALIZED_BYTES_SIZE;
 
 // Public key serialized size
-const PUBLIC_KEY_SERIALIZED_SIZE: usize =
+pub const PUBLIC_KEY_SERIALIZED_SIZE: usize =
 	<DoublePublicKey<TinyBLS381> as SerializableToBytes>::SERIALIZED_BYTES_SIZE;
 
 // Signature serialized size
-const SIGNATURE_SERIALIZED_SIZE: usize =
+pub const SIGNATURE_SERIALIZED_SIZE: usize =
 	<DoubleSignature<TinyBLS381> as SerializableToBytes>::SERIALIZED_BYTES_SIZE;
 
 /// A secret seed.

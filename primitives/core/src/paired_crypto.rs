@@ -35,34 +35,61 @@ use sp_runtime_interface::pass_by::PassByInner;
 use sp_std::{convert::TryFrom, marker::PhantomData, ops::Deref};
 
 /// ECDSA and BLS-377 specialized types
+#[cfg(feature = "bls-experimental")]
 pub mod ecdsa_n_bls377 {
     use crate::crypto::{CryptoTypeId};
-    use crate::{ecdsa, ed25519};
+    use crate::{ecdsa, ed25519, bls377};
     
-	/// An identifier used to match public keys against BLS12-377 keys
-	pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecb7");
+    /// An identifier used to match public keys against BLS12-377 keys
+    pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecb7");
 
-	/// BLS12-377 key pair.
-	#[cfg(feature = "full_crypto")]
-	pub type Pair = super::Pair<ecdsa::Pair, ed25519::Pair, 64, 64>;
+    const PUBLIC_KEY_LEN :usize = 33 + crate::bls::PUBLIC_KEY_SERIALIZED_SIZE;
+    const LEFT_SIGNATURE_LEN :usize = 64;
+    const RIGHT_SIGNATURE_LEN :usize = crate::bls::SIGNATURE_SERIALIZED_SIZE;
+    const SIGNATURE_LEN: usize = LEFT_SIGNATURE_LEN + RIGHT_SIGNATURE_LEN;
+    const LEFT_SEED_LEN: usize = 32;
+    const RIGHT_SEED_LEN: usize = 32;
+    
+    /// BLS12-377 key pair.
+    #[cfg(feature = "full_crypto")]
+    pub type Pair = super::Pair<ecdsa::Pair, bls377::Pair, PUBLIC_KEY_LEN, SIGNATURE_LEN>;
 	/// BLS12-377 public key.
-	pub type Public = super::Public<ecdsa::Public, ed25519::Public, 64>;
+    pub type Public = super::Public<ecdsa::Public, bls377::Public, PUBLIC_KEY_LEN>;
 	// /// BLS12-377 signature.
-	//pub type Signature = super::Signature<ecdsa:Signature, bls377:Signature>;
+    pub type Signature = super::Signature<ecdsa::Signature, bls377::Signature,SIGNATURE_LEN>;
 
-    // impl super::CryptoType for Public
-    // {
-    // 	#[cfg(feature = "full_crypto")]
-    // 	type Pair = Pair;
-    // }
-	// impl super::HardJunctionId for TinyBLS377 {
-	// 	const ID: &'static str = "BLS12377HDKD";
-	// }
+    impl super::SignaturePair for Signature {
+	const LEFT_SIGNATURE_LEN: usize = LEFT_SIGNATURE_LEN;
+	const RIGHT_SIGNATURE_LEN: usize = RIGHT_SIGNATURE_LEN;
+	const LEFT_PLUS_RIGHT_LEN: usize = SIGNATURE_LEN;
+    }
+    
+    #[cfg(feature = "full_crypto")]
+    impl super::DoublePair for Pair{
+	const PUBLIC_KEY_LEN: usize = PUBLIC_KEY_LEN;
+	const LEFT_SIGNATURE_LEN: usize = LEFT_SIGNATURE_LEN;
+	const RIGHT_SIGNATURE_LEN:usize = RIGHT_SIGNATURE_LEN;
+	const SIGNATURE_LEN: usize = SIGNATURE_LEN;
+	const LEFT_SEED_LEN: usize = LEFT_SEED_LEN;
+	const RIGHT_SEED_LEN: usize = RIGHT_SEED_LEN;
+    }
 
-//     impl<T: BlsBound> CryptoType for Signature<T> {
-// 	#[cfg(feature = "full_crypto")]
-// 	type Pair = Pair<T>;
-// }
+    impl super::CryptoType for Public
+    {
+     	#[cfg(feature = "full_crypto")]
+     	type Pair = Pair;
+    }	
+
+    impl super::CryptoType for Signature {
+ 	#[cfg(feature = "full_crypto")]
+ 	type Pair = Pair;
+    }
+
+    #[cfg(feature = "full_crypto")]
+    impl super::CryptoType for Pair{
+	type Pair = Pair;
+    }
+
 
 }
 
@@ -80,12 +107,40 @@ const DOUBLE_SEED_LEN: usize = SECURE_SEED_LEN * 2;
 #[cfg(feature = "full_crypto")]
 pub trait SeedBound:  Default + AsRef<[u8]> + AsMut<[u8]> + Clone {}
 
+impl<SeedTrait: Default + AsRef<[u8]> + AsMut<[u8]> + Clone> SeedBound for SeedTrait {}
+
 #[cfg(feature = "full_crypto")]
+#[derive(Clone)]
 pub struct Seed<LeftSeed: SeedBound, RightSeed: SeedBound, const LEFT_PLUS_RIGHT_LEN: usize,> {
     left: LeftSeed,
     right: RightSeed,
     inner: [u8; LEFT_PLUS_RIGHT_LEN],
 }
+
+#[cfg(feature = "full_crypto")]
+impl<LeftSeed: SeedBound, RightSeed: SeedBound, const LEFT_PLUS_RIGHT_LEN: usize,> Default for Seed<LeftSeed, RightSeed, LEFT_PLUS_RIGHT_LEN>  {
+    fn default() ->  Self{
+	Self {
+	    left: LeftSeed::default(), right: RightSeed::default(), inner: [LeftSeed::default().as_ref(), RightSeed::default().as_ref()].concat().try_into().unwrap()
+	}
+    }
+}
+
+#[cfg(feature = "full_crypto")]
+impl<LeftSeed: SeedBound, RightSeed: SeedBound, const LEFT_PLUS_RIGHT_LEN: usize,> AsRef<[u8]> for Seed<LeftSeed, RightSeed, LEFT_PLUS_RIGHT_LEN>  {
+    fn as_ref(&self) -> &[u8] {
+		&self.inner[..]
+    }
+}
+
+#[cfg(feature = "full_crypto")]
+impl<LeftSeed: SeedBound, RightSeed: SeedBound, const LEFT_PLUS_RIGHT_LEN: usize> AsMut<[u8]> for Seed<LeftSeed, RightSeed, LEFT_PLUS_RIGHT_LEN> {
+    fn as_mut(&mut self) -> &mut [u8] {
+	&mut self.inner[..]
+    }
+}
+
+
 //pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {}
 pub trait PublicKeyBound: TraitPublic + Sized + Derive + sp_std::hash::Hash + ByteArray + for<'a> TryFrom<&'a[u8]> + AsMut<[u8]> + CryptoType {}
 
@@ -262,6 +317,8 @@ impl<LeftPublic: PublicKeyBound, RightPublic: PublicKeyBound, const LEFT_PLUS_RI
 
 //pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {}
 pub trait SignatureBound: sp_std::hash::Hash + for<'a> TryFrom<&'a[u8]> + AsRef<[u8]> {}
+
+impl<SignatureTrait:  sp_std::hash::Hash + for<'a> TryFrom<&'a[u8]> + AsRef<[u8]>> SignatureBound for SignatureTrait {}
 
 /// A pair of signatures of different types
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, PartialEq, Eq)]
@@ -491,4 +548,5 @@ Seed<LeftPair::Seed, RightPair::Seed, DOUBLE_SEED_LEN>: SeedBound,
 		[self.left.to_raw_vec(), self.left.to_raw_vec()].concat()
 	}
 }
+
 
