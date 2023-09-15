@@ -14,6 +14,6 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-backtrace = "0.3.64"
+backtrace = "0.3.69"
 lazy_static = "1.4.0"
 regex = "1.6.0"
