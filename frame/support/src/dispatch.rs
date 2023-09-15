@@ -327,7 +327,7 @@ impl sp_runtime::traits::Printable for PostDispatchInfo {
 }
 
 /// Allows easy conversion from `DispatchError` to `DispatchErrorWithPostInfo` for dispatchables
-/// that want to return a custom a posterior weight on error.
+/// that want to return a custom posterior weight or fee payment decision on error.
 pub trait WithPostDispatchInfo {
 	/// Call this on your modules custom errors type in order to return a custom weight on error.
 	///
@@ -338,6 +338,14 @@ pub trait WithPostDispatchInfo {
 	/// ensure!(who == me, Error::<T>::NotMe.with_weight(200_000));
 	/// ```
 	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo;
+	/// Call this on your modules custom errors type in order to decide fee payment on error.
+	///
+	/// # Example
+	///
+	/// ```ignore
+	/// ensure!(validate(params), Error::<T>::InvalidParameters.with_pays_fee(Pays::No));
+	/// ```
+	fn with_pays_fee(self, pays_fee: Pays) -> DispatchErrorWithPostInfo;
 }
 
 impl<T> WithPostDispatchInfo for T
@@ -350,6 +358,12 @@ where
 				actual_weight: Some(actual_weight),
 				pays_fee: Default::default(),
 			},
+			error: self.into(),
+		}
+	}
+	fn with_pays_fee(self, pays_fee: Pays) -> DispatchErrorWithPostInfo {
+		DispatchErrorWithPostInfo {
+			post_info: PostDispatchInfo { actual_weight: None, pays_fee },
 			error: self.into(),
 		}
 	}
