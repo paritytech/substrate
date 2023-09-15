@@ -1,0 +1,178 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_fast_unstake/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_fast_unstake/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Made with Substrate, for Polkadot."><title>pallet_fast_unstake - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pallet_fast_unstake" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../pallet_fast_unstake/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../pallet_fast_unstake/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate pallet_fast_unstake</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 4.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#constants">Constants</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pallet_fast_unstake</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/pallet_fast_unstake/lib.rs.html#18-632">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><blockquote>
+<p>Made with <em>Substrate</em>, for <em>Polkadot</em>.</p>
+</blockquote>
+<p><a href="https://github.com/paritytech/substrate/frame/fast-unstake"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> -
+<a href="https://polkadot.network"><img src="https://img.shields.io/badge/polkadot-E6007A?style=for-the-badge&amp;logo=polkadot&amp;logoColor=white" alt="polkadot" /></a></p>
+<h2 id="fast-unstake-pallet"><a href="#fast-unstake-pallet">Fast Unstake Pallet</a></h2>
+<p>A pallet to allow participants of the staking system (represented by <a href="pallet/trait.Config.html#associatedtype.Staking" title="associated type pallet_fast_unstake::pallet::Config::Staking"><code>Config::Staking</code></a>, being
+<a href="trait.StakingInterface.html" title="trait pallet_fast_unstake::StakingInterface"><code>StakingInterface</code></a>) to unstake quicker, if and only if they meet the condition of not being
+exposed to any slashes.</p>
+<h3 id="overview"><a href="#overview">Overview</a></h3>
+<p>If a nominator is not exposed anywhere in the staking system, checked via
+<a href="trait.StakingInterface.html#tymethod.is_exposed_in_era" title="associated function pallet_fast_unstake::StakingInterface::is_exposed_in_era"><code>StakingInterface::is_exposed_in_era</code></a> (i.e. “has not actively backed any validators in the
+last <a href="trait.StakingInterface.html#tymethod.bonding_duration" title="associated function pallet_fast_unstake::StakingInterface::bonding_duration"><code>StakingInterface::bonding_duration</code></a> days”), then they can register themselves in this
+pallet and unstake faster than having to wait an entire bonding duration.</p>
+<p><em>Being exposed with validator</em> from the point of view of the staking system means earning
+rewards with the validator, and also being at the risk of slashing with the validator. This is
+equivalent to the “Active Nominator” role explained in
+<a href="https://polkadot.network/blog/staking-update-february-2022/">here</a>.</p>
+<p>Stakers who are certain about NOT being exposed can register themselves with
+<a href="pallet/struct.Pallet.html#method.register_fast_unstake" title="associated function pallet_fast_unstake::pallet::Pallet::register_fast_unstake"><code>Pallet::register_fast_unstake</code></a>. This will chill, fully unbond the staker and place them
+in the queue to be checked.</p>
+<p>A successful registration implies being fully unbonded and chilled in the staking system. These
+effects persist even if the fast-unstake registration is retracted (see <a href="pallet/struct.Pallet.html#method.deregister" title="associated function pallet_fast_unstake::pallet::Pallet::deregister"><code>Pallet::deregister</code></a>
+and further).</p>
+<p>Once registered as a fast-unstaker, the staker will be queued and checked by the system. This
+can take a variable number of blocks based on demand, but will almost certainly be “faster” (as
+the name suggest) than waiting the standard bonding duration.</p>
+<p>A fast-unstaker is either in <a href="pallet/type.Queue.html" title="type pallet_fast_unstake::pallet::Queue"><code>Queue</code></a> or actively being checked, at which point it lives in
+<a href="pallet/type.Head.html" title="type pallet_fast_unstake::pallet::Head"><code>Head</code></a>. Once in <a href="pallet/type.Head.html" title="type pallet_fast_unstake::pallet::Head"><code>Head</code></a>, the request cannot be retracted anymore. But, once in <a href="pallet/type.Queue.html" title="type pallet_fast_unstake::pallet::Queue"><code>Queue</code></a>, it
+can, via <a href="pallet/struct.Pallet.html#method.deregister" title="associated function pallet_fast_unstake::pallet::Pallet::deregister"><code>Pallet::deregister</code></a>.</p>
+<p>A deposit equal to <a href="pallet/trait.Config.html#associatedtype.Deposit" title="associated type pallet_fast_unstake::pallet::Config::Deposit"><code>Config::Deposit</code></a> is collected for this process, and is returned in case a
+successful unstake occurs (<code>Event::Unstaked</code> signals that).</p>
+<p>Once processed, if successful, no additional fee for the checking process is taken, and the
+staker is instantly unbonded.</p>
+<p>If unsuccessful, meaning that the staker was exposed, the aforementioned deposit will be slashed
+for the amount of wasted work they have inflicted on the chain.</p>
+<p>All in all, this pallet is meant to provide an easy off-ramp for some stakers.</p>
+<h4 id="example"><a href="#example">Example</a></h4>
+<ol>
+<li>Fast-unstake with multiple participants in the queue.</li>
+</ol>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>	<span class="attr">#[test]
+	</span><span class="kw">fn </span>successful_multi_queue() {
+		ExtBuilder::default().build_and_execute(|| {
+			ErasToCheckPerBlock::&lt;T&gt;::put(BondingDuration::get() + <span class="number">1</span>);
+			CurrentEra::&lt;T&gt;::put(BondingDuration::get());
+
+			<span class="comment">// register multi accounts for fast unstake
+			</span><span class="macro">assert_ok!</span>(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(<span class="number">1</span>)));
+			<span class="macro">assert_eq!</span>(Queue::&lt;T&gt;::get(<span class="number">1</span>), <span class="prelude-val">Some</span>(Deposit::get()));
+			<span class="macro">assert_ok!</span>(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(<span class="number">3</span>)));
+			<span class="macro">assert_eq!</span>(Queue::&lt;T&gt;::get(<span class="number">3</span>), <span class="prelude-val">Some</span>(Deposit::get()));
+
+			<span class="comment">// assert 2 queue items are in Queue &amp; None in Head to start with
+			</span><span class="macro">assert_eq!</span>(Queue::&lt;T&gt;::count(), <span class="number">2</span>);
+			<span class="macro">assert_eq!</span>(Head::&lt;T&gt;::get(), <span class="prelude-val">None</span>);
+
+			<span class="comment">// process on idle and check eras for next Queue item
+			</span>next_block(<span class="bool-val">true</span>);
+
+			<span class="comment">// process on idle &amp; let go of current Head
+			</span>next_block(<span class="bool-val">true</span>);
+
+			<span class="comment">// confirm Head / Queue items remaining
+			</span><span class="macro">assert_eq!</span>(Queue::&lt;T&gt;::count(), <span class="number">1</span>);
+			<span class="macro">assert_eq!</span>(Head::&lt;T&gt;::get(), <span class="prelude-val">None</span>);
+
+			<span class="comment">// process on idle and check eras for next Queue item
+			</span>next_block(<span class="bool-val">true</span>);
+
+			<span class="comment">// process on idle &amp; let go of current Head
+			</span>next_block(<span class="bool-val">true</span>);
+
+			<span class="comment">// Head &amp; Queue should now be empty
+			</span><span class="macro">assert_eq!</span>(Head::&lt;T&gt;::get(), <span class="prelude-val">None</span>);
+			<span class="macro">assert_eq!</span>(Queue::&lt;T&gt;::count(), <span class="number">0</span>);
+
+			<span class="macro">assert_eq!</span>(
+				fast_unstake_events_since_last_call(),
+				<span class="macro">vec!</span>[
+					Event::BatchChecked { eras: <span class="macro">vec!</span>[<span class="number">3</span>, <span class="number">2</span>, <span class="number">1</span>, <span class="number">0</span>] },
+					Event::Unstaked { stash: <span class="number">1</span>, result: <span class="prelude-val">Ok</span>(()) },
+					Event::BatchFinished { size: <span class="number">1 </span>},
+					Event::BatchChecked { eras: <span class="macro">vec!</span>[<span class="number">3</span>, <span class="number">2</span>, <span class="number">1</span>, <span class="number">0</span>] },
+					Event::Unstaked { stash: <span class="number">3</span>, result: <span class="prelude-val">Ok</span>(()) },
+					Event::BatchFinished { size: <span class="number">1 </span>},
+				]
+			);
+
+			assert_unstaked(<span class="kw-2">&amp;</span><span class="number">1</span>);
+			assert_unstaked(<span class="kw-2">&amp;</span><span class="number">3</span>);
+		});
+	}</code></pre></div>
+<ol start="2">
+<li>Fast unstake failing because a nominator is exposed.</li>
+</ol>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>	<span class="attr">#[test]
+	</span><span class="kw">fn </span>exposed_nominator_cannot_unstake() {
+		ExtBuilder::default().build_and_execute(|| {
+			ErasToCheckPerBlock::&lt;T&gt;::put(<span class="number">1</span>);
+			CurrentEra::&lt;T&gt;::put(BondingDuration::get());
+
+			<span class="comment">// create an exposed nominator in era 1
+			</span><span class="kw">let </span>exposed = <span class="number">666</span>;
+			create_exposed_nominator(exposed, <span class="number">1</span>);
+
+			<span class="comment">// a few blocks later, we realize they are slashed
+			</span>next_block(<span class="bool-val">true</span>);
+			<span class="macro">assert_eq!</span>(
+				Head::&lt;T&gt;::get(),
+				<span class="prelude-val">Some</span>(UnstakeRequest {
+					stashes: <span class="macro">bounded_vec!</span>[(exposed, Deposit::get())],
+					checked: <span class="macro">bounded_vec!</span>[<span class="number">3</span>]
+				})
+			);
+			next_block(<span class="bool-val">true</span>);
+			<span class="macro">assert_eq!</span>(
+				Head::&lt;T&gt;::get(),
+				<span class="prelude-val">Some</span>(UnstakeRequest {
+					stashes: <span class="macro">bounded_vec!</span>[(exposed, Deposit::get())],
+					checked: <span class="macro">bounded_vec!</span>[<span class="number">3</span>, <span class="number">2</span>]
+				})
+			);
+			next_block(<span class="bool-val">true</span>);
+			<span class="macro">assert_eq!</span>(Head::&lt;T&gt;::get(), <span class="prelude-val">None</span>);
+
+			<span class="macro">assert_eq!</span>(
+				fast_unstake_events_since_last_call(),
+				<span class="macro">vec!</span>[
+					Event::BatchChecked { eras: <span class="macro">vec!</span>[<span class="number">3</span>] },
+					Event::BatchChecked { eras: <span class="macro">vec!</span>[<span class="number">2</span>] },
+					Event::Slashed { stash: exposed, amount: Deposit::get() },
+					Event::BatchFinished { size: <span class="number">0 </span>}
+				]
+			);
+		});
+	}</code></pre></div>
+<h3 id="pallet-api"><a href="#pallet-api">Pallet API</a></h3>
+<p>See the <a href="pallet/index.html" title="mod pallet_fast_unstake::pallet"><code>pallet</code></a> module for more information about the interfaces this pallet exposes,
+including its configuration trait, dispatchables, storage items, events and errors.</p>
+<h3 id="low-level--implementation-details"><a href="#low-level--implementation-details">Low Level / Implementation Details</a></h3>
+<p>This pallet works off the basis of <code>on_idle</code>, meaning that it provides no guarantee about when
+it will succeed, if at all. Moreover, the queue implementation is unordered. In case of
+congestion, no FIFO ordering is provided.</p>
+<p>A few important considerations can be concluded based on the <code>on_idle</code>-based implementation:</p>
+<ul>
+<li>
+<p>It is crucial for the weights of this pallet to be correct. The code inside
+<a href="pallet/struct.Pallet.html#method.on_idle" title="associated function pallet_fast_unstake::pallet::Pallet::on_idle"><code>Pallet::on_idle</code></a> MUST be able to measure itself and report the remaining weight correctly
+after execution.</p>
+</li>
+<li>
+<p>If the weight measurement is incorrect, it can lead to perpetual overweight (consequently
+slow) blocks.</p>
+</li>
+<li>
+<p>The amount of weight that <code>on_idle</code> consumes is a direct function of <a href="pallet/type.ErasToCheckPerBlock.html" title="type pallet_fast_unstake::pallet::ErasToCheckPerBlock"><code>ErasToCheckPerBlock</code></a>.</p>
+</li>
+<li>
+<p>Thus, a correct value of <a href="pallet/type.ErasToCheckPerBlock.html" title="type pallet_fast_unstake::pallet::ErasToCheckPerBlock"><code>ErasToCheckPerBlock</code></a> (which can be set via <a href="pallet/struct.Pallet.html#method.control" title="associated function pallet_fast_unstake::pallet::Pallet::control"><code>Pallet::control</code></a>)
+should be chosen, such that a reasonable amount of weight is used <code>on_idle</code>. If
+<a href="pallet/type.ErasToCheckPerBlock.html" title="type pallet_fast_unstake::pallet::ErasToCheckPerBlock"><code>ErasToCheckPerBlock</code></a> is too large, <code>on_idle</code> will always conclude that it has not enough
+weight to proceed, and will early-return. Nonetheless, this should also be <em>safe</em> as long as
+the benchmarking/weights are <em>accurate</em>.</p>
+</li>
+<li>
+<p>See the inline code-comments on <code>do_on_idle</code> (private) for more details.</p>
+</li>
+<li>
+<p>For further safety, in case of any unforeseen errors, the pallet will emit
+<a href="pallet/enum.Event.html#variant.InternalError" title="variant pallet_fast_unstake::pallet::Event::InternalError"><code>Event::InternalError</code></a> and set <a href="pallet/type.ErasToCheckPerBlock.html" title="type pallet_fast_unstake::pallet::ErasToCheckPerBlock"><code>ErasToCheckPerBlock</code></a> back to 0, which essentially means
+the pallet will halt/disable itself.</p>
+</li>
+</ul>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name"><code>pub use <a class="mod" href="pallet/index.html" title="mod pallet_fast_unstake::pallet">pallet</a>::*;</code></div></li></ul><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="migrations/index.html" title="mod pallet_fast_unstake::migrations">migrations</a></div></li><li><div class="item-name"><a class="mod" href="pallet/index.html" title="mod pallet_fast_unstake::pallet">pallet</a></div><div class="desc docblock-short">The <code>pallet</code> module in each FRAME pallet hosts the most important items needed
+to construct this pallet.</div></li><li><div class="item-name"><a class="mod" href="types/index.html" title="mod pallet_fast_unstake::types">types</a></div><div class="desc docblock-short">Types used in the Fast Unstake pallet.</div></li><li><div class="item-name"><a class="mod" href="weights/index.html" title="mod pallet_fast_unstake::weights">weights</a></div><div class="desc docblock-short">Autogenerated weights for pallet_fast_unstake</div></li></ul><h2 id="macros" class="small-section-header"><a href="#macros">Macros</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.log.html" title="macro pallet_fast_unstake::log">log</a></div></li></ul><h2 id="constants" class="small-section-header"><a href="#constants">Constants</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.LOG_TARGET.html" title="constant pallet_fast_unstake::LOG_TARGET">LOG_TARGET</a></div><div class="desc docblock-short">The logging target of this pallet.</div></li></ul><h2 id="traits" class="small-section-header"><a href="#traits">Traits</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Hooks.html" title="trait pallet_fast_unstake::Hooks">Hooks</a></div><div class="desc docblock-short">The pallet hooks trait. This is merely an umbrella trait for:</div></li><li><div class="item-name"><a class="trait" href="trait.StakingInterface.html" title="trait pallet_fast_unstake::StakingInterface">StakingInterface</a></div><div class="desc docblock-short">A generic representation of a staking implementation.</div></li></ul></section></div></main></body></html>

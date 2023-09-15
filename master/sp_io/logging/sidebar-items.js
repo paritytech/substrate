@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["log","max_level"],"struct":["HostFunctions"]};

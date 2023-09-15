@@ -1,0 +1,180 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_election_provider_multi_phase/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_election_provider_multi_phase/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Multi phase, offchain election provider pallet."><title>pallet_election_provider_multi_phase - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pallet_election_provider_multi_phase" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../pallet_election_provider_multi_phase/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../pallet_election_provider_multi_phase/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate pallet_election_provider_multi_phase</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 4.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Definitions</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pallet_election_provider_multi_phase</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/pallet_election_provider_multi_phase/lib.rs.html#18-2696">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="multi-phase-offchain-election-provider-pallet"><a href="#multi-phase-offchain-election-provider-pallet">Multi phase, offchain election provider pallet.</a></h2>
+<p>Currently, this election-provider has two distinct phases (see <a href="enum.Phase.html" title="enum pallet_election_provider_multi_phase::Phase"><code>Phase</code></a>), <strong>signed</strong> and
+<strong>unsigned</strong>.</p>
+<h3 id="phases"><a href="#phases">Phases</a></h3>
+<p>The timeline of pallet is as follows. At each block,
+[<code>frame_election_provider_support::ElectionDataProvider::next_election_prediction</code>] is used to
+estimate the time remaining to the next call to
+[<code>frame_election_provider_support::ElectionProvider::elect</code>]. Based on this, a phase is chosen.
+The timeline is as follows.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>                                                                   elect()
+                +   &lt;--T::SignedPhase--&gt;  +  &lt;--T::UnsignedPhase--&gt;   +
+  +-------------------------------------------------------------------+
+   Phase::Off   +       Phase::Signed     +      Phase::Unsigned      +</code></pre></div>
+<p>Note that the unsigned phase starts <a href="pallet/trait.Config.html#associatedtype.UnsignedPhase" title="associated type pallet_election_provider_multi_phase::pallet::Config::UnsignedPhase"><code>pallet::Config::UnsignedPhase</code></a> blocks before the
+<code>next_election_prediction</code>, but only ends when a call to [<code>ElectionProvider::elect</code>] happens. If
+no <code>elect</code> happens, the signed phase is extended.</p>
+<blockquote>
+<p>Given this, it is rather important for the user of this pallet to ensure it always terminates
+election via <code>elect</code> before requesting a new one.</p>
+</blockquote>
+<p>Each of the phases can be disabled by essentially setting their length to zero. If both phases
+have length zero, then the pallet essentially runs only the fallback strategy, denoted by
+<a href="pallet/trait.Config.html#associatedtype.Fallback" title="associated type pallet_election_provider_multi_phase::pallet::Config::Fallback"><code>Config::Fallback</code></a>.</p>
+<h4 id="signed-phase"><a href="#signed-phase">Signed Phase</a></h4>
+<p>In the signed phase, solutions (of type <a href="struct.RawSolution.html" title="struct pallet_election_provider_multi_phase::RawSolution"><code>RawSolution</code></a>) are submitted and queued on chain. A
+deposit is reserved, based on the size of the solution, for the cost of keeping this solution
+on-chain for a number of blocks, and the potential weight of the solution upon being checked. A
+maximum of <code>pallet::Config::SignedMaxSubmissions</code> solutions are stored. The queue is always
+sorted based on score (worse to best).</p>
+<p>Upon arrival of a new solution:</p>
+<ol>
+<li>If the queue is not full, it is stored in the appropriate sorted index.</li>
+<li>If the queue is full but the submitted solution is better than one of the queued ones, the
+worse solution is discarded, the bond of the outgoing solution is returned, and the new
+solution is stored in the correct index.</li>
+<li>If the queue is full and the solution is not an improvement compared to any of the queued
+ones, it is instantly rejected and no additional bond is reserved.</li>
+</ol>
+<p>A signed solution cannot be reversed, taken back, updated, or retracted. In other words, the
+origin can not bail out in any way, if their solution is queued.</p>
+<p>Upon the end of the signed phase, the solutions are examined from best to worse (i.e. <code>pop()</code>ed
+until drained). Each solution undergoes an expensive <code>Pallet::feasibility_check</code>, which ensures
+the score claimed by this score was correct, and it is valid based on the election data (i.e.
+votes and targets). At each step, if the current best solution passes the feasibility check,
+it is considered to be the best one. The sender of the origin is rewarded, and the rest of the
+queued solutions get their deposit back and are discarded, without being checked.</p>
+<p>The following example covers all of the cases at the end of the signed phase:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>Queue
++-------------------------------+
+|Solution(score=<span class="number">20</span>, valid=<span class="bool-val">false</span>)| +--&gt;  Slashed
++-------------------------------+
+|Solution(score=<span class="number">15</span>, valid=<span class="bool-val">true </span>)| +--&gt;  Rewarded, Saved
++-------------------------------+
+|Solution(score=<span class="number">10</span>, valid=<span class="bool-val">true </span>)| +--&gt;  Discarded
++-------------------------------+
+|Solution(score=<span class="number">05</span>, valid=<span class="bool-val">false</span>)| +--&gt;  Discarded
++-------------------------------+
+|             <span class="prelude-val">None              </span>|
++-------------------------------+</code></pre></div>
+<p>Note that both of the bottom solutions end up being discarded and get their deposit back,
+despite one of them being <em>invalid</em>.</p>
+<h3 id="unsigned-phase"><a href="#unsigned-phase">Unsigned Phase</a></h3>
+<p>The unsigned phase will always follow the signed phase, with the specified duration. In this
+phase, only validator nodes can submit solutions. A validator node who has offchain workers
+enabled will start to mine a solution in this phase and submits it back to the chain as an
+unsigned transaction, thus the name <em>unsigned</em> phase. This unsigned transaction can never be
+valid if propagated, and it acts similar to an inherent.</p>
+<p>Validators will only submit solutions if the one that they have computed is sufficiently better
+than the best queued one (see <a href="pallet/trait.Config.html#associatedtype.BetterUnsignedThreshold" title="associated type pallet_election_provider_multi_phase::pallet::Config::BetterUnsignedThreshold"><code>pallet::Config::BetterUnsignedThreshold</code></a>) and will limit the
+weight of the solution to <a href="unsigned/trait.MinerConfig.html#associatedtype.MaxWeight" title="associated type pallet_election_provider_multi_phase::unsigned::MinerConfig::MaxWeight"><code>MinerConfig::MaxWeight</code></a>.</p>
+<p>The unsigned phase can be made passive depending on how the previous signed phase went, by
+setting the first inner value of <a href="enum.Phase.html" title="enum pallet_election_provider_multi_phase::Phase"><code>Phase</code></a> to <code>false</code>. For now, the signed phase is always
+active.</p>
+<h4 id="fallback"><a href="#fallback">Fallback</a></h4>
+<p>If we reach the end of both phases (i.e. call to [<code>ElectionProvider::elect</code>] happens) and no
+good solution is queued, then the fallback strategy <a href="pallet/trait.Config.html#associatedtype.Fallback" title="associated type pallet_election_provider_multi_phase::pallet::Config::Fallback"><code>pallet::Config::Fallback</code></a> is used to
+determine what needs to be done. The on-chain election is slow, and contains no balancing or
+reduction post-processing. If <a href="pallet/trait.Config.html#associatedtype.Fallback" title="associated type pallet_election_provider_multi_phase::pallet::Config::Fallback"><code>pallet::Config::Fallback</code></a> fails, the next phase
+<a href="enum.Phase.html#variant.Emergency" title="variant pallet_election_provider_multi_phase::Phase::Emergency"><code>Phase::Emergency</code></a> is enabled, which is a more <em>fail-safe</em> approach.</p>
+<h4 id="emergency-phase"><a href="#emergency-phase">Emergency Phase</a></h4>
+<p>If, for any of the below reasons:</p>
+<ol>
+<li>No <strong>signed</strong> or <strong>unsigned</strong> solution submitted, and no successful <a href="pallet/trait.Config.html#associatedtype.Fallback" title="associated type pallet_election_provider_multi_phase::pallet::Config::Fallback"><code>Config::Fallback</code></a> is
+provided</li>
+<li>Any other unforeseen internal error</li>
+</ol>
+<p>A call to <code>T::ElectionProvider::elect</code> is made, and <code>Ok(_)</code> cannot be returned, then the pallet
+proceeds to the <a href="enum.Phase.html#variant.Emergency" title="variant pallet_election_provider_multi_phase::Phase::Emergency"><code>Phase::Emergency</code></a>. During this phase, any solution can be submitted from
+<a href="pallet/trait.Config.html#associatedtype.ForceOrigin" title="associated type pallet_election_provider_multi_phase::pallet::Config::ForceOrigin"><code>Config::ForceOrigin</code></a>, without any checking, via <a href="pallet/struct.Pallet.html#method.set_emergency_election_result" title="associated function pallet_election_provider_multi_phase::pallet::Pallet::set_emergency_election_result"><code>Pallet::set_emergency_election_result</code></a>
+transaction. Hence, <code>[</code>Config::ForceOrigin<code>]</code> should only be set to a trusted origin, such as
+the council or root. Once submitted, the forced solution is kept in <a href="pallet/type.QueuedSolution.html" title="type pallet_election_provider_multi_phase::pallet::QueuedSolution"><code>QueuedSolution</code></a> until the
+next call to <code>T::ElectionProvider::elect</code>, where it is returned and <a href="enum.Phase.html" title="enum pallet_election_provider_multi_phase::Phase"><code>Phase</code></a> goes back to
+<code>Off</code>.</p>
+<p>This implies that the user of this pallet (i.e. a staking pallet) should re-try calling
+<code>T::ElectionProvider::elect</code> in case of error, until <code>OK(_)</code> is returned.</p>
+<p>To generate an emergency solution, one must only provide one argument: <a href="../sp_npos_elections/type.Supports.html" title="type sp_npos_elections::Supports"><code>Supports</code></a>. This is
+essentially a collection of elected winners for the election, and voters who support them. The
+supports can be generated by any means. In the simplest case, it could be manual. For example,
+in the case of massive network failure or misbehavior, <a href="pallet/trait.Config.html#associatedtype.ForceOrigin" title="associated type pallet_election_provider_multi_phase::pallet::Config::ForceOrigin"><code>Config::ForceOrigin</code></a> might decide to
+select only a small number of emergency winners (which would greatly restrict the next validator
+set, if this pallet is used with <code>pallet-staking</code>). If the failure is for other technical
+reasons, then a simple and safe way to generate supports is using the staking-miner binary
+provided in the Polkadot repository. This binary has a subcommand named <code>emergency-solution</code>
+which is capable of connecting to a live network, and generating appropriate <code>supports</code> using a
+standard algorithm, and outputting the <code>supports</code> in hex format, ready for submission. Note that
+while this binary lives in the Polkadot repository, this particular subcommand of it can work
+against any substrate-based chain.</p>
+<p>See the <code>staking-miner</code> documentation in the Polkadot repository for more information.</p>
+<h3 id="feasible-solution-correct-solution"><a href="#feasible-solution-correct-solution">Feasible Solution (correct solution)</a></h3>
+<p>All submissions must undergo a feasibility check. Signed solutions are checked one by one at the
+end of the signed phase, and the unsigned solutions are checked on the spot. A feasible solution
+is as follows:</p>
+<ol start="0">
+<li><strong>all</strong> of the used indices must be correct.</li>
+<li>present <em>exactly</em> correct number of winners.</li>
+<li>any assignment is checked to match with <a href="struct.RoundSnapshot.html#structfield.voters" title="field pallet_election_provider_multi_phase::RoundSnapshot::voters"><code>RoundSnapshot::voters</code></a>.</li>
+<li>the claimed score is valid, based on the fixed point arithmetic accuracy.</li>
+</ol>
+<h3 id="accuracy"><a href="#accuracy">Accuracy</a></h3>
+<p>The accuracy of the election is configured via <a href="type.SolutionAccuracyOf.html" title="type pallet_election_provider_multi_phase::SolutionAccuracyOf"><code>SolutionAccuracyOf</code></a> which is the accuracy that
+the submitted solutions must adhere to.</p>
+<p>Note that the accuracy is of great importance. The offchain solution should be as small as
+possible, reducing solutions size/weight.</p>
+<h3 id="error-types"><a href="#error-types">Error types</a></h3>
+<p>This pallet provides a verbose error system to ease future debugging and debugging. The overall
+hierarchy of errors is as follows:</p>
+<ol>
+<li><a href="pallet/enum.Error.html" title="enum pallet_election_provider_multi_phase::pallet::Error"><code>pallet::Error</code></a>: These are the errors that can be returned in the dispatchables of the
+pallet, either signed or unsigned. Since decomposition with nested enums is not possible
+here, they are prefixed with the logical sub-system to which they belong.</li>
+<li><a href="enum.ElectionError.html" title="enum pallet_election_provider_multi_phase::ElectionError"><code>ElectionError</code></a>: These are the errors that can be generated while the pallet is doing
+something in automatic scenarios, such as <code>offchain_worker</code> or <code>on_initialize</code>. These errors
+are helpful for logging and are thus nested as:
+<ul>
+<li><a href="enum.ElectionError.html#variant.Miner" title="variant pallet_election_provider_multi_phase::ElectionError::Miner"><code>ElectionError::Miner</code></a>: wraps a <a href="unsigned/enum.MinerError.html" title="enum pallet_election_provider_multi_phase::unsigned::MinerError"><code>unsigned::MinerError</code></a>.</li>
+<li><a href="enum.ElectionError.html#variant.Feasibility" title="variant pallet_election_provider_multi_phase::ElectionError::Feasibility"><code>ElectionError::Feasibility</code></a>: wraps a <a href="enum.FeasibilityError.html" title="enum pallet_election_provider_multi_phase::FeasibilityError"><code>FeasibilityError</code></a>.</li>
+<li><a href="enum.ElectionError.html#variant.Fallback" title="variant pallet_election_provider_multi_phase::ElectionError::Fallback"><code>ElectionError::Fallback</code></a>: wraps a fallback error.</li>
+<li><a href="enum.ElectionError.html#variant.DataProvider" title="variant pallet_election_provider_multi_phase::ElectionError::DataProvider"><code>ElectionError::DataProvider</code></a>: wraps a static str.</li>
+</ul>
+</li>
+</ol>
+<p>Note that there could be an overlap between these sub-errors. For example, A
+<code>SnapshotUnavailable</code> can happen in both miner and feasibility check phase.</p>
+<h3 id="future-plans"><a href="#future-plans">Future Plans</a></h3>
+<p><strong>Emergency-phase recovery script</strong>: This script should be taken out of staking-miner in
+polkadot and ideally live in <code>substrate/utils/frame/elections</code>.</p>
+<p><strong>Challenge Phase</strong>. We plan on adding a third phase to the pallet, called the challenge phase.
+This is a phase in which no further solutions are processed, and the current best solution might
+be challenged by anyone (signed or unsigned). The main plan here is to enforce the solution to
+be PJR. Checking PJR on-chain is quite expensive, yet proving that a solution is <strong>not</strong> PJR is
+rather cheap. If a queued solution is successfully proven bad:</p>
+<ol>
+<li>We must surely slash whoever submitted that solution (might be a challenge for unsigned
+solutions).</li>
+<li>We will fallback to the emergency strategy (likely extending the current era).</li>
+</ol>
+<p><strong>Bailing out</strong>. The functionality of bailing out of a queued solution is nice. A miner can
+submit a solution as soon as they <em>think</em> it is high probability feasible, and do the checks
+afterwards, and remove their solution (for a small cost of probably just transaction fees, or a
+portion of the bond).</p>
+<p><strong>Conditionally open unsigned phase</strong>: Currently, the unsigned phase is always opened. This is
+useful because an honest validator will run substrate OCW code, which should be good enough to
+trump a mediocre or malicious signed submission (assuming in the absence of honest signed bots).
+If there are signed submissions, they can be checked against an absolute measure (e.g. PJR),
+then we can only open the unsigned phase in extreme conditions (i.e. “no good signed solution
+received”) to spare some work for the active validators.</p>
+<p><strong>Allow smaller solutions and build up</strong>: For now we only allow solutions that are exactly
+<a href="pallet/type.DesiredTargets.html" title="type pallet_election_provider_multi_phase::pallet::DesiredTargets"><code>DesiredTargets</code></a>, no more, no less. Over time, we can change this to a [min, max] where any
+solution within this range is acceptable, where bigger solutions are prioritized.</p>
+<p><strong>Score based on (byte) size</strong>: We should always prioritize small solutions over bigger ones, if
+there is a tie. Even more harsh should be to enforce the bound of the <code>reduce</code> algorithm.</p>
+<p><strong>Take into account the encode/decode weight in benchmarks.</strong> Currently, we only take into
+account the weight of encode/decode in the <code>submit_unsigned</code> given its priority. Nonetheless,
+all operations on the solution and the snapshot are worthy of taking this into account.</p>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.WeightInfo"><code>pub use weights::<a class="trait" href="weights/trait.WeightInfo.html" title="trait pallet_election_provider_multi_phase::weights::WeightInfo">WeightInfo</a>;</code></div></li><li><div class="item-name" id="reexport.BalanceOf"><code>pub use signed::<a class="type" href="signed/type.BalanceOf.html" title="type pallet_election_provider_multi_phase::signed::BalanceOf">BalanceOf</a>;</code></div></li><li><div class="item-name" id="reexport.NegativeImbalanceOf"><code>pub use signed::<a class="type" href="signed/type.NegativeImbalanceOf.html" title="type pallet_election_provider_multi_phase::signed::NegativeImbalanceOf">NegativeImbalanceOf</a>;</code></div></li><li><div class="item-name" id="reexport.PositiveImbalanceOf"><code>pub use signed::<a class="type" href="signed/type.PositiveImbalanceOf.html" title="type pallet_election_provider_multi_phase::signed::PositiveImbalanceOf">PositiveImbalanceOf</a>;</code></div></li><li><div class="item-name" id="reexport.SignedSubmission"><code>pub use signed::<a class="struct" href="signed/struct.SignedSubmission.html" title="struct pallet_election_provider_multi_phase::signed::SignedSubmission">SignedSubmission</a>;</code></div></li><li><div class="item-name" id="reexport.SignedSubmissionOf"><code>pub use signed::<a class="type" href="signed/type.SignedSubmissionOf.html" title="type pallet_election_provider_multi_phase::signed::SignedSubmissionOf">SignedSubmissionOf</a>;</code></div></li><li><div class="item-name" id="reexport.SignedSubmissions"><code>pub use signed::<a class="struct" href="signed/struct.SignedSubmissions.html" title="struct pallet_election_provider_multi_phase::signed::SignedSubmissions">SignedSubmissions</a>;</code></div></li><li><div class="item-name" id="reexport.SubmissionIndicesOf"><code>pub use signed::<a class="type" href="signed/type.SubmissionIndicesOf.html" title="type pallet_election_provider_multi_phase::signed::SubmissionIndicesOf">SubmissionIndicesOf</a>;</code></div></li><li><div class="item-name" id="reexport.Miner"><code>pub use unsigned::<a class="struct" href="unsigned/struct.Miner.html" title="struct pallet_election_provider_multi_phase::unsigned::Miner">Miner</a>;</code></div></li><li><div class="item-name" id="reexport.MinerConfig"><code>pub use unsigned::<a class="trait" href="unsigned/trait.MinerConfig.html" title="trait pallet_election_provider_multi_phase::unsigned::MinerConfig">MinerConfig</a>;</code></div></li><li><div class="item-name"><code>pub use <a class="mod" href="pallet/index.html" title="mod pallet_election_provider_multi_phase::pallet">pallet</a>::*;</code></div></li></ul><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="helpers/index.html" title="mod pallet_election_provider_multi_phase::helpers">helpers</a></div><div class="desc docblock-short">Some helper functions/macros for this crate.</div></li><li><div class="item-name"><a class="mod" href="migrations/index.html" title="mod pallet_election_provider_multi_phase::migrations">migrations</a></div></li><li><div class="item-name"><a class="mod" href="pallet/index.html" title="mod pallet_election_provider_multi_phase::pallet">pallet</a></div><div class="desc docblock-short">The <code>pallet</code> module in each FRAME pallet hosts the most important items needed
+to construct this pallet.</div></li><li><div class="item-name"><a class="mod" href="signed/index.html" title="mod pallet_election_provider_multi_phase::signed">signed</a></div><div class="desc docblock-short">The signed phase implementation.</div></li><li><div class="item-name"><a class="mod" href="unsigned/index.html" title="mod pallet_election_provider_multi_phase::unsigned">unsigned</a></div><div class="desc docblock-short">The unsigned phase, and its miner.</div></li><li><div class="item-name"><a class="mod" href="weights/index.html" title="mod pallet_election_provider_multi_phase::weights">weights</a></div><div class="desc docblock-short">Autogenerated weights for pallet_election_provider_multi_phase</div></li></ul><h2 id="macros" class="small-section-header"><a href="#macros">Macros</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.log.html" title="macro pallet_election_provider_multi_phase::log">log</a></div></li><li><div class="item-name"><a class="macro" href="macro.log_no_system.html" title="macro pallet_election_provider_multi_phase::log_no_system">log_no_system</a></div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.RawSolution.html" title="struct pallet_election_provider_multi_phase::RawSolution">RawSolution</a></div><div class="desc docblock-short">A raw, unchecked solution.</div></li><li><div class="item-name"><a class="struct" href="struct.ReadySolution.html" title="struct pallet_election_provider_multi_phase::ReadySolution">ReadySolution</a></div><div class="desc docblock-short">A checked solution, ready to be enacted.</div></li><li><div class="item-name"><a class="struct" href="struct.RoundSnapshot.html" title="struct pallet_election_provider_multi_phase::RoundSnapshot">RoundSnapshot</a></div><div class="desc docblock-short">A snapshot of all the data that is needed for en entire round. They are provided by
+[<code>ElectionDataProvider</code>] and are kept around until the round is finished.</div></li><li><div class="item-name"><a class="struct" href="struct.SolutionOrSnapshotSize.html" title="struct pallet_election_provider_multi_phase::SolutionOrSnapshotSize">SolutionOrSnapshotSize</a></div><div class="desc docblock-short">Encodes the length of a solution or a snapshot.</div></li></ul><h2 id="enums" class="small-section-header"><a href="#enums">Enums</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.ElectionCompute.html" title="enum pallet_election_provider_multi_phase::ElectionCompute">ElectionCompute</a></div><div class="desc docblock-short">The type of <code>Computation</code> that provided this election data.</div></li><li><div class="item-name"><a class="enum" href="enum.ElectionError.html" title="enum pallet_election_provider_multi_phase::ElectionError">ElectionError</a></div><div class="desc docblock-short">Internal errors of the pallet.</div></li><li><div class="item-name"><a class="enum" href="enum.FeasibilityError.html" title="enum pallet_election_provider_multi_phase::FeasibilityError">FeasibilityError</a></div><div class="desc docblock-short">Errors that can happen in the feasibility check.</div></li><li><div class="item-name"><a class="enum" href="enum.Phase.html" title="enum pallet_election_provider_multi_phase::Phase">Phase</a></div><div class="desc docblock-short">Current phase of the pallet.</div></li></ul><h2 id="traits" class="small-section-header"><a href="#traits">Traits</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.BenchmarkingConfig.html" title="trait pallet_election_provider_multi_phase::BenchmarkingConfig">BenchmarkingConfig</a></div><div class="desc docblock-short">Configuration for the benchmarks of the pallet.</div></li></ul><h2 id="functions" class="small-section-header"><a href="#functions">Functions</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.dispatch_error_to_invalid.html" title="fn pallet_election_provider_multi_phase::dispatch_error_to_invalid">dispatch_error_to_invalid</a></div><div class="desc docblock-short">convert a DispatchError to a custom InvalidTransaction with the inner code being the error
+number.</div></li></ul><h2 id="types" class="small-section-header"><a href="#types">Type Definitions</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.FallbackErrorOf.html" title="type pallet_election_provider_multi_phase::FallbackErrorOf">FallbackErrorOf</a></div><div class="desc docblock-short">The fallback election type.</div></li><li><div class="item-name"><a class="type" href="type.SolutionAccuracyOf.html" title="type pallet_election_provider_multi_phase::SolutionAccuracyOf">SolutionAccuracyOf</a></div><div class="desc docblock-short">The accuracy of the election, when submitted from offchain. Derived from <a href="type.SolutionOf.html" title="type pallet_election_provider_multi_phase::SolutionOf"><code>SolutionOf</code></a>.</div></li><li><div class="item-name"><a class="type" href="type.SolutionOf.html" title="type pallet_election_provider_multi_phase::SolutionOf">SolutionOf</a></div><div class="desc docblock-short">The solution type used by this crate.</div></li><li><div class="item-name"><a class="type" href="type.SolutionTargetIndexOf.html" title="type pallet_election_provider_multi_phase::SolutionTargetIndexOf">SolutionTargetIndexOf</a></div><div class="desc docblock-short">The target index. Derived from <a href="type.SolutionOf.html" title="type pallet_election_provider_multi_phase::SolutionOf"><code>SolutionOf</code></a>.</div></li><li><div class="item-name"><a class="type" href="type.SolutionVoterIndexOf.html" title="type pallet_election_provider_multi_phase::SolutionVoterIndexOf">SolutionVoterIndexOf</a></div><div class="desc docblock-short">The voter index. Derived from <a href="type.SolutionOf.html" title="type pallet_election_provider_multi_phase::SolutionOf"><code>SolutionOf</code></a>.</div></li></ul></section></div></main></body></html>

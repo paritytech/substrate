@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"sc_service":[["impl&lt;B, E, Block, RA&gt; <a class=\"trait\" href=\"sc_client_api/client/trait.PreCommitActions.html\" title=\"trait sc_client_api::client::PreCommitActions\">PreCommitActions</a>&lt;Block&gt; for <a class=\"struct\" href=\"sc_service/client/struct.Client.html\" title=\"struct sc_service::client::Client\">Client</a>&lt;B, E, Block, RA&gt;<span class=\"where fmt-newline\">where\n    Block: <a class=\"trait\" href=\"sp_runtime/traits/trait.Block.html\" title=\"trait sp_runtime::traits::Block\">BlockT</a>,</span>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

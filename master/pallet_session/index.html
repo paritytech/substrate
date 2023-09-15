@@ -1,0 +1,88 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_session/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_session/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Session Pallet"><title>pallet_session - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pallet_session" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../pallet_session/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../pallet_session/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate pallet_session</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 4.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pallet_session</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/pallet_session/lib.rs.html#18-940">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="session-pallet"><a href="#session-pallet">Session Pallet</a></h2>
+<p>The Session pallet allows validators to manage their session keys, provides a function for
+changing the session length, and handles session rotation.</p>
+<ul>
+<li><a href="pallet/trait.Config.html" title="trait pallet_session::pallet::Config"><code>Config</code></a></li>
+<li><a href="pallet/enum.Call.html" title="enum pallet_session::pallet::Call"><code>Call</code></a></li>
+<li><a href="pallet/struct.Pallet.html" title="struct pallet_session::pallet::Pallet"><code>Pallet</code></a></li>
+</ul>
+<h3 id="overview"><a href="#overview">Overview</a></h3><h4 id="terminology"><a href="#terminology">Terminology</a></h4><!-- Original author of paragraph: @gavofyork -->
+<ul>
+<li>
+<p><strong>Session:</strong> A session is a period of time that has a constant set of validators. Validators
+can only join or exit the validator set at a session change. It is measured in block numbers.
+The block where a session is ended is determined by the <code>ShouldEndSession</code> trait. When the
+session is ending, a new validator set can be chosen by <code>OnSessionEnding</code> implementations.</p>
+</li>
+<li>
+<p><strong>Session key:</strong> A session key is actually several keys kept together that provide the various
+signing functions required by network authorities/validators in pursuit of their duties.</p>
+</li>
+<li>
+<p><strong>Validator ID:</strong> Every account has an associated validator ID. For some simple staking
+systems, this may just be the same as the account ID. For staking systems using a
+stash/controller model, the validator ID would be the stash account ID of the controller.</p>
+</li>
+<li>
+<p><strong>Session key configuration process:</strong> Session keys are set using <code>set_keys</code> for use not in
+the next session, but the session after next. They are stored in <code>NextKeys</code>, a mapping between
+the caller’s <code>ValidatorId</code> and the session keys provided. <code>set_keys</code> allows users to set their
+session key prior to being selected as validator. It is a public call since it uses
+<code>ensure_signed</code>, which checks that the origin is a signed account. As such, the account ID of
+the origin stored in <code>NextKeys</code> may not necessarily be associated with a block author or a
+validator. The session keys of accounts are removed once their account balance is zero.</p>
+</li>
+<li>
+<p><strong>Session length:</strong> This pallet does not assume anything about the length of each session.
+Rather, it relies on an implementation of <code>ShouldEndSession</code> to dictate a new session’s start.
+This pallet provides the <code>PeriodicSessions</code> struct for simple periodic sessions.</p>
+</li>
+<li>
+<p><strong>Session rotation configuration:</strong> Configure as either a ‘normal’ (rewardable session where
+rewards are applied) or ‘exceptional’ (slashable) session rotation.</p>
+</li>
+<li>
+<p><strong>Session rotation process:</strong> At the beginning of each block, the <code>on_initialize</code> function
+queries the provided implementation of <code>ShouldEndSession</code>. If the session is to end the newly
+activated validator IDs and session keys are taken from storage and passed to the
+<code>SessionHandler</code>. The validator set supplied by <code>SessionManager::new_session</code> and the
+corresponding session keys, which may have been registered via <code>set_keys</code> during the previous
+session, are written to storage where they will wait one session before being passed to the
+<code>SessionHandler</code> themselves.</p>
+</li>
+</ul>
+<h4 id="goals"><a href="#goals">Goals</a></h4>
+<p>The Session pallet is designed to make the following possible:</p>
+<ul>
+<li>Set session keys of the validator set for upcoming sessions.</li>
+<li>Control the length of sessions.</li>
+<li>Configure and switch between either normal or exceptional session rotations.</li>
+</ul>
+<h3 id="interface"><a href="#interface">Interface</a></h3><h4 id="dispatchable-functions"><a href="#dispatchable-functions">Dispatchable Functions</a></h4>
+<ul>
+<li><code>set_keys</code> - Set a validator’s session keys for upcoming sessions.</li>
+</ul>
+<h4 id="public-functions"><a href="#public-functions">Public Functions</a></h4>
+<ul>
+<li><code>rotate_session</code> - Change to the next session. Register the new authority set. Queue changes
+for next session rotation.</li>
+<li><code>disable_index</code> - Disable a validator by index.</li>
+<li><code>disable</code> - Disable a validator by Validator ID</li>
+</ul>
+<h3 id="usage"><a href="#usage">Usage</a></h3><h4 id="example-from-the-frame"><a href="#example-from-the-frame">Example from the FRAME</a></h4>
+<p>The <a href="../pallet_staking/index.html">Staking pallet</a> uses the Session pallet to get the validator
+set.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pallet_session <span class="kw">as </span>session;
+
+<span class="kw">fn </span>validators&lt;T: pallet_session::Config&gt;() -&gt; Vec&lt;&lt;T <span class="kw">as </span>pallet_session::Config&gt;::ValidatorId&gt; {
+	&lt;pallet_session::Pallet&lt;T&gt;&gt;::validators()
+}</code></pre></div>
+<h3 id="related-pallets"><a href="#related-pallets">Related Pallets</a></h3>
+<ul>
+<li><a href="../pallet_staking/index.html">Staking</a></li>
+</ul>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.WeightInfo"><code>pub use weights::<a class="trait" href="weights/trait.WeightInfo.html" title="trait pallet_session::weights::WeightInfo">WeightInfo</a>;</code></div></li><li><div class="item-name"><code>pub use <a class="mod" href="pallet/index.html" title="mod pallet_session::pallet">pallet</a>::*;</code></div></li></ul><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="historical/index.html" title="mod pallet_session::historical">historical</a></div><div class="desc docblock-short">An opt-in utility for tracking historical sessions in FRAME-session.</div></li><li><div class="item-name"><a class="mod" href="migrations/index.html" title="mod pallet_session::migrations">migrations</a></div></li><li><div class="item-name"><a class="mod" href="pallet/index.html" title="mod pallet_session::pallet">pallet</a></div><div class="desc docblock-short">The <code>pallet</code> module in each FRAME pallet hosts the most important items needed
+to construct this pallet.</div></li><li><div class="item-name"><a class="mod" href="weights/index.html" title="mod pallet_session::weights">weights</a></div><div class="desc docblock-short">Autogenerated weights for pallet_session</div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.FindAccountFromAuthorIndex.html" title="struct pallet_session::FindAccountFromAuthorIndex">FindAccountFromAuthorIndex</a></div><div class="desc docblock-short">Wraps the author-scraping logic for consensus engines that can recover
+the canonical index of an author. This then transforms it into the
+registering account-ID of that session key index.</div></li><li><div class="item-name"><a class="struct" href="struct.PeriodicSessions.html" title="struct pallet_session::PeriodicSessions">PeriodicSessions</a></div><div class="desc docblock-short">Ends the session after a fixed period of blocks.</div></li><li><div class="item-name"><a class="struct" href="struct.TestSessionHandler.html" title="struct pallet_session::TestSessionHandler">TestSessionHandler</a></div><div class="desc docblock-short"><code>SessionHandler</code> for tests that use <code>UintAuthorityId</code> as <code>Keys</code>.</div></li></ul><h2 id="traits" class="small-section-header"><a href="#traits">Traits</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.SessionHandler.html" title="trait pallet_session::SessionHandler">SessionHandler</a></div><div class="desc docblock-short">Handler for session life cycle events.</div></li><li><div class="item-name"><a class="trait" href="trait.SessionManager.html" title="trait pallet_session::SessionManager">SessionManager</a></div><div class="desc docblock-short">A trait for managing creation of new validator set.</div></li><li><div class="item-name"><a class="trait" href="trait.ShouldEndSession.html" title="trait pallet_session::ShouldEndSession">ShouldEndSession</a></div><div class="desc docblock-short">Decides whether the session should be ended.</div></li></ul></section></div></main></body></html>

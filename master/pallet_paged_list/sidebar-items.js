@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["mock","pallet"],"struct":["ListPrefix","StoragePagedList"]};

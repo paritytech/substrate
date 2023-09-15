@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/sp_version/attr.runtime_version.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/sp_version/attr.runtime_version.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An attribute that accepts a version declaration of a runtime and generates a custom wasm section with the equivalent contents."><title>runtime_version in sp_version - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="sp_version" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../sp_version/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../sp_version/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><div class="sidebar-elems"><h2><a href="index.html">In sp_version</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">sp_version</a>::<wbr><a class="attr" href="#">runtime_version</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/sp_version_proc_macro/lib.rs.html#30">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[runtime_version]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An attribute that accepts a version declaration of a runtime and generates a custom wasm
+section with the equivalent contents.</p>
+<p>The custom section allows to read the version of the runtime without having to execute any
+code. Instead, the generated custom section can be relatively easily parsed from the wasm
+binary. The identifier of the custom section is “runtime_version”.</p>
+<p>A shortcoming of this macro is that it is unable to embed information regarding supported
+APIs. This is supported by the <code>construct_runtime!</code> macro.</p>
+<h2 id="usage"><a href="#usage">Usage</a></h2>
+<p>This macro accepts a const item like the following:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sp_version::{create_runtime_str, RuntimeVersion};
+
+<span class="attr">#[sp_version::runtime_version]
+</span><span class="kw">pub const </span>VERSION: RuntimeVersion = RuntimeVersion {
+	spec_name: <span class="macro">create_runtime_str!</span>(<span class="string">&quot;test&quot;</span>),
+	impl_name: <span class="macro">create_runtime_str!</span>(<span class="string">&quot;test&quot;</span>),
+	authoring_version: <span class="number">10</span>,
+	spec_version: <span class="number">265</span>,
+	impl_version: <span class="number">1</span>,
+	apis: RUNTIME_API_VERSIONS,
+	transaction_version: <span class="number">2</span>,
+	state_version: <span class="number">1</span>,
+};
+</code></pre></div>
+<p>It will pass it through and add code required for emitting a custom section. The
+information that will go into the custom section is parsed from the item declaration. Due
+to that, the macro is somewhat rigid in terms of the code it accepts. There are the
+following considerations:</p>
+<ul>
+<li>
+<p>The <code>spec_name</code> and <code>impl_name</code> must be set by a macro-like expression. The name of the
+macro doesn’t matter though.</p>
+</li>
+<li>
+<p><code>authoring_version</code>, <code>spec_version</code>, <code>impl_version</code> and <code>transaction_version</code> must be set
+by a literal. Literal must be an integer. No other expressions are allowed there. In
+particular, you can’t supply a constant variable.</p>
+</li>
+<li>
+<p><code>apis</code> doesn’t have any specific constraints. This is because this information doesn’t
+get into the custom section and is not parsed.</p>
+</li>
+</ul>
+<h2 id="compilation-target--std-feature"><a href="#compilation-target--std-feature">Compilation Target &amp; “std” feature</a></h2>
+<p>This macro assumes it will be used within a runtime. By convention, a runtime crate defines
+a feature named “std”. This feature is enabled when the runtime is compiled to native code
+and disabled when it is compiled to the wasm code.</p>
+<p>The custom section can only be emitted while compiling to wasm. In order to detect the
+compilation target we use the “std” feature. This macro will emit the custom section only
+if the “std” feature is <strong>not</strong> enabled.</p>
+<p>Including this macro in the context where there is no “std” feature and the code is not
+compiled to wasm can lead to cryptic linking errors.</p>
+</div></details></section></div></main></body></html>

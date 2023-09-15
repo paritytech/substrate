@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["WEIGHT_PROOF_SIZE_PER_KB","WEIGHT_PROOF_SIZE_PER_MB","WEIGHT_REF_TIME_PER_MICROS","WEIGHT_REF_TIME_PER_MILLIS","WEIGHT_REF_TIME_PER_NANOS","WEIGHT_REF_TIME_PER_SECOND"],"struct":["BlockExecutionWeight","ExtrinsicBaseWeight","ParityDbWeight","RocksDbWeight"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["insert_genesis_block"],"struct":["GenesisStorageBuilder"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["blacklist","cancel_proposal","cancel_referendum","clear_public_proposals","delegate","emergency_cancel","external_propose","external_propose_default","external_propose_majority","fast_track","propose","remove_other_vote","remove_vote","second","set_metadata","undelegate","unlock","veto_external","vote"]};

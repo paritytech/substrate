@@ -1,0 +1,4 @@
+(function() {var implementors = {
+"pallet_nomination_pools":[["impl <a class=\"trait\" href=\"sp_staking/trait.StakingInterface.html\" title=\"trait sp_staking::StakingInterface\">StakingInterface</a> for <a class=\"struct\" href=\"pallet_nomination_pools/mock/struct.StakingMock.html\" title=\"struct pallet_nomination_pools::mock::StakingMock\">StakingMock</a>"]],
+"pallet_staking":[["impl&lt;T: <a class=\"trait\" href=\"pallet_staking/trait.Config.html\" title=\"trait pallet_staking::Config\">Config</a>&gt; <a class=\"trait\" href=\"sp_staking/trait.StakingInterface.html\" title=\"trait sp_staking::StakingInterface\">StakingInterface</a> for <a class=\"struct\" href=\"pallet_staking/struct.Pallet.html\" title=\"struct pallet_staking::Pallet\">Pallet</a>&lt;T&gt;"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["MigrateToV4","OldBondedPoolInner"],"type":["MigrateV3ToV5"]};

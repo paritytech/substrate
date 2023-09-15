@@ -1,0 +1,142 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_bags_list/example/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_bags_list/example/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="In this example, assuming each node has an equal id and score (eg. node 21 has a score of 21), the node 22 can be moved from bag 1 to bag 0 with the `rebag` operation."><title>pallet_bags_list::example - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="pallet_bags_list" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../../pallet_bags_list/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../../pallet_bags_list/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Module example</a></h2><div class="sidebar-elems"></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">pallet_bags_list</a>::<wbr><a class="mod" href="#">example</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../../src/pallet_bags_list/lib.rs.html#123">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>In this example, assuming each node has an equal id and score (eg. node 21 has a score of 21),
+the node 22 can be moved from bag 1 to bag 0 with the <code>rebag</code> operation.</p>
+<p>Once the whole list is iterated, assuming the above above rebag happens, the order of iteration
+would be: <code>25, 21, 22, 12, 22, 5, 7, 3</code>.</p>
+<p>Moreover, in bag2, node 7 can be moved to the front of node 5 with the <code>put_in_front_of</code>, as it
+has a higher score.</p>
+<script type="module">
+    const mermaidModuleFile = "static.files.mermaid/mermaid.esm.min.mjs";
+    const fallbackRemoteUrl = "https://unpkg.com/mermaid@10/dist/mermaid.esm.min.mjs";
+    const rustdocVarsId= "rustdoc-vars";
+    const dataRootPathAttr = "data-root-path";
+
+
+    function initializeMermaid(mermaid) {
+     var amrn_mermaid_theme =
+         window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+         ? 'dark'
+         : 'default';
+
+      mermaid.initialize({
+        'startOnLoad':'true',
+        'theme': amrn_mermaid_theme,
+        'logLevel': 3 });
+      mermaid.run();
+    }
+
+	function failedToLoadWarnings() {
+		for(var elem of document.getElementsByClassName("mermaid")) {
+			 elem.innerHTML =
+			 `<div> <mark>
+			  &#9888; Cannot render diagram! Failed to import module from local
+			  file and remote location also!
+			  Either access the rustdocs via HTTP/S using a
+			  <a href="https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Tools_and_setup/set_up_a_local_testing_server">
+			   local web server
+			  </a>, for example:
+			   python3 -m http.server --directory target/doc/, <br> or enable local file access in your
+			   Safari/Firefox/Chrome browser, for example
+			  starting Chrome with flag '--allow-file-access-from-files'.
+			  </mark></div> `;
+		}
+	}
+
+
+    // If rustdoc is read from file directly, the import of mermaid module
+    // from file will fail. In this case falling back to remote location.
+    // If neither succeeds, the mermaid markdown is replaced by notice to
+    // enable file acecss in browser.
+    try {
+       var rootPath = document
+         .getElementById(rustdocVarsId)
+         .attributes[dataRootPathAttr]
+         .value;
+       const {
+         default: mermaid,
+       } = await import(rootPath + mermaidModuleFile);
+	   initializeMermaid(mermaid);
+    } catch (e) {
+       try {
+         const {
+            default: mermaid,
+         } = await import(fallbackRemoteUrl);
+	     initializeMermaid(mermaid);
+       } catch (e) {
+		 failedToLoadWarnings();
+	   }
+    }
+</script>
+<div class="mermaid">
+ graph LR
+ 	Bag0 --> Bag1 --> Bag2
+ 	subgraph Bag0[Bag 0: 21-30 DOT]
+ 		direction LR
+ 		25 --> 21 --> 22X[22]
+ 	end
+ 	subgraph Bag1[Bag 1: 11-20 DOT]
+ 		direction LR
+ 		12 --> 22
+ 	end
+ 	subgraph Bag2[Bag 2: 0-10 DOT]
+ 		direction LR
+ 		5 --> 7 --> 3
+ 	end
+ 	style 22X stroke-dasharray: 5 5,opacity:50%
+</div>
+<p>The equivalent of this in code would be:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[test]
+</span><span class="kw">fn </span>examples_work() {
+	ExtBuilder::default()
+		.skip_genesis_ids()
+		<span class="comment">// initially set the score of 11 for 22 to push it next to 12
+		</span>.add_ids(<span class="macro">vec!</span>[(<span class="number">25</span>, <span class="number">25</span>), (<span class="number">21</span>, <span class="number">21</span>), (<span class="number">12</span>, <span class="number">12</span>), (<span class="number">22</span>, <span class="number">11</span>), (<span class="number">5</span>, <span class="number">5</span>), (<span class="number">7</span>, <span class="number">7</span>), (<span class="number">3</span>, <span class="number">3</span>)])
+		.build_and_execute(|| {
+			<span class="comment">// initial bags
+			</span><span class="macro">assert_eq!</span>(
+				List::&lt;Runtime&gt;::get_bags(),
+				<span class="macro">vec!</span>[
+					<span class="comment">// bag 0 -&gt; 10
+					</span>(<span class="number">10</span>, <span class="macro">vec!</span>[<span class="number">5</span>, <span class="number">7</span>, <span class="number">3</span>]),
+					<span class="comment">// bag 10 -&gt; 20
+					</span>(<span class="number">20</span>, <span class="macro">vec!</span>[<span class="number">12</span>, <span class="number">22</span>]),
+					<span class="comment">// bag 20 -&gt; 30
+					</span>(<span class="number">30</span>, <span class="macro">vec!</span>[<span class="number">25</span>, <span class="number">21</span>])
+				]
+			);
+
+			<span class="comment">// set score of 22 to 22
+			</span>StakingMock::set_score_of(<span class="kw-2">&amp;</span><span class="number">22</span>, <span class="number">22</span>);
+
+			<span class="comment">// now we rebag 22 to the first bag
+			</span><span class="macro">assert_ok!</span>(BagsList::rebag(RuntimeOrigin::signed(<span class="number">42</span>), <span class="number">22</span>));
+
+			<span class="macro">assert_eq!</span>(
+				List::&lt;Runtime&gt;::get_bags(),
+				<span class="macro">vec!</span>[
+					<span class="comment">// bag 0 -&gt; 10
+					</span>(<span class="number">10</span>, <span class="macro">vec!</span>[<span class="number">5</span>, <span class="number">7</span>, <span class="number">3</span>]),
+					<span class="comment">// bag 10 -&gt; 20
+					</span>(<span class="number">20</span>, <span class="macro">vec!</span>[<span class="number">12</span>]),
+					<span class="comment">// bag 20 -&gt; 30
+					</span>(<span class="number">30</span>, <span class="macro">vec!</span>[<span class="number">25</span>, <span class="number">21</span>, <span class="number">22</span>])
+				]
+			);
+
+			<span class="comment">// now we put 7 at the front of bag 0
+			</span><span class="macro">assert_ok!</span>(BagsList::put_in_front_of(RuntimeOrigin::signed(<span class="number">7</span>), <span class="number">5</span>));
+
+			<span class="macro">assert_eq!</span>(
+				List::&lt;Runtime&gt;::get_bags(),
+				<span class="macro">vec!</span>[
+					<span class="comment">// bag 0 -&gt; 10
+					</span>(<span class="number">10</span>, <span class="macro">vec!</span>[<span class="number">7</span>, <span class="number">5</span>, <span class="number">3</span>]),
+					<span class="comment">// bag 10 -&gt; 20
+					</span>(<span class="number">20</span>, <span class="macro">vec!</span>[<span class="number">12</span>]),
+					<span class="comment">// bag 20 -&gt; 30
+					</span>(<span class="number">30</span>, <span class="macro">vec!</span>[<span class="number">25</span>, <span class="number">21</span>, <span class="number">22</span>])
+				]
+			);
+		})
+}</code></pre></div>
+</div></details></section></div></main></body></html>

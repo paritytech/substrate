@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["approve_as_multi","as_multi","as_multi_threshold_1","cancel_as_multi"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["INDEXING_PREFIX"],"enum":["DataOrHash","Error"],"mod":["utils"],"struct":["Compact","EncodableOpaqueLeaf","OpaqueLeaf","Proof"],"trait":["FullLeaf","LeafDataProvider","MmrApi","OnNewRoot"],"type":["LeafIndex","NodeIndex"]};

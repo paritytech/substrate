@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["pallet"],"struct":["BeefyEcdsaToEthereum","DepositBeefyDigest"],"trait":["BeefyMmrApi"]};

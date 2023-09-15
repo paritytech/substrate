@@ -1,0 +1,157 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/frame_support_procedural/attr.derive_impl.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/frame_support_procedural/attr.derive_impl.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This attribute can be used to derive a full implementation of a trait based on a local partial impl and an external impl containing defaults that can be overriden in the local impl."><title>derive_impl in frame_support_procedural - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="frame_support_procedural" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../frame_support_procedural/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../frame_support_procedural/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><div class="sidebar-elems"><h2><a href="index.html">In frame_support_procedural</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">frame_support_procedural</a>::<wbr><a class="attr" href="#">derive_impl</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/frame_support_procedural/lib.rs.html#754-765">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive_impl]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This attribute can be used to derive a full implementation of a trait based on a local partial
+impl and an external impl containing defaults that can be overriden in the local impl.</p>
+<p>For a full end-to-end example, see <a href="#use-case-auto-derive-test-pallet-config-traits">below</a>.</p>
+<h2 id="usage"><a href="#usage">Usage</a></h2>
+<p>The attribute should be attached to an impl block (strictly speaking a <code>syn::ItemImpl</code>) for
+which we want to inject defaults in the event of missing trait items in the block.</p>
+<p>The attribute minimally takes a single <code>default_impl_path</code> argument, which should be the module
+path to an impl registered via <a href="attr.register_default_impl.html" title="attr frame_support_procedural::register_default_impl"><code>#[register_default_impl]</code></a> that
+contains the default trait items we want to potentially inject, with the general form:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive_impl(default_impl_path)]
+</span><span class="kw">impl </span>SomeTrait <span class="kw">for </span>SomeStruct {
+    ...
+}</code></pre></div>
+<p>Optionally, a <code>disambiguation_path</code> can be specified as follows by providing <code>as path::here</code>
+after the <code>default_impl_path</code>:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive_impl(default_impl_path <span class="kw">as </span>disambiguation_path)]
+</span><span class="kw">impl </span>SomeTrait <span class="kw">for </span>SomeStruct {
+    ...
+}</code></pre></div>
+<p>The <code>disambiguation_path</code>, if specified, should be the path to a trait that will be used to
+qualify all default entries that are injected into the local impl. For example if your
+<code>default_impl_path</code> is <code>some::path::TestTraitImpl</code> and your <code>disambiguation_path</code> is
+<code>another::path::DefaultTrait</code>, any items injected into the local impl will be qualified as
+<code>&lt;some::path::TestTraitImpl as another::path::DefaultTrait&gt;::specific_trait_item</code>.</p>
+<p>If you omit the <code>as disambiguation_path</code> portion, the <code>disambiguation_path</code> will internally
+default to <code>A</code> from the <code>impl A for B</code> part of the default impl. This is useful for scenarios
+where all of the relevant types are already in scope via <code>use</code> statements.</p>
+<p>Conversely, the <code>default_impl_path</code> argument is required and cannot be omitted.</p>
+<p>Optionally, <code>no_aggregated_types</code> can be specified as follows:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive_impl(default_impl_path <span class="kw">as </span>disambiguation_path, no_aggregated_types)]
+</span><span class="kw">impl </span>SomeTrait <span class="kw">for </span>SomeStruct {
+    ...
+}</code></pre></div>
+<p>If specified, this indicates that the aggregated types (as denoted by impl items
+attached with [<code>#[inject_runtime_type]</code>]) should not be injected with the respective concrete
+types. By default, all such types are injected.</p>
+<p>You can also make use of <code>#[pallet::no_default]</code> on specific items in your default impl that you
+want to ensure will not be copied over but that you nonetheless want to use locally in the
+context of the foreign impl and the pallet (or context) in which it is defined.</p>
+<h3 id="use-case-example-auto-derive-test-pallet-config-traits"><a href="#use-case-example-auto-derive-test-pallet-config-traits">Use-Case Example: Auto-Derive Test Pallet Config Traits</a></h3>
+<p>The <code>#[derive_imp(..)]</code> attribute can be used to derive a test pallet <code>Config</code> based on an
+existing pallet <code>Config</code> that has been marked with
+<a href="attr.config.html" title="attr frame_support_procedural::config"><code>#[pallet::config(with_default)]</code></a> (which under the hood, generates a
+<code>DefaultConfig</code> trait in the pallet in which the macro was invoked).</p>
+<p>In this case, the <code>#[derive_impl(..)]</code> attribute should be attached to an <code>impl</code> block that
+implements a compatible <code>Config</code> such as <code>frame_system::Config</code> for a test/mock runtime, and
+should receive as its first argument the path to a <code>DefaultConfig</code> impl that has been registered
+via <a href="attr.register_default_impl.html" title="attr frame_support_procedural::register_default_impl"><code>#[register_default_impl]</code></a>, and as its second argument, the
+path to the auto-generated <code>DefaultConfig</code> for the existing pallet <code>Config</code> we want to base our
+test config off of.</p>
+<p>The following is what the <code>basic</code> example pallet would look like with a default testing config:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive_impl(frame_system::config_preludes::TestDefaultConfig <span class="kw">as </span>frame_system::pallet::DefaultConfig)]
+</span><span class="kw">impl </span>frame_system::Config <span class="kw">for </span>Test {
+    <span class="comment">// These are all defined by system as mandatory.
+    </span><span class="kw">type </span>BaseCallFilter = frame_support::traits::Everything;
+    <span class="kw">type </span>RuntimeEvent = RuntimeEvent;
+    <span class="kw">type </span>RuntimeCall = RuntimeCall;
+    <span class="kw">type </span>RuntimeOrigin = RuntimeOrigin;
+    <span class="kw">type </span>OnSetCode = ();
+    <span class="kw">type </span>PalletInfo = PalletInfo;
+    <span class="kw">type </span>Block = Block;
+    <span class="comment">// We decide to override this one.
+    </span><span class="kw">type </span>AccountData = pallet_balances::AccountData&lt;u64&gt;;
+}</code></pre></div>
+<p>where <code>TestDefaultConfig</code> was defined and registered as follows:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">pub struct </span>TestDefaultConfig;
+
+<span class="attr">#[register_default_impl(TestDefaultConfig)]
+</span><span class="kw">impl </span>DefaultConfig <span class="kw">for </span>TestDefaultConfig {
+    <span class="kw">type </span>Version = ();
+    <span class="kw">type </span>BlockWeights = ();
+    <span class="kw">type </span>BlockLength = ();
+    <span class="kw">type </span>DbWeight = ();
+    <span class="kw">type </span>Nonce = u64;
+    <span class="kw">type </span>BlockNumber = u64;
+    <span class="kw">type </span>Hash = sp_core::hash::H256;
+    <span class="kw">type </span>Hashing = sp_runtime::traits::BlakeTwo256;
+    <span class="kw">type </span>AccountId = AccountId;
+    <span class="kw">type </span>Lookup = IdentityLookup&lt;AccountId&gt;;
+    <span class="kw">type </span>BlockHashCount = frame_support::traits::ConstU64&lt;<span class="number">10</span>&gt;;
+    <span class="kw">type </span>AccountData = u32;
+    <span class="kw">type </span>OnNewAccount = ();
+    <span class="kw">type </span>OnKilledAccount = ();
+    <span class="kw">type </span>SystemWeightInfo = ();
+    <span class="kw">type </span>SS58Prefix = ();
+    <span class="kw">type </span>MaxConsumers = frame_support::traits::ConstU32&lt;<span class="number">16</span>&gt;;
+}</code></pre></div>
+<p>The above call to <code>derive_impl</code> would expand to roughly the following:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>frame_system::Config <span class="kw">for </span>Test {
+    <span class="kw">use </span>frame_system::config_preludes::TestDefaultConfig;
+    <span class="kw">use </span>frame_system::pallet::DefaultConfig;
+
+    <span class="kw">type </span>BaseCallFilter = frame_support::traits::Everything;
+    <span class="kw">type </span>RuntimeEvent = RuntimeEvent;
+    <span class="kw">type </span>RuntimeCall = RuntimeCall;
+    <span class="kw">type </span>RuntimeOrigin = RuntimeOrigin;
+    <span class="kw">type </span>OnSetCode = ();
+    <span class="kw">type </span>PalletInfo = PalletInfo;
+    <span class="kw">type </span>Block = Block;
+    <span class="kw">type </span>AccountData = pallet_balances::AccountData&lt;u64&gt;;
+    <span class="kw">type </span>Version = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::Version;
+    <span class="kw">type </span>BlockWeights = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::BlockWeights;
+    <span class="kw">type </span>BlockLength = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::BlockLength;
+    <span class="kw">type </span>DbWeight = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::DbWeight;
+    <span class="kw">type </span>Nonce = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::Nonce;
+    <span class="kw">type </span>BlockNumber = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::BlockNumber;
+    <span class="kw">type </span>Hash = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::Hash;
+    <span class="kw">type </span>Hashing = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::Hashing;
+    <span class="kw">type </span>AccountId = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::AccountId;
+    <span class="kw">type </span>Lookup = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::Lookup;
+    <span class="kw">type </span>BlockHashCount = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::BlockHashCount;
+    <span class="kw">type </span>OnNewAccount = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::OnNewAccount;
+    <span class="kw">type </span>OnKilledAccount = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::OnKilledAccount;
+    <span class="kw">type </span>SystemWeightInfo = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::SystemWeightInfo;
+    <span class="kw">type </span>SS58Prefix = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::SS58Prefix;
+    <span class="kw">type </span>MaxConsumers = &lt;TestDefaultConfig <span class="kw">as </span>DefaultConfig&gt;::MaxConsumers;
+}</code></pre></div>
+<p>You can then use the resulting <code>Test</code> config in test scenarios.</p>
+<p>Note that items that are <em>not</em> present in our local <code>DefaultConfig</code> are automatically copied
+from the foreign trait (in this case <code>TestDefaultConfig</code>) into the local trait impl (in this
+case <code>Test</code>), unless the trait item in the local trait impl is marked with
+<a href="attr.no_default.html" title="attr frame_support_procedural::no_default"><code>#[pallet::no_default]</code></a>, in which case it cannot be overridden, and any
+attempts to do so will result in a compiler error.</p>
+<p>See <code>frame/examples/default-config/tests.rs</code> for a runnable end-to-end example pallet that makes
+use of <code>derive_impl</code> to derive its testing config.</p>
+<p>See <a href="attr.config.html" title="attr frame_support_procedural::config">here</a> for more information and caveats about the auto-generated
+<code>DefaultConfig</code> trait.</p>
+<h3 id="optional-conventions"><a href="#optional-conventions">Optional Conventions</a></h3>
+<p>Note that as an optional convention, we encourage creating a <code>config_preludes</code> module inside of
+your pallet. This is the convention we follow for <code>frame_system</code>’s <code>TestDefaultConfig</code> which, as
+shown above, is located at <code>frame_system::config_preludes::TestDefaultConfig</code>. This is just a
+suggested convention – there is nothing in the code that expects modules with these names to be
+in place, so there is no imperative to follow this pattern unless desired.</p>
+<p>In <code>config_preludes</code>, you can place types named like:</p>
+<ul>
+<li><code>TestDefaultConfig</code></li>
+<li><code>ParachainDefaultConfig</code></li>
+<li><code>SolochainDefaultConfig</code></li>
+</ul>
+<p>Signifying in which context they can be used.</p>
+<h2 id="advanced-usage"><a href="#advanced-usage">Advanced Usage</a></h2><h3 id="expansion"><a href="#expansion">Expansion</a></h3>
+<p>The <code>#[derive_impl(default_impl_path as disambiguation_path)]</code> attribute will expand to the
+local impl, with any extra items from the foreign impl that aren’t present in the local impl
+also included. In the case of a colliding trait item, the version of the item that exists in the
+local impl will be retained. All imported items are qualified by the <code>disambiguation_path</code>, as
+discussed above.</p>
+<h3 id="handling-of-unnamed-trait-items"><a href="#handling-of-unnamed-trait-items">Handling of Unnamed Trait Items</a></h3>
+<p>Items that lack a <code>syn::Ident</code> for whatever reason are first checked to see if they exist,
+verbatim, in the local/destination trait before they are copied over, so you should not need to
+worry about collisions between identical unnamed items.</p>
+</div></details></section></div></main></body></html>

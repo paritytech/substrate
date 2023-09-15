@@ -1,0 +1,69 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_timestamp/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_timestamp/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Timestamp Pallet"><title>pallet_timestamp - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pallet_timestamp" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../pallet_timestamp/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../pallet_timestamp/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate pallet_timestamp</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 4.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pallet_timestamp</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/pallet_timestamp/lib.rs.html#18-314">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="timestamp-pallet"><a href="#timestamp-pallet">Timestamp Pallet</a></h2>
+<p>The Timestamp pallet provides functionality to get and set the on-chain time.</p>
+<ul>
+<li><a href="pallet/trait.Config.html" title="trait pallet_timestamp::pallet::Config"><code>Config</code></a></li>
+<li><a href="pallet/enum.Call.html" title="enum pallet_timestamp::pallet::Call"><code>Call</code></a></li>
+<li><a href="pallet/struct.Pallet.html" title="struct pallet_timestamp::pallet::Pallet"><code>Pallet</code></a></li>
+</ul>
+<h3 id="overview"><a href="#overview">Overview</a></h3>
+<p>The Timestamp pallet allows the validators to set and validate a timestamp with each block.</p>
+<p>It uses inherents for timestamp data, which is provided by the block author and
+validated/verified by other validators. The timestamp can be set only once per block and must be
+set each block. There could be a constraint on how much time must pass before setting the new
+timestamp.</p>
+<p><strong>NOTE:</strong> The Timestamp pallet is the recommended way to query the on-chain time instead of
+using an approach based on block numbers. The block number based time measurement can cause
+issues because of cumulative calculation errors and hence should be avoided.</p>
+<h3 id="interface"><a href="#interface">Interface</a></h3><h4 id="dispatchable-functions"><a href="#dispatchable-functions">Dispatchable Functions</a></h4>
+<ul>
+<li><code>set</code> - Sets the current time.</li>
+</ul>
+<h4 id="public-functions"><a href="#public-functions">Public functions</a></h4>
+<ul>
+<li><code>get</code> - Gets the current time for the current block. If this function is called prior to
+setting the timestamp, it will return the timestamp of the previous block.</li>
+</ul>
+<h4 id="config-getters"><a href="#config-getters">Config Getters</a></h4>
+<ul>
+<li><code>MinimumPeriod</code> - Gets the minimum (and advised) period between blocks for the chain.</li>
+</ul>
+<h3 id="usage"><a href="#usage">Usage</a></h3>
+<p>The following example shows how to use the Timestamp pallet in your custom pallet to query the
+current timestamp.</p>
+<h4 id="prerequisites"><a href="#prerequisites">Prerequisites</a></h4>
+<p>Import the Timestamp pallet into your custom pallet and derive the pallet configuration
+trait from the timestamp trait.</p>
+<h4 id="get-current-timestamp"><a href="#get-current-timestamp">Get current timestamp</a></h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pallet_timestamp::{<span class="self">self </span><span class="kw">as </span>timestamp};
+
+<span class="attr">#[frame_support::pallet]
+</span><span class="kw">pub mod </span>pallet {
+	<span class="kw">use super</span>::<span class="kw-2">*</span>;
+	<span class="kw">use </span>frame_support::pallet_prelude::<span class="kw-2">*</span>;
+	<span class="kw">use </span>frame_system::pallet_prelude::<span class="kw-2">*</span>;
+
+	<span class="attr">#[pallet::pallet]
+	</span><span class="kw">pub struct </span>Pallet&lt;T&gt;(<span class="kw">_</span>);
+
+	<span class="attr">#[pallet::config]
+	</span><span class="kw">pub trait </span>Config: frame_system::Config + timestamp::Config {}
+
+	<span class="attr">#[pallet::call]
+	</span><span class="kw">impl</span>&lt;T: Config&gt; Pallet&lt;T&gt; {
+		<span class="attr">#[pallet::weight(<span class="number">0</span>)]
+		</span><span class="kw">pub fn </span>get_time(origin: OriginFor&lt;T&gt;) -&gt; DispatchResult {
+			<span class="kw">let </span>_sender = ensure_signed(origin)<span class="question-mark">?</span>;
+			<span class="kw">let </span>_now = &lt;timestamp::Pallet&lt;T&gt;&gt;::get();
+			<span class="prelude-val">Ok</span>(())
+		}
+	}
+}</code></pre></div>
+<h4 id="example-from-the-frame"><a href="#example-from-the-frame">Example from the FRAME</a></h4>
+<p>The <a href="https://github.com/paritytech/substrate/blob/master/frame/session/src/lib.rs">Session pallet</a> uses
+the Timestamp pallet for session management.</p>
+<h3 id="related-pallets"><a href="#related-pallets">Related Pallets</a></h3>
+<ul>
+<li><a href="../pallet_session/index.html">Session</a></li>
+</ul>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.WeightInfo"><code>pub use weights::<a class="trait" href="weights/trait.WeightInfo.html" title="trait pallet_timestamp::weights::WeightInfo">WeightInfo</a>;</code></div></li><li><div class="item-name"><code>pub use <a class="mod" href="pallet/index.html" title="mod pallet_timestamp::pallet">pallet</a>::*;</code></div></li></ul><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="pallet/index.html" title="mod pallet_timestamp::pallet">pallet</a></div><div class="desc docblock-short">The <code>pallet</code> module in each FRAME pallet hosts the most important items needed
+to construct this pallet.</div></li><li><div class="item-name"><a class="mod" href="weights/index.html" title="mod pallet_timestamp::weights">weights</a></div><div class="desc docblock-short">Autogenerated weights for pallet_timestamp</div></li></ul></section></div></main></body></html>

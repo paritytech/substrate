@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["store_old_contract_info"],"struct":["Migration"]};

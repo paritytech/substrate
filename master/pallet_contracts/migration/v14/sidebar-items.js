@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["store_dummy_code"],"struct":["Migration"]};

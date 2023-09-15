@@ -1,0 +1,168 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/substrate/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/substrate/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Substrate"><title>substrate - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="substrate" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../substrate/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../substrate/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate substrate</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 0.0.0</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">substrate</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/substrate/lib.rs.html#19-297">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="substrate"><a href="#substrate">Substrate</a></h2>
+<p>Substrate is a Rust framework for building blockchains in a modular and extensible way. While in
+itself un-opinionated, it is the main engine behind the Polkadot ecosystem.</p>
+<p><a href="https://github.com/paritytech/substrate/"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> - <a href="https://polkadot.network"><img src="https://img.shields.io/badge/polkadot-E6007A?style=for-the-badge&amp;logo=polkadot&amp;logoColor=white" alt="polkadot" /></a></p>
+<p>This crate in itself does not contain any code and is just meant ot be a documentation hub for
+substrate-based crates.</p>
+<h3 id="overview"><a href="#overview">Overview</a></h3>
+<p>Substrate approaches blockchain development with an acknowledgement of a few self-evident
+truths:</p>
+<ol>
+<li>Society and technology evolves.</li>
+<li>Humans are fallible.</li>
+</ol>
+<p>This, specifically, makes the task of designing a correct, safe and long-lasting blockchain
+system hard.</p>
+<p>Nonetheless, in order to achieve this goal, substrate embraces the following:</p>
+<ol>
+<li>Use of <strong>Rust</strong> as a modern, and safe programming language, which limits human error through
+various means, most notably memory safety.</li>
+<li>Substrate is written from the ground-up with a generic, modular and extensible design. This
+ensures that software components can be easily swapped and upgraded. Examples of this is
+multiple consensus mechanisms provided by Substrate, as listed below.</li>
+<li>Lastly, the final blockchain system created with the above properties needs to be
+upgradeable. In order to achieve this, Substrate is designed as a meta-protocol, whereby the
+application logic of the blockchain (called “Runtime”) is encoded as a Wasm blob, and is
+stored onchain. The rest of the system (called “Client”) acts as the executor of the Wasm
+blob.</li>
+</ol>
+<p>In essence, the meta-protocol of all Substrate based chains is the “Runtime as Wasm blob”
+accord. This enables the Runtime to become inherently upgradeable (without forks). The upgrade
+is merely a matter of the Wasm blob being changed in the chain state, which is, in principle,
+same as updating an account’s balance.</p>
+<p>To learn more about the substrate architecture using some visuals, see <a href="substrate_diagram/index.html" title="mod substrate::substrate_diagram"><code>substrate_diagram</code></a>.</p>
+<p><code>FRAME</code>, Substrate’s default runtime development library takes the above even further by
+embracing a declarative programming model whereby correctness is enhanced and the system is
+highly configurable through parameterization.</p>
+<p>All in all, this design enables all substrate-based chains to achieve forkless, self-enacting
+upgrades out of the box. Combined with governance abilities that are shipped with <code>FRAME</code>, this
+enables a chain to survive the test of time.</p>
+<h3 id="how-to-get-stared"><a href="#how-to-get-stared">How to Get Stared</a></h3>
+<p>Most developers want to leave the client side code as-is, and focus on the runtime. To do so,
+look into the <a href="../frame_support/index.html" title="mod frame_support"><code>frame_support</code></a> crate, which is the entry point crate into runtime development
+with FRAME.</p>
+<blockquote>
+<p>Side note, it is entirely possible to craft a substrate-based runtime without FRAME, an
+example of which can be found <a href="https://github.com/JoshOrndorff/frameless-node-template">here</a>.</p>
+</blockquote>
+<p>In more broad terms, the following avenues exist into developing with substrate:</p>
+<ul>
+<li><strong>Templates</strong>: A number of substrate-based templates exist and they can be used for various
+purposes, with zero to little additional code needed. All of these templates contain runtimes
+that are highly configurable and are likely suitable for basic needs.</li>
+<li><code>FRAME</code>: If need, one can customize that runtime even further, by using <code>FRAME</code> and developing
+custom modules.</li>
+<li><strong>Core</strong>: To the contrary, some developers may want to customize the client side software to
+achieve novel goals such as a new consensus engine, or a new database backend. While
+Substrate’s main configurability is in the runtime, the client is also highly generic and can
+be customized to a great extent.</li>
+</ul>
+<h3 id="structure"><a href="#structure">Structure</a></h3>
+<p>Substrate is a massive cargo workspace with hundreds of crates, therefore it is useful to know
+how to navigate its crates.</p>
+<p>In broad terms, it is divided into three categories:</p>
+<ul>
+<li><code>sc-*</code> (short for <em>substrate-client</em>) crates, located under <code>./client</code> folder. These are all
+the client crates. Notable examples are crates such as <a href="../sc_network/index.html"><code>sc-network</code></a>, various consensus
+crates, <a href="../sc_rpc_api/index.html"><code>sc-rpc-api</code></a> and <a href="../sc_client_db/index.html"><code>sc-client-db</code></a>, all of which are expected to reside in the client
+side.</li>
+<li><code>sp-*</code> (short for <em>substrate-primitives</em>) crates, located under <code>./primitives</code> folder. These
+are the traits that glue the client and runtime together, but are not opinionated about what
+framework is using for building the runtime. Notable examples are <a href="../sp_api/index.html"><code>sp-api</code></a> and <a href="../sp_io/index.html"><code>sp-io</code></a>,
+which form the communication bridge between the client and runtime, as explained in
+<a href="substrate_diagram/index.html" title="mod substrate::substrate_diagram"><code>substrate_diagram</code></a>.</li>
+<li><code>pallet-*</code> and <code>frame-*</code> crates, located under <code>./frame</code> folder. These are the crates related
+to FRAME. See <a href="../frame_support/index.html" title="mod frame_support"><code>frame_support</code></a> for more information.</li>
+</ul>
+<h4 id="wasm-build"><a href="#wasm-build">Wasm Build</a></h4>
+<p>Many of the Substrate crates, such as entire <code>sp-*</code>, need to compile to both Wasm (when a Wasm
+runtime is being generated) and native (for example, when testing). To achieve this, Substrate
+follows the convention of the Rust community, and uses a <code>feature = &quot;std&quot;</code> to signify that a
+crate is being built with the standard library, and is built for native. Otherwise, it is built
+for <code>no_std</code>.</p>
+<p>This can be summarized in <code>#![cfg_attr(not(feature = &quot;std&quot;), no_std)]</code>, which you can often find
+in any Substrate-based runtime.</p>
+<p>Substrate-based runtimes use <a href="https://crates.io/crates/substrate-wasm-builder"><code>substrate-wasm-builder</code></a> in their <code>build.rs</code> to automatically
+build their Wasm files as a part of normal build commandsOnce built, the wasm file is placed in
+<code>./target/{debug|release}/wbuild/{runtime_name}.wasm</code>.</p>
+<h4 id="binaries"><a href="#binaries">Binaries</a></h4>
+<p>Multiple binaries are shipped with substrate, the most important of which are located in the
+<code>./bin</code> folder.</p>
+<ul>
+<li><a href="../node_cli/index.html"><code>node</code></a> is an extensive substrate node that contains the superset of all runtime and client
+side features. The corresponding runtime, called <a href="../kitchensink_runtime/index.html"><code>kitchensink_runtime</code></a> contains all of the
+modules that are provided with <code>FRAME</code>. This node and runtime is only used for testing and
+demonstration.
+<ul>
+<li><a href="../chain_spec_builder/index.html"><code>chain-spec-builder</code></a>: Utility to build more detailed chain-specs for the aforementioned
+node. Other projects typically contain a <code>build-spec</code> subcommand that does the same.</li>
+</ul>
+</li>
+<li><a href="../node_template/index.html"><code>node-template</code></a>: a template node that contains a minimal set of features and can act as a
+starting point of a project.</li>
+<li><a href="../subkey/index.html"><code>subkey</code></a>: Substrate’s key management utility.</li>
+</ul>
+<h4 id="anatomy-of-a-binary-crate"><a href="#anatomy-of-a-binary-crate">Anatomy of a Binary Crate</a></h4>
+<p>From the above, <a href="../node_cli/index.html"><code>node</code></a> and <a href="../node_template/index.html"><code>node-template</code></a> are essentially blueprints of a substrate-based
+project, as the name of the latter is implying. Each substrate-based project typically contains
+the following:</p>
+<ul>
+<li>
+<p>Under <code>./runtime</code>, a <code>./runtime/src/lib.rs</code> which is the top level runtime amalgamator file.
+This file typically contains the <a href="../frame_support_procedural/macro.construct_runtime.html" title="macro frame_support_procedural::construct_runtime"><code>frame_support::construct_runtime</code></a> macro, which is the
+final definition of a runtime.</p>
+</li>
+<li>
+<p>Under <code>./node</code>, a <code>main.rs</code>, which is the point, and a <code>./service.rs</code>, which contains all the
+client side components. Skimming this file yields an overview of the networking, database,
+consensus and similar client side components.</p>
+</li>
+</ul>
+<blockquote>
+<p>The above two are conventions, not rules.</p>
+</blockquote>
+<h3 id="parachain"><a href="#parachain">Parachain?</a></h3>
+<p>As noted above, Substrate is the main engine behind the Polkadot ecosystem. One of the ways
+through which Polkadot can be utilized is by building “parachains”, blockchains that are
+connected to Polkadot’s shared security.</p>
+<p>To build a parachain, one could use <a href="https://github.com/paritytech/cumulus/"><code>Cumulus</code></a>, the
+library on top of Substrate, empowering any substrate-based chain to be a Polkadot parachain.</p>
+<h3 id="where-to-go-next"><a href="#where-to-go-next">Where To Go Next?</a></h3>
+<p>Additional noteworthy crates within substrate:</p>
+<ul>
+<li>RPC APIs of a Substrate node: <a href="../sc_rpc_api/index.html"><code>sc-rpc-api</code></a>/<a href="../sc_rpc/index.html"><code>sc-rpc</code></a></li>
+<li>CLI Options of a Substrate node: <a href="../sc_cli/index.html"><code>sc-cli</code></a></li>
+<li>All of the consensus related crates provided by Substrate:
+<ul>
+<li><a href="../sc_consensus_aura/index.html"><code>sc-consensus-aura</code></a></li>
+<li><a href="../sc_consensus_babe/index.html"><code>sc-consensus-babe</code></a></li>
+<li><a href="../sc_consensus_grandpa/index.html"><code>sc-consensus-grandpa</code></a></li>
+<li><a href="../sc_consensus_beefy/index.html"><code>sc-consensus-beefy</code></a></li>
+<li><a href="../sc_consensus_manual_seal/index.html"><code>sc-consensus-manual-seal</code></a></li>
+<li><a href="../sc_consensus_pow/index.html"><code>sc-consensus-pow</code></a></li>
+</ul>
+</li>
+</ul>
+<p>Additional noteworthy external resources:</p>
+<ul>
+<li><a href="https://substrate.dev">Substrate Developer Hub</a></li>
+<li><a href="https://paritytech.github.io/">Parity Tech’s Documentation Hub</a></li>
+<li><a href="https://paritytech.github.io/frontier/">Frontier: Substrate’s Ethereum Compatibility Library</a></li>
+<li><a href="https://wiki.polkadot.network/en/">Polkadot Wiki</a></li>
+</ul>
+<p>Notable upstream crates:</p>
+<ul>
+<li><a href="https://github.com/paritytech/parity-scale-codec"><code>parity-scale-codec</code></a></li>
+<li><a href="https://github.com/paritytech/parity-db"><code>parity-db</code></a></li>
+<li><a href="https://github.com/paritytech/trie"><code>trie</code></a></li>
+<li><a href="https://github.com/paritytech/parity-common"><code>parity-common</code></a></li>
+</ul>
+<p>Templates:</p>
+<ul>
+<li>classic <a href="https://github.com/substrate-developer-hub/substrate-node-template"><code>substrate-node-template</code></a></li>
+<li>classic <a href="https://github.com/substrate-developer-hub/substrate-parachain-template">cumulus-parachain-template</a></li>
+<li><a href="https://github.com/paritytech/extended-parachain-template"><code>extended-parachain-template</code></a></li>
+<li><a href="https://github.com/paritytech/frontier-parachain-template"><code>frontier-parachain-template</code></a></li>
+</ul>
+</div></details><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="substrate_diagram/index.html" title="mod substrate::substrate_diagram">substrate_diagram</a></div><div class="desc docblock-short">In this module, we explore substrate at a more depth. First, let’s establish substrate being
+divided into a client and runtime.</div></li></ul></section></div></main></body></html>

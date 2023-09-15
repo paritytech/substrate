@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["build_config","create_default_config"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ActiveIssuanceOf","TotalIssuanceOf"],"trait":["Currency","LockableCurrency","NamedReservableCurrency","ReservableCurrency","VestingSchedule"],"type":["LockIdentifier"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["SaturatingCurrencyToVote","U128CurrencyToVote"],"trait":["CurrencyToVote"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["cancel","kill","nudge_referendum","one_fewer_deciding","place_decision_deposit","refund_decision_deposit","refund_submission_deposit","set_metadata","submit"]};

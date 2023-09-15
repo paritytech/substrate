@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_member","change_key","clear_prime","remove_member","reset_members","set_prime","swap_member"]};

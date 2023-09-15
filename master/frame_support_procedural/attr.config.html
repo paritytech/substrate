@@ -1,0 +1,58 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/frame_support_procedural/attr.config.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/frame_support_procedural/attr.config.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The mandatory attribute `#[pallet::config]` defines the configurable options for the pallet."><title>config in frame_support_procedural - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="frame_support_procedural" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../frame_support_procedural/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../frame_support_procedural/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><div class="sidebar-elems"><h2><a href="index.html">In frame_support_procedural</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">frame_support_procedural</a>::<wbr><a class="attr" href="#">config</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/frame_support_procedural/lib.rs.html#971-973">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[config]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The mandatory attribute <code>#[pallet::config]</code> defines the configurable options for the pallet.</p>
+<p>Item must be defined as:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[pallet::config]
+</span><span class="kw">pub trait </span>Config: frame_system::Config + <span class="macro-nonterminal">$optionally_some_other_supertraits
+$optional_where_clause
+</span>{
+...
+}</code></pre></div>
+<p>I.e. a regular trait definition named <code>Config</code>, with the supertrait
+<code>frame_system::pallet::Config</code>, and optionally other supertraits and a where clause.
+(Specifying other supertraits here is known as <a href="https://docs.substrate.io/reference/how-to-guides/pallet-design/use-tight-coupling/">tight
+coupling</a>)</p>
+<p>The associated type <code>RuntimeEvent</code> is reserved. If defined, it must have the bounds
+<code>From&lt;Event&gt;</code> and <code>IsType&lt;&lt;Self as frame_system::Config&gt;::RuntimeEvent&gt;</code>.</p>
+<p><a href="attr.event.html" title="attr frame_support_procedural::event"><code>pallet::event</code></a> must be present if <code>RuntimeEvent</code> exists as a config item
+in your <code>#[pallet::config]</code>.</p>
+<h3 id="optional-with_default"><a href="#optional-with_default">Optional: <code>with_default</code></a></h3>
+<p>An optional <code>with_default</code> argument may also be specified. Doing so will automatically
+generate a <code>DefaultConfig</code> trait inside your pallet which is suitable for use with
+<a href="attr.derive_impl.html" title="attr frame_support_procedural::derive_impl"><code>[#[derive_impl(..)]</code></a> to derive a default testing config:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[pallet::config(with_default)]
+</span><span class="kw">pub trait </span>Config: frame_system::Config {
+		<span class="kw">type </span>RuntimeEvent: Parameter
+			+ Member
+			+ From&lt;Event&lt;<span class="self">Self</span>&gt;&gt;
+			+ Debug
+			+ IsType&lt;&lt;<span class="self">Self </span><span class="kw">as </span>frame_system::Config&gt;::RuntimeEvent&gt;;
+
+		<span class="attr">#[pallet::no_default]
+		</span><span class="kw">type </span>BaseCallFilter: Contains&lt;<span class="self">Self</span>::RuntimeCall&gt;;
+	<span class="comment">// ...
+</span>}</code></pre></div>
+<p>As shown above, you may also attach the <a href="attr.no_default.html" title="attr frame_support_procedural::no_default"><code>#[pallet::no_default]</code></a>
+attribute to specify that a particular trait item <em>cannot</em> be used as a default when a test
+<code>Config</code> is derived using the <a href="attr.derive_impl.html" title="attr frame_support_procedural::derive_impl"><code>#[derive_impl(..)]</code></a> attribute macro.
+This will cause that particular trait item to simply not appear in default testing configs
+based on this config (the trait item will not be included in <code>DefaultConfig</code>).</p>
+<h4 id="defaultconfig-caveats"><a href="#defaultconfig-caveats"><code>DefaultConfig</code> Caveats</a></h4>
+<p>The auto-generated <code>DefaultConfig</code> trait:</p>
+<ul>
+<li>is always a <em>subset</em> of your pallet’s <code>Config</code> trait.</li>
+<li>can only contain items that don’t rely on externalities, such as <code>frame_system::Config</code>.</li>
+</ul>
+<p>Trait items that <em>do</em> rely on externalities should be marked with
+<a href="attr.no_default.html" title="attr frame_support_procedural::no_default"><code>#[pallet::no_default]</code></a></p>
+<p>Consequently:</p>
+<ul>
+<li>Any items that rely on externalities <em>must</em> be marked with
+<a href="attr.no_default.html" title="attr frame_support_procedural::no_default"><code>#[pallet::no_default]</code></a> or your trait will fail to compile when used
+with <a href="attr.derive_impl.html" title="attr frame_support_procedural::derive_impl"><code>derive_impl</code></a>.</li>
+<li>Items marked with <a href="attr.no_default.html" title="attr frame_support_procedural::no_default"><code>#[pallet::no_default]</code></a> are entirely excluded from the
+<code>DefaultConfig</code> trait, and therefore any impl of <code>DefaultConfig</code> doesn’t need to implement
+such items.</li>
+</ul>
+<p>For more information, see <a href="attr.derive_impl.html" title="attr frame_support_procedural::derive_impl"><code>derive_impl</code></a>.</p>
+</div></details></section></div></main></body></html>

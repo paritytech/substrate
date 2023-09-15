@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["migration_status"],"struct":["MigrationStatusResult","StateMigration"],"trait":["StateMigrationApiServer"]};

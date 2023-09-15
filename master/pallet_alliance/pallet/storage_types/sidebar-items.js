@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Announcements","DepositOf","Members","RetiringMembers","Rule","UnscrupulousAccounts","UnscrupulousWebsites"]};

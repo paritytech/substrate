@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DenyUnsafe"],"fn":["create_full"],"struct":["BabeDeps","FullDeps","GrandpaDeps"]};

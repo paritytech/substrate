@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CheckInherentsResult","InherentData","MakeFatalError"],"trait":["IsFatalError","ProvideInherent"],"type":["InherentIdentifier"]};

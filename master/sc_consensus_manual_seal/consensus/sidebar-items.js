@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["aura","babe","timestamp"],"trait":["ConsensusDataProvider"]};

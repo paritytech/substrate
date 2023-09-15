@@ -1,0 +1,94 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_paged_list/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_paged_list/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Made with Substrate, for DotSama."><title>pallet_paged_list - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pallet_paged_list" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../pallet_paged_list/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../pallet_paged_list/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate pallet_paged_list</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 0.1.0</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pallet_paged_list</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/pallet_paged_list/lib.rs.html#18-136">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><blockquote>
+<p>Made with <em>Substrate</em>, for <em>DotSama</em>.</p>
+</blockquote>
+<p><a href="https://github.com/paritytech/substrate/frame/fast-unstake"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> -
+<a href="https://polkadot.network"><img src="https://img.shields.io/badge/polkadot-E6007A?style=for-the-badge&amp;logo=polkadot&amp;logoColor=white" alt="polkadot" /></a></p>
+<h2 id="paged-list-pallet"><a href="#paged-list-pallet">Paged List Pallet</a></h2>
+<p>A thin wrapper pallet around a <a href="struct.StoragePagedList.html" title="struct pallet_paged_list::StoragePagedList"><code>paged_list::StoragePagedList</code></a>. It provides an API for a single
+paginated list. It can be instantiated multiple times to provide multiple lists.</p>
+<h3 id="overview"><a href="#overview">Overview</a></h3>
+<p>The pallet is quite unique since it does not expose any <code>Call</code>s, <code>Error</code>s or <code>Event</code>s. All
+interaction goes through the implemented <a href="../frame_support/storage/trait.StorageList.html" title="trait frame_support::storage::StorageList"><code>StorageList</code></a>
+trait.</p>
+<p>A fuzzer for testing is provided in crate <code>pallet-paged-list-fuzzer</code>.</p>
+<h3 id="examples"><a href="#examples">Examples</a></h3>
+<ol>
+<li><strong>Appending</strong> some data to the list can happen either by <a href="pallet/struct.Pallet.html#method.append_one" title="associated function pallet_paged_list::pallet::Pallet::append_one"><code>Pallet::append_one</code></a>:</li>
+</ol>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[test]
+</span><span class="kw">fn </span>append_one_works() {
+	test_closure(|| {
+		PagedList::append_one(<span class="number">1</span>);
+
+		<span class="macro">assert_eq!</span>(PagedList::iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="macro">vec!</span>[<span class="number">1</span>]);
+	});
+}</code></pre></div>
+<ol start="2">
+<li>or by <a href="pallet/struct.Pallet.html#method.append_many" title="associated function pallet_paged_list::pallet::Pallet::append_many"><code>Pallet::append_many</code></a>. This should always be preferred to repeated calls to
+<a href="pallet/struct.Pallet.html#method.append_one" title="associated function pallet_paged_list::pallet::Pallet::append_one"><code>Pallet::append_one</code></a>:</li>
+</ol>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[test]
+</span><span class="kw">fn </span>append_many_works() {
+	test_closure(|| {
+		PagedList::append_many(<span class="number">0</span>..<span class="number">3</span>);
+
+		<span class="macro">assert_eq!</span>(PagedList::iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>]);
+	});
+}</code></pre></div>
+<ol start="3">
+<li>If you want to append many values (ie. in a loop), then best use the <a href="pallet/struct.Pallet.html#method.appender" title="associated function pallet_paged_list::pallet::Pallet::appender"><code>Pallet::appender</code></a>:</li>
+</ol>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[test]
+</span><span class="kw">fn </span>appender_works() {
+	<span class="kw">use </span>frame_support::storage::StorageAppender;
+	test_closure(|| {
+		<span class="kw">let </span><span class="kw-2">mut </span>appender = PagedList::appender();
+
+		appender.append(<span class="number">0</span>);
+		appender.append(<span class="number">1</span>); <span class="comment">// Repeated calls are fine here.
+		</span>appender.append_many(<span class="number">2</span>..<span class="number">4</span>);
+
+		<span class="macro">assert_eq!</span>(PagedList::iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]);
+	});
+}</code></pre></div>
+<ol start="4">
+<li><strong>Iterating</strong> over the list can be done with <a href="pallet/struct.Pallet.html#method.iter" title="associated function pallet_paged_list::pallet::Pallet::iter"><code>Pallet::iter</code></a>. It uses the standard
+<code>Iterator</code> trait:</li>
+</ol>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[test]
+</span><span class="kw">fn </span>iter_works() {
+	test_closure(|| {
+		PagedList::append_many(<span class="number">0</span>..<span class="number">10</span>);
+		<span class="kw">let </span><span class="kw-2">mut </span>iter = PagedList::iter();
+
+		<span class="macro">assert_eq!</span>(iter.next(), <span class="prelude-val">Some</span>(<span class="number">0</span>));
+		<span class="macro">assert_eq!</span>(iter.next(), <span class="prelude-val">Some</span>(<span class="number">1</span>));
+		<span class="macro">assert_eq!</span>(iter.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), (<span class="number">2</span>..<span class="number">10</span>).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;());
+	});
+}</code></pre></div>
+<ol start="5">
+<li><strong>Draining</strong> elements happens through the <a href="pallet/struct.Pallet.html#method.drain" title="associated function pallet_paged_list::pallet::Pallet::drain"><code>Pallet::drain</code></a> iterator. Note that even
+<em>peeking</em> a value will already remove it.</li>
+</ol>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[test]
+</span><span class="kw">fn </span>drain_works() {
+	test_closure(|| {
+		PagedList::append_many(<span class="number">0</span>..<span class="number">3</span>);
+		PagedList::drain().next();
+		<span class="macro">assert_eq!</span>(PagedList::iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>], <span class="string">&quot;0 is drained&quot;</span>);
+		PagedList::drain().peekable().peek();
+		<span class="macro">assert_eq!</span>(PagedList::iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="macro">vec!</span>[<span class="number">2</span>], <span class="string">&quot;Peeking removed 1&quot;</span>);
+	});
+}</code></pre></div>
+<h3 id="pallet-api"><a href="#pallet-api">Pallet API</a></h3>
+<p>None. Only things to consider is the <a href="pallet/trait.Config.html" title="trait pallet_paged_list::pallet::Config"><code>Config</code></a> traits.</p>
+<h3 id="low-level--implementation-details"><a href="#low-level--implementation-details">Low Level / Implementation Details</a></h3>
+<p>Implementation details are documented in <a href="struct.StoragePagedList.html" title="struct pallet_paged_list::StoragePagedList"><code>paged_list::StoragePagedList</code></a>.<br />
+All storage entries are prefixed with a unique prefix that is generated by <a href="struct.ListPrefix.html" title="struct pallet_paged_list::ListPrefix"><code>ListPrefix</code></a>.</p>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name"><code>pub use <a class="mod" href="pallet/index.html" title="mod pallet_paged_list::pallet">pallet</a>::*;</code></div></li></ul><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="mock/index.html" title="mod pallet_paged_list::mock">mock</a></div><div class="desc docblock-short">Helpers for tests.</div></li><li><div class="item-name"><a class="mod" href="pallet/index.html" title="mod pallet_paged_list::pallet">pallet</a></div><div class="desc docblock-short">The <code>pallet</code> module in each FRAME pallet hosts the most important items needed
+to construct this pallet.</div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ListPrefix.html" title="struct pallet_paged_list::ListPrefix">ListPrefix</a></div><div class="desc docblock-short">Generates a unique storage prefix for each instance of the pallet.</div></li><li><div class="item-name"><a class="struct" href="struct.StoragePagedList.html" title="struct pallet_paged_list::StoragePagedList">StoragePagedList</a></div><div class="desc docblock-short">A paginated storage list.</div></li></ul></section></div></main></body></html>

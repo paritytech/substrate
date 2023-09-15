@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BlockImportAdapter","ExtrinsicBuilder","ForceFinalized","FullPeerConfig","JustificationTestNet","PassThroughVerifier","Peer","PeersClient","TestNet","Transfer"],"trait":["BlockImportAdapterFull","TestClientBuilderExt","TestNetFactory"],"type":["Block","Hash","Header","PeersFullClient","TestClient","TestClientBuilder"]};

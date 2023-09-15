@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["bond_extra","bond_extra_other","chill","claim_commission","claim_payout","claim_payout_other","create","create_with_pool_id","join","nominate","pool_withdraw_unbonded","set_claim_permission","set_commission","set_commission_change_rate","set_commission_max","set_configs","set_metadata","set_state","unbond","update_roles","withdraw_unbonded"]};

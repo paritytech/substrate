@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"derive":["Copy"],"struct":["PhantomData","PhantomPinned"],"trait":["Copy","Destruct","DiscriminantKind","FnPtr","PointerLike","Send","Sized","StructuralEq","StructuralPartialEq","Sync","Tuple","Unpin","Unsize"]};

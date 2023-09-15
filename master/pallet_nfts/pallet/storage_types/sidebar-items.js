@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Account","Attribute","Collection","CollectionAccount","CollectionConfigOf","CollectionMetadataOf","CollectionRoleOf","Item","ItemAttributesApprovalsOf","ItemConfigOf","ItemMetadataOf","ItemPriceOf","NextCollectionId","OwnershipAcceptance","PendingSwapOf"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["LOG_TARGET"],"enum":["MemberRole","UnscrupulousItem","Version"],"mod":["migration","pallet","weights"],"struct":["Cid","DisbandWitness","Multihash"],"trait":["IdentityVerifier","ProposalProvider"],"type":["ProposalIndex"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"struct":["CheckInherentsResult","InherentData","MakeFatalError"],"trait":["CreateInherentDataProviders","InherentDataProvider","IsFatalError"],"type":["InherentIdentifier"]};

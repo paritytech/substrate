@@ -1,0 +1,103 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/frame_support/macro.construct_runtime.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/frame_support/macro.construct_runtime.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Construct a runtime, with the given name and the given pallets."><title>construct_runtime in frame_support - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="frame_support" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../frame_support/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../frame_support/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><div class="sidebar-elems"><h2><a href="index.html">In frame_support</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">frame_support</a>::<wbr><a class="macro" href="#">construct_runtime</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/frame_support_procedural/lib.rs.html#185">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>construct_runtime!() { /* proc-macro */ }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Construct a runtime, with the given name and the given pallets.</p>
+<p>The parameters here are specific types for <code>Block</code>, <code>NodeBlock</code>, and <code>UncheckedExtrinsic</code>
+and the pallets that are used by the runtime.
+<code>Block</code> is the block type that is used in the runtime and <code>NodeBlock</code> is the block type
+that is used in the node. For instance they can differ in the extrinsics type.</p>
+<h2 id="example"><a href="#example">Example:</a></h2>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">construct_runtime!</span>(
+    <span class="kw">pub enum </span>Runtime <span class="kw">where
+        </span>Block = Block,
+        NodeBlock = node::Block,
+        UncheckedExtrinsic = UncheckedExtrinsic
+    {
+        System: frame_system::{Pallet, Call, Event&lt;T&gt;, Config&lt;T&gt;} = <span class="number">0</span>,
+        Test: path::to::test::{Pallet, Call} = <span class="number">1</span>,
+
+        <span class="comment">// Pallets with instances.
+        </span>Test2_Instance1: test2::&lt;Instance1&gt;::{Pallet, Call, Storage, Event&lt;T, I&gt;, Config&lt;T, I&gt;, Origin&lt;T, I&gt;},
+        Test2_DefaultInstance: test2::{Pallet, Call, Storage, Event&lt;T&gt;, Config&lt;T&gt;, Origin&lt;T&gt;} = <span class="number">4</span>,
+
+        <span class="comment">// Pallets declared with `pallet` attribute macro: no need to define the parts
+        </span>Test3_Instance1: test3::&lt;Instance1&gt;,
+        Test3_DefaultInstance: test3,
+
+        <span class="comment">// with `exclude_parts` keyword some part can be excluded.
+        </span>Test4_Instance1: test4::&lt;Instance1&gt; exclude_parts { Call, Origin },
+        Test4_DefaultInstance: test4 exclude_parts { Storage },
+
+        <span class="comment">// with `use_parts` keyword, a subset of the pallet parts can be specified.
+        </span>Test4_Instance1: test4::&lt;Instance1&gt; use_parts { Pallet, Call},
+        Test4_DefaultInstance: test4 use_parts { Pallet },
+    }
+)</code></pre></div>
+<p>Each pallet is declared as such:</p>
+<ul>
+<li>
+<p><code>Identifier</code>: name given to the pallet that uniquely identifies it.</p>
+</li>
+<li>
+<p><code>:</code>: colon separator</p>
+</li>
+<li>
+<p><code>path::to::pallet</code>: identifiers separated by colons which declare the path to a pallet
+definition.</p>
+</li>
+<li>
+<p><code>::&lt;InstanceN&gt;</code> optional: specify the instance of the pallet to use. If not specified it will
+use the default instance (or the only instance in case of non-instantiable pallets).</p>
+</li>
+<li>
+<p><code>::{ Part1, Part2&lt;T&gt;, .. }</code> optional if pallet declared with <code>frame_support::pallet</code>: Comma
+separated parts declared with their generic. If a pallet is declared with
+<code>frame_support::pallet</code> macro then the parts can be automatically derived if not explicitly
+provided. We provide support for the following module parts in a pallet:</p>
+<ul>
+<li><code>Pallet</code> - Required for all pallets</li>
+<li><code>Call</code> - If the pallet has callable functions</li>
+<li><code>Storage</code> - If the pallet uses storage</li>
+<li><code>Event</code> or <code>Event&lt;T&gt;</code> (if the event is generic) - If the pallet emits events</li>
+<li><code>Origin</code> or <code>Origin&lt;T&gt;</code> (if the origin is generic) - If the pallet has instanciable origins</li>
+<li><code>Config</code> or <code>Config&lt;T&gt;</code> (if the config is generic) - If the pallet builds the genesis
+storage with <code>GenesisConfig</code></li>
+<li><code>Inherent</code> - If the pallet provides/can check inherents.</li>
+<li><code>ValidateUnsigned</code> - If the pallet validates unsigned extrinsics.</li>
+</ul>
+<p>It is important to list these parts here to export them correctly in the metadata or to make
+the pallet usable in the runtime.</p>
+</li>
+<li>
+<p><code>exclude_parts { Part1, Part2 }</code> optional: comma separated parts without generics. I.e. one of
+<code>Pallet</code>, <code>Call</code>, <code>Storage</code>, <code>Event</code>, <code>Origin</code>, <code>Config</code>, <code>Inherent</code>, <code>ValidateUnsigned</code>. It
+is incompatible with <code>use_parts</code>. This specifies the part to exclude. In order to select
+subset of the pallet parts.</p>
+<p>For example excluding the part <code>Call</code> can be useful if the runtime doesn’t want to make the
+pallet calls available.</p>
+</li>
+<li>
+<p><code>use_parts { Part1, Part2 }</code> optional: comma separated parts without generics. I.e. one of
+<code>Pallet</code>, <code>Call</code>, <code>Storage</code>, <code>Event</code>, <code>Origin</code>, <code>Config</code>, <code>Inherent</code>, <code>ValidateUnsigned</code>. It
+is incompatible with <code>exclude_parts</code>. This specifies the part to use. In order to select a
+subset of the pallet parts.</p>
+<p>For example not using the part <code>Call</code> can be useful if the runtime doesn’t want to make the
+pallet calls available.</p>
+</li>
+<li>
+<p><code>= $n</code> optional: number to define at which index the pallet variants in <code>OriginCaller</code>, <code>Call</code>
+and <code>Event</code> are encoded, and to define the ModuleToIndex value.</p>
+<p>if <code>= $n</code> is not given, then index is resolved in the same way as fieldless enum in Rust
+(i.e. incrementedly from previous index):</p>
+<div class="example-wrap"><pre class="language-nocompile"><code>pallet1 .. = 2,
+pallet2 .., // Here pallet2 is given index 3
+pallet3 .. = 0,
+pallet4 .., // Here pallet4 is given index 1
+</code></pre></div></li>
+</ul>
+<h2 id="note"><a href="#note">Note</a></h2>
+<p>The population of the genesis storage depends on the order of pallets. So, if one of your
+pallets depends on another pallet, the pallet that is depended upon needs to come before
+the pallet depending on it.</p>
+<h2 id="type-definitions"><a href="#type-definitions">Type definitions</a></h2>
+<ul>
+<li>The macro generates a type alias for each pallet to their <code>Pallet</code>. E.g. <code>type System = frame_system::Pallet&lt;Runtime&gt;</code></li>
+</ul>
+</div></details></section></div></main></body></html>

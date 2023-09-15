@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["migrations","pallet"],"struct":["MinimumPeriodTimesTwo"],"type":["AuraAuthorId"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["bestow_membership","bid","claim_membership","cleanup_candidacy","cleanup_challenge","defender_vote","dissolve","drop_candidate","found_society","judge_suspended_member","kick_candidate","payout","punish_skeptic","resign_candidacy","set_parameters","unbid","unvouch","vote","vouch","waive_repay"]};

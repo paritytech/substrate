@@ -1,0 +1,166 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_example_basic/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_example_basic/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Basic Example Pallet"><title>pallet_example_basic - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pallet_example_basic" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../pallet_example_basic/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../pallet_example_basic/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate pallet_example_basic</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 4.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pallet_example_basic</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/pallet_example_basic/lib.rs.html#18-759">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><!-- markdown-link-check-disable -->
+<h2 id="basic-example-pallet"><a href="#basic-example-pallet">Basic Example Pallet</a></h2><!-- Original author of paragraph: @gavofyork -->
+<p>The Example: A simple example of a FRAME pallet demonstrating
+concepts, APIs and structures common to most FRAME runtimes.</p>
+<p>Run <code>cargo doc --package pallet-example-basic --open</code> to view this pallet’s documentation.</p>
+<p><strong>This pallet serves as an example and is not meant to be used in production.</strong></p>
+<h4 id="documentation-guidelines"><a href="#documentation-guidelines">Documentation Guidelines:</a></h4><!-- Original author of paragraph: Various. Based on collation of review comments to PRs
+addressing issues with --> <!-- label 'S3-FRAME' in https://github.com/paritytech/substrate-developer-hub/issues -->
+<ul>
+<li>Documentation comments (i.e. <code>/// comment</code>) - should
+accompany pallet functions and be restricted to the pallet interface,
+not the internals of the pallet implementation. Only state inputs,
+outputs, and a brief description that mentions whether calling it
+requires root, but without repeating the source code details.
+Capitalize the first word of each documentation comment and end it with
+a full stop. See
+<a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
+target="_blank"> Generic example of annotating source code with documentation comments</a></li>
+<li>Self-documenting code - Try to refactor code to be self-documenting.</li>
+<li>Code comments - Supplement complex code with a brief explanation, not every line of
+code.</li>
+<li>Identifiers - surround by backticks (i.e. <code>INHERENT_IDENTIFIER</code>,
+<code>InherentType</code>, <code>u64</code>)</li>
+<li>Usage scenarios - should be simple doctests. The compiler should ensure they stay
+valid.</li>
+<li>Extended tutorials - should be moved to external files and refer to.</li>
+<li>Mandatory - include all of the sections/subsections where <b>MUST</b> is specified.</li>
+<li>Optional - optionally include sections/subsections where <b>CAN</b> is specified.</li>
+</ul>
+<h4 id="documentation-template"><a href="#documentation-template">Documentation Template:<br></a></h4>
+<p>Copy and paste this template from frame/examples/basic/src/lib.rs into file
+<code>frame/&lt;INSERT_CUSTOM_PALLET_NAME&gt;/src/lib.rs</code> of your own custom pallet and complete it.</p>
+<details><p><pre>
+// Add heading with custom pallet name
+<p># &lt;INSERT_CUSTOM_PALLET_NAME&gt; Pallet</p>
+<p>// Add simple description</p>
+<p>// Include the following links that shows what trait needs to be implemented to use the pallet
+// and the supported dispatchables that are documented in the Call enum.</p>
+<ul>
+<li>[<code>Config</code>]</li>
+<li>[<code>Call</code>]</li>
+<li>[<code>Pallet</code>]</li>
+</ul>
+<p>## Overview</p>
+<!-- Original author of paragraph: Various. See https://github.com/paritytech/substrate-developer-hub/issues/44 -->
+<p>// Short description of pallet’s purpose.
+// Links to Traits that should be implemented.
+// What this pallet is for.
+// What functionality the pallet provides.
+// When to use the pallet (use case examples).
+// How it is used.
+// Inputs it uses and the source of each input.
+// Outputs it produces.</p>
+<!-- Original author of paragraph: @Kianenigma in PR https://github.com/paritytech/substrate/pull/1951 -->
+<!-- and comment https://github.com/paritytech/substrate-developer-hub/issues/44#issuecomment-471982710 -->
+<p>## Terminology</p>
+<p>// Add terminology used in the custom pallet. Include concepts, storage items, or actions that
+you think // deserve to be noted to give context to the rest of the documentation or pallet
+usage. The author needs to // use some judgment about what is included. We don’t want a list of
+every storage item nor types - the user // can go to the code for that. For example, “transfer
+fee” is obvious and should not be included, but // “free balance” and “reserved balance” should
+be noted to give context to the pallet. // Please do not link to outside resources. The
+reference docs should be the ultimate source of truth.</p>
+<!-- Original author of heading: @Kianenigma in PR https://github.com/paritytech/substrate/pull/1951 -->
+<p>## Goals</p>
+<p>// Add goals that the custom pallet is designed to achieve.</p>
+<!-- Original author of heading: @Kianenigma in PR https://github.com/paritytech/substrate/pull/1951 -->
+<p>### Scenarios</p>
+<!-- Original author of paragraph: @Kianenigma. Based on PR https://github.com/paritytech/substrate/pull/1951 -->
+<p>#### &lt;INSERT_SCENARIO_NAME&gt;</p>
+<p>// Describe requirements prior to interacting with the custom pallet.
+// Describe the process of interacting with the custom pallet for this scenario and public API
+functions used.</p>
+<p>## Interface</p>
+<p>### Supported Origins</p>
+<p>// What origins are used and supported in this pallet (root, signed, none)
+// i.e. root when <code>`ensure_root`</code> used
+// i.e. none when <code>`ensure_none`</code> used
+// i.e. signed when <code>`ensure_signed`</code> used</p>
+<p><code>`inherent`</code> &lt;INSERT_DESCRIPTION&gt;</p>
+<!-- Original author of paragraph: @Kianenigma in comment -->
+<!-- https://github.com/paritytech/substrate-developer-hub/issues/44#issuecomment-471982710 -->
+<p>### Types</p>
+<p>// Type aliases. Include any associated types and where the user would typically define them.</p>
+<p><code>`ExampleType`</code> &lt;INSERT_DESCRIPTION&gt;</p>
+<!-- Original author of paragraph: ??? -->
+<p>// Reference documentation of aspects such as <code>storageItems</code> and <code>dispatchable</code> functions should
+// only be included in the <a href="https://docs.rs">https://docs.rs</a> Rustdocs for Substrate and not repeated in the
+// README file.</p>
+<p>### Dispatchable Functions</p>
+<!-- Original author of paragraph: @AmarRSingh & @joepetrowski -->
+<p>// A brief description of dispatchable functions and a link to the rustdoc with their actual
+documentation.</p>
+<p>// <b>MUST</b> have link to Call enum
+// <b>MUST</b> have origin information included in function doc
+// <b>CAN</b> have more info up to the user</p>
+<p>### Public Functions</p>
+<!-- Original author of paragraph: @joepetrowski -->
+<p>// A link to the rustdoc and any notes about usage in the pallet, not for specific functions.
+// For example, in the Balances Pallet: “Note that when using the publicly exposed functions,
+// you (the runtime developer) are responsible for implementing any necessary checks
+// (e.g. that the sender is the signer) before calling a function that will affect storage.”</p>
+<!-- Original author of paragraph: @AmarRSingh -->
+<p>// It is up to the writer of the respective pallet (with respect to how much information to
+provide).</p>
+<p>#### Public Inspection functions - Immutable (getters)</p>
+<p>// Insert a subheading for each getter function signature</p>
+<p>##### <code>`example_getter_name()`</code></p>
+<p>// What it returns
+// Why, when, and how often to call it
+// When it could panic or error
+// When safety issues to consider</p>
+<p>#### Public Mutable functions (changing state)</p>
+<p>// Insert a subheading for each setter function signature</p>
+<p>##### <code>`example_setter_name(origin, parameter_name: T::ExampleType)`</code></p>
+<p>// What state it changes
+// Why, when, and how often to call it
+// When it could panic or error
+// When safety issues to consider
+// What parameter values are valid and why</p>
+<p>### Storage Items</p>
+<p>// Explain any storage items included in this pallet</p>
+<p>### Digest Items</p>
+<p>// Explain any digest items included in this pallet</p>
+<p>### Inherent Data</p>
+<p>// Explain what inherent data (if any) is defined in the pallet and any other related types</p>
+<p>### Events:</p>
+<p>// Insert events for this pallet if any</p>
+<p>### Errors:</p>
+<p>// Explain what generates errors</p>
+<p>## Usage</p>
+<p>// Insert 2-3 examples of usage and code snippets that show how to
+// use &lt;INSERT_CUSTOM_PALLET_NAME&gt; Pallet in a custom pallet.</p>
+<p>### Prerequisites</p>
+<p>// Show how to include necessary imports for &lt;INSERT_CUSTOM_PALLET_NAME&gt; and derive
+// your pallet configuration trait with the <code>INSERT_CUSTOM_PALLET_NAME</code> trait.</p>
+<p>```rust
+use &lt;INSERT_CUSTOM_PALLET_NAME&gt;;</p>
+<p>pub trait Config: &lt;INSERT_CUSTOM_PALLET_NAME&gt;::Config { }
+```</p>
+<p>### Simple Code Snippet</p>
+<p>// Show a simple example (e.g. how to query a public getter function of
+&lt;INSERT_CUSTOM_PALLET_NAME&gt;)</p>
+<p>### Example from FRAME</p>
+<p>// Show a usage example in an actual runtime</p>
+<p>// See:
+// - Substrate TCR <a href="https://github.com/parity-samples/substrate-tcr">https://github.com/parity-samples/substrate-tcr</a>
+// - Substrate Kitties <a href="https://shawntabrizi.github.io/substrate-collectables-workshop/#/">https://shawntabrizi.github.io/substrate-collectables-workshop/#/</a></p>
+<p>## Genesis Config</p>
+<!-- Original author of paragraph: @joepetrowski -->
+<p>## Dependencies</p>
+<p>// Dependencies on other FRAME pallets and the genesis config should be mentioned,
+// but not the Rust Standard Library.
+// Genesis configuration modifications that may be made to incorporate this pallet
+// Interaction with other pallets</p>
+<!-- Original author of heading: @AmarRSingh -->
+<p>## Related Pallets</p>
+<p>// Interaction with other pallets in the form of a bullet point list</p>
+<p>## References</p>
+<!-- Original author of paragraph: @joepetrowski -->
+<p>// Links to reference material, if applicable. For example, Phragmen, W3F research, etc.
+// that the implementation is based on.
+</pre></p></details></p>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name"><code>pub use <a class="mod" href="pallet/index.html" title="mod pallet_example_basic::pallet">pallet</a>::*;</code></div></li><li><div class="item-name"><code>pub use <a class="mod" href="weights/index.html" title="mod pallet_example_basic::weights">weights</a>::*;</code></div></li></ul><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="pallet/index.html" title="mod pallet_example_basic::pallet">pallet</a></div><div class="desc docblock-short">The <code>pallet</code> module in each FRAME pallet hosts the most important items needed
+to construct this pallet.</div></li><li><div class="item-name"><a class="mod" href="weights/index.html" title="mod pallet_example_basic::weights">weights</a></div><div class="desc docblock-short">Autogenerated weights for pallet_example_basic</div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.WatchDummy.html" title="struct pallet_example_basic::WatchDummy">WatchDummy</a></div><div class="desc docblock-short">A simple signed extension that checks for the <code>set_dummy</code> call. In that case, it increases the
+priority and prints some log.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,373 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_contracts/api_doc/trait.Version1.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_contracts/api_doc/trait.Version1.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="All functions available in the seal1 module"><title>Version1 in pallet_contracts::api_doc - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="pallet_contracts" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../../static.files/storage-62ce34ea385b278a.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../../pallet_contracts/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../../pallet_contracts/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Version1</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.call">call</a></li><li><a href="#tymethod.clear_storage">clear_storage</a></li><li><a href="#tymethod.contains_storage">contains_storage</a></li><li><a href="#tymethod.gas_left">gas_left</a></li><li><a href="#tymethod.get_storage">get_storage</a></li><li><a href="#tymethod.instantiate">instantiate</a></li><li><a href="#tymethod.random">random</a></li><li><a href="#tymethod.restore_to">restore_to</a></li><li><a href="#tymethod.seal_call">seal_call</a></li><li><a href="#tymethod.seal_clear_storage">seal_clear_storage</a></li><li><a href="#tymethod.seal_contains_storage">seal_contains_storage</a></li><li><a href="#tymethod.seal_get_storage">seal_get_storage</a></li><li><a href="#tymethod.seal_instantiate">seal_instantiate</a></li><li><a href="#tymethod.seal_random">seal_random</a></li><li><a href="#tymethod.seal_restore_to">seal_restore_to</a></li><li><a href="#tymethod.seal_set_rent_allowance">seal_set_rent_allowance</a></li><li><a href="#tymethod.seal_set_storage">seal_set_storage</a></li><li><a href="#tymethod.seal_terminate">seal_terminate</a></li><li><a href="#tymethod.set_rent_allowance">set_rent_allowance</a></li><li><a href="#tymethod.set_storage">set_storage</a></li><li><a href="#tymethod.terminate">terminate</a></li><li><a href="#tymethod.weight_to_fee">weight_to_fee</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In pallet_contracts::api_doc</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">pallet_contracts</a>::<wbr><a href="index.html">api_doc</a>::<wbr><a class="trait" href="#">Version1</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Version1 {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 22 methods</span></summary>    // Required methods
+    fn <a href="#tymethod.set_storage" class="fn">set_storage</a>(
+        key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        value_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.clear_storage" class="fn">clear_storage</a>(key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, key_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.get_storage" class="fn">get_storage</a>(
+        key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        key_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        out_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        out_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;ReturnCode, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.contains_storage" class="fn">contains_storage</a>(key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, key_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.call" class="fn">call</a>(
+        flags: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        callee_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        gas: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u64.html">u64</a>,
+        value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        input_data_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        input_data_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        output_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        output_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;ReturnCode, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.instantiate" class="fn">instantiate</a>(
+        code_hash_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        gas: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u64.html">u64</a>,
+        value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        input_data_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        input_data_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        address_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        address_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        output_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        output_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        salt_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        salt_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;ReturnCode, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.terminate" class="fn">terminate</a>(beneficiary_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.weight_to_fee" class="fn">weight_to_fee</a>(
+        ref_time_limit: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u64.html">u64</a>,
+        proof_size_limit: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u64.html">u64</a>,
+        out_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        out_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.gas_left" class="fn">gas_left</a>(out_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, out_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.random" class="fn">random</a>(
+        subject_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        subject_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        out_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        out_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.restore_to" class="fn">restore_to</a>(
+        _dest_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        _code_hash_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        _rent_allowance_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        _delta_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        _delta_count: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.set_rent_allowance" class="fn">set_rent_allowance</a>(_value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.seal_set_storage" class="fn">seal_set_storage</a>(
+        key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        value_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.seal_clear_storage" class="fn">seal_clear_storage</a>(key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, key_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.seal_get_storage" class="fn">seal_get_storage</a>(
+        key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        key_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        out_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        out_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;ReturnCode, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.seal_contains_storage" class="fn">seal_contains_storage</a>(
+        key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        key_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.seal_call" class="fn">seal_call</a>(
+        flags: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        callee_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        gas: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u64.html">u64</a>,
+        value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        input_data_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        input_data_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        output_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        output_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;ReturnCode, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.seal_instantiate" class="fn">seal_instantiate</a>(
+        code_hash_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        gas: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u64.html">u64</a>,
+        value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        input_data_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        input_data_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        address_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        address_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        output_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        output_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        salt_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        salt_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;ReturnCode, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.seal_terminate" class="fn">seal_terminate</a>(beneficiary_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.seal_random" class="fn">seal_random</a>(
+        subject_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        subject_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        out_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        out_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.seal_restore_to" class="fn">seal_restore_to</a>(
+        _dest_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        _code_hash_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        _rent_allowance_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        _delta_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+        _delta_count: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.seal_set_rent_allowance" class="fn">seal_set_rent_allowance</a>(_value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;;
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>All functions available in the <strong>seal1</strong> module</p>
+</div></details><h2 id="required-methods" class="small-section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.set_storage" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.set_storage" class="fn">set_storage</a>(
+    key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    value_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><p>Set the value at the given key in the contract storage.</p>
+<p>This version is to be used with a fixed sized storage key. For runtimes supporting
+transparent hashing, please use the newer version of this function.</p>
+<p>The value length must not exceed the maximum defined by the contracts module parameters.
+Specifying a <code>value_len</code> of zero will store an empty value.</p>
+<h5 id="parameters"><a href="#parameters">Parameters</a></h5>
+<ul>
+<li><code>key_ptr</code>: pointer into the linear memory where the location to store the value is placed.</li>
+<li><code>value_ptr</code>: pointer into the linear memory where the value to set is placed.</li>
+<li><code>value_len</code>: the length of the value in bytes.</li>
+</ul>
+<h5 id="return-value"><a href="#return-value">Return Value</a></h5>
+<p>Returns the size of the pre-existing value at the specified key if any. Otherwise
+<code>SENTINEL</code> is returned as a sentinel value.</p>
+<h5 id="wasm-import-statement"><a href="#wasm-import-statement">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;set_storage&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.clear_storage" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.clear_storage" class="fn">clear_storage</a>(key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, key_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><p>Clear the value at the given key in the contract storage.</p>
+<h5 id="parameters-1"><a href="#parameters-1">Parameters</a></h5>
+<ul>
+<li><code>key_ptr</code>: pointer into the linear memory where the key is placed.</li>
+<li><code>key_len</code>: the length of the key in bytes.</li>
+</ul>
+<h5 id="return-value-1"><a href="#return-value-1">Return Value</a></h5>
+<p>Returns the size of the pre-existing value at the specified key if any. Otherwise
+<code>SENTINEL</code> is returned as a sentinel value.</p>
+<h5 id="wasm-import-statement-1"><a href="#wasm-import-statement-1">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;clear_storage&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.get_storage" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.get_storage" class="fn">get_storage</a>(
+    key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    key_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    out_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    out_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;ReturnCode, TrapReason&gt;</h4></section></summary><div class="docblock"><p>Retrieve the value under the given key from storage.</p>
+<p>This version is to be used with a fixed sized storage key. For runtimes supporting
+transparent hashing, please use the newer version of this function.</p>
+<p>The key length must not exceed the maximum defined by the contracts module parameter.</p>
+<h5 id="parameters-2"><a href="#parameters-2">Parameters</a></h5>
+<ul>
+<li><code>key_ptr</code>: pointer into the linear memory where the key of the requested value is placed.</li>
+<li><code>key_len</code>: the length of the key in bytes.</li>
+<li><code>out_ptr</code>: pointer to the linear memory where the value is written to.</li>
+<li><code>out_len_ptr</code>: in-out pointer into linear memory where the buffer length is read from and
+the value length is written to.</li>
+</ul>
+<h5 id="errors"><a href="#errors">Errors</a></h5>
+<ul>
+<li><code>ReturnCode::KeyNotFound</code></li>
+</ul>
+<h5 id="wasm-import-statement-2"><a href="#wasm-import-statement-2">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;get_storage&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.contains_storage" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.contains_storage" class="fn">contains_storage</a>(key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, key_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><p>Checks whether there is a value stored under the given key.</p>
+<p>The key length must not exceed the maximum defined by the contracts module parameter.</p>
+<h5 id="parameters-3"><a href="#parameters-3">Parameters</a></h5>
+<ul>
+<li><code>key_ptr</code>: pointer into the linear memory where the key of the requested value is placed.</li>
+<li><code>key_len</code>: the length of the key in bytes.</li>
+</ul>
+<h5 id="return-value-2"><a href="#return-value-2">Return Value</a></h5>
+<p>Returns the size of the pre-existing value at the specified key if any. Otherwise
+<code>SENTINEL</code> is returned as a sentinel value.</p>
+<h5 id="wasm-import-statement-3"><a href="#wasm-import-statement-3">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;contains_storage&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.call" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.call" class="fn">call</a>(
+    flags: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    callee_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    gas: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u64.html">u64</a>,
+    value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    input_data_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    input_data_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    output_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    output_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;ReturnCode, TrapReason&gt;</h4></section></summary><div class="docblock"><p>Make a call to another contract.</p>
+<p>Equivalent to the newer <a href="trait.Version2.html#tymethod.call" title="associated function pallet_contracts::api_doc::Version2::call"><code>seal2</code></a> version but works with
+<em>ref_time</em> Weight only. It is recommended to switch to the latest version, once it’s
+stabilized.</p>
+<h5 id="wasm-import-statement-4"><a href="#wasm-import-statement-4">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;call&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.instantiate" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.instantiate" class="fn">instantiate</a>(
+    code_hash_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    gas: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u64.html">u64</a>,
+    value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    input_data_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    input_data_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    address_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    address_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    output_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    output_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    salt_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    salt_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;ReturnCode, TrapReason&gt;</h4></section></summary><div class="docblock"><p>Instantiate a contract with the specified code hash.</p>
+<p>Equivalent to the newer <a href="trait.Version2.html#tymethod.instantiate" title="associated function pallet_contracts::api_doc::Version2::instantiate"><code>seal2</code></a> version but works
+with <em>ref_time</em> Weight only. It is recommended to switch to the latest version, once it’s
+stabilized.</p>
+<h5 id="wasm-import-statement-5"><a href="#wasm-import-statement-5">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;instantiate&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.terminate" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.terminate" class="fn">terminate</a>(beneficiary_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><p>Remove the calling account and transfer remaining <strong>free</strong> balance.</p>
+<p>This function never returns. Either the termination was successful and the
+execution of the destroyed contract is halted. Or it failed during the termination
+which is considered fatal and results in a trap + rollback.</p>
+<ul>
+<li><code>beneficiary_ptr</code>: a pointer to the address of the beneficiary account where all where all
+remaining funds of the caller are transferred. Should be decodable as an <code>T::AccountId</code>.
+Traps otherwise.</li>
+</ul>
+<h5 id="traps"><a href="#traps">Traps</a></h5>
+<ul>
+<li>The contract is live i.e is already on the call stack.</li>
+<li>Failed to send the balance to the beneficiary.</li>
+<li>The deletion queue is full.</li>
+</ul>
+<h5 id="wasm-import-statement-6"><a href="#wasm-import-statement-6">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;terminate&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.weight_to_fee" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.weight_to_fee" class="fn">weight_to_fee</a>(
+    ref_time_limit: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u64.html">u64</a>,
+    proof_size_limit: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u64.html">u64</a>,
+    out_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    out_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><p>Stores the price for the specified amount of weight into the supplied buffer.</p>
+<h5 id="parameters-4"><a href="#parameters-4">Parameters</a></h5>
+<ul>
+<li><code>out_ptr</code>: pointer to the linear memory where the returning value is written to. If the
+available space at <code>out_ptr</code> is less than the size of the value a trap is triggered.</li>
+<li><code>out_len_ptr</code>: in-out pointer into linear memory where the buffer length is read from and
+the value length is written to.</li>
+</ul>
+<p>The data is encoded as <code>T::Balance</code>.</p>
+<h5 id="note"><a href="#note">Note</a></h5>
+<p>It is recommended to avoid specifying very small values for <code>ref_time_limit</code> and
+<code>proof_size_limit</code> as the prices for a single gas can be smaller than the basic balance
+unit.</p>
+<h5 id="wasm-import-statement-7"><a href="#wasm-import-statement-7">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;weight_to_fee&quot; (func ...))
+</code></pre></div><h5 id="unstable"><a href="#unstable">Unstable</a></h5>
+<p>This function is unstable and it is a subject to change (or removal) in the future.
+Do not deploy a contract using it to a production chain.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.gas_left" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.gas_left" class="fn">gas_left</a>(out_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, out_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><p>Stores the amount of weight left into the supplied buffer.</p>
+<p>The value is stored to linear memory at the address pointed to by <code>out_ptr</code>.
+<code>out_len_ptr</code> must point to a u32 value that describes the available space at
+<code>out_ptr</code>. This call overwrites it with the size of the value. If the available
+space at <code>out_ptr</code> is less than the size of the value a trap is triggered.</p>
+<p>The data is encoded as Weight.</p>
+<h5 id="wasm-import-statement-8"><a href="#wasm-import-statement-8">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;gas_left&quot; (func ...))
+</code></pre></div><h5 id="unstable-1"><a href="#unstable-1">Unstable</a></h5>
+<p>This function is unstable and it is a subject to change (or removal) in the future.
+Do not deploy a contract using it to a production chain.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.random" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.random" class="fn">random</a>(
+    subject_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    subject_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    out_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    out_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><h5 id="deprecated"><a href="#deprecated">Deprecated</a></h5>
+<p>This function is deprecated and will be removed in future versions.
+No new code or contracts with this API can be deployed.
+Stores a random number for the current block and the given subject into the supplied buffer.</p>
+<p>The value is stored to linear memory at the address pointed to by <code>out_ptr</code>.
+<code>out_len_ptr</code> must point to a u32 value that describes the available space at
+<code>out_ptr</code>. This call overwrites it with the size of the value. If the available
+space at <code>out_ptr</code> is less than the size of the value a trap is triggered.</p>
+<p>The data is encoded as (T::Hash, frame_system::pallet_prelude::BlockNumberFor::<T>).</p>
+<h5 id="changes-from-v0"><a href="#changes-from-v0">Changes from v0</a></h5>
+<p>In addition to the seed it returns the block number since which it was determinable
+by chain observers.</p>
+<h5 id="note-1"><a href="#note-1">Note</a></h5>
+<p>The returned seed should only be used to distinguish commitments made before
+the returned block number. If the block number is too early (i.e. commitments were
+made afterwards), then ensure no further commitments may be made and repeatedly
+call this on later blocks until the block number returned is later than the latest
+commitment.</p>
+<h5 id="wasm-import-statement-9"><a href="#wasm-import-statement-9">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;random&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.restore_to" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.restore_to" class="fn">restore_to</a>(
+    _dest_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    _code_hash_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    _rent_allowance_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    _delta_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    _delta_count: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><h5 id="deprecated-1"><a href="#deprecated-1">Deprecated</a></h5>
+<p>This function is deprecated and will be removed in future versions.
+No new code or contracts with this API can be deployed.
+Was used to restore the given destination contract sacrificing the caller.</p>
+<h5 id="note-2"><a href="#note-2">Note</a></h5>
+<p>The state rent functionality was removed. This is stub only exists for
+backwards compatibility</p>
+<h5 id="wasm-import-statement-10"><a href="#wasm-import-statement-10">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;restore_to&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.set_rent_allowance" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.set_rent_allowance" class="fn">set_rent_allowance</a>(_value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><h5 id="deprecated-2"><a href="#deprecated-2">Deprecated</a></h5>
+<p>This function is deprecated and will be removed in future versions.
+No new code or contracts with this API can be deployed.
+Was used to set rent allowance of the contract.</p>
+<h5 id="note-3"><a href="#note-3">Note</a></h5>
+<p>The state rent functionality was removed. This is stub only exists for
+backwards compatibility.</p>
+<h5 id="wasm-import-statement-11"><a href="#wasm-import-statement-11">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;set_rent_allowance&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.seal_set_storage" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.seal_set_storage" class="fn">seal_set_storage</a>(
+    key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    value_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><p>This is just an alias function to <a href="trait.Version1.html#tymethod.set_storage"><code>set_storage()</code></a> with backwards-compatible prefixed identifier.</p>
+<h5 id="wasm-import-statement-12"><a href="#wasm-import-statement-12">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;seal_set_storage&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.seal_clear_storage" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.seal_clear_storage" class="fn">seal_clear_storage</a>(key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, key_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><p>This is just an alias function to <a href="trait.Version1.html#tymethod.clear_storage"><code>clear_storage()</code></a> with backwards-compatible prefixed identifier.</p>
+<h5 id="wasm-import-statement-13"><a href="#wasm-import-statement-13">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;seal_clear_storage&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.seal_get_storage" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.seal_get_storage" class="fn">seal_get_storage</a>(
+    key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    key_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    out_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    out_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;ReturnCode, TrapReason&gt;</h4></section></summary><div class="docblock"><p>This is just an alias function to <a href="trait.Version1.html#tymethod.get_storage"><code>get_storage()</code></a> with backwards-compatible prefixed identifier.</p>
+<h5 id="wasm-import-statement-14"><a href="#wasm-import-statement-14">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;seal_get_storage&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.seal_contains_storage" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.seal_contains_storage" class="fn">seal_contains_storage</a>(key_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, key_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><p>This is just an alias function to <a href="trait.Version1.html#tymethod.contains_storage"><code>contains_storage()</code></a> with backwards-compatible prefixed identifier.</p>
+<h5 id="wasm-import-statement-15"><a href="#wasm-import-statement-15">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;seal_contains_storage&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.seal_call" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.seal_call" class="fn">seal_call</a>(
+    flags: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    callee_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    gas: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u64.html">u64</a>,
+    value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    input_data_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    input_data_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    output_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    output_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;ReturnCode, TrapReason&gt;</h4></section></summary><div class="docblock"><p>This is just an alias function to <a href="trait.Version1.html#tymethod.call"><code>call()</code></a> with backwards-compatible prefixed identifier.</p>
+<h5 id="wasm-import-statement-16"><a href="#wasm-import-statement-16">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;seal_call&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.seal_instantiate" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.seal_instantiate" class="fn">seal_instantiate</a>(
+    code_hash_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    gas: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u64.html">u64</a>,
+    value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    input_data_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    input_data_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    address_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    address_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    output_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    output_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    salt_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    salt_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;ReturnCode, TrapReason&gt;</h4></section></summary><div class="docblock"><p>This is just an alias function to <a href="trait.Version1.html#tymethod.instantiate"><code>instantiate()</code></a> with backwards-compatible prefixed identifier.</p>
+<h5 id="wasm-import-statement-17"><a href="#wasm-import-statement-17">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;seal_instantiate&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.seal_terminate" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.seal_terminate" class="fn">seal_terminate</a>(beneficiary_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><p>This is just an alias function to <a href="trait.Version1.html#tymethod.terminate"><code>terminate()</code></a> with backwards-compatible prefixed identifier.</p>
+<h5 id="wasm-import-statement-18"><a href="#wasm-import-statement-18">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;seal_terminate&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.seal_random" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.seal_random" class="fn">seal_random</a>(
+    subject_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    subject_len: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    out_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    out_len_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><h5 id="deprecated-3"><a href="#deprecated-3">Deprecated</a></h5>
+<p>This function is deprecated and will be removed in future versions.
+No new code or contracts with this API can be deployed.
+This is just an alias function to <a href="trait.Version1.html#tymethod.random"><code>random()</code></a> with backwards-compatible prefixed identifier.</p>
+<h5 id="wasm-import-statement-19"><a href="#wasm-import-statement-19">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;seal_random&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.seal_restore_to" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.seal_restore_to" class="fn">seal_restore_to</a>(
+    _dest_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    _code_hash_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    _rent_allowance_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    _delta_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>,
+    _delta_count: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><h5 id="deprecated-4"><a href="#deprecated-4">Deprecated</a></h5>
+<p>This function is deprecated and will be removed in future versions.
+No new code or contracts with this API can be deployed.
+This is just an alias function to <a href="trait.Version1.html#tymethod.restore_to"><code>restore_to()</code></a> with backwards-compatible prefixed identifier.</p>
+<h5 id="wasm-import-statement-20"><a href="#wasm-import-statement-20">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;seal_restore_to&quot; (func ...))
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="tymethod.seal_set_rent_allowance" class="method"><a class="srclink rightside" href="../../src/pallet_contracts/wasm/runtime.rs.html#1024">source</a><h4 class="code-header">fn <a href="#tymethod.seal_set_rent_allowance" class="fn">seal_set_rent_allowance</a>(_value_ptr: <a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, TrapReason&gt;</h4></section></summary><div class="docblock"><h5 id="deprecated-5"><a href="#deprecated-5">Deprecated</a></h5>
+<p>This function is deprecated and will be removed in future versions.
+No new code or contracts with this API can be deployed.
+This is just an alias function to <a href="trait.Version1.html#tymethod.set_rent_allowance"><code>set_rent_allowance()</code></a> with backwards-compatible prefixed identifier.</p>
+<h5 id="wasm-import-statement-21"><a href="#wasm-import-statement-21">Wasm Import Statement</a></h5><div class="example-wrap"><pre class="language-wat"><code>(import &quot;seal1&quot; &quot;seal_set_rent_allowance&quot; (func ...))
+</code></pre></div></div></details></div><h2 id="implementors" class="small-section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../implementors/pallet_contracts/wasm/runtime/api_doc/trait.Version1.js" async></script></section></div></main></body></html>

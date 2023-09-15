@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CRYPTO_ID"],"mod":["vrf"],"struct":["Pair","Public","Signature"]};

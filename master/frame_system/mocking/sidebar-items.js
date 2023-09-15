@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"type":["MockBlock","MockBlockU128","MockBlockU32","MockUncheckedExtrinsic"]};

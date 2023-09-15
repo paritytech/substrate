@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["STORAGE_VERSION"],"fn":["migrate"],"struct":["Migration"]};

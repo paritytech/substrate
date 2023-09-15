@@ -1,0 +1,158 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/frame_election_provider_support/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/frame_election_provider_support/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Primitive traits for providing election functionality."><title>frame_election_provider_support - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="frame_election_provider_support" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../frame_election_provider_support/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../frame_election_provider_support/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate frame_election_provider_support</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 4.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Definitions</a></li><li><a href="#derives">Derive Macros</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">frame_election_provider_support</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/frame_election_provider_support/lib.rs.html#18-690">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Primitive traits for providing election functionality.</p>
+<p>This crate provides two traits that could interact to enable extensible election functionality
+within FRAME pallets.</p>
+<p>Something that will provide the functionality of election will implement
+<a href="trait.ElectionProvider.html" title="trait frame_election_provider_support::ElectionProvider"><code>ElectionProvider</code></a> and its parent-trait <a href="trait.ElectionProviderBase.html" title="trait frame_election_provider_support::ElectionProviderBase"><code>ElectionProviderBase</code></a>, whilst needing an
+associated <a href="trait.ElectionProviderBase.html#associatedtype.DataProvider" title="associated type frame_election_provider_support::ElectionProviderBase::DataProvider"><code>ElectionProviderBase::DataProvider</code></a>, which needs to be
+fulfilled by an entity implementing <a href="trait.ElectionDataProvider.html" title="trait frame_election_provider_support::ElectionDataProvider"><code>ElectionDataProvider</code></a>. Most often, <em>the data provider is</em>
+the receiver of the election, resulting in a diagram as below:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>                                        ElectionDataProvider
+                         &lt;------------------------------------------+
+                         |                                          |
+                         v                                          |
+                   +-----+----+                              +------+---+
+                   |          |                              |          |
+pallet-<span class="kw">do</span>-election |          |                              |          | pallet-needs-election
+                   |          |                              |          |
+                   |          |                              |          |
+                   +-----+----+                              +------+---+
+                         |                                          ^
+                         |                                          |
+                         +------------------------------------------+
+                                        ElectionProvider</code></pre></div>
+<blockquote>
+<p>It could also be possible that a third party pallet (C), provides the data of election to an
+election provider (B), which then passes the election result to another pallet (A).</p>
+</blockquote>
+<h3 id="election-types"><a href="#election-types">Election Types</a></h3>
+<p>Typically, two types of elections exist:</p>
+<ol>
+<li><strong>Stateless</strong>: Election data is provided, and the election result is immediately ready.</li>
+<li><strong>Stateful</strong>: Election data is is queried ahead of time, and the election result might be
+ready some number of blocks in the future.</li>
+</ol>
+<p>To accommodate both type of elections in one trait, the traits lean toward <strong>stateful
+election</strong>, as it is more general than the stateless. This is why <a href="trait.ElectionProvider.html#tymethod.elect" title="associated function frame_election_provider_support::ElectionProvider::elect"><code>ElectionProvider::elect</code></a>
+has no parameters. All value and type parameter must be provided by the <a href="trait.ElectionDataProvider.html" title="trait frame_election_provider_support::ElectionDataProvider"><code>ElectionDataProvider</code></a>
+trait, even if the election happens immediately.</p>
+<h3 id="election-data"><a href="#election-data">Election Data</a></h3>
+<p>The data associated with an election, essentially what the <a href="trait.ElectionDataProvider.html" title="trait frame_election_provider_support::ElectionDataProvider"><code>ElectionDataProvider</code></a> must convey
+is as follows:</p>
+<ol>
+<li>A list of voters, with their stake.</li>
+<li>A list of targets (i.e. <em>candidates</em>).</li>
+<li>A number of desired targets to be elected (i.e. <em>winners</em>)</li>
+</ol>
+<p>In addition to that, the <a href="trait.ElectionDataProvider.html" title="trait frame_election_provider_support::ElectionDataProvider"><code>ElectionDataProvider</code></a> must also hint <a href="trait.ElectionProvider.html" title="trait frame_election_provider_support::ElectionProvider"><code>ElectionProvider</code></a> at when
+the next election might happen (<a href="trait.ElectionDataProvider.html#tymethod.next_election_prediction" title="associated function frame_election_provider_support::ElectionDataProvider::next_election_prediction"><code>ElectionDataProvider::next_election_prediction</code></a>). A stateless
+election provider would probably ignore this. A stateful election provider can use this to
+prepare the election result in advance.</p>
+<p>Nonetheless, an <a href="trait.ElectionProvider.html" title="trait frame_election_provider_support::ElectionProvider"><code>ElectionProvider</code></a> shan’t rely on this and should preferably provide some
+means of fallback election as well, in case the <code>elect</code> was called immaturely early.</p>
+<h3 id="example"><a href="#example">Example</a></h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="kw">type </span>AccountId = u64;
+<span class="kw">type </span>Balance = u64;
+<span class="kw">type </span>BlockNumber = u32;
+
+<span class="kw">mod </span>data_provider_mod {
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+
+    <span class="kw">pub trait </span>Config: Sized {
+        <span class="kw">type </span>ElectionProvider: ElectionProvider&lt;
+            AccountId = AccountId,
+            BlockNumber = BlockNumber,
+            DataProvider = Pallet&lt;<span class="self">Self</span>&gt;,
+        &gt;;
+    }
+
+    <span class="kw">pub struct </span>Pallet&lt;T: Config&gt;(std::marker::PhantomData&lt;T&gt;);
+
+    <span class="kw">impl</span>&lt;T: Config&gt; ElectionDataProvider <span class="kw">for </span>Pallet&lt;T&gt; {
+        <span class="kw">type </span>AccountId = AccountId;
+        <span class="kw">type </span>BlockNumber = BlockNumber;
+        <span class="kw">type </span>MaxVotesPerVoter = ConstU32&lt;<span class="number">1</span>&gt;;
+
+        <span class="kw">fn </span>desired_targets() -&gt; data_provider::Result&lt;u32&gt; {
+            <span class="prelude-val">Ok</span>(<span class="number">1</span>)
+        }
+        <span class="kw">fn </span>electing_voters(bounds: DataProviderBounds)
+          -&gt; data_provider::Result&lt;Vec&lt;VoterOf&lt;<span class="self">Self</span>&gt;&gt;&gt;
+        {
+            <span class="prelude-val">Ok</span>(Default::default())
+        }
+        <span class="kw">fn </span>electable_targets(bounds: DataProviderBounds) -&gt; data_provider::Result&lt;Vec&lt;AccountId&gt;&gt; {
+            <span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[<span class="number">10</span>, <span class="number">20</span>, <span class="number">30</span>])
+        }
+        <span class="kw">fn </span>next_election_prediction(now: BlockNumber) -&gt; BlockNumber {
+            <span class="number">0
+        </span>}
+    }
+}
+
+
+<span class="kw">mod </span>generic_election_provider {
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+
+    <span class="kw">pub struct </span>GenericElectionProvider&lt;T: Config&gt;(std::marker::PhantomData&lt;T&gt;);
+
+    <span class="kw">pub trait </span>Config {
+        <span class="kw">type </span>DataProvider: ElectionDataProvider&lt;AccountId=AccountId, BlockNumber = BlockNumber&gt;;
+    }
+
+    <span class="kw">impl</span>&lt;T: Config&gt; ElectionProviderBase <span class="kw">for </span>GenericElectionProvider&lt;T&gt; {
+        <span class="kw">type </span>AccountId = AccountId;
+        <span class="kw">type </span>BlockNumber = BlockNumber;
+        <span class="kw">type </span>Error = <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str;
+        <span class="kw">type </span>DataProvider = T::DataProvider;
+        <span class="kw">type </span>MaxWinners = ConstU32&lt;{ u32::MAX }&gt;;
+
+    }
+
+    <span class="kw">impl</span>&lt;T: Config&gt; ElectionProvider <span class="kw">for </span>GenericElectionProvider&lt;T&gt; {
+        <span class="kw">fn </span>ongoing() -&gt; bool { <span class="bool-val">false </span>}
+        <span class="kw">fn </span>elect() -&gt; <span class="prelude-ty">Result</span>&lt;BoundedSupportsOf&lt;<span class="self">Self</span>&gt;, <span class="self">Self</span>::Error&gt; {
+            <span class="self">Self</span>::DataProvider::electable_targets(DataProviderBounds::default())
+                .map_err(|<span class="kw">_</span>| <span class="string">&quot;failed to elect&quot;</span>)
+                .map(|t| <span class="macro">bounded_vec!</span>[(t[<span class="number">0</span>], Support::default())])
+        }
+    }
+}
+
+<span class="kw">mod </span>runtime {
+    <span class="kw">use </span><span class="kw">super</span>::generic_election_provider;
+    <span class="kw">use </span><span class="kw">super</span>::data_provider_mod;
+    <span class="kw">use </span><span class="kw">super</span>::AccountId;
+
+    <span class="kw">struct </span>Runtime;
+    <span class="kw">impl </span>generic_election_provider::Config <span class="kw">for </span>Runtime {
+        <span class="kw">type </span>DataProvider = data_provider_mod::Pallet&lt;Runtime&gt;;
+    }
+
+    <span class="kw">impl </span>data_provider_mod::Config <span class="kw">for </span>Runtime {
+        <span class="kw">type </span>ElectionProvider = generic_election_provider::GenericElectionProvider&lt;Runtime&gt;;
+    }
+
+}
+</code></pre></div>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.DataProviderBounds"><code>pub use bounds::<a class="struct" href="bounds/struct.DataProviderBounds.html" title="struct frame_election_provider_support::bounds::DataProviderBounds">DataProviderBounds</a>;</code></div></li><li><div class="item-name" id="reexport.NposSolution"><code>pub use traits::<a class="trait" href="traits/trait.NposSolution.html" title="trait frame_election_provider_support::traits::NposSolution">NposSolution</a>;</code></div></li><li><div class="item-name" id="reexport.WeightInfo"><code>pub use weights::<a class="trait" href="weights/trait.WeightInfo.html" title="trait frame_election_provider_support::weights::WeightInfo">WeightInfo</a>;</code></div></li></ul><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="bounds/index.html" title="mod frame_election_provider_support::bounds">bounds</a></div><div class="desc docblock-short">Types and helpers to define and handle election bounds.</div></li><li><div class="item-name"><a class="mod" href="data_provider/index.html" title="mod frame_election_provider_support::data_provider">data_provider</a></div><div class="desc docblock-short">Types that are used by the data provider trait.</div></li><li><div class="item-name"><a class="mod" href="onchain/index.html" title="mod frame_election_provider_support::onchain">onchain</a></div><div class="desc docblock-short">An implementation of <a href="trait.ElectionProvider.html" title="trait frame_election_provider_support::ElectionProvider"><code>ElectionProvider</code></a> that uses an <code>NposSolver</code> to do the election. As the
+name suggests, this is meant to be used onchain. Given how heavy the calculations are, please be
+careful when using it onchain.</div></li><li><div class="item-name"><a class="mod" href="traits/index.html" title="mod frame_election_provider_support::traits">traits</a></div><div class="desc docblock-short">Traits for the election operations.</div></li><li><div class="item-name"><a class="mod" href="weights/index.html" title="mod frame_election_provider_support::weights">weights</a></div><div class="desc docblock-short">Autogenerated weights for pallet_election_provider_support_benchmarking</div></li></ul><h2 id="macros" class="small-section-header"><a href="#macros">Macros</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro._runtime_benchmarks_enabled.html" title="macro frame_election_provider_support::_runtime_benchmarks_enabled">_runtime_benchmarks_enabled</a></div><div class="desc docblock-short">Enable/disable the given code depending on
+<code>feature = &quot;runtime-benchmarks&quot;</code>
+being enabled for the crate or not.</div></li><li><div class="item-name"><a class="macro" href="macro._runtime_benchmarks_fuzz_or_std_enabled.html" title="macro frame_election_provider_support::_runtime_benchmarks_fuzz_or_std_enabled">_runtime_benchmarks_fuzz_or_std_enabled</a></div><div class="desc docblock-short">Enable/disable the given code depending on
+<code>any(feature = &quot;runtime-benchmarks&quot;, feature = &quot;fuzzing&quot;, feature = &quot;std&quot;)</code>
+being enabled for the crate or not.</div></li><li><div class="item-name"><a class="macro" href="macro.generate_solution_type.html" title="macro frame_election_provider_support::generate_solution_type">generate_solution_type</a></div><div class="desc docblock-short">Re-export the solution generation macro.
+Generates a struct to store the election result in a small/compact way. This can encode a
+structure which is the equivalent of a <code>sp_npos_elections::Assignment&lt;_&gt;</code>.</div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Assignment.html" title="struct frame_election_provider_support::Assignment">Assignment</a></div><div class="desc docblock-short">A voter’s stake assignment among a set of targets, represented as ratios.</div></li><li><div class="item-name"><a class="struct" href="struct.BalancingConfig.html" title="struct frame_election_provider_support::BalancingConfig">BalancingConfig</a></div><div class="desc docblock-short">Utility struct to group parameters for the balancing algorithm.</div></li><li><div class="item-name"><a class="struct" href="struct.BoundedVec.html" title="struct frame_election_provider_support::BoundedVec">BoundedVec</a></div><div class="desc docblock-short">A bounded vector.</div></li><li><div class="item-name"><a class="struct" href="struct.ElectionResult.html" title="struct frame_election_provider_support::ElectionResult">ElectionResult</a></div><div class="desc docblock-short">Final result of the election.</div></li><li><div class="item-name"><a class="struct" href="struct.IndexAssignment.html" title="struct frame_election_provider_support::IndexAssignment">IndexAssignment</a></div><div class="desc docblock-short">The <a href="struct.IndexAssignment.html" title="struct frame_election_provider_support::IndexAssignment"><code>IndexAssignment</code></a> type is an intermediate between the assignments list
+(<a href="struct.Assignment.html" title="struct frame_election_provider_support::Assignment"><code>&amp;[Assignment&lt;T&gt;]</code></a>) and <code>SolutionOf&lt;T&gt;</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.NoElection.html" title="struct frame_election_provider_support::NoElection">NoElection</a></div><div class="desc docblock-short">An election provider that does nothing whatsoever.</div></li><li><div class="item-name"><a class="struct" href="struct.PhragMMS.html" title="struct frame_election_provider_support::PhragMMS">PhragMMS</a></div><div class="desc docblock-short">A wrapper for <a href="../sp_npos_elections/phragmms/fn.phragmms.html" title="fn sp_npos_elections::phragmms::phragmms"><code>sp_npos_elections::phragmms()</code></a> that implements <a href="trait.NposSolver.html" title="trait frame_election_provider_support::NposSolver"><code>NposSolver</code></a>. See the
+documentation of <a href="../sp_npos_elections/phragmms/fn.phragmms.html" title="fn sp_npos_elections::phragmms::phragmms"><code>sp_npos_elections::phragmms()</code></a> for more info.</div></li><li><div class="item-name"><a class="struct" href="struct.SequentialPhragmen.html" title="struct frame_election_provider_support::SequentialPhragmen">SequentialPhragmen</a></div><div class="desc docblock-short">A wrapper for <a href="../sp_npos_elections/phragmen/fn.seq_phragmen.html" title="fn sp_npos_elections::phragmen::seq_phragmen"><code>sp_npos_elections::seq_phragmen</code></a> that implements <a href="trait.NposSolver.html" title="trait frame_election_provider_support::NposSolver"><code>NposSolver</code></a>. See the
+documentation of <a href="../sp_npos_elections/phragmen/fn.seq_phragmen.html" title="fn sp_npos_elections::phragmen::seq_phragmen"><code>sp_npos_elections::seq_phragmen</code></a> for more info.</div></li><li><div class="item-name"><a class="struct" href="struct.Support.html" title="struct frame_election_provider_support::Support">Support</a></div><div class="desc docblock-short">A structure to demonstrate the election result from the perspective of the candidate, i.e. how
+much support each candidate is receiving.</div></li><li><div class="item-name"><a class="struct" href="struct.Weight.html" title="struct frame_election_provider_support::Weight">Weight</a></div></li></ul><h2 id="enums" class="small-section-header"><a href="#enums">Enums</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum frame_election_provider_support::Error">Error</a></div><div class="desc docblock-short">The errors that might occur in this crate and <code>frame-election-provider-solution-type</code>.</div></li></ul><h2 id="traits" class="small-section-header"><a href="#traits">Traits</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Decode.html" title="trait frame_election_provider_support::Decode">Decode</a></div><div class="desc docblock-short">Trait that allows zero-copy read of value-references from slices in LE format.</div></li><li><div class="item-name"><a class="trait" href="trait.ElectionDataProvider.html" title="trait frame_election_provider_support::ElectionDataProvider">ElectionDataProvider</a></div><div class="desc docblock-short">Something that can provide the data to an <a href="trait.ElectionProvider.html" title="trait frame_election_provider_support::ElectionProvider"><code>ElectionProvider</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.ElectionProvider.html" title="trait frame_election_provider_support::ElectionProvider">ElectionProvider</a></div><div class="desc docblock-short">Elect a new set of winners, bounded by <code>MaxWinners</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.ElectionProviderBase.html" title="trait frame_election_provider_support::ElectionProviderBase">ElectionProviderBase</a></div><div class="desc docblock-short">Base trait for types that can provide election</div></li><li><div class="item-name"><a class="trait" href="trait.Encode.html" title="trait frame_election_provider_support::Encode">Encode</a></div><div class="desc docblock-short">Trait that allows zero-copy write of value-references to slices in LE format.</div></li><li><div class="item-name"><a class="trait" href="trait.Get.html" title="trait frame_election_provider_support::Get">Get</a></div><div class="desc docblock-short">A trait for querying a single value from a type.</div></li><li><div class="item-name"><a class="trait" href="trait.IdentifierT.html" title="trait frame_election_provider_support::IdentifierT">IdentifierT</a></div><div class="desc docblock-short">an aggregator trait for a generic type of a voter/target identifier. This usually maps to
+substrate’s account id.</div></li><li><div class="item-name"><a class="trait" href="trait.InstantElectionProvider.html" title="trait frame_election_provider_support::InstantElectionProvider">InstantElectionProvider</a></div><div class="desc docblock-short">A (almost) marker trait that signifies an election provider as working synchronously. i.e. being
+<em>instant</em>.</div></li><li><div class="item-name"><a class="trait" href="trait.NposSolver.html" title="trait frame_election_provider_support::NposSolver">NposSolver</a></div><div class="desc docblock-short">Something that can compute the result to an NPoS solution.</div></li><li><div class="item-name"><a class="trait" href="trait.PerThing.html" title="trait frame_election_provider_support::PerThing">PerThing</a></div><div class="desc docblock-short">Re-export some type as they are used in the interface.
+Something that implements a fixed point ration with an arbitrary granularity <code>X</code>, as <em>parts per
+<code>X</code></em>.</div></li><li><div class="item-name"><a class="trait" href="trait.PerThing128.html" title="trait frame_election_provider_support::PerThing128">PerThing128</a></div><div class="desc docblock-short">Aggregator trait for a PerThing that can be multiplied by u128 (ExtendedBalance).</div></li><li><div class="item-name"><a class="trait" href="trait.ScoreProvider.html" title="trait frame_election_provider_support::ScoreProvider">ScoreProvider</a></div><div class="desc docblock-short">Something that can provide the <code>Score</code> of an account. Similar to <a href="trait.ElectionProvider.html" title="trait frame_election_provider_support::ElectionProvider"><code>ElectionProvider</code></a> and
+<a href="trait.ElectionDataProvider.html" title="trait frame_election_provider_support::ElectionDataProvider"><code>ElectionDataProvider</code></a>, this should typically be implementing by whoever is supposed to <em>use</em>
+<code>SortedListProvider</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.SortedListProvider.html" title="trait frame_election_provider_support::SortedListProvider">SortedListProvider</a></div><div class="desc docblock-short">A utility trait for something to implement <code>ElectionDataProvider</code> in a sensible way.</div></li></ul><h2 id="types" class="small-section-header"><a href="#types">Type Definitions</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.BoundedSupports.html" title="type frame_election_provider_support::BoundedSupports">BoundedSupports</a></div><div class="desc docblock-short">Same as <code>Supports</code> but bounded by <code>B</code>.</div></li><li><div class="item-name"><a class="type" href="type.BoundedSupportsOf.html" title="type frame_election_provider_support::BoundedSupportsOf">BoundedSupportsOf</a></div><div class="desc docblock-short">Same as <code>BoundedSupports</code> but parameterized by a <code>ElectionProviderBase</code>.</div></li><li><div class="item-name"><a class="type" href="type.ExtendedBalance.html" title="type frame_election_provider_support::ExtendedBalance">ExtendedBalance</a></div><div class="desc docblock-short">A type in which performing operations on vote weights are safe.</div></li><li><div class="item-name"><a class="type" href="type.IndexAssignmentOf.html" title="type frame_election_provider_support::IndexAssignmentOf">IndexAssignmentOf</a></div><div class="desc docblock-short">A type alias for <a href="struct.IndexAssignment.html" title="struct frame_election_provider_support::IndexAssignment"><code>IndexAssignment</code></a> made from <a href="traits/trait.NposSolution.html" title="trait frame_election_provider_support::traits::NposSolution"><code>NposSolution</code></a>.</div></li><li><div class="item-name"><a class="type" href="type.Supports.html" title="type frame_election_provider_support::Supports">Supports</a></div><div class="desc docblock-short">A target-major representation of the the election outcome.</div></li><li><div class="item-name"><a class="type" href="type.VoteWeight.html" title="type frame_election_provider_support::VoteWeight">VoteWeight</a></div><div class="desc docblock-short">A type which is used in the API of this crate as a numeric weight of a vote, most often the
+stake of the voter. It is always converted to <a href="type.ExtendedBalance.html" title="type frame_election_provider_support::ExtendedBalance"><code>ExtendedBalance</code></a> for computation.</div></li><li><div class="item-name"><a class="type" href="type.Voter.html" title="type frame_election_provider_support::Voter">Voter</a></div><div class="desc docblock-short">A voter, at the level of abstraction of this crate.</div></li><li><div class="item-name"><a class="type" href="type.VoterOf.html" title="type frame_election_provider_support::VoterOf">VoterOf</a></div><div class="desc docblock-short">Same as <a href="type.Voter.html" title="type frame_election_provider_support::Voter"><code>Voter</code></a>, but parameterized by an <a href="trait.ElectionDataProvider.html" title="trait frame_election_provider_support::ElectionDataProvider"><code>ElectionDataProvider</code></a>.</div></li></ul><h2 id="derives" class="small-section-header"><a href="#derives">Derive Macros</a></h2><ul class="item-table"><li><div class="item-name"><a class="derive" href="derive.Decode.html" title="derive frame_election_provider_support::Decode">Decode</a></div><div class="desc docblock-short">Derive <code>parity_scale_codec::Decode</code> and for struct and enum.</div></li><li><div class="item-name"><a class="derive" href="derive.Encode.html" title="derive frame_election_provider_support::Encode">Encode</a></div><div class="desc docblock-short">Derive <code>parity_scale_codec::Encode</code> and <code>parity_scale_codec::EncodeLike</code> for struct and enum.</div></li></ul></section></div></main></body></html>

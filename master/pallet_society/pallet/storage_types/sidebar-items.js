@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Bids","Candidates","ChallengeRoundCount","DefenderVotes","Defending","Founder","Head","MemberByIndex","MemberCount","Members","NextHead","Parameters","Payouts","Pot","RoundCount","Rules","Skeptic","SuspendedMembers","VoteClearCursor","Votes"]};

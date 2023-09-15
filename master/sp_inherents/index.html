@@ -1,0 +1,118 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/sp_inherents/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/sp_inherents/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Substrate Inherent Extrinsics"><title>sp_inherents - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="sp_inherents" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../sp_inherents/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../sp_inherents/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate sp_inherents</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 4.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Definitions</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">sp_inherents</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/sp_inherents/lib.rs.html#18-506">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Substrate Inherent Extrinsics</p>
+<p>Inherent extrinsics are extrinsics that are inherently added to each block. However, it is up to
+the runtime implementation to require an inherent for each block or to make it optional.
+Inherents are mainly used to pass data from the block producer to the runtime. So, inherents
+require some part that is running on the client side and some part that is running on the
+runtime side. Any data that is required by an inherent is passed as <a href="struct.InherentData.html" title="struct sp_inherents::InherentData"><code>InherentData</code></a> from the
+client to the runtime when the inherents are constructed.</p>
+<p>The process of constructing and applying inherents is the following:</p>
+<ol>
+<li>
+<p>The block producer first creates the <a href="struct.InherentData.html" title="struct sp_inherents::InherentData"><code>InherentData</code></a> by using the inherent data providers
+that are created by <a href="trait.CreateInherentDataProviders.html" title="trait sp_inherents::CreateInherentDataProviders"><code>CreateInherentDataProviders</code></a>.</p>
+</li>
+<li>
+<p>The <a href="struct.InherentData.html" title="struct sp_inherents::InherentData"><code>InherentData</code></a> is passed to the <code>inherent_extrinsics</code> function of the <code>BlockBuilder</code>
+runtime api. This will call the runtime which will create all the inherents that should be
+applied to the block.</p>
+</li>
+<li>
+<p>Apply each inherent to the block like any normal extrinsic.</p>
+</li>
+</ol>
+<p>On block import the inherents in the block are checked by calling the <code>check_inherents</code> runtime
+API. This will also pass an instance of <a href="struct.InherentData.html" title="struct sp_inherents::InherentData"><code>InherentData</code></a> which the runtime can use to validate
+all inherents. If some inherent data isn’t required for validating an inherent, it can be
+omitted when providing the inherent data providers for block import.</p>
+<h2 id="providing-inherent-data"><a href="#providing-inherent-data">Providing inherent data</a></h2>
+<p>To provide inherent data from the client side, <a href="trait.InherentDataProvider.html" title="trait sp_inherents::InherentDataProvider"><code>InherentDataProvider</code></a> should be implemented.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>codec::Decode;
+<span class="kw">use </span>sp_inherents::{InherentIdentifier, InherentData};
+
+<span class="comment">// This needs to be unique for the runtime.
+</span><span class="kw">const </span>INHERENT_IDENTIFIER: InherentIdentifier = <span class="kw-2">*</span><span class="string">b&quot;testinh0&quot;</span>;
+
+<span class="doccomment">/// Some custom inherent data provider
+</span><span class="kw">struct </span>InherentDataProvider;
+
+<span class="attr">#[async_trait::async_trait]
+</span><span class="kw">impl </span>sp_inherents::InherentDataProvider <span class="kw">for </span>InherentDataProvider {
+	<span class="kw">async fn </span>provide_inherent_data(
+		<span class="kw-2">&amp;</span><span class="self">self</span>,
+		inherent_data: <span class="kw-2">&amp;mut </span>InherentData,
+	) -&gt; <span class="prelude-ty">Result</span>&lt;(), sp_inherents::Error&gt; {
+		<span class="comment">// We can insert any data that implements [`codec::Encode`].
+		</span>inherent_data.put_data(INHERENT_IDENTIFIER, <span class="kw-2">&amp;</span><span class="string">&quot;hello&quot;</span>)
+	}
+
+	<span class="doccomment">/// When validating the inherents, the runtime implementation can throw errors. We support
+	/// two error modes, fatal and non-fatal errors. A fatal error means that the block is invalid
+	/// and this function here should return `Err(_)` to not import the block. Non-fatal errors
+	/// are allowed to be handled here in this function and the function should return `Ok(())`
+	/// if it could be handled. A non-fatal error is for example that a block is in the future
+	/// from the point of view of the local node. In such a case the block import for example
+	/// should be delayed until the block is valid.
+	///
+	/// If this functions returns `None`, it means that it is not responsible for this error or
+	/// that the error could not be interpreted.
+	</span><span class="kw">async fn </span>try_handle_error(
+		<span class="kw-2">&amp;</span><span class="self">self</span>,
+		identifier: <span class="kw-2">&amp;</span>InherentIdentifier,
+		<span class="kw-2">mut </span>error: <span class="kw-2">&amp;</span>[u8],
+	) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="prelude-ty">Result</span>&lt;(), sp_inherents::Error&gt;&gt; {
+		<span class="comment">// Check if this error belongs to us.
+		</span><span class="kw">if </span><span class="kw-2">*</span>identifier != INHERENT_IDENTIFIER {
+			<span class="kw">return </span><span class="prelude-val">None</span>;
+		}
+
+		<span class="comment">// For demonstration purposes we are using a `String` as error type. In real
+		// implementations it is advised to not use `String`.
+		</span><span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(
+			sp_inherents::Error::Application(Box::from(String::decode(<span class="kw-2">&amp;mut </span>error).ok()<span class="question-mark">?</span>))
+		))
+	}
+}</code></pre></div>
+<p>In the service the relevant inherent data providers need to be passed the block production and
+the block import. As already highlighted above, the providers can be different between import
+and production.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="kw">async fn </span>cool_consensus_block_production(
+	<span class="comment">// The second parameter to the trait are parameters that depend on what the caller
+	// can provide on extra data.
+	</span><span class="kw">_</span>: <span class="kw">impl </span>sp_inherents::CreateInherentDataProviders&lt;Block, ()&gt;,
+) {
+	<span class="comment">// do cool stuff
+</span>}
+
+<span class="kw">async fn </span>cool_consensus_block_import(
+	<span class="kw">_</span>: <span class="kw">impl </span>sp_inherents::CreateInherentDataProviders&lt;Block, ()&gt;,
+) {
+	<span class="comment">// do cool stuff
+</span>}
+
+<span class="kw">async fn </span>build_service(is_validator: bool) {
+	<span class="comment">// For block import we don&#39;t pass any inherent data provider, because our runtime
+	// does not need any inherent data to validate the inherents.
+	</span><span class="kw">let </span>block_import = cool_consensus_block_import(|_parent, ()| <span class="kw">async </span>{ <span class="prelude-val">Ok</span>(()) });
+
+	<span class="kw">let </span>block_production = <span class="kw">if </span>is_validator {
+		<span class="comment">// For block production we want to provide our inherent data provider
+		</span>cool_consensus_block_production(|_parent, ()| <span class="kw">async </span>{
+			<span class="prelude-val">Ok</span>(InherentDataProvider)
+		}).boxed()
+	} <span class="kw">else </span>{
+		futures::future::pending().boxed()
+	};
+
+	<span class="macro">futures::pin_mut!</span>(block_import);
+
+	futures::future::select(block_import, block_production).<span class="kw">await</span>;
+}</code></pre></div>
+<h2 id="creating-the-inherent"><a href="#creating-the-inherent">Creating the inherent</a></h2>
+<p>As the inherents are created by the runtime, it depends on the runtime implementation on how
+to create the inherents. As already described above the client side passes the <a href="struct.InherentData.html" title="struct sp_inherents::InherentData"><code>InherentData</code></a>
+and expects the runtime to construct the inherents out of it. When validating the inherents,
+<a href="struct.CheckInherentsResult.html" title="struct sp_inherents::CheckInherentsResult"><code>CheckInherentsResult</code></a> is used to communicate the result client side.</p>
+</div></details><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.CheckInherentsResult.html" title="struct sp_inherents::CheckInherentsResult">CheckInherentsResult</a></div><div class="desc docblock-short">The result of checking inherents.</div></li><li><div class="item-name"><a class="struct" href="struct.InherentData.html" title="struct sp_inherents::InherentData">InherentData</a></div><div class="desc docblock-short">Inherent data to include in a block.</div></li><li><div class="item-name"><a class="struct" href="struct.MakeFatalError.html" title="struct sp_inherents::MakeFatalError">MakeFatalError</a></div><div class="desc docblock-short">Auxiliary to make any given error resolve to <code>is_fatal_error() == true</code> for <a href="trait.IsFatalError.html" title="trait sp_inherents::IsFatalError"><code>IsFatalError</code></a>.</div></li></ul><h2 id="enums" class="small-section-header"><a href="#enums">Enums</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum sp_inherents::Error">Error</a></div><div class="desc docblock-short">Errors that occur in context of inherents.</div></li></ul><h2 id="traits" class="small-section-header"><a href="#traits">Traits</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.CreateInherentDataProviders.html" title="trait sp_inherents::CreateInherentDataProviders">CreateInherentDataProviders</a></div><div class="desc docblock-short">Something that can create inherent data providers.</div></li><li><div class="item-name"><a class="trait" href="trait.InherentDataProvider.html" title="trait sp_inherents::InherentDataProvider">InherentDataProvider</a></div><div class="desc docblock-short">Something that provides inherent data.</div></li><li><div class="item-name"><a class="trait" href="trait.IsFatalError.html" title="trait sp_inherents::IsFatalError">IsFatalError</a></div><div class="desc docblock-short">Did we encounter a fatal error while checking an inherent?</div></li></ul><h2 id="types" class="small-section-header"><a href="#types">Type Definitions</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.InherentIdentifier.html" title="type sp_inherents::InherentIdentifier">InherentIdentifier</a></div><div class="desc docblock-short">An identifier for an inherent.</div></li></ul></section></div></main></body></html>

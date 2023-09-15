@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_bounties/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_bounties/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Bounties Module ( pallet-bounties )"><title>pallet_bounties - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pallet_bounties" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../pallet_bounties/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../pallet_bounties/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate pallet_bounties</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 4.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Definitions</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pallet_bounties</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/pallet_bounties/lib.rs.html#18-917">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="bounties-module--pallet-bounties-"><a href="#bounties-module--pallet-bounties-">Bounties Module ( pallet-bounties )</a></h2><h3 id="bounty"><a href="#bounty">Bounty</a></h3>
+<blockquote>
+<p>NOTE: This pallet is tightly coupled with pallet-treasury.</p>
+</blockquote>
+<p>A Bounty Spending is a reward for a specified body of work - or specified set of objectives -
+that needs to be executed for a predefined Treasury amount to be paid out. A curator is assigned
+after the bounty is approved and funded by Council, to be delegated with the responsibility of
+assigning a payout address once the specified set of objectives is completed.</p>
+<p>After the Council has activated a bounty, it delegates the work that requires expertise to a
+curator in exchange of a deposit. Once the curator accepts the bounty, they get to close the
+active bounty. Closing the active bounty enacts a delayed payout to the payout address, the
+curator fee and the return of the curator deposit. The delay allows for intervention through
+regular democracy. The Council gets to unassign the curator, resulting in a new curator
+election. The Council also gets to cancel the bounty if deemed necessary before assigning a
+curator or once the bounty is active or payout is pending, resulting in the slash of the
+curator’s deposit.</p>
+<p>This pallet may opt into using a <a href="trait.ChildBountyManager.html" title="trait pallet_bounties::ChildBountyManager"><code>ChildBountyManager</code></a> that enables bounties to be split into
+sub-bounties, as children of anh established bounty (called the parent in the context of it’s
+children).</p>
+<blockquote>
+<p>NOTE: The parent bounty cannot be closed if it has a non-zero number of it has active child
+bounties associated with it.</p>
+</blockquote>
+<h4 id="terminology"><a href="#terminology">Terminology</a></h4>
+<p>Bounty:</p>
+<ul>
+<li><strong>Bounty spending proposal:</strong> A proposal to reward a predefined body of work upon completion
+by the Treasury.</li>
+<li><strong>Proposer:</strong> An account proposing a bounty spending.</li>
+<li><strong>Curator:</strong> An account managing the bounty and assigning a payout address receiving the
+reward for the completion of work.</li>
+<li><strong>Deposit:</strong> The amount held on deposit for placing a bounty proposal plus the amount held on
+deposit per byte within the bounty description.</li>
+<li><strong>Curator deposit:</strong> The payment from a candidate willing to curate an approved bounty. The
+deposit is returned when/if the bounty is completed.</li>
+<li><strong>Bounty value:</strong> The total amount that should be paid to the Payout Address if the bounty is
+rewarded.</li>
+<li><strong>Payout address:</strong> The account to which the total or part of the bounty is assigned to.</li>
+<li><strong>Payout Delay:</strong> The delay period for which a bounty beneficiary needs to wait before
+claiming.</li>
+<li><strong>Curator fee:</strong> The reserved upfront payment for a curator for work related to the bounty.</li>
+</ul>
+<h3 id="interface"><a href="#interface">Interface</a></h3><h4 id="dispatchable-functions"><a href="#dispatchable-functions">Dispatchable Functions</a></h4>
+<p>Bounty protocol:</p>
+<ul>
+<li><code>propose_bounty</code> - Propose a specific treasury amount to be earmarked for a predefined set of
+tasks and stake the required deposit.</li>
+<li><code>approve_bounty</code> - Accept a specific treasury amount to be earmarked for a predefined body of
+work.</li>
+<li><code>propose_curator</code> - Assign an account to a bounty as candidate curator.</li>
+<li><code>accept_curator</code> - Accept a bounty assignment from the Council, setting a curator deposit.</li>
+<li><code>extend_bounty_expiry</code> - Extend the expiry block number of the bounty and stay active.</li>
+<li><code>award_bounty</code> - Close and pay out the specified amount for the completed work.</li>
+<li><code>claim_bounty</code> - Claim a specific bounty amount from the Payout Address.</li>
+<li><code>unassign_curator</code> - Unassign an accepted curator from a specific earmark.</li>
+<li><code>close_bounty</code> - Cancel the earmark for a specific treasury amount and close the bounty.</li>
+</ul>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.WeightInfo"><code>pub use weights::<a class="trait" href="weights/trait.WeightInfo.html" title="trait pallet_bounties::weights::WeightInfo">WeightInfo</a>;</code></div></li><li><div class="item-name"><code>pub use <a class="mod" href="pallet/index.html" title="mod pallet_bounties::pallet">pallet</a>::*;</code></div></li></ul><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="migrations/index.html" title="mod pallet_bounties::migrations">migrations</a></div></li><li><div class="item-name"><a class="mod" href="pallet/index.html" title="mod pallet_bounties::pallet">pallet</a></div><div class="desc docblock-short">The <code>pallet</code> module in each FRAME pallet hosts the most important items needed
+to construct this pallet.</div></li><li><div class="item-name"><a class="mod" href="weights/index.html" title="mod pallet_bounties::weights">weights</a></div><div class="desc docblock-short">Autogenerated weights for pallet_bounties</div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Bounty.html" title="struct pallet_bounties::Bounty">Bounty</a></div><div class="desc docblock-short">A bounty proposal.</div></li></ul><h2 id="enums" class="small-section-header"><a href="#enums">Enums</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.BountyStatus.html" title="enum pallet_bounties::BountyStatus">BountyStatus</a></div><div class="desc docblock-short">The status of a bounty proposal.</div></li></ul><h2 id="traits" class="small-section-header"><a href="#traits">Traits</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.ChildBountyManager.html" title="trait pallet_bounties::ChildBountyManager">ChildBountyManager</a></div><div class="desc docblock-short">The child bounty manager.</div></li></ul><h2 id="types" class="small-section-header"><a href="#types">Type Definitions</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.BountyIndex.html" title="type pallet_bounties::BountyIndex">BountyIndex</a></div><div class="desc docblock-short">An index of a bounty. Just a <code>u32</code>.</div></li></ul></section></div></main></body></html>

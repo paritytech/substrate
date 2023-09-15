@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["error"],"struct":["Offchain"],"trait":["OffchainApiClient","OffchainApiServer"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["change_member_count","kick","score","submit_candidacy","withdraw_candidacy"]};

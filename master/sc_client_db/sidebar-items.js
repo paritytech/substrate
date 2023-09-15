@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BlocksPruning","DatabaseSource","PruningMode"],"mod":["bench","offchain"],"struct":["Backend","BlockImportOperation","BlockchainDb","DatabaseSettings","RawIter","RefTrackingState"],"trait":["Database"],"type":["DbHash","DbState","DbStateBuilder"]};

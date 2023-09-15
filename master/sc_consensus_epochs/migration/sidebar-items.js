@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["EpochChangesV0","EpochChangesV1"],"type":["EpochChangesV0For","EpochChangesV1For"]};

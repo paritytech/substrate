@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Account","AllExtrinsicsLen","BlockHash","BlockWeight","Digest","EventCount","EventTopics","Events","ExecutionPhase","ExtrinsicCount","ExtrinsicData","LastRuntimeUpgrade","Number","ParentHash","UpgradedToTripleRefCount","UpgradedToU32RefCount"]};

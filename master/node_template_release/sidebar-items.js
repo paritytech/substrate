@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SUBSTRATE_GIT_URL"],"fn":["build_and_test","copy_node_template","find_cargo_tomls","get_git_commit_id","main","merge_deps","parse_cargo_toml","process_cargo_tomls","process_root_cargo_toml","update_git_dependencies","update_root_cargo_toml","write_cargo_toml"],"struct":["Dependency","Options"],"type":["CargoToml","Dependencies"]};

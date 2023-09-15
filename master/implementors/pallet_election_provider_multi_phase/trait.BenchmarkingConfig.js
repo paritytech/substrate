@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"kitchensink_runtime":[["impl <a class=\"trait\" href=\"pallet_election_provider_multi_phase/trait.BenchmarkingConfig.html\" title=\"trait pallet_election_provider_multi_phase::BenchmarkingConfig\">BenchmarkingConfig</a> for <a class=\"struct\" href=\"kitchensink_runtime/struct.ElectionProviderBenchmarkConfig.html\" title=\"struct kitchensink_runtime::ElectionProviderBenchmarkConfig\">ElectionProviderBenchmarkConfig</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

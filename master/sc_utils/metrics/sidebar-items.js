@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["register_globals"],"struct":["TOKIO_THREADS_ALIVE","TOKIO_THREADS_TOTAL","UNBOUNDED_CHANNELS_COUNTER"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["clear","set"],"struct":["HostFunctions"]};

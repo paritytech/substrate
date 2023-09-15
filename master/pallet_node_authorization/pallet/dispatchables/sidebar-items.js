@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_connections","add_well_known_node","claim_node","remove_claim","remove_connections","remove_well_known_node","reset_well_known_nodes","swap_well_known_node","transfer_node"]};

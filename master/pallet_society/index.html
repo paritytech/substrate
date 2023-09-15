@@ -1,0 +1,178 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_society/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_society/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Society Pallet"><title>pallet_society - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pallet_society" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../pallet_society/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../pallet_society/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate pallet_society</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 4.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#types">Type Definitions</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pallet_society</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/pallet_society/lib.rs.html#18-2035">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="society-pallet"><a href="#society-pallet">Society Pallet</a></h2>
+<ul>
+<li><a href="pallet/trait.Config.html" title="trait pallet_society::pallet::Config"><code>Config</code></a></li>
+<li><a href="pallet/enum.Call.html" title="enum pallet_society::pallet::Call"><code>Call</code></a></li>
+</ul>
+<h3 id="overview"><a href="#overview">Overview</a></h3>
+<p>The Society pallet is an economic game which incentivizes users to participate
+and maintain a membership society.</p>
+<h4 id="user-types"><a href="#user-types">User Types</a></h4>
+<p>At any point, a user in the society can be one of a:</p>
+<ul>
+<li>Bidder - A user who has submitted intention of joining the society.</li>
+<li>Candidate - A user who will be voted on to join the society.</li>
+<li>Member - A user who is a member of the society.</li>
+<li>Suspended Member - A member of the society who has accumulated too many strikes
+or failed their membership challenge.</li>
+</ul>
+<p>Of the non-suspended members, there is always a:</p>
+<ul>
+<li>Head - A member who is exempt from suspension.</li>
+<li>Defender - A member whose membership is under question and voted on again.</li>
+</ul>
+<p>Of the non-suspended members of the society, a random set of them are chosen as
+“skeptics”. The mechanics of skeptics is explained in the
+<a href="#member-phase">member phase</a> below.</p>
+<h4 id="mechanics"><a href="#mechanics">Mechanics</a></h4><h5 id="rewards"><a href="#rewards">Rewards</a></h5>
+<p>Members are incentivized to participate in the society through rewards paid
+by the Society treasury. These payments have a maturity period that the user
+must wait before they are able to access the funds.</p>
+<h5 id="punishments"><a href="#punishments">Punishments</a></h5>
+<p>Members can be punished by slashing the reward payouts that have not been
+collected. Additionally, members can accumulate “strikes”, and when they
+reach a max strike limit, they become suspended.</p>
+<h5 id="skeptics"><a href="#skeptics">Skeptics</a></h5>
+<p>During the voting period, a random set of members are selected as “skeptics”.
+These skeptics are expected to vote on the current candidates. If they do not vote,
+their skeptic status is treated as a rejection vote, the member is deemed
+“lazy”, and are given a strike per missing vote.</p>
+<h5 id="membership-challenges"><a href="#membership-challenges">Membership Challenges</a></h5>
+<p>Every challenge rotation period, an existing member will be randomly selected
+to defend their membership into society. Then, other members can vote whether
+this defender should stay in society. A simple majority wins vote will determine
+the outcome of the user. Ties are treated as a failure of the challenge, but
+assuming no one else votes, the defender always get a free vote on their
+own challenge keeping them in the society. The Head member is exempt from the
+negative outcome of a membership challenge.</p>
+<h5 id="society-treasury"><a href="#society-treasury">Society Treasury</a></h5>
+<p>The membership society is independently funded by a treasury managed by this
+pallet. Some subset of this treasury is placed in a Society Pot, which is used
+to determine the number of accepted bids.</p>
+<h5 id="rate-of-growth"><a href="#rate-of-growth">Rate of Growth</a></h5>
+<p>The membership society can grow at a rate of 10 accepted candidates per rotation period up
+to the max membership threshold. Once this threshold is met, candidate selections
+are stalled until there is space for new members to join. This can be resolved by
+voting out existing members through the random challenges or by using governance
+to increase the maximum membership count.</p>
+<h4 id="user-life-cycle"><a href="#user-life-cycle">User Life Cycle</a></h4>
+<p>A user can go through the following phases:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>          +-------&gt;  User  &lt;----------+
+          |           +               |
+          |           |               |
++----------------------------------------------+
+|         |           |               |        |
+|         |           v               |        |
+|         |        Bidder &lt;-----------+        |
+|         |           +               |        |
+|         |           |               +        |
+|         |           v            Suspended   |
+|         |       Candidate +----&gt; Candidate   |
+|         |           +               +        |
+|         |           |               |        |
+|         +           |               |        |
+|   Suspended +------&gt;|               |        |
+|      Member         |               |        |
+|         ^           |               |        |
+|         |           v               |        |
+|         +-------+ Member &lt;----------+        |
+|                                              |
+|                                              |
++------------------Society---------------------+</code></pre></div>
+<h5 id="initialization"><a href="#initialization">Initialization</a></h5>
+<p>The society is initialized with a single member who is automatically chosen as the Head.</p>
+<h5 id="bid-phase"><a href="#bid-phase">Bid Phase</a></h5>
+<p>New users must have a bid to join the society.</p>
+<p>A user can make a bid by reserving a deposit. Alternatively, an already existing member
+can create a bid on a user’s behalf by “vouching” for them.</p>
+<p>A bid includes reward information that the user would like to receive for joining
+the society. A vouching bid can additionally request some portion of that reward as a tip
+to the voucher for vouching for the prospective candidate.</p>
+<p>Every rotation period, Bids are ordered by reward amount, and the pallet
+selects as many bids the Society Pot can support for that period.</p>
+<p>These selected bids become candidates and move on to the Candidate phase.
+Bids that were not selected stay in the bidder pool until they are selected or
+a user chooses to “unbid”.</p>
+<h5 id="candidate-phase"><a href="#candidate-phase">Candidate Phase</a></h5>
+<p>Once a bidder becomes a candidate, members vote whether to approve or reject
+that candidate into society. This voting process also happens during a rotation period.</p>
+<p>The approval and rejection criteria for candidates are not set on chain,
+and may change for different societies.</p>
+<p>At the end of the rotation period, we collect the votes for a candidate
+and randomly select a vote as the final outcome.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code> [ a-accept, r-reject, s-skeptic ]
++----------------------------------+
+|                                  |
+|  Member   |<span class="number">0</span>|<span class="number">1</span>|<span class="number">2</span>|<span class="number">3</span>|<span class="number">4</span>|<span class="number">5</span>|<span class="number">6</span>|<span class="number">7</span>|<span class="number">8</span>|<span class="number">9</span>|  |
+|  -----------------------------   |
+|  Vote     |a|a|a|r|s|r|a|a|s|a|  |
+|  -----------------------------   |
+|  Selected | | | |x| | | | | | |  |
+|                                  |
++----------------------------------+
+
+<span class="prelude-ty">Result</span>: Rejected</code></pre></div>
+<p>Each member that voted opposite to this randomly selected vote is punished by
+slashing their unclaimed payouts and increasing the number of strikes they have.</p>
+<p>These slashed funds are given to a random user who voted the same as the
+selected vote as a reward for participating in the vote.</p>
+<p>If the candidate wins the vote, they receive their bid reward as a future payout.
+If the bid was placed by a voucher, they will receive their portion of the reward,
+before the rest is paid to the winning candidate.</p>
+<p>One winning candidate is selected as the Head of the members. This is randomly
+chosen, weighted by the number of approvals the winning candidates accumulated.</p>
+<p>If the candidate loses the vote, they are suspended and it is up to the Suspension
+Judgement origin to determine if the candidate should go through the bidding process
+again, should be accepted into the membership society, or rejected and their deposit
+slashed.</p>
+<h5 id="member-phase"><a href="#member-phase">Member Phase</a></h5>
+<p>Once a candidate becomes a member, their role is to participate in society.</p>
+<p>Regular participation involves voting on candidates who want to join the membership
+society, and by voting in the right way, a member will accumulate future payouts.
+When a payout matures, members are able to claim those payouts.</p>
+<p>Members can also vouch for users to join the society, and request a “tip” from
+the fees the new member would collect by joining the society. This vouching
+process is useful in situations where a user may not have enough balance to
+satisfy the bid deposit. A member can only vouch one user at a time.</p>
+<p>During rotation periods, a random group of members are selected as “skeptics”.
+These skeptics are expected to vote on the current candidates. If they do not vote,
+their skeptic status is treated as a rejection vote, the member is deemed
+“lazy”, and are given a strike per missing vote.</p>
+<p>There is a challenge period in parallel to the rotation period. During a challenge period,
+a random member is selected to defend their membership to the society. Other members
+make a traditional majority-wins vote to determine if the member should stay in the society.
+Ties are treated as a failure of the challenge.</p>
+<p>If a member accumulates too many strikes or fails their membership challenge,
+they will become suspended. While a member is suspended, they are unable to
+claim matured payouts. It is up to the Suspension Judgement origin to determine
+if the member should re-enter society or be removed from society with all their
+future payouts slashed.</p>
+<h3 id="interface"><a href="#interface">Interface</a></h3><h4 id="dispatchable-functions"><a href="#dispatchable-functions">Dispatchable Functions</a></h4><h5 id="for-general-users"><a href="#for-general-users">For General Users</a></h5>
+<ul>
+<li><code>bid</code> - A user can make a bid to join the membership society by reserving a deposit.</li>
+<li><code>unbid</code> - A user can withdraw their bid for entry, the deposit is returned.</li>
+</ul>
+<h5 id="for-members"><a href="#for-members">For Members</a></h5>
+<ul>
+<li><code>vouch</code> - A member can place a bid on behalf of a user to join the membership society.</li>
+<li><code>unvouch</code> - A member can revoke their vouch for a user.</li>
+<li><code>vote</code> - A member can vote to approve or reject a candidate’s request to join the society.</li>
+<li><code>defender_vote</code> - A member can vote to approve or reject a defender’s continued membership
+to the society.</li>
+<li><code>payout</code> - A member can claim their first matured payment.</li>
+<li><code>unfound</code> - Allow the founder to unfound the society when they are the only member.</li>
+</ul>
+<h5 id="for-super-users"><a href="#for-super-users">For Super Users</a></h5>
+<ul>
+<li><code>found</code> - The founder origin can initiate this society. Useful for bootstrapping the Society
+pallet on an already running chain.</li>
+<li><code>judge_suspended_member</code> - The suspension judgement origin is able to make
+judgement on a suspended member.</li>
+<li><code>judge_suspended_candidate</code> - The suspension judgement origin is able to
+make judgement on a suspended candidate.</li>
+<li><code>set_max_membership</code> - The ROOT origin can update the maximum member count for the society.
+The max membership count must be greater than 1.</li>
+</ul>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.WeightInfo"><code>pub use weights::<a class="trait" href="weights/trait.WeightInfo.html" title="trait pallet_society::weights::WeightInfo">WeightInfo</a>;</code></div></li><li><div class="item-name"><code>pub use <a class="mod" href="pallet/index.html" title="mod pallet_society::pallet">pallet</a>::*;</code></div></li></ul><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="migrations/index.html" title="mod pallet_society::migrations">migrations</a></div><div class="desc docblock-short">Migrations for Society Pallet</div></li><li><div class="item-name"><a class="mod" href="pallet/index.html" title="mod pallet_society::pallet">pallet</a></div><div class="desc docblock-short">The <code>pallet</code> module in each FRAME pallet hosts the most important items needed
+to construct this pallet.</div></li><li><div class="item-name"><a class="mod" href="weights/index.html" title="mod pallet_society::weights">weights</a></div><div class="desc docblock-short">Autogenerated weights for pallet_society</div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Bid.html" title="struct pallet_society::Bid">Bid</a></div><div class="desc docblock-short">A bid for entry into society.</div></li><li><div class="item-name"><a class="struct" href="struct.Candidacy.html" title="struct pallet_society::Candidacy">Candidacy</a></div><div class="desc docblock-short">A bid for entry into society.</div></li><li><div class="item-name"><a class="struct" href="struct.EnsureFounder.html" title="struct pallet_society::EnsureFounder">EnsureFounder</a></div><div class="desc docblock-short">Simple ensure origin struct to filter for the founder account.</div></li><li><div class="item-name"><a class="struct" href="struct.GroupParams.html" title="struct pallet_society::GroupParams">GroupParams</a></div></li><li><div class="item-name"><a class="struct" href="struct.IntakeRecord.html" title="struct pallet_society::IntakeRecord">IntakeRecord</a></div><div class="desc docblock-short">Record for an individual new member who was elevated from a candidate recently.</div></li><li><div class="item-name"><a class="struct" href="struct.MemberRecord.html" title="struct pallet_society::MemberRecord">MemberRecord</a></div><div class="desc docblock-short">Information concerning a member.</div></li><li><div class="item-name"><a class="struct" href="struct.Payout.html" title="struct pallet_society::Payout">Payout</a></div><div class="desc docblock-short">Details of a payout given as a per-block linear “trickle”.</div></li><li><div class="item-name"><a class="struct" href="struct.PayoutRecord.html" title="struct pallet_society::PayoutRecord">PayoutRecord</a></div><div class="desc docblock-short">Information concerning a member.</div></li><li><div class="item-name"><a class="struct" href="struct.Tally.html" title="struct pallet_society::Tally">Tally</a></div><div class="desc docblock-short">Tally of votes.</div></li><li><div class="item-name"><a class="struct" href="struct.Vote.html" title="struct pallet_society::Vote">Vote</a></div></li></ul><h2 id="enums" class="small-section-header"><a href="#enums">Enums</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.BidKind.html" title="enum pallet_society::BidKind">BidKind</a></div><div class="desc docblock-short">A vote by a member on a candidate application.</div></li><li><div class="item-name"><a class="enum" href="enum.Judgement.html" title="enum pallet_society::Judgement">Judgement</a></div><div class="desc docblock-short">A judgement by the suspension judgement origin on a suspended candidate.</div></li><li><div class="item-name"><a class="enum" href="enum.Period.html" title="enum pallet_society::Period">Period</a></div></li><li><div class="item-name"><a class="enum" href="enum.VouchingStatus.html" title="enum pallet_society::VouchingStatus">VouchingStatus</a></div><div class="desc docblock-short">Status of a vouching member.</div></li></ul><h2 id="types" class="small-section-header"><a href="#types">Type Definitions</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.GroupParamsFor.html" title="type pallet_society::GroupParamsFor">GroupParamsFor</a></div></li><li><div class="item-name"><a class="type" href="type.IntakeRecordFor.html" title="type pallet_society::IntakeRecordFor">IntakeRecordFor</a></div></li><li><div class="item-name"><a class="type" href="type.PayoutRecordFor.html" title="type pallet_society::PayoutRecordFor">PayoutRecordFor</a></div></li><li><div class="item-name"><a class="type" href="type.PayoutsFor.html" title="type pallet_society::PayoutsFor">PayoutsFor</a></div></li><li><div class="item-name"><a class="type" href="type.Rank.html" title="type pallet_society::Rank">Rank</a></div><div class="desc docblock-short">The rank of a member.</div></li><li><div class="item-name"><a class="type" href="type.RoundIndex.html" title="type pallet_society::RoundIndex">RoundIndex</a></div><div class="desc docblock-short">The index of a round of candidates.</div></li><li><div class="item-name"><a class="type" href="type.StrikeCount.html" title="type pallet_society::StrikeCount">StrikeCount</a></div><div class="desc docblock-short">Number of strikes that a member has against them.</div></li><li><div class="item-name"><a class="type" href="type.VoteCount.html" title="type pallet_society::VoteCount">VoteCount</a></div><div class="desc docblock-short">The number of votes.</div></li></ul></section></div></main></body></html>

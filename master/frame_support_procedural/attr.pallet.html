@@ -1,0 +1,103 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/frame_support_procedural/attr.pallet.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/frame_support_procedural/attr.pallet.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The pallet struct placeholder `#[pallet::pallet]` is mandatory and allows you to specify pallet information."><title>pallet in frame_support_procedural - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="frame_support_procedural" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../frame_support_procedural/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../frame_support_procedural/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><div class="sidebar-elems"><h2><a href="index.html">In frame_support_procedural</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">frame_support_procedural</a>::<wbr><a class="attr" href="#">pallet</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/frame_support_procedural/lib.rs.html#317-319">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[pallet]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The pallet struct placeholder <code>#[pallet::pallet]</code> is mandatory and allows you to specify
+pallet information.</p>
+<p>The struct must be defined as follows:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[pallet::pallet]
+</span><span class="kw">pub struct </span>Pallet&lt;T&gt;(<span class="kw">_</span>);</code></pre></div>
+<p>I.e. a regular struct definition named <code>Pallet</code>, with generic T and no where clause.</p>
+<h3 id="macro-expansion"><a href="#macro-expansion">Macro expansion:</a></h3>
+<p>The macro adds this attribute to the struct definition:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(
+	frame_support::CloneNoBound,
+	frame_support::EqNoBound,
+	frame_support::PartialEqNoBound,
+	frame_support::RuntimeDebugNoBound,
+)]</span></code></pre></div>
+<p>and replaces the type <code>_</code> with <code>PhantomData&lt;T&gt;</code>. It also implements on the pallet:</p>
+<ul>
+<li><code>GetStorageVersion</code></li>
+<li><code>OnGenesis</code>: contains some logic to write the pallet version into storage.</li>
+<li><code>PalletErrorTypeInfo</code>: provides the type information for the pallet error, if defined.</li>
+</ul>
+<p>It declares <code>type Module</code> type alias for <code>Pallet</code>, used by <code>construct_runtime</code>.</p>
+<p>It implements <code>PalletInfoAccess</code> on <code>Pallet</code> to ease access to pallet information given by
+<code>frame_support::traits::PalletInfo</code>. (The implementation uses the associated type
+<code>frame_system::Config::PalletInfo</code>).</p>
+<p>It implements <code>StorageInfoTrait</code> on <code>Pallet</code> which give information about all storages.</p>
+<p>If the attribute <code>generate_store</code> is set then the macro creates the trait <code>Store</code> and
+implements it on <code>Pallet</code>.</p>
+<p>If the attribute <code>set_storage_max_encoded_len</code> is set then the macro calls
+<code>StorageInfoTrait</code> for each storage in the implementation of <code>StorageInfoTrait</code> for the
+pallet. Otherwise it implements <code>StorageInfoTrait</code> for the pallet using the
+<code>PartialStorageInfoTrait</code> implementation of storages.</p>
+<h3 id="dev-mode-palletdev_mode"><a href="#dev-mode-palletdev_mode">Dev Mode (<code>#[pallet(dev_mode)]</code>)</a></h3>
+<p>Specifying the argument <code>dev_mode</code> will allow you to enable dev mode for a pallet. The aim
+of dev mode is to loosen some of the restrictions and requirements placed on production
+pallets for easy tinkering and development. Dev mode pallets should not be used in
+production. Enabling dev mode has the following effects:</p>
+<ul>
+<li>Weights no longer need to be specified on every <code>#[pallet::call]</code> declaration. By default, dev
+mode pallets will assume a weight of zero (<code>0</code>) if a weight is not specified. This is
+equivalent to specifying <code>#[weight(0)]</code> on all calls that do not specify a weight.</li>
+<li>Call indices no longer need to be specified on every <code>#[pallet::call]</code> declaration. By
+default, dev mode pallets will assume a call index based on the order of the call.</li>
+<li>All storages are marked as unbounded, meaning you do not need to implement <code>MaxEncodedLen</code> on
+storage types. This is equivalent to specifying <code>#[pallet::unbounded]</code> on all storage type
+definitions.</li>
+<li>Storage hashers no longer need to be specified and can be replaced by <code>_</code>. In dev mode, these
+will be replaced by <code>Blake2_128Concat</code>. In case of explicit key-binding, <code>Hasher</code> can simply
+be ignored when in <code>dev_mode</code>.</li>
+</ul>
+<p>Note that the <code>dev_mode</code> argument can only be supplied to the <code>#[pallet]</code> or
+<code>#[frame_support::pallet]</code> attribute macro that encloses your pallet module. This argument
+cannot be specified anywhere else, including but not limited to the <code>#[pallet::pallet]</code>
+attribute macro.</p>
+<div class="example-wrap" style="display:inline-block"><pre class="compile_fail"
+style="white-space:normal;font:inherit;">
+<strong>WARNING</strong>:
+You should not deploy or use dev mode pallets in production. Doing so can break your chain
+and therefore should never be done. Once you are done tinkering, you should remove the
+'dev_mode' argument from your #[pallet] declaration and fix any compile errors before
+attempting to use your pallet in a production scenario.
+</pre></div>
+<p>See <code>frame_support::pallet</code> docs for more info.</p>
+<h3 id="runtime-metadata-documentation"><a href="#runtime-metadata-documentation">Runtime Metadata Documentation</a></h3>
+<p>The documentation added to this pallet is included in the runtime metadata.</p>
+<p>The documentation can be defined in the following ways:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[pallet::pallet]
+</span><span class="doccomment">/// Documentation for pallet 1
+</span><span class="attr">#[doc = <span class="string">&quot;Documentation for pallet 2&quot;</span>]
+#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;../README.md&quot;</span>)]
+#[pallet_doc(<span class="string">&quot;../doc1.md&quot;</span>)]
+#[pallet_doc(<span class="string">&quot;../doc2.md&quot;</span>)]
+</span><span class="kw">pub mod </span>pallet {}</code></pre></div>
+<p>The runtime metadata for this pallet contains the following</p>
+<ul>
+<li>“ Documentation for pallet 1“ (captured from <code>///</code>)</li>
+<li>“Documentation for pallet 2”  (captured from <code>#[doc]</code>)</li>
+<li>content of ../README.md       (captured from <code>#[doc]</code> with <code>include_str!</code>)</li>
+<li>content of “../doc1.md”       (captured from <code>pallet_doc</code>)</li>
+<li>content of “../doc2.md”       (captured from <code>pallet_doc</code>)</li>
+</ul>
+<h4 id="doc-attribute"><a href="#doc-attribute"><code>doc</code> attribute</a></h4>
+<p>The value of the <code>doc</code> attribute is included in the runtime metadata, as well as
+expanded on the pallet module. The previous example is expanded to:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="doccomment">/// Documentation for pallet 1
+/// Documentation for pallet 2
+/// Content of README.md
+</span><span class="kw">pub mod </span>pallet {}</code></pre></div>
+<p>If you want to specify the file from which the documentation is loaded, you can use the
+<code>include_str</code> macro. However, if you only want the documentation to be included in the
+runtime metadata, use the <code>pallet_doc</code> attribute.</p>
+<h4 id="pallet_doc-attribute"><a href="#pallet_doc-attribute"><code>pallet_doc</code> attribute</a></h4>
+<p>Unlike the <code>doc</code> attribute, the documentation provided to the <code>pallet_doc</code> attribute is
+not inserted on the module.</p>
+<p>The <code>pallet_doc</code> attribute can only be provided with one argument,
+which is the file path that holds the documentation to be added to the metadata.</p>
+<p>This approach is beneficial when you use the <code>include_str</code> macro at the beginning of the file
+and want that documentation to extend to the runtime metadata, without reiterating the
+documentation on the pallet module itself.</p>
+</div></details></section></div></main></body></html>

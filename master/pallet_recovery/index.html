@@ -1,0 +1,123 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_recovery/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_recovery/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Recovery Pallet"><title>pallet_recovery - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pallet_recovery" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../pallet_recovery/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../pallet_recovery/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate pallet_recovery</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 4.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pallet_recovery</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/pallet_recovery/lib.rs.html#18-718">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="recovery-pallet"><a href="#recovery-pallet">Recovery Pallet</a></h2>
+<ul>
+<li><a href="pallet/trait.Config.html" title="trait pallet_recovery::pallet::Config"><code>Config</code></a></li>
+<li><a href="pallet/enum.Call.html" title="enum pallet_recovery::pallet::Call"><code>Call</code></a></li>
+</ul>
+<h3 id="overview"><a href="#overview">Overview</a></h3>
+<p>The Recovery pallet is an M-of-N social recovery tool for users to gain
+access to their accounts if the private key or other authentication mechanism
+is lost. Through this pallet, a user is able to make calls on-behalf-of another
+account which they have recovered. The recovery process is protected by trusted
+“friends” whom the original account owner chooses. A threshold (M) out of N
+friends are needed to give another account access to the recoverable account.</p>
+<h4 id="recovery-configuration"><a href="#recovery-configuration">Recovery Configuration</a></h4>
+<p>The recovery process for each recoverable account can be configured by the account owner.
+They are able to choose:</p>
+<ul>
+<li><code>friends</code> - The list of friends that the account owner trusts to protect the recovery process
+for their account.</li>
+<li><code>threshold</code> - The number of friends that need to approve a recovery process for the account to
+be successfully recovered.</li>
+<li><code>delay_period</code> - The minimum number of blocks after the beginning of the recovery process that
+need to pass before the account can be successfully recovered.</li>
+</ul>
+<p>There is a configurable deposit that all users need to pay to create a recovery
+configuration. This deposit is composed of a base deposit plus a multiplier for
+the number of friends chosen. This deposit is returned in full when the account
+owner removes their recovery configuration.</p>
+<h4 id="recovery-life-cycle"><a href="#recovery-life-cycle">Recovery Life Cycle</a></h4>
+<p>The intended life cycle of a successful recovery takes the following steps:</p>
+<ol>
+<li>The account owner calls <code>create_recovery</code> to set up a recovery configuration for their
+account.</li>
+<li>At some later time, the account owner loses access to their account and wants to recover it.
+Likely, they will need to create a new account and fund it with enough balance to support the
+transaction fees and the deposit for the recovery process.</li>
+<li>Using this new account, they call <code>initiate_recovery</code>.</li>
+<li>Then the account owner would contact their configured friends to vouch for the recovery
+attempt. The account owner would provide their old account id and the new account id, and
+friends would call <code>vouch_recovery</code> with those parameters.</li>
+<li>Once a threshold number of friends have vouched for the recovery attempt, the account owner
+needs to wait until the delay period has passed, starting when they initiated the recovery
+process.</li>
+<li>Now the account owner is able to call <code>claim_recovery</code>, which subsequently allows them to
+call <code>as_recovered</code> and directly make calls on-behalf-of the lost account.</li>
+<li>Using the now recovered account, the account owner can call <code>close_recovery</code> on the recovery
+process they opened, reclaiming the recovery deposit they placed.</li>
+<li>Then the account owner should then call <code>remove_recovery</code> to remove the recovery
+configuration on the recovered account and reclaim the recovery configuration deposit they
+placed.</li>
+<li>Using <code>as_recovered</code>, the account owner is able to call any other pallets to clean up their
+state and reclaim any reserved or locked funds. They can then transfer all funds from the
+recovered account to the new account.</li>
+<li>When the recovered account becomes reaped (i.e. its free and reserved balance drops to
+zero), the final recovery link is removed.</li>
+</ol>
+<h4 id="malicious-recovery-attempts"><a href="#malicious-recovery-attempts">Malicious Recovery Attempts</a></h4>
+<p>Initializing a the recovery process for a recoverable account is open and
+permissionless. However, the recovery deposit is an economic deterrent that
+should disincentivize would-be attackers from trying to maliciously recover
+accounts.</p>
+<p>The recovery deposit can always be claimed by the account which is trying to
+to be recovered. In the case of a malicious recovery attempt, the account
+owner who still has access to their account can claim the deposit and
+essentially punish the malicious user.</p>
+<p>Furthermore, the malicious recovery attempt can only be successful if the
+attacker is also able to get enough friends to vouch for the recovery attempt.
+In the case where the account owner prevents a malicious recovery process,
+this pallet makes it near-zero cost to re-configure the recovery settings and
+remove/replace friends who are acting inappropriately.</p>
+<h4 id="safety-considerations"><a href="#safety-considerations">Safety Considerations</a></h4>
+<p>It is important to note that this is a powerful pallet that can compromise the
+security of an account if used incorrectly. Some recommended practices for users
+of this pallet are:</p>
+<ul>
+<li>Configure a significant <code>delay_period</code> for your recovery process: As long as you have access
+to your recoverable account, you need only check the blockchain once every <code>delay_period</code>
+blocks to ensure that no recovery attempt is successful against your account. Using off-chain
+notification systems can help with this, but ultimately, setting a large <code>delay_period</code> means
+that even the most skilled attacker will need to wait this long before they can access your
+account.</li>
+<li>Use a high threshold of approvals: Setting a value of 1 for the threshold means that any of
+your friends would be able to recover your account. They would simply need to start a recovery
+process and approve their own process. Similarly, a threshold of 2 would mean that any 2
+friends could work together to gain access to your account. The only way to prevent against
+these kinds of attacks is to choose a high threshold of approvals and select from a diverse
+friend group that would not be able to reasonably coordinate with one another.</li>
+<li>Reset your configuration over time: Since the entire deposit of creating a recovery
+configuration is returned to the user, the only cost of updating your recovery configuration
+is the transaction fees for the calls. Thus, it is strongly encouraged to regularly update
+your recovery configuration as your life changes and your relationship with new and existing
+friends change as well.</li>
+</ul>
+<h3 id="interface"><a href="#interface">Interface</a></h3><h4 id="dispatchable-functions"><a href="#dispatchable-functions">Dispatchable Functions</a></h4><h5 id="for-general-users"><a href="#for-general-users">For General Users</a></h5>
+<ul>
+<li><code>create_recovery</code> - Create a recovery configuration for your account and make it recoverable.</li>
+<li><code>initiate_recovery</code> - Start the recovery process for a recoverable account.</li>
+</ul>
+<h5 id="for-friends-of-a-recoverable-account"><a href="#for-friends-of-a-recoverable-account">For Friends of a Recoverable Account</a></h5>
+<ul>
+<li><code>vouch_recovery</code> - As a <code>friend</code> of a recoverable account, vouch for a recovery attempt on the
+account.</li>
+</ul>
+<h5 id="for-a-user-who-successfully-recovered-an-account"><a href="#for-a-user-who-successfully-recovered-an-account">For a User Who Successfully Recovered an Account</a></h5>
+<ul>
+<li><code>claim_recovery</code> - Claim access to the account that you have successfully completed the
+recovery process for.</li>
+<li><code>as_recovered</code> - Send a transaction as an account that you have recovered. See other functions
+below.</li>
+</ul>
+<h5 id="for-the-recoverable-account"><a href="#for-the-recoverable-account">For the Recoverable Account</a></h5>
+<ul>
+<li><code>close_recovery</code> - Close an active recovery process for your account and reclaim the recovery
+deposit.</li>
+<li><code>remove_recovery</code> - Remove the recovery configuration from the account, making it
+un-recoverable.</li>
+</ul>
+<h5 id="for-super-users"><a href="#for-super-users">For Super Users</a></h5>
+<ul>
+<li><code>set_recovered</code> - The ROOT origin is able to skip the recovery process and directly allow one
+account to access another.</li>
+</ul>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.WeightInfo"><code>pub use weights::<a class="trait" href="weights/trait.WeightInfo.html" title="trait pallet_recovery::weights::WeightInfo">WeightInfo</a>;</code></div></li><li><div class="item-name"><code>pub use <a class="mod" href="pallet/index.html" title="mod pallet_recovery::pallet">pallet</a>::*;</code></div></li></ul><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="pallet/index.html" title="mod pallet_recovery::pallet">pallet</a></div><div class="desc docblock-short">The <code>pallet</code> module in each FRAME pallet hosts the most important items needed
+to construct this pallet.</div></li><li><div class="item-name"><a class="mod" href="weights/index.html" title="mod pallet_recovery::weights">weights</a></div><div class="desc docblock-short">Autogenerated weights for pallet_recovery</div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ActiveRecovery.html" title="struct pallet_recovery::ActiveRecovery">ActiveRecovery</a></div><div class="desc docblock-short">An active recovery process.</div></li><li><div class="item-name"><a class="struct" href="struct.RecoveryConfig.html" title="struct pallet_recovery::RecoveryConfig">RecoveryConfig</a></div><div class="desc docblock-short">Configuration for recovering an account.</div></li></ul></section></div></main></body></html>

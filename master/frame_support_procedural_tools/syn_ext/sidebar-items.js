@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["expr_contains_ident","extract_type_option","type_contains_ident"],"struct":["Braces","Brackets","Meta","NoTrailing","OuterAttributes","Parens","PunctuatedInner","StopParse","Trailing"],"type":["Punctuated","PunctuatedTrailing"]};

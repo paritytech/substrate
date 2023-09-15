@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Renouncing"],"mod":["migrations","pallet","weights"],"struct":["SeatHolder","Voter"]};

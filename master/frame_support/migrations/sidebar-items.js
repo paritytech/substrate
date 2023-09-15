@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["VersionedPostUpgradeData"],"fn":["migrate_from_pallet_version_to_storage_version"],"struct":["RemovePallet","VersionedRuntimeUpgrade"],"trait":["PalletVersionToStorageVersionHelper","StoreCurrentStorageVersion"]};

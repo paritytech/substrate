@@ -1,0 +1,176 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/subkey/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/subkey/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Subkey"><title>subkey - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="subkey" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../subkey/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../subkey/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate subkey</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 3.0.0</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">subkey</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/subkey/lib.rs.html#19-359">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="subkey"><a href="#subkey">Subkey</a></h2>
+<p>Subkey is a commandline utility included with Substrate. It allows generating and restoring keys
+for Substrate based chains such as Polkadot, Kusama and a growing number of parachains and
+Substrate based projects.
+<code>subkey</code> provides a few sub-commands to generate keys, check keys, sign messages, verify
+messages, etc…</p>
+<p>You can see the full list of commands with <code>subkey --help</code>. Most commands have additional help
+available with for instance <code>subkey generate --help</code> for the <code>generate</code> command.</p>
+<h3 id="safety-first"><a href="#safety-first">Safety first</a></h3>
+<p><code>subkey</code> does not need an internet connection to work. Indeed, for the best security, you should
+be using <code>subkey</code> on a machine that is <strong>not connected</strong> to the internet.</p>
+<p><code>subkey</code> deals with <strong>seeds</strong> and <strong>private keys</strong>. Make sure to use <code>subkey</code> in a safe
+environment (ie. no one looking over your shoulder) and on a safe computer (ie. no one able to
+check your command history).</p>
+<p>If you save any output of <code>subkey</code> into a file, make sure to apply proper permissions and/or
+delete the file as soon as possible.</p>
+<h3 id="usage"><a href="#usage">Usage</a></h3>
+<p>The following guide explains <em>some</em> of the <code>subkey</code> commands. For the full list and the most up
+to date documentation, make sure to check the integrated help with <code>subkey --help</code>.</p>
+<h4 id="install-with-cargo"><a href="#install-with-cargo">Install with Cargo</a></h4>
+<p>You will need to have the Substrate build dependencies to install Subkey. Use the following two
+commands to install the dependencies and Subkey, respectively:</p>
+<p>Command:</p>
+<div class="example-wrap"><pre class="language-bash"><code># Install only `subkey`, at a specific version of the subkey crate
+cargo install --force subkey --git https://github.com/paritytech/substrate --version &lt;SET VERSION&gt; --locked
+# If you run into issues building, you likely are missing deps defined in https://docs.substrate.io/install/
+</code></pre></div><h4 id="run-in-a-container"><a href="#run-in-a-container">Run in a container</a></h4><div class="example-wrap"><pre class="language-bash"><code># Use `--pull=always` with the `latest` tag, or specify a version in a tag
+docker run -it --pull=always docker.io/parity/subkey:latest &lt;command to subkey&gt;
+</code></pre></div><h4 id="generate-a-random-account"><a href="#generate-a-random-account">Generate a random account</a></h4>
+<p>Generating a new key is as simple as running:</p>
+<div class="example-wrap"><pre class="language-bash"><code>subkey generate
+</code></pre></div>
+<p>The output looks similar to:</p>
+<div class="example-wrap"><pre class="language-text"><code>Secret phrase `hotel forest jar hover kite book view eight stuff angle legend defense` is account:
+  Secret seed:      0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
+  Public key (hex): 0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
+  Account ID:       0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
+  SS58 Address:     5Hpm9fq3W3dQgwWpAwDS2ZHKAdnk86QRCu7iX4GnmDxycrte
+</code></pre></div>
+<hr />
+<p>☠️ DO NT RE-USE ANY OF THE SEEDS AND SECRETS FROM THIS PAGE ☠️.</p>
+<p>You can read more about security and risks in <a href="./SECURITY.md">SECURITY.md</a> and in the <a href="https://wiki.polkadot.network/docs/learn-account-generation">Polkadot Wiki</a>.</p>
+<hr />
+<p>The output above shows a <strong>secret phrase</strong> (also called <strong>mnemonic phrase</strong>) and the <strong>secret
+seed</strong> (also called <strong>Private Key</strong>). Those 2 secrets are the pieces of information you MUST
+keep safe and secret. All the other information below can be derived from those secrets.</p>
+<p>The output above also show the <strong>public key</strong> and the <strong>Account ID</strong>. Those are the independant
+from the network where you will use the key.</p>
+<p>The <strong>SS58 address</strong> (or <strong>Public Address</strong>) of a new account is a reprensentation of the public
+keys of an account for a given network (for instance Kusama or Polkadot).</p>
+<p>You can read more about the <a href="https://docs.substrate.io/reference/address-formats/">SS58 format in the Substrate Docs</a> and see the list of reserved prefixes in the <a href="https://github.com/paritytech/ss58-registry">SS58 Registry</a>.</p>
+<p>For instance, considering the previous seed
+<code>0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d</code> the SS58 addresses are:</p>
+<ul>
+<li>Polkadot: <code>16m4J167Mptt8UXL8aGSAi7U2FnPpPxZHPrCgMG9KJzVoFqM</code></li>
+<li>Kusama: <code>JLNozAv8QeLSbLFwe2UvWeKKE4yvmDbfGxTuiYkF2BUMx4M</code></li>
+</ul>
+<h4 id="json-output"><a href="#json-output">Json output</a></h4>
+<p><code>subkey</code> can calso generate the output as <em>json</em>. This is useful for automation.</p>
+<p>command:</p>
+<div class="example-wrap"><pre class="language-bash"><code>subkey generate --output-type json
+</code></pre></div>
+<p>output:</p>
+<div class="example-wrap"><pre class="language-json"><code>{
+  &quot;accountId&quot;: &quot;0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515&quot;,
+  &quot;publicKey&quot;: &quot;0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515&quot;,
+  &quot;secretPhrase&quot;: &quot;hotel forest jar hover kite book view eight stuff angle legend defense&quot;,
+  &quot;secretSeed&quot;: &quot;0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d&quot;,
+  &quot;ss58Address&quot;: &quot;5Hpm9fq3W3dQgwWpAwDS2ZHKAdnk86QRCu7iX4GnmDxycrte&quot;
+}
+</code></pre></div>
+<p>So if you only want to get the <code>secretSeed</code> for instance, you can use:</p>
+<p>command:</p>
+<div class="example-wrap"><pre class="language-bash"><code>subkey generate --output-type json | jq -r .secretSeed
+</code></pre></div>
+<p>output:</p>
+<div class="example-wrap"><pre class="language-text"><code>0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
+</code></pre></div><h4 id="additional-user-defined-password"><a href="#additional-user-defined-password">Additional user-defined password</a></h4>
+<p><code>subkey</code> supports an additional user-defined secret that will be appended to the seed. Let’s see
+the following example:</p>
+<div class="example-wrap"><pre class="language-bash"><code>subkey generate --password extra_secret
+</code></pre></div>
+<p>output:</p>
+<div class="example-wrap"><pre class="language-text"><code>Secret phrase `soup lyrics media market way crouch elevator put moon useful question wide` is account:
+  Secret seed:      0xe7cfd179d6537a676cb94bac3b5c5c9cb1550e846ac4541040d077dfbac2e7fd
+  Public key (hex): 0xf6a233c3e1de1a2ae0486100b460b3ce3d7231ddfe9dadabbd35ab968c70905d
+  Account ID:       0xf6a233c3e1de1a2ae0486100b460b3ce3d7231ddfe9dadabbd35ab968c70905d
+  SS58 Address:     5He5pZpc7AJ8evPuab37vJF6KkFDqq9uDq2WXh877Qw6iaVC
+</code></pre></div>
+<p>Using the <code>inspect</code> command (see more details below), we see that knowning only the <strong>secret
+seed</strong> is no longer sufficient to recover the account:</p>
+<div class="example-wrap"><pre class="language-bash"><code>subkey inspect &quot;soup lyrics media market way crouch elevator put moon useful question wide&quot;
+</code></pre></div>
+<p>which recovers the account <code>5Fe4sqj2K4fRuzEGvToi4KATqZfiDU7TqynjXG6PZE2dxwyh</code> and not
+<code>5He5pZpc7AJ8evPuab37vJF6KkFDqq9uDq2WXh877Qw6iaVC</code> as we expected. The additional user-defined
+<strong>password</strong> (<code>extra_secret</code> in our example) is now required to fully recover the account. Let’s
+inspect the the previous mnemonic, this time passing also the required <code>password</code> as shown
+below:</p>
+<div class="example-wrap"><pre class="language-bash"><code>subkey inspect --password extra_secret &quot;soup lyrics media market way crouch elevator put moon useful question wide&quot;
+</code></pre></div>
+<p>This time, we properly recovered <code>5He5pZpc7AJ8evPuab37vJF6KkFDqq9uDq2WXh877Qw6iaVC</code>.</p>
+<h4 id="inspecting-a-key"><a href="#inspecting-a-key">Inspecting a key</a></h4>
+<p>If you have <em>some data</em> about a key, <code>subkey inpsect</code> will help you discover more information
+about it.</p>
+<p>If you have <strong>secrets</strong> that you would like to verify for instance, you can use:</p>
+<div class="example-wrap"><pre class="language-bash"><code>subkey inspect &lt; mnemonic | seed &gt;
+</code></pre></div>
+<p>If you have only <strong>public data</strong>, you can see a subset of the information:</p>
+<div class="example-wrap"><pre class="language-bash"><code>subkey inspect --public &lt; pubkey | address &gt;
+</code></pre></div>
+<p><strong>NOTE</strong>: While you will be able to recover the secret seed from the mnemonic, the opposite is
+not possible.</p>
+<p><strong>NOTE</strong>: For obvious reasons, the <strong>secrets</strong> cannot be recovered from passing <strong>public data</strong>
+such as <code>pubkey</code> or <code>address</code> as input.</p>
+<p>command:</p>
+<div class="example-wrap"><pre class="language-bash"><code>subkey inspect 0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
+</code></pre></div>
+<p>output:</p>
+<div class="example-wrap"><pre class="language-text"><code>Secret Key URI `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d` is account:
+  Secret seed:      0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
+  Public key (hex): 0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
+  Account ID:       0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
+  SS58 Address:     5Hpm9fq3W3dQgwWpAwDS2ZHKAdnk86QRCu7iX4GnmDxycrte
+</code></pre></div><h4 id="signing"><a href="#signing">Signing</a></h4>
+<p><code>subkey</code> allows using a <strong>secret key</strong> to sign a random message. The signature can then be
+verified by anyone using your <strong>public key</strong>:</p>
+<div class="example-wrap"><pre class="language-bash"><code>echo -n &lt;msg&gt; | subkey sign --suri &lt;seed|mnemonic&gt;
+</code></pre></div>
+<p>example:</p>
+<div class="example-wrap"><pre class="language-text"><code>MESSAGE=hello
+SURI=0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
+echo -n $MESSAGE | subkey sign --suri $SURI
+</code></pre></div>
+<p>output:</p>
+<div class="example-wrap"><pre class="language-text"><code>9201af3788ad4f986b800853c79da47155f2e08fde2070d866be4c27ab060466fea0623dc2b51f4392f4c61f25381a62848dd66c5d8217fae3858e469ebd668c
+</code></pre></div>
+<p><strong>NOTE</strong>: Each run of the <code>sign</code> command will yield a different output. While each signature is
+different, they are all valid.</p>
+<h4 id="verifying-a-signature"><a href="#verifying-a-signature">Verifying a signature</a></h4>
+<p>Given a message, a signature and an address, <code>subkey</code> can verify whether the <strong>message</strong> has
+been digitally signed by the holder (or one of the holders) of the <strong>private key</strong> for the given
+<strong>address</strong>:</p>
+<div class="example-wrap"><pre class="language-bash"><code>echo -n &lt;msg&gt; | subkey verify &lt;sig&gt; &lt;address&gt;
+</code></pre></div>
+<p>example:</p>
+<div class="example-wrap"><pre class="language-bash"><code>MESSAGE=hello
+URI=0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
+SIGNATURE=9201af3788ad4f986b800853c79da47155f2e08fde2070d866be4c27ab060466fea0623dc2b51f4392f4c61f25381a62848dd66c5d8217fae3858e469ebd668c
+echo -n $MESSAGE | subkey verify $SIGNATURE $URI
+</code></pre></div>
+<p>output:</p>
+<div class="example-wrap"><pre class="language-text"><code>Signature verifies correctly.
+</code></pre></div>
+<p>A failure looks like:</p>
+<div class="example-wrap"><pre class="language-text"><code>Error: SignatureInvalid
+</code></pre></div><h4 id="using-the-vanity-generator"><a href="#using-the-vanity-generator">Using the vanity generator</a></h4>
+<p>You can use the included vanity generator to find a seed that provides an address which includes
+the desired pattern. Be warned, depending on your hardware this may take a while.</p>
+<p>command:</p>
+<div class="example-wrap"><pre class="language-bash"><code>subkey vanity --network polkadot --pattern bob
+</code></pre></div>
+<p>output:</p>
+<div class="example-wrap"><pre class="language-text"><code>Generating key containing pattern &#39;bob&#39;
+best: 190 == top: 189
+Secret Key URI `0x8c9a73097f235b84021a446bc2826a00c690ea0be3e0d81a84931cb4146d6691` is account:
+  Secret seed:      0x8c9a73097f235b84021a446bc2826a00c690ea0be3e0d81a84931cb4146d6691
+  Public key (hex): 0x1a8b32e95c1f571118ea0b84801264c3c70f823e320d099e5de31b9b1f18f843
+  Account ID:       0x1a8b32e95c1f571118ea0b84801264c3c70f823e320d099e5de31b9b1f18f843
+  SS58 Address:     1bobYxBPjZWRPbVo35aSwci1u5Zmq8P6J2jpa4kkudBZMqE
+</code></pre></div>
+<p><code>Bob</code> now got a nice address starting with their name:
+1<strong>bob</strong>YxBPjZWRPbVo35aSwci1u5Zmq8P6J2jpa4kkudBZMqE.</p>
+<p><strong>Note</strong>: While <code>Bob</code>, having a short name (3 chars), got a result rather quickly, it will take
+much longer for <code>Alice</code> who has a much longer name, thus the chances to generate a random
+address that contains the chain <code>alice</code> will be much smaller.</p>
+</div></details><h2 id="enums" class="small-section-header"><a href="#enums">Enums</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Subkey.html" title="enum subkey::Subkey">Subkey</a></div></li></ul><h2 id="functions" class="small-section-header"><a href="#functions">Functions</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.run.html" title="fn subkey::run">run</a></div><div class="desc docblock-short">Run the subkey command, given the appropriate runtime.</div></li></ul></section></div></main></body></html>

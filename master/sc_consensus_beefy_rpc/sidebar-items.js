@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error","ErrorCode"],"struct":["Beefy"],"trait":["BeefyApiClient","BeefyApiServer"]};

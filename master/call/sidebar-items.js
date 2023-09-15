@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ERA","MAX_ED_MULTIPLE","MIN_ED_MULTIPLE","REWARD_AGENT_ACCOUNT"],"fn":["fund_account","main","random_call","random_ed_multiple","random_existing_pool","random_signed_origin"],"struct":["RewardAgent"]};

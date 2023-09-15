@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Call","Event"],"fn":["__type_value_for_next_fee_multiplier_on_empty"],"mod":["dispatchables","storage_types"],"struct":["GenesisConfig","NextFeeMultiplierOnEmpty","Pallet"],"trait":["Config"],"type":["Module","NextFeeMultiplier"]};

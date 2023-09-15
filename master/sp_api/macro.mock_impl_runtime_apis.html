@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/sp_api/macro.mock_impl_runtime_apis.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/sp_api/macro.mock_impl_runtime_apis.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Mocks given trait implementations as runtime apis."><title>mock_impl_runtime_apis in sp_api - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="sp_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../sp_api/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../sp_api/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><div class="sidebar-elems"><h2><a href="index.html">In sp_api</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">sp_api</a>::<wbr><a class="macro" href="#">mock_impl_runtime_apis</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/sp_api_proc_macro/lib.rs.html#38">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>mock_impl_runtime_apis!() { /* proc-macro */ }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Mocks given trait implementations as runtime apis.</p>
+<p>Accepts similar syntax as <a href="macro.impl_runtime_apis.html" title="macro sp_api::impl_runtime_apis"><code>impl_runtime_apis!</code></a> and generates
+simplified mock implementations of the given runtime apis. The difference in syntax is that
+the trait does not need to be referenced by a qualified path, methods accept the <code>&amp;self</code>
+parameter and the error type can be specified as associated type. If no error type is
+specified <a href="https://doc.rust-lang.org/1.70.0/alloc/string/struct.String.html" title="struct alloc::string::String"><code>String</code></a> is used as error type.</p>
+<p>Besides implementing the given traits, the <a href="trait.Core.html" title="trait sp_api::Core"><code>Core</code></a> and
+<a href="trait.ApiExt.html" title="trait sp_api::ApiExt"><code>ApiExt</code></a> are implemented automatically.</p>
+<h2 id="example"><a href="#example">Example</a></h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">struct </span>MockApi {
+    balance: u64,
+}
+
+<span class="doccomment">/// All runtime api mock implementations need to be done in one call of the macro!
+</span><span class="macro">sp_api::mock_impl_runtime_apis! </span>{
+    <span class="kw">impl </span>Balance&lt;Block&gt; <span class="kw">for </span>MockApi {
+        <span class="doccomment">/// Here we take the `&amp;self` to access the instance.
+        </span><span class="kw">fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+            <span class="self">self</span>.balance
+        }
+        <span class="kw">fn </span>set_balance(_bal: u64) {
+            <span class="comment">// Store the balance
+        </span>}
+    }
+
+    <span class="kw">impl </span>BlockBuilder&lt;Block&gt; <span class="kw">for </span>MockApi {
+        <span class="kw">fn </span>build_block() -&gt; Block {
+             <span class="macro">unimplemented!</span>(<span class="string">&quot;Not Required in tests&quot;</span>)
+        }
+    }
+}
+</code></pre></div>
+<h2 id="advanced-attribute"><a href="#advanced-attribute"><code>advanced</code> attribute</a></h2>
+<p>This attribute can be placed above individual function in the mock implementation to
+request more control over the function declaration. From the client side each runtime api
+function is called with the <code>at</code> parameter that is a <a href="../sp_runtime/traits/trait.Hash.html" title="trait sp_runtime::traits::Hash"><code>Hash</code></a>.
+When using the <code>advanced</code> attribute, the macro expects that the first parameter of the
+function is this <code>at</code> parameter. Besides that the macro also doesn’t do the automatic
+return value rewrite, which means that full return value must be specified. The full return
+value is constructed like <a href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a><code>&lt;&lt;ReturnValue&gt;, Error&gt;</code> while <code>ReturnValue</code> being the
+return value that is specified in the trait declaration.</p>
+<h3 id="example-1"><a href="#example-1">Example</a></h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">struct </span>MockApi {
+    balance: u64,
+}
+
+<span class="macro">sp_api::mock_impl_runtime_apis! </span>{
+    <span class="kw">impl </span>Balance&lt;Block&gt; <span class="kw">for </span>MockApi {
+        <span class="attr">#[advanced]
+        </span><span class="kw">fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>, at: &lt;Block <span class="kw">as </span>BlockT&gt;::Hash) -&gt; <span class="prelude-ty">Result</span>&lt;u64, sp_api::ApiError&gt; {
+            <span class="macro">println!</span>(<span class="string">&quot;Being called at: {}&quot;</span>, at);
+
+            <span class="prelude-val">Ok</span>(<span class="self">self</span>.balance.into())
+        }
+        <span class="attr">#[advanced]
+        </span><span class="kw">fn </span>set_balance(at: &lt;Block <span class="kw">as </span>BlockT&gt;::Hash, val: u64) -&gt; <span class="prelude-ty">Result</span>&lt;(), sp_api::ApiError&gt; {
+            <span class="macro">println!</span>(<span class="string">&quot;Being called at: {}&quot;</span>, at);
+
+            <span class="prelude-val">Ok</span>(().into())
+        }
+    }
+}
+</code></pre></div>
+</div></details></section></div></main></body></html>

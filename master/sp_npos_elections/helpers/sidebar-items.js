@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["assignment_ratio_to_staked","assignment_ratio_to_staked_normalized","assignment_staked_to_ratio","assignment_staked_to_ratio_normalized"]};

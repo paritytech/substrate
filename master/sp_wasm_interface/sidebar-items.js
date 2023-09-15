@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ReturnValue","Value","ValueType"],"macro":["if_wasmtime_is_enabled"],"struct":["ExtendedHostFunctions","Pointer","Signature"],"trait":["Function","FunctionContext","HostFunctionRegistry","HostFunctions","IntoValue","MaybeRefUnwindSafe","PointerType","TryFromValue","WasmTy"],"type":["Result","WordSize"]};

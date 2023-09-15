@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Subcommand"],"fn":["run"],"mod":["chain_spec","service"],"struct":["Cli"]};

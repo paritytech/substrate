@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["clear_prefix","contains_prefixed_key","exists","get","get_or","get_or_default","get_or_else","get_raw","kill","kill_prefix","put","put_raw","take","take_or","take_or_default","take_or_else"]};

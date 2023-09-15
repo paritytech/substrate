@@ -1,0 +1,125 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/frame_benchmarking/v1/macro.benchmarks.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/frame_benchmarking/v1/macro.benchmarks.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Construct pallet benchmarks for weighing dispatchables."><title>benchmarks in frame_benchmarking::v1 - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="frame_benchmarking" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../../static.files/storage-62ce34ea385b278a.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../../frame_benchmarking/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../../frame_benchmarking/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><div class="sidebar-elems"><h2><a href="index.html">In frame_benchmarking::v1</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../index.html">frame_benchmarking</a>::<wbr><a href="index.html">v1</a>::<wbr><a class="macro" href="#">benchmarks</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../../src/frame_benchmarking/v1.rs.html#172-187">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules! </span>benchmarks {
+    (
+		$( <span class="macro-nonterminal">$rest</span>:tt )*
+	) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Construct pallet benchmarks for weighing dispatchables.</p>
+<p>Works around the idea of complexity parameters, named by a single letter (which is usually
+upper cased in complexity notation but is lower-cased for use in this macro).</p>
+<p>Complexity parameters (“parameters”) have a range which is a <code>u32</code> pair. Every time a benchmark
+is prepared and run, this parameter takes a concrete value within the range. There is an
+associated instancing block, which is a single expression that is evaluated during
+preparation. It may use <code>?</code> (<code>i.e. </code>return Err(…)`) to bail with a string error. Here’s a
+few examples:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// These two are equivalent:
+</span><span class="kw">let </span>x <span class="kw">in </span><span class="number">0 </span>.. <span class="number">10</span>;
+<span class="kw">let </span>x <span class="kw">in </span><span class="number">0 </span>.. <span class="number">10 </span>=&gt; ();
+<span class="comment">// This one calls a setup function and might return an error (which would be terminal).
+</span><span class="kw">let </span>y <span class="kw">in </span><span class="number">0 </span>.. <span class="number">10 </span>=&gt; setup(y)<span class="question-mark">?</span>;
+<span class="comment">// This one uses a code block to do lots of stuff:
+</span><span class="kw">let </span>z <span class="kw">in </span><span class="number">0 </span>.. <span class="number">10 </span>=&gt; {
+  <span class="kw">let </span>a = z * z / <span class="number">5</span>;
+  <span class="kw">let </span>b = do_something(a)<span class="question-mark">?</span>;
+  combine_into(z, b);
+}</code></pre></div>
+<p>Note that due to parsing restrictions, if the <code>from</code> expression is not a single token (i.e. a
+literal or constant), then it must be parenthesized.</p>
+<p>The macro allows for a number of “arms”, each representing an individual benchmark. Using the
+simple syntax, the associated dispatchable function maps 1:1 with the benchmark and the name of
+the benchmark is the same as that of the associated function. However, extended syntax allows
+for arbitrary expressions to be evaluated in a benchmark (including for example,
+<code>on_initialize</code>).</p>
+<p>Note that the ranges are <em>inclusive</em> on both sides. This is in contrast to ranges in Rust which
+are left-inclusive right-exclusive.</p>
+<p>Each arm may also have a block of code which is run prior to any instancing and a block of code
+which is run afterwards. All code blocks may draw upon the specific value of each parameter
+at any time. Local variables are shared between the two pre- and post- code blocks, but do not
+leak from the interior of any instancing expressions.</p>
+<p>Example:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">benchmarks! </span>{
+  where_clause {  <span class="kw">where </span>T::A: From&lt;u32&gt; } <span class="comment">// Optional line to give additional bound on `T`.
+
+  // first dispatchable: foo; this is a user dispatchable and operates on a `u8` vector of
+  // size `l`
+  </span>foo {
+    <span class="kw">let </span>caller = account::&lt;T&gt;(<span class="string">b&quot;caller&quot;</span>, <span class="number">0</span>, benchmarks_seed);
+    <span class="kw">let </span>l <span class="kw">in </span><span class="number">1 </span>.. MAX_LENGTH =&gt; initialize_l(l);
+  }: <span class="kw">_</span>(RuntimeOrigin::Signed(caller), <span class="macro">vec!</span>[<span class="number">0u8</span>; l])
+
+  <span class="comment">// second dispatchable: bar; this is a root dispatchable and accepts a `u8` vector of size
+  // `l`.
+  // In this case, we explicitly name the call using `bar` instead of `_`.
+  </span>bar {
+    <span class="kw">let </span>l <span class="kw">in </span><span class="number">1 </span>.. MAX_LENGTH =&gt; initialize_l(l);
+  }: bar(RuntimeOrigin::Root, <span class="macro">vec!</span>[<span class="number">0u8</span>; l])
+
+  <span class="comment">// third dispatchable: baz; this is a user dispatchable. It isn&#39;t dependent on length like the
+  // other two but has its own complexity `c` that needs setting up. It uses `caller` (in the
+  // pre-instancing block) within the code block. This is only allowed in the param instancers
+  // of arms.
+  </span>baz1 {
+    <span class="kw">let </span>caller = account::&lt;T&gt;(<span class="string">b&quot;caller&quot;</span>, <span class="number">0</span>, benchmarks_seed);
+    <span class="kw">let </span>c = <span class="number">0 </span>.. <span class="number">10 </span>=&gt; setup_c(<span class="kw-2">&amp;</span>caller, c);
+  }: baz(RuntimeOrigin::Signed(caller))
+
+  <span class="comment">// this is a second benchmark of the baz dispatchable with a different setup.
+  </span>baz2 {
+    <span class="kw">let </span>caller = account::&lt;T&gt;(<span class="string">b&quot;caller&quot;</span>, <span class="number">0</span>, benchmarks_seed);
+    <span class="kw">let </span>c = <span class="number">0 </span>.. <span class="number">10 </span>=&gt; setup_c_in_some_other_way(<span class="kw-2">&amp;</span>caller, c);
+  }: baz(RuntimeOrigin::Signed(caller))
+
+  <span class="comment">// You may optionally specify the origin type if it can&#39;t be determined automatically like
+  // this.
+  </span>baz3 {
+    <span class="kw">let </span>caller = account::&lt;T&gt;(<span class="string">b&quot;caller&quot;</span>, <span class="number">0</span>, benchmarks_seed);
+    <span class="kw">let </span>l <span class="kw">in </span><span class="number">1 </span>.. MAX_LENGTH =&gt; initialize_l(l);
+  }: baz&lt;T::RuntimeOrigin&gt;(RuntimeOrigin::Signed(caller), <span class="macro">vec!</span>[<span class="number">0u8</span>; l])
+
+  <span class="comment">// this is benchmarking some code that is not a dispatchable.
+  </span>populate_a_set {
+    <span class="kw">let </span>x <span class="kw">in </span><span class="number">0 </span>.. <span class="number">10_000</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>m = Vec::&lt;u32&gt;::new();
+    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..x {
+      m.insert(i);
+    }
+  }: { m.into_iter().collect::&lt;BTreeSet&gt;() }
+}</code></pre></div>
+<p>Test functions are automatically generated for each benchmark and are accessible to you when you
+run <code>cargo test</code>. All tests are named <code>test_benchmark_&lt;benchmark_name&gt;</code>, implemented on the
+Pallet struct, and run them in a test externalities environment. The test function runs your
+benchmark just like a regular benchmark, but only testing at the lowest and highest values for
+each component. The function will return <code>Ok(())</code> if the benchmarks return no errors.</p>
+<p>It is also possible to generate one #<a href="https://doc.rust-lang.org/1.70.0/core/macros/builtin/attr.test.html" title="attr core::macros::builtin::test">test</a> function per benchmark by calling the
+<code>impl_benchmark_test_suite</code> macro inside the <code>benchmarks</code> block. The functions will be named
+<code>bench_&lt;benchmark_name&gt;</code> and can be run via <code>cargo test</code>.
+You will see one line of output per benchmark. This approach will give you more understandable
+error messages and allows for parallel benchmark execution.</p>
+<p>You can optionally add a <code>verify</code> code block at the end of a benchmark to test any final state
+of your benchmark in a unit test. For example:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>sort_vector {
+	<span class="kw">let </span>x <span class="kw">in </span><span class="number">1 </span>.. <span class="number">10000</span>;
+	<span class="kw">let </span><span class="kw-2">mut </span>m = Vec::&lt;u32&gt;::new();
+	<span class="kw">for </span>i <span class="kw">in </span>(<span class="number">0</span>..x).rev() {
+		m.push(i);
+	}
+}: {
+	m.sort();
+} verify {
+	<span class="macro">ensure!</span>(m[<span class="number">0</span>] == <span class="number">0</span>, <span class="string">&quot;You forgot to sort!&quot;</span>)
+}</code></pre></div>
+<p>These <code>verify</code> blocks will not affect your benchmark results!</p>
+<p>You can construct benchmark by using the <code>impl_benchmark_test_suite</code> macro or
+by manually implementing them like so:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[test]
+</span><span class="kw">fn </span>test_benchmarks() {
+  new_test_ext().execute_with(|| {
+    <span class="macro">assert_ok!</span>(Pallet::&lt;Test&gt;::test_benchmark_dummy());
+    <span class="macro">assert_err!</span>(Pallet::&lt;Test&gt;::test_benchmark_other_name(), <span class="string">&quot;Bad origin&quot;</span>);
+    <span class="macro">assert_ok!</span>(Pallet::&lt;Test&gt;::test_benchmark_sort_vector());
+    <span class="macro">assert_err!</span>(Pallet::&lt;Test&gt;::test_benchmark_broken_benchmark(), <span class="string">&quot;You forgot to sort!&quot;</span>);
+  });
+}</code></pre></div>
+</div></details></section></div></main></body></html>

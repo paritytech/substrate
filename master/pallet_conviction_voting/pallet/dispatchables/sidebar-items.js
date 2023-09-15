@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["delegate","remove_other_vote","remove_vote","undelegate","unlock","vote"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["new_in_mem","new_with_backend"],"struct":["Client","ClientConfig","LocalCallExecutor"]};

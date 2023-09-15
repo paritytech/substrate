@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["approvals","freeze","hold","metadata","roles"],"struct":["DecreaseIssuance","Dust","Imbalance","IncreaseIssuance"],"trait":["Balanced","Create","Destroy","HandleImbalanceDrop","Inspect","InspectEnumerable","Mutate","Unbalanced"],"type":["Credit","Debt"]};

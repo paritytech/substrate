@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_sudo/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_sudo/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Sudo Pallet"><title>pallet_sudo - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pallet_sudo" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../pallet_sudo/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../pallet_sudo/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate pallet_sudo</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 4.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pallet_sudo</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/pallet_sudo/lib.rs.html#18-299">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="sudo-pallet"><a href="#sudo-pallet">Sudo Pallet</a></h2>
+<ul>
+<li><a href="pallet/trait.Config.html" title="trait pallet_sudo::pallet::Config"><code>Config</code></a></li>
+<li><a href="pallet/enum.Call.html" title="enum pallet_sudo::pallet::Call"><code>Call</code></a></li>
+</ul>
+<h3 id="overview"><a href="#overview">Overview</a></h3>
+<p>The Sudo pallet allows for a single account (called the “sudo key”)
+to execute dispatchable functions that require a <code>Root</code> call
+or designate a new account to replace them as the sudo key.
+Only one account can be the sudo key at a time.</p>
+<h3 id="interface"><a href="#interface">Interface</a></h3><h4 id="dispatchable-functions"><a href="#dispatchable-functions">Dispatchable Functions</a></h4>
+<p>Only the sudo key can call the dispatchable functions from the Sudo pallet.</p>
+<ul>
+<li><code>sudo</code> - Make a <code>Root</code> call to a dispatchable function.</li>
+<li><code>set_key</code> - Assign a new account to be the sudo key.</li>
+</ul>
+<h3 id="usage"><a href="#usage">Usage</a></h3><h4 id="executing-privileged-functions"><a href="#executing-privileged-functions">Executing Privileged Functions</a></h4>
+<p>The Sudo pallet itself is not intended to be used within other pallets.
+Instead, you can build “privileged functions” (i.e. functions that require <code>Root</code> origin) in
+other pallets. You can execute these privileged functions by calling <code>sudo</code> with the sudo key
+account. Privileged functions cannot be directly executed via an extrinsic.</p>
+<p>Learn more about privileged functions and <code>Root</code> origin in the <a href="https://docs.substrate.io/main-docs/build/origins/"><code>Origin</code></a> type documentation.</p>
+<h4 id="simple-code-snippet"><a href="#simple-code-snippet">Simple Code Snippet</a></h4>
+<p>This is an example of a pallet that exposes a privileged function:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[frame_support::pallet]
+</span><span class="kw">pub mod </span>pallet {
+	<span class="kw">use super</span>::<span class="kw-2">*</span>;
+	<span class="kw">use </span>frame_support::pallet_prelude::<span class="kw-2">*</span>;
+	<span class="kw">use </span>frame_system::pallet_prelude::<span class="kw-2">*</span>;
+
+	<span class="attr">#[pallet::pallet]
+	</span><span class="kw">pub struct </span>Pallet&lt;T&gt;(<span class="kw">_</span>);
+
+	<span class="attr">#[pallet::config]
+	</span><span class="kw">pub trait </span>Config: frame_system::Config {}
+
+	<span class="attr">#[pallet::call]
+	</span><span class="kw">impl</span>&lt;T: Config&gt; Pallet&lt;T&gt; {
+		<span class="attr">#[pallet::weight(<span class="number">0</span>)]
+        </span><span class="kw">pub fn </span>privileged_function(origin: OriginFor&lt;T&gt;) -&gt; DispatchResult {
+            ensure_root(origin)<span class="question-mark">?</span>;
+
+            <span class="comment">// do something...
+
+            </span><span class="prelude-val">Ok</span>(())
+        }
+	}
+}</code></pre></div>
+<h4 id="signed-extension"><a href="#signed-extension">Signed Extension</a></h4>
+<p>The Sudo pallet defines the following extension:</p>
+<ul>
+<li><a href="struct.CheckOnlySudoAccount.html" title="struct pallet_sudo::CheckOnlySudoAccount"><code>CheckOnlySudoAccount</code></a>: Ensures that the signed transactions are only valid if they are
+signed by sudo account.</li>
+</ul>
+<h3 id="genesis-config"><a href="#genesis-config">Genesis Config</a></h3>
+<p>The Sudo pallet depends on the <a href="pallet/struct.GenesisConfig.html" title="struct pallet_sudo::pallet::GenesisConfig"><code>GenesisConfig</code></a>.
+You need to set an initial superuser account as the sudo <code>key</code>.</p>
+<h3 id="related-pallets"><a href="#related-pallets">Related Pallets</a></h3>
+<ul>
+<li><a href="../pallet_democracy/index.html">Democracy</a></li>
+</ul>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.WeightInfo"><code>pub use weights::<a class="trait" href="weights/trait.WeightInfo.html" title="trait pallet_sudo::weights::WeightInfo">WeightInfo</a>;</code></div></li><li><div class="item-name"><code>pub use <a class="mod" href="pallet/index.html" title="mod pallet_sudo::pallet">pallet</a>::*;</code></div></li></ul><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="pallet/index.html" title="mod pallet_sudo::pallet">pallet</a></div><div class="desc docblock-short">The <code>pallet</code> module in each FRAME pallet hosts the most important items needed
+to construct this pallet.</div></li><li><div class="item-name"><a class="mod" href="weights/index.html" title="mod pallet_sudo::weights">weights</a></div><div class="desc docblock-short">Autogenerated weights for pallet_sudo</div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.CheckOnlySudoAccount.html" title="struct pallet_sudo::CheckOnlySudoAccount">CheckOnlySudoAccount</a></div><div class="desc docblock-short">Ensure that signed transactions are only valid if they are signed by sudo account.</div></li></ul></section></div></main></body></html>

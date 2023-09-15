@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["WrappedFFIValue"],"struct":["ExchangeableFunction","RestoreImplementation"],"trait":["FromFFIValue","IntoFFIValue"]};

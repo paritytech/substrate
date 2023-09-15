@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["store_current_session_validator_set_to_offchain","store_session_validator_set_to_offchain"]};

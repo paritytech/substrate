@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["clear_storage_prefix","get_storage_value","have_storage_value","move_pallet","move_prefix","move_storage_from_pallet","put_storage_value","remove_storage_prefix","storage_iter","storage_iter_with_suffix","storage_key_iter","storage_key_iter_with_suffix","take_storage_item","take_storage_value"],"struct":["StorageIterator","StorageKeyIterator"]};

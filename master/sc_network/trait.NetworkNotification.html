@@ -1,0 +1,111 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/sc_network/trait.NetworkNotification.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/sc_network/trait.NetworkNotification.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Provides ability to send network notifications."><title>NetworkNotification in sc_network - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="sc_network" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../sc_network/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../sc_network/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">NetworkNotification</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.notification_sender">notification_sender</a></li><li><a href="#tymethod.set_notification_handshake">set_notification_handshake</a></li><li><a href="#tymethod.write_notification">write_notification</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-NetworkNotification-for-Arc%3CT%3E">Arc&lt;T&gt;</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In sc_network</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">sc_network</a>::<wbr><a class="trait" href="#">NetworkNotification</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/sc_network/service/traits.rs.html#389-485">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait NetworkNotification {
+    // Required methods
+    fn <a href="#tymethod.write_notification" class="fn">write_notification</a>(
+        &amp;self,
+        target: <a class="struct" href="struct.PeerId.html" title="struct sc_network::PeerId">PeerId</a>,
+        protocol: <a class="enum" href="types/enum.ProtocolName.html" title="enum sc_network::types::ProtocolName">ProtocolName</a>,
+        message: <a class="struct" href="https://doc.rust-lang.org/1.70.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u8.html">u8</a>&gt;
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.notification_sender" class="fn">notification_sender</a>(
+        &amp;self,
+        target: <a class="struct" href="struct.PeerId.html" title="struct sc_network::PeerId">PeerId</a>,
+        protocol: <a class="enum" href="types/enum.ProtocolName.html" title="enum sc_network::types::ProtocolName">ProtocolName</a>
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.70.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="trait.NotificationSenderT.html" title="trait sc_network::NotificationSenderT">NotificationSender</a>&gt;, <a class="enum" href="enum.NotificationSenderError.html" title="enum sc_network::NotificationSenderError">NotificationSenderError</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.set_notification_handshake" class="fn">set_notification_handshake</a>(
+        &amp;self,
+        protocol: <a class="enum" href="types/enum.ProtocolName.html" title="enum sc_network::types::ProtocolName">ProtocolName</a>,
+        handshake: <a class="struct" href="https://doc.rust-lang.org/1.70.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u8.html">u8</a>&gt;
+    );
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Provides ability to send network notifications.</p>
+</div></details><h2 id="required-methods" class="small-section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.write_notification" class="method"><a class="srclink rightside" href="../src/sc_network/service/traits.rs.html#409">source</a><h4 class="code-header">fn <a href="#tymethod.write_notification" class="fn">write_notification</a>(
+    &amp;self,
+    target: <a class="struct" href="struct.PeerId.html" title="struct sc_network::PeerId">PeerId</a>,
+    protocol: <a class="enum" href="types/enum.ProtocolName.html" title="enum sc_network::types::ProtocolName">ProtocolName</a>,
+    message: <a class="struct" href="https://doc.rust-lang.org/1.70.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u8.html">u8</a>&gt;
+)</h4></section></summary><div class="docblock"><p>Appends a notification to the buffer of pending outgoing notifications with the given peer.
+Has no effect if the notifications channel with this protocol name is not open.</p>
+<p>If the buffer of pending outgoing notifications with that peer is full, the notification
+is silently dropped and the connection to the remote will start being shut down. This
+happens if you call this method at a higher rate than the rate at which the peer processes
+these notifications, or if the available network bandwidth is too low.</p>
+<p>For this reason, this method is considered soft-deprecated. You are encouraged to use
+<a href="trait.NetworkNotification.html#tymethod.notification_sender" title="method sc_network::NetworkNotification::notification_sender"><code>NetworkNotification::notification_sender</code></a> instead.</p>
+<blockquote>
+<p><strong>Note</strong>: The reason why this is a no-op in the situation where we have no channel is
+that we don’t guarantee message delivery anyway. Networking issues can cause
+connections to drop at any time, and higher-level logic shouldn’t differentiate
+between the remote voluntarily closing a substream or a network error
+preventing the message from being delivered.</p>
+</blockquote>
+<p>The protocol must have been registered with
+<code>crate::config::NetworkConfiguration::notifications_protocols</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.notification_sender" class="method"><a class="srclink rightside" href="../src/sc_network/service/traits.rs.html#477-481">source</a><h4 class="code-header">fn <a href="#tymethod.notification_sender" class="fn">notification_sender</a>(
+    &amp;self,
+    target: <a class="struct" href="struct.PeerId.html" title="struct sc_network::PeerId">PeerId</a>,
+    protocol: <a class="enum" href="types/enum.ProtocolName.html" title="enum sc_network::types::ProtocolName">ProtocolName</a>
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.70.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="trait.NotificationSenderT.html" title="trait sc_network::NotificationSenderT">NotificationSender</a>&gt;, <a class="enum" href="enum.NotificationSenderError.html" title="enum sc_network::NotificationSenderError">NotificationSenderError</a>&gt;</h4></section></summary><div class="docblock"><p>Obtains a <a href="trait.NotificationSenderT.html" title="trait sc_network::NotificationSenderT"><code>NotificationSender</code></a> for a connected peer, if it exists.</p>
+<p>A <code>NotificationSender</code> is scoped to a particular connection to the peer that holds
+a receiver. With a <code>NotificationSender</code> at hand, sending a notification is done in two
+steps:</p>
+<ol>
+<li><a href="trait.NotificationSenderT.html#tymethod.ready" title="method sc_network::NotificationSenderT::ready"><code>NotificationSender::ready</code></a> is used to wait for the sender to become ready
+for another notification, yielding a <a href="trait.NotificationSenderReady.html" title="trait sc_network::NotificationSenderReady"><code>NotificationSenderReady</code></a> token.</li>
+<li><a href="trait.NotificationSenderReady.html#tymethod.send" title="method sc_network::NotificationSenderReady::send"><code>NotificationSenderReady::send</code></a> enqueues the notification for sending. This operation
+can only fail if the underlying notification substream or connection has suddenly closed.</li>
+</ol>
+<p>An error is returned by <a href="trait.NotificationSenderReady.html#tymethod.send" title="method sc_network::NotificationSenderReady::send"><code>NotificationSenderReady::send</code></a> if there exists no open
+notifications substream with that combination of peer and protocol, or if the remote
+has asked to close the notifications substream. If that happens, it is guaranteed that an
+<a href="event/enum.Event.html#variant.NotificationStreamClosed" title="variant sc_network::event::Event::NotificationStreamClosed"><code>Event::NotificationStreamClosed</code></a> has been generated on the stream returned by
+<a href="trait.NetworkEventStream.html#tymethod.event_stream" title="method sc_network::NetworkEventStream::event_stream"><code>NetworkEventStream::event_stream</code></a>.</p>
+<p>If the remote requests to close the notifications substream, all notifications successfully
+enqueued using <a href="trait.NotificationSenderReady.html#tymethod.send" title="method sc_network::NotificationSenderReady::send"><code>NotificationSenderReady::send</code></a> will finish being sent out before the
+substream actually gets closed, but attempting to enqueue more notifications will now
+return an error. It is however possible for the entire connection to be abruptly closed,
+in which case enqueued notifications will be lost.</p>
+<p>The protocol must have been registered with
+<code>crate::config::NetworkConfiguration::notifications_protocols</code>.</p>
+<h5 id="usage"><a href="#usage">Usage</a></h5>
+<p>This method returns a struct that allows waiting until there is space available in the
+buffer of messages towards the given peer. If the peer processes notifications at a slower
+rate than we send them, this buffer will quickly fill up.</p>
+<p>As such, you should never do something like this:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// Do NOT do this
+</span><span class="kw">for </span>peer <span class="kw">in </span>peers {
+	<span class="kw">if let </span><span class="prelude-val">Ok</span>(n) = network.notification_sender(peer, ...) {
+			<span class="kw">if let </span><span class="prelude-val">Ok</span>(s) = n.ready().<span class="kw">await </span>{
+				<span class="kw">let _ </span>= s.send(...);
+			}
+	}
+}</code></pre></div>
+<p>Doing so would slow down all peers to the rate of the slowest one. A malicious or
+malfunctioning peer could intentionally process notifications at a very slow rate.</p>
+<p>Instead, you are encouraged to maintain your own buffer of notifications on top of the one
+maintained by <code>sc-network</code>, and use <code>notification_sender</code> to progressively send out
+elements from your buffer. If this additional buffer is full (which will happen at some
+point if the peer is too slow to process notifications), appropriate measures can be taken,
+such as removing non-critical notifications from the buffer or disconnecting the peer
+using <a href="trait.NetworkPeers.html#tymethod.disconnect_peer" title="method sc_network::NetworkPeers::disconnect_peer"><code>NetworkPeers::disconnect_peer</code></a>.</p>
+<p>Notifications              Per-peer buffer
+broadcast    +—––&gt;   of notifications   +–&gt;  <code>notification_sender</code>  +–&gt;  Internet
+^       (not covered by
+|         sc-network)
++
+Notifications should be dropped
+if buffer is full</p>
+<p>See also the <code>sc-network-gossip</code> crate for a higher-level way to send notifications.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.set_notification_handshake" class="method"><a class="srclink rightside" href="../src/sc_network/service/traits.rs.html#484">source</a><h4 class="code-header">fn <a href="#tymethod.set_notification_handshake" class="fn">set_notification_handshake</a>(&amp;self, protocol: <a class="enum" href="types/enum.ProtocolName.html" title="enum sc_network::types::ProtocolName">ProtocolName</a>, handshake: <a class="struct" href="https://doc.rust-lang.org/1.70.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u8.html">u8</a>&gt;)</h4></section></summary><div class="docblock"><p>Set handshake for the notification protocol.</p>
+</div></details></div><h2 id="foreign-impls" class="small-section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><details class="toggle implementors-toggle"><summary><section id="impl-NetworkNotification-for-Arc%3CT%3E" class="impl"><a class="srclink rightside" href="../src/sc_network/service/traits.rs.html#487-507">source</a><a href="#impl-NetworkNotification-for-Arc%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.NetworkNotification.html" title="trait sc_network::NetworkNotification">NetworkNotification</a> for <a class="struct" href="https://doc.rust-lang.org/1.70.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;T&gt;<span class="where fmt-newline">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.70.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> + <a class="trait" href="trait.NetworkNotification.html" title="trait sc_network::NetworkNotification">NetworkNotification</a>,</span></h3></section></summary><div class="impl-items"><section id="method.write_notification" class="method trait-impl"><a class="srclink rightside" href="../src/sc_network/service/traits.rs.html#492-494">source</a><a href="#method.write_notification" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.write_notification" class="fn">write_notification</a>(
+    &amp;self,
+    target: <a class="struct" href="struct.PeerId.html" title="struct sc_network::PeerId">PeerId</a>,
+    protocol: <a class="enum" href="types/enum.ProtocolName.html" title="enum sc_network::types::ProtocolName">ProtocolName</a>,
+    message: <a class="struct" href="https://doc.rust-lang.org/1.70.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u8.html">u8</a>&gt;
+)</h4></section><section id="method.notification_sender" class="method trait-impl"><a class="srclink rightside" href="../src/sc_network/service/traits.rs.html#496-502">source</a><a href="#method.notification_sender" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.notification_sender" class="fn">notification_sender</a>(
+    &amp;self,
+    target: <a class="struct" href="struct.PeerId.html" title="struct sc_network::PeerId">PeerId</a>,
+    protocol: <a class="enum" href="types/enum.ProtocolName.html" title="enum sc_network::types::ProtocolName">ProtocolName</a>
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.70.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.70.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="trait.NotificationSenderT.html" title="trait sc_network::NotificationSenderT">NotificationSender</a>&gt;, <a class="enum" href="enum.NotificationSenderError.html" title="enum sc_network::NotificationSenderError">NotificationSenderError</a>&gt;</h4></section><section id="method.set_notification_handshake" class="method trait-impl"><a class="srclink rightside" href="../src/sc_network/service/traits.rs.html#504-506">source</a><a href="#method.set_notification_handshake" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.set_notification_handshake" class="fn">set_notification_handshake</a>(&amp;self, protocol: <a class="enum" href="types/enum.ProtocolName.html" title="enum sc_network::types::ProtocolName">ProtocolName</a>, handshake: <a class="struct" href="https://doc.rust-lang.org/1.70.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u8.html">u8</a>&gt;)</h4></section></div></details><h2 id="implementors" class="small-section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-NetworkNotification-for-NetworkService%3CB,+H%3E" class="impl"><a class="srclink rightside" href="../src/sc_network/service.rs.html#1006-1074">source</a><a href="#impl-NetworkNotification-for-NetworkService%3CB,+H%3E" class="anchor">§</a><h3 class="code-header">impl&lt;B, H&gt; <a class="trait" href="trait.NetworkNotification.html" title="trait sc_network::NetworkNotification">NetworkNotification</a> for <a class="struct" href="struct.NetworkService.html" title="struct sc_network::NetworkService">NetworkService</a>&lt;B, H&gt;<span class="where fmt-newline">where
+    B: <a class="trait" href="../sp_runtime/traits/trait.Block.html" title="trait sp_runtime::traits::Block">BlockT</a> + 'static,
+    H: <a class="trait" href="config/trait.ExHashT.html" title="trait sc_network::config::ExHashT">ExHashT</a>,</span></h3></section></div><script src="../implementors/sc_network/service/traits/trait.NetworkNotification.js" data-ignore-extern-crates="alloc" async></script></section></div></main></body></html>

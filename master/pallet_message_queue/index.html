@@ -1,0 +1,132 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_message_queue/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_message_queue/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generalized Message Queue Pallet"><title>pallet_message_queue - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pallet_message_queue" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../pallet_message_queue/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../pallet_message_queue/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate pallet_message_queue</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 7.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Definitions</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pallet_message_queue</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/pallet_message_queue/lib.rs.html#18-1469">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="generalized-message-queue-pallet"><a href="#generalized-message-queue-pallet">Generalized Message Queue Pallet</a></h2>
+<p>Provides generalized message queuing and processing capabilities on a per-queue basis for
+arbitrary use-cases.</p>
+<h2 id="design-goals"><a href="#design-goals">Design Goals</a></h2>
+<ol>
+<li>Minimal assumptions about <code>Message</code>s and <code>MessageOrigin</code>s. Both should be MEL bounded blobs.
+This ensures the generality and reusability of the pallet.</li>
+<li>Well known and tightly limited pre-dispatch PoV weights, especially for message execution.
+This is paramount for the success of the pallet since message execution is done in
+<code>on_initialize</code> which must <em>never</em> under-estimate its PoV weight. It also needs a frugal PoV
+footprint since PoV is scarce and this is (possibly) done in every block. This must also hold
+in  the presence of unpredictable message size distributions.</li>
+<li>Usable as XCMP, DMP and UMP message/dispatch queue - possibly through adapter types.</li>
+</ol>
+<h2 id="design"><a href="#design">Design</a></h2>
+<p>The pallet has means to enqueue, store and process messages. This is implemented by having
+<em>queues</em> which store enqueued messages and can be <em>served</em> to process said messages. A queue is
+identified by its origin in the <code>BookStateFor</code>. Each message has an origin which defines into
+which queue it will be stored. Messages are stored by being appended to the last <a href="struct.Page.html" title="struct pallet_message_queue::Page"><code>Page</code></a> of a
+book. Each book keeps track of its pages by indexing <code>Pages</code>. The <code>ReadyRing</code> contains all
+queues which hold at least one unprocessed message and are thereby <em>ready</em> to be serviced. The
+<code>ServiceHead</code> indicates which <em>ready</em> queue is the next to be serviced.
+The pallet implements <a href="../frame_support/traits/messages/trait.EnqueueMessage.html" title="trait frame_support::traits::messages::EnqueueMessage"><code>frame_support::traits::EnqueueMessage</code></a>,
+<a href="../frame_support/traits/messages/trait.ServiceQueues.html" title="trait frame_support::traits::messages::ServiceQueues"><code>frame_support::traits::ServiceQueues</code></a> and has <a href="../frame_support/traits/messages/trait.ProcessMessage.html" title="trait frame_support::traits::messages::ProcessMessage"><code>frame_support::traits::ProcessMessage</code></a> and
+<a href="trait.OnQueueChanged.html" title="trait pallet_message_queue::OnQueueChanged"><code>OnQueueChanged</code></a> hooks to communicate with the outside world.</p>
+<p>NOTE: The storage items are not linked since they are not public.</p>
+<p><strong>Message Execution</strong></p>
+<p>Executing a message is offloaded to the <a href="pallet/trait.Config.html#associatedtype.MessageProcessor" title="associated type pallet_message_queue::pallet::Config::MessageProcessor"><code>Config::MessageProcessor</code></a> which contains the actual
+logic of how to handle the message since they are blobs. A message can be temporarily or
+permanently overweight. The pallet will perpetually try to execute a temporarily overweight
+message. A permanently overweight message is skipped and must be executed manually.</p>
+<p><strong>Pagination</strong></p>
+<p>Queues are stored in a <em>paged</em> manner by splitting their messages into <a href="struct.Page.html" title="struct pallet_message_queue::Page"><code>Page</code></a>s. This results
+in a lot of complexity when implementing the pallet but is completely necessary to achieve the
+second #<a href="design-goals">Design Goal</a>. The problem comes from the fact a message can <em>possibly</em> be
+quite large, lets say 64KiB. This then results in a <em>MEL</em> of at least 64KiB which results in a
+PoV of at least 64KiB. Now we have the assumption that most messages are much shorter than their
+maximum allowed length. This would result in most messages having a pre-dispatch PoV size which
+is much larger than their post-dispatch PoV size, possibly by a factor of thousand. Disregarding
+this observation would cripple the processing power of the pallet since it cannot straighten out
+this discrepancy at runtime. Conceptually, the implementation is packing as many messages into a
+single bounded vec, as actually fit into the bounds. This reduces the wasted PoV.</p>
+<p><strong>Page Data Layout</strong></p>
+<p>A Page contains a heap which holds all its messages. The heap is built by concatenating
+<code>(ItemHeader, Message)</code> pairs. The <a href="struct.ItemHeader.html" title="struct pallet_message_queue::ItemHeader"><code>ItemHeader</code></a> contains the length of the message which is
+needed for retrieving it. This layout allows for constant access time of the next message and
+linear access time for any message in the page. The header must remain minimal to reduce its PoV
+impact.</p>
+<p><strong>Weight Metering</strong></p>
+<p>The pallet utilizes the <a href="../sp_weights/weight_meter/struct.WeightMeter.html" title="struct sp_weights::weight_meter::WeightMeter"><code>sp_weights::WeightMeter</code></a> to manually track its consumption to always
+stay within the required limit. This implies that the message processor hook can calculate the
+weight of a message without executing it. This restricts the possible use-cases but is necessary
+since the pallet runs in <code>on_initialize</code> which has a hard weight limit. The weight meter is used
+in a way that <code>can_accrue</code> and <code>check_accrue</code> are always used to check the remaining weight of
+an operation before committing to it. The process of exiting due to insufficient weight is
+termed “bailing”.</p>
+<h2 id="scenario-message-enqueuing"><a href="#scenario-message-enqueuing">Scenario: Message enqueuing</a></h2>
+<p>A message <code>m</code> is enqueued for origin <code>o</code> into queue <code>Q[o]</code> through
+<a href="../frame_support/traits/messages/trait.EnqueueMessage.html#tymethod.enqueue_message" title="associated function frame_support::traits::messages::EnqueueMessage::enqueue_message"><code>frame_support::traits::EnqueueMessage::enqueue_message</code></a><code>(m, o)</code>.</p>
+<p>First the queue is either loaded if it exists or otherwise created with empty default values.
+The message is then inserted to the queue by appended it into its last <code>Page</code> or by creating a
+new <code>Page</code> just for <code>m</code> if it does not fit in there. The number of messages in the <code>Book</code> is
+incremented.</p>
+<p><code>Q[o]</code> is now <em>ready</em> which will eventually result in <code>m</code> being processed.</p>
+<h2 id="scenario-message-processing"><a href="#scenario-message-processing">Scenario: Message processing</a></h2>
+<p>The pallet runs each block in <code>on_initialize</code> or when being manually called through
+<a href="../frame_support/traits/messages/trait.ServiceQueues.html#tymethod.service_queues" title="associated function frame_support::traits::messages::ServiceQueues::service_queues"><code>frame_support::traits::ServiceQueues::service_queues</code></a>.</p>
+<p>First it tries to “rotate” the <code>ReadyRing</code> by one through advancing the <code>ServiceHead</code> to the
+next <em>ready</em> queue. It then starts to service this queue by servicing as many pages of it as
+possible. Servicing a page means to execute as many message of it as possible. Each executed
+message is marked as <em>processed</em> if the <a href="pallet/trait.Config.html#associatedtype.MessageProcessor" title="associated type pallet_message_queue::pallet::Config::MessageProcessor"><code>Config::MessageProcessor</code></a> return Ok. An event
+<a href="pallet/enum.Event.html#variant.Processed" title="variant pallet_message_queue::pallet::Event::Processed"><code>Event::Processed</code></a> is emitted afterwards. It is possible that the weight limit of the pallet
+will never allow a specific message to be executed. In this case it remains as unprocessed and
+is skipped. This process stops if either there are no more messages in the queue or the
+remaining weight became insufficient to service this queue. If there is enough weight it tries
+to advance to the next <em>ready</em> queue and service it. This continues until there are no more
+queues on which it can make progress or not enough weight to check that.</p>
+<h2 id="scenario-overweight-execution"><a href="#scenario-overweight-execution">Scenario: Overweight execution</a></h2>
+<p>A permanently over-weight message which was skipped by the message processing will never be
+executed automatically through <code>on_initialize</code> nor by calling
+<a href="../frame_support/traits/messages/trait.ServiceQueues.html#tymethod.service_queues" title="associated function frame_support::traits::messages::ServiceQueues::service_queues"><code>frame_support::traits::ServiceQueues::service_queues</code></a>.</p>
+<p>Manual intervention in the form of
+<a href="../frame_support/traits/messages/trait.ServiceQueues.html#method.execute_overweight" title="associated function frame_support::traits::messages::ServiceQueues::execute_overweight"><code>frame_support::traits::ServiceQueues::execute_overweight</code></a> is necessary. Overweight messages
+emit an <a href="pallet/enum.Event.html#variant.OverweightEnqueued" title="variant pallet_message_queue::pallet::Event::OverweightEnqueued"><code>Event::OverweightEnqueued</code></a> event which can be used to extract the arguments for
+manual execution. This only works on permanently overweight messages. There is no guarantee that
+this will work since the message could be part of a stale page and be reaped before execution
+commences.</p>
+<h2 id="terminology"><a href="#terminology">Terminology</a></h2>
+<ul>
+<li><code>Message</code>: A blob of data into which the pallet has no introspection, defined as
+[<code>BoundedSlice&lt;u8, MaxMessageLenOf&lt;T&gt;&gt;</code>]. The message length is limited by <a href="type.MaxMessageLenOf.html" title="type pallet_message_queue::MaxMessageLenOf"><code>MaxMessageLenOf</code></a>
+which is calculated from <a href="pallet/trait.Config.html#associatedtype.HeapSize" title="associated type pallet_message_queue::pallet::Config::HeapSize"><code>Config::HeapSize</code></a> and <a href="struct.ItemHeader.html#method.max_encoded_len" title="associated function pallet_message_queue::ItemHeader::max_encoded_len"><code>ItemHeader::max_encoded_len()</code></a>.</li>
+<li><code>MessageOrigin</code>: A generic <em>origin</em> of a message, defined as <a href="type.MessageOriginOf.html" title="type pallet_message_queue::MessageOriginOf"><code>MessageOriginOf</code></a>. The
+requirements for it are kept minimal to remain as generic as possible. The type is defined in
+<a href="../frame_support/traits/messages/trait.ProcessMessage.html#associatedtype.Origin" title="associated type frame_support::traits::messages::ProcessMessage::Origin"><code>frame_support::traits::ProcessMessage::Origin</code></a>.</li>
+<li><code>Page</code>: An array of <code>Message</code>s, see <a href="struct.Page.html" title="struct pallet_message_queue::Page"><code>Page</code></a>. Can never be empty.</li>
+<li><code>Book</code>: A list of <code>Page</code>s, see <a href="struct.BookState.html" title="struct pallet_message_queue::BookState"><code>BookState</code></a>. Can be empty.</li>
+<li><code>Queue</code>: A <code>Book</code> together with an <code>MessageOrigin</code> which can be part of the <code>ReadyRing</code>. Can
+be empty.</li>
+<li><code>ReadyRing</code>: A double-linked list which contains all <em>ready</em> <code>Queue</code>s. It chains together the
+queues via their <code>ready_neighbours</code> fields. A <code>Queue</code> is <em>ready</em> if it contains at least one
+<code>Message</code> which can be processed. Can be empty.</li>
+<li><code>ServiceHead</code>: A pointer into the <code>ReadyRing</code> to the next <code>Queue</code> to be serviced.</li>
+<li>(<code>un</code>)<code>processed</code>: A message is marked as <em>processed</em> after it was executed by the pallet. A
+message which was either: not yet executed or could not be executed remains as <code>unprocessed</code>
+which is the default state for a message after being enqueued.</li>
+<li><code>knitting</code>/<code>unknitting</code>: The means of adding or removing a <code>Queue</code> from the <code>ReadyRing</code>.</li>
+<li><code>MEL</code>: The Max Encoded Length of a type, see [<code>codec::MaxEncodedLen</code>].</li>
+</ul>
+<h2 id="properties"><a href="#properties">Properties</a></h2>
+<p><strong>Liveness - Enqueueing</strong></p>
+<p>It is always possible to enqueue any message for any <code>MessageOrigin</code>.</p>
+<p><strong>Liveness - Processing</strong></p>
+<p><code>on_initialize</code> always respects its finite weight-limit.</p>
+<p><strong>Progress - Enqueueing</strong></p>
+<p>An enqueued message immediately becomes <em>unprocessed</em> and thereby eligible for execution.</p>
+<p><strong>Progress - Processing</strong></p>
+<p>The pallet will execute at least one unprocessed message per block, if there is any. Ensuring
+this property needs careful consideration of the concrete weights, since it is possible that the
+weight limit of <code>on_initialize</code> never allows for the execution of even one message; trivially if
+the limit is set to zero. <code>integrity_test</code> can be used to ensure that this property holds.</p>
+<p><strong>Fairness - Enqueuing</strong></p>
+<p>Enqueueing a message for a specific <code>MessageOrigin</code> does not influence the ability to enqueue a
+message for the same of any other <code>MessageOrigin</code>; guaranteed by <strong>Liveness - Enqueueing</strong>.</p>
+<p><strong>Fairness - Processing</strong></p>
+<p>The average amount of weight available for message processing is the same for each queue if the
+number of queues is constant. Creating a new queue must therefore be, possibly economically,
+expensive. Currently this is archived by having one queue per para-chain/thread, which keeps the
+number of queues within <code>O(n)</code> and should be “good enough”.</p>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.WeightInfo"><code>pub use weights::<a class="trait" href="weights/trait.WeightInfo.html" title="trait pallet_message_queue::weights::WeightInfo">WeightInfo</a>;</code></div></li><li><div class="item-name"><code>pub use <a class="mod" href="pallet/index.html" title="mod pallet_message_queue::pallet">pallet</a>::*;</code></div></li></ul><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="mock_helpers/index.html" title="mod pallet_message_queue::mock_helpers">mock_helpers</a></div><div class="desc docblock-short">Std setup helpers for testing and benchmarking.</div></li><li><div class="item-name"><a class="mod" href="pallet/index.html" title="mod pallet_message_queue::pallet">pallet</a></div><div class="desc docblock-short">The <code>pallet</code> module in each FRAME pallet hosts the most important items needed
+to construct this pallet.</div></li><li><div class="item-name"><a class="mod" href="weights/index.html" title="mod pallet_message_queue::weights">weights</a></div><div class="desc docblock-short">Autogenerated weights for pallet_message_queue</div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.BookState.html" title="struct pallet_message_queue::BookState">BookState</a></div><div class="desc docblock-short">The state of a queue as represented by a book of its pages.</div></li><li><div class="item-name"><a class="struct" href="struct.IntoU32.html" title="struct pallet_message_queue::IntoU32">IntoU32</a></div><div class="desc docblock-short">Converts a [<code>sp_core::Get</code>] with returns a type that can be cast into an <code>u32</code> into a <code>Get</code>
+which returns an <code>u32</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.ItemHeader.html" title="struct pallet_message_queue::ItemHeader">ItemHeader</a></div><div class="desc docblock-short">Data encoded and prefixed to the encoded <code>MessageItem</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.MaxEncodedLenOf.html" title="struct pallet_message_queue::MaxEncodedLenOf">MaxEncodedLenOf</a></div><div class="desc docblock-short">Provides a [<code>sp_core::Get</code>] to access the <code>MEL</code> of a [<code>codec::MaxEncodedLen</code>] type.</div></li><li><div class="item-name"><a class="struct" href="struct.MaxMessageLen.html" title="struct pallet_message_queue::MaxMessageLen">MaxMessageLen</a></div><div class="desc docblock-short">Calculates the maximum message length and exposed it through the [<code>codec::MaxEncodedLen</code>] trait.</div></li><li><div class="item-name"><a class="struct" href="struct.Neighbours.html" title="struct pallet_message_queue::Neighbours">Neighbours</a></div><div class="desc docblock-short">A single link in the double-linked Ready Ring list.</div></li><li><div class="item-name"><a class="struct" href="struct.Page.html" title="struct pallet_message_queue::Page">Page</a></div><div class="desc docblock-short">A page of messages. Pages always contain at least one item.</div></li></ul><h2 id="traits" class="small-section-header"><a href="#traits">Traits</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.OnQueueChanged.html" title="trait pallet_message_queue::OnQueueChanged">OnQueueChanged</a></div><div class="desc docblock-short">Handler code for when the items in a queue change.</div></li></ul><h2 id="types" class="small-section-header"><a href="#types">Type Definitions</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.BookStateOf.html" title="type pallet_message_queue::BookStateOf">BookStateOf</a></div><div class="desc docblock-short">The <a href="struct.BookState.html" title="struct pallet_message_queue::BookState"><code>BookState</code></a> of this pallet.</div></li><li><div class="item-name"><a class="type" href="type.HeapSizeU32Of.html" title="type pallet_message_queue::HeapSizeU32Of">HeapSizeU32Of</a></div><div class="desc docblock-short">The maximal heap size of a page.</div></li><li><div class="item-name"><a class="type" href="type.MaxMessageLenOf.html" title="type pallet_message_queue::MaxMessageLenOf">MaxMessageLenOf</a></div><div class="desc docblock-short">The maximal message length.</div></li><li><div class="item-name"><a class="type" href="type.MaxOriginLenOf.html" title="type pallet_message_queue::MaxOriginLenOf">MaxOriginLenOf</a></div><div class="desc docblock-short">The maximal encoded origin length.</div></li><li><div class="item-name"><a class="type" href="type.MessageOriginOf.html" title="type pallet_message_queue::MessageOriginOf">MessageOriginOf</a></div><div class="desc docblock-short">The <code>MessageOrigin</code> of this pallet.</div></li><li><div class="item-name"><a class="type" href="type.PageOf.html" title="type pallet_message_queue::PageOf">PageOf</a></div><div class="desc docblock-short">The <a href="struct.Page.html" title="struct pallet_message_queue::Page"><code>Page</code></a> of this pallet.</div></li></ul></section></div></main></body></html>

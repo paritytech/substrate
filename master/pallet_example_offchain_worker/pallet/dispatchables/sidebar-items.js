@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["submit_price","submit_price_unsigned","submit_price_unsigned_with_signed_payload"]};

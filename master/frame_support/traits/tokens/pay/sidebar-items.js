@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PaymentStatus"],"struct":["PayFromAccount"],"trait":["Pay"]};

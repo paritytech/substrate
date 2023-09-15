@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["clear_validators_and_nominators","create_funded_user","create_funded_user_with_balance","create_stash_and_dead_payee","create_stash_controller","create_stash_controller_with_balance","create_unique_stash_controller","create_validators","create_validators_with_nominators_for_era","create_validators_with_seed","current_era"]};

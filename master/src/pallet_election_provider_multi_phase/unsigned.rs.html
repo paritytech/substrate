@@ -1,0 +1,3831 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/src/pallet_election_provider_multi_phase/unsigned.rs.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/src/pallet_election_provider_multi_phase/unsigned.rs.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `frame/election-provider-multi-phase/src/unsigned.rs`."><title>unsigned.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="pallet_election_provider_multi_phase" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../../static.files/source-script-905937fbbdc8e9ea.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../pallet_election_provider_multi_phase/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
+<a href="#907" id="907">907</a>
+<a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
+<a href="#911" id="911">911</a>
+<a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
+<a href="#924" id="924">924</a>
+<a href="#925" id="925">925</a>
+<a href="#926" id="926">926</a>
+<a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a>
+<a href="#930" id="930">930</a>
+<a href="#931" id="931">931</a>
+<a href="#932" id="932">932</a>
+<a href="#933" id="933">933</a>
+<a href="#934" id="934">934</a>
+<a href="#935" id="935">935</a>
+<a href="#936" id="936">936</a>
+<a href="#937" id="937">937</a>
+<a href="#938" id="938">938</a>
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a>
+<a href="#947" id="947">947</a>
+<a href="#948" id="948">948</a>
+<a href="#949" id="949">949</a>
+<a href="#950" id="950">950</a>
+<a href="#951" id="951">951</a>
+<a href="#952" id="952">952</a>
+<a href="#953" id="953">953</a>
+<a href="#954" id="954">954</a>
+<a href="#955" id="955">955</a>
+<a href="#956" id="956">956</a>
+<a href="#957" id="957">957</a>
+<a href="#958" id="958">958</a>
+<a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
+<a href="#961" id="961">961</a>
+<a href="#962" id="962">962</a>
+<a href="#963" id="963">963</a>
+<a href="#964" id="964">964</a>
+<a href="#965" id="965">965</a>
+<a href="#966" id="966">966</a>
+<a href="#967" id="967">967</a>
+<a href="#968" id="968">968</a>
+<a href="#969" id="969">969</a>
+<a href="#970" id="970">970</a>
+<a href="#971" id="971">971</a>
+<a href="#972" id="972">972</a>
+<a href="#973" id="973">973</a>
+<a href="#974" id="974">974</a>
+<a href="#975" id="975">975</a>
+<a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
+<a href="#1005" id="1005">1005</a>
+<a href="#1006" id="1006">1006</a>
+<a href="#1007" id="1007">1007</a>
+<a href="#1008" id="1008">1008</a>
+<a href="#1009" id="1009">1009</a>
+<a href="#1010" id="1010">1010</a>
+<a href="#1011" id="1011">1011</a>
+<a href="#1012" id="1012">1012</a>
+<a href="#1013" id="1013">1013</a>
+<a href="#1014" id="1014">1014</a>
+<a href="#1015" id="1015">1015</a>
+<a href="#1016" id="1016">1016</a>
+<a href="#1017" id="1017">1017</a>
+<a href="#1018" id="1018">1018</a>
+<a href="#1019" id="1019">1019</a>
+<a href="#1020" id="1020">1020</a>
+<a href="#1021" id="1021">1021</a>
+<a href="#1022" id="1022">1022</a>
+<a href="#1023" id="1023">1023</a>
+<a href="#1024" id="1024">1024</a>
+<a href="#1025" id="1025">1025</a>
+<a href="#1026" id="1026">1026</a>
+<a href="#1027" id="1027">1027</a>
+<a href="#1028" id="1028">1028</a>
+<a href="#1029" id="1029">1029</a>
+<a href="#1030" id="1030">1030</a>
+<a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
+<a href="#1039" id="1039">1039</a>
+<a href="#1040" id="1040">1040</a>
+<a href="#1041" id="1041">1041</a>
+<a href="#1042" id="1042">1042</a>
+<a href="#1043" id="1043">1043</a>
+<a href="#1044" id="1044">1044</a>
+<a href="#1045" id="1045">1045</a>
+<a href="#1046" id="1046">1046</a>
+<a href="#1047" id="1047">1047</a>
+<a href="#1048" id="1048">1048</a>
+<a href="#1049" id="1049">1049</a>
+<a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
+<a href="#1052" id="1052">1052</a>
+<a href="#1053" id="1053">1053</a>
+<a href="#1054" id="1054">1054</a>
+<a href="#1055" id="1055">1055</a>
+<a href="#1056" id="1056">1056</a>
+<a href="#1057" id="1057">1057</a>
+<a href="#1058" id="1058">1058</a>
+<a href="#1059" id="1059">1059</a>
+<a href="#1060" id="1060">1060</a>
+<a href="#1061" id="1061">1061</a>
+<a href="#1062" id="1062">1062</a>
+<a href="#1063" id="1063">1063</a>
+<a href="#1064" id="1064">1064</a>
+<a href="#1065" id="1065">1065</a>
+<a href="#1066" id="1066">1066</a>
+<a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
+<a href="#1080" id="1080">1080</a>
+<a href="#1081" id="1081">1081</a>
+<a href="#1082" id="1082">1082</a>
+<a href="#1083" id="1083">1083</a>
+<a href="#1084" id="1084">1084</a>
+<a href="#1085" id="1085">1085</a>
+<a href="#1086" id="1086">1086</a>
+<a href="#1087" id="1087">1087</a>
+<a href="#1088" id="1088">1088</a>
+<a href="#1089" id="1089">1089</a>
+<a href="#1090" id="1090">1090</a>
+<a href="#1091" id="1091">1091</a>
+<a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+<a href="#1098" id="1098">1098</a>
+<a href="#1099" id="1099">1099</a>
+<a href="#1100" id="1100">1100</a>
+<a href="#1101" id="1101">1101</a>
+<a href="#1102" id="1102">1102</a>
+<a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
+<a href="#1145" id="1145">1145</a>
+<a href="#1146" id="1146">1146</a>
+<a href="#1147" id="1147">1147</a>
+<a href="#1148" id="1148">1148</a>
+<a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a>
+<a href="#1151" id="1151">1151</a>
+<a href="#1152" id="1152">1152</a>
+<a href="#1153" id="1153">1153</a>
+<a href="#1154" id="1154">1154</a>
+<a href="#1155" id="1155">1155</a>
+<a href="#1156" id="1156">1156</a>
+<a href="#1157" id="1157">1157</a>
+<a href="#1158" id="1158">1158</a>
+<a href="#1159" id="1159">1159</a>
+<a href="#1160" id="1160">1160</a>
+<a href="#1161" id="1161">1161</a>
+<a href="#1162" id="1162">1162</a>
+<a href="#1163" id="1163">1163</a>
+<a href="#1164" id="1164">1164</a>
+<a href="#1165" id="1165">1165</a>
+<a href="#1166" id="1166">1166</a>
+<a href="#1167" id="1167">1167</a>
+<a href="#1168" id="1168">1168</a>
+<a href="#1169" id="1169">1169</a>
+<a href="#1170" id="1170">1170</a>
+<a href="#1171" id="1171">1171</a>
+<a href="#1172" id="1172">1172</a>
+<a href="#1173" id="1173">1173</a>
+<a href="#1174" id="1174">1174</a>
+<a href="#1175" id="1175">1175</a>
+<a href="#1176" id="1176">1176</a>
+<a href="#1177" id="1177">1177</a>
+<a href="#1178" id="1178">1178</a>
+<a href="#1179" id="1179">1179</a>
+<a href="#1180" id="1180">1180</a>
+<a href="#1181" id="1181">1181</a>
+<a href="#1182" id="1182">1182</a>
+<a href="#1183" id="1183">1183</a>
+<a href="#1184" id="1184">1184</a>
+<a href="#1185" id="1185">1185</a>
+<a href="#1186" id="1186">1186</a>
+<a href="#1187" id="1187">1187</a>
+<a href="#1188" id="1188">1188</a>
+<a href="#1189" id="1189">1189</a>
+<a href="#1190" id="1190">1190</a>
+<a href="#1191" id="1191">1191</a>
+<a href="#1192" id="1192">1192</a>
+<a href="#1193" id="1193">1193</a>
+<a href="#1194" id="1194">1194</a>
+<a href="#1195" id="1195">1195</a>
+<a href="#1196" id="1196">1196</a>
+<a href="#1197" id="1197">1197</a>
+<a href="#1198" id="1198">1198</a>
+<a href="#1199" id="1199">1199</a>
+<a href="#1200" id="1200">1200</a>
+<a href="#1201" id="1201">1201</a>
+<a href="#1202" id="1202">1202</a>
+<a href="#1203" id="1203">1203</a>
+<a href="#1204" id="1204">1204</a>
+<a href="#1205" id="1205">1205</a>
+<a href="#1206" id="1206">1206</a>
+<a href="#1207" id="1207">1207</a>
+<a href="#1208" id="1208">1208</a>
+<a href="#1209" id="1209">1209</a>
+<a href="#1210" id="1210">1210</a>
+<a href="#1211" id="1211">1211</a>
+<a href="#1212" id="1212">1212</a>
+<a href="#1213" id="1213">1213</a>
+<a href="#1214" id="1214">1214</a>
+<a href="#1215" id="1215">1215</a>
+<a href="#1216" id="1216">1216</a>
+<a href="#1217" id="1217">1217</a>
+<a href="#1218" id="1218">1218</a>
+<a href="#1219" id="1219">1219</a>
+<a href="#1220" id="1220">1220</a>
+<a href="#1221" id="1221">1221</a>
+<a href="#1222" id="1222">1222</a>
+<a href="#1223" id="1223">1223</a>
+<a href="#1224" id="1224">1224</a>
+<a href="#1225" id="1225">1225</a>
+<a href="#1226" id="1226">1226</a>
+<a href="#1227" id="1227">1227</a>
+<a href="#1228" id="1228">1228</a>
+<a href="#1229" id="1229">1229</a>
+<a href="#1230" id="1230">1230</a>
+<a href="#1231" id="1231">1231</a>
+<a href="#1232" id="1232">1232</a>
+<a href="#1233" id="1233">1233</a>
+<a href="#1234" id="1234">1234</a>
+<a href="#1235" id="1235">1235</a>
+<a href="#1236" id="1236">1236</a>
+<a href="#1237" id="1237">1237</a>
+<a href="#1238" id="1238">1238</a>
+<a href="#1239" id="1239">1239</a>
+<a href="#1240" id="1240">1240</a>
+<a href="#1241" id="1241">1241</a>
+<a href="#1242" id="1242">1242</a>
+<a href="#1243" id="1243">1243</a>
+<a href="#1244" id="1244">1244</a>
+<a href="#1245" id="1245">1245</a>
+<a href="#1246" id="1246">1246</a>
+<a href="#1247" id="1247">1247</a>
+<a href="#1248" id="1248">1248</a>
+<a href="#1249" id="1249">1249</a>
+<a href="#1250" id="1250">1250</a>
+<a href="#1251" id="1251">1251</a>
+<a href="#1252" id="1252">1252</a>
+<a href="#1253" id="1253">1253</a>
+<a href="#1254" id="1254">1254</a>
+<a href="#1255" id="1255">1255</a>
+<a href="#1256" id="1256">1256</a>
+<a href="#1257" id="1257">1257</a>
+<a href="#1258" id="1258">1258</a>
+<a href="#1259" id="1259">1259</a>
+<a href="#1260" id="1260">1260</a>
+<a href="#1261" id="1261">1261</a>
+<a href="#1262" id="1262">1262</a>
+<a href="#1263" id="1263">1263</a>
+<a href="#1264" id="1264">1264</a>
+<a href="#1265" id="1265">1265</a>
+<a href="#1266" id="1266">1266</a>
+<a href="#1267" id="1267">1267</a>
+<a href="#1268" id="1268">1268</a>
+<a href="#1269" id="1269">1269</a>
+<a href="#1270" id="1270">1270</a>
+<a href="#1271" id="1271">1271</a>
+<a href="#1272" id="1272">1272</a>
+<a href="#1273" id="1273">1273</a>
+<a href="#1274" id="1274">1274</a>
+<a href="#1275" id="1275">1275</a>
+<a href="#1276" id="1276">1276</a>
+<a href="#1277" id="1277">1277</a>
+<a href="#1278" id="1278">1278</a>
+<a href="#1279" id="1279">1279</a>
+<a href="#1280" id="1280">1280</a>
+<a href="#1281" id="1281">1281</a>
+<a href="#1282" id="1282">1282</a>
+<a href="#1283" id="1283">1283</a>
+<a href="#1284" id="1284">1284</a>
+<a href="#1285" id="1285">1285</a>
+<a href="#1286" id="1286">1286</a>
+<a href="#1287" id="1287">1287</a>
+<a href="#1288" id="1288">1288</a>
+<a href="#1289" id="1289">1289</a>
+<a href="#1290" id="1290">1290</a>
+<a href="#1291" id="1291">1291</a>
+<a href="#1292" id="1292">1292</a>
+<a href="#1293" id="1293">1293</a>
+<a href="#1294" id="1294">1294</a>
+<a href="#1295" id="1295">1295</a>
+<a href="#1296" id="1296">1296</a>
+<a href="#1297" id="1297">1297</a>
+<a href="#1298" id="1298">1298</a>
+<a href="#1299" id="1299">1299</a>
+<a href="#1300" id="1300">1300</a>
+<a href="#1301" id="1301">1301</a>
+<a href="#1302" id="1302">1302</a>
+<a href="#1303" id="1303">1303</a>
+<a href="#1304" id="1304">1304</a>
+<a href="#1305" id="1305">1305</a>
+<a href="#1306" id="1306">1306</a>
+<a href="#1307" id="1307">1307</a>
+<a href="#1308" id="1308">1308</a>
+<a href="#1309" id="1309">1309</a>
+<a href="#1310" id="1310">1310</a>
+<a href="#1311" id="1311">1311</a>
+<a href="#1312" id="1312">1312</a>
+<a href="#1313" id="1313">1313</a>
+<a href="#1314" id="1314">1314</a>
+<a href="#1315" id="1315">1315</a>
+<a href="#1316" id="1316">1316</a>
+<a href="#1317" id="1317">1317</a>
+<a href="#1318" id="1318">1318</a>
+<a href="#1319" id="1319">1319</a>
+<a href="#1320" id="1320">1320</a>
+<a href="#1321" id="1321">1321</a>
+<a href="#1322" id="1322">1322</a>
+<a href="#1323" id="1323">1323</a>
+<a href="#1324" id="1324">1324</a>
+<a href="#1325" id="1325">1325</a>
+<a href="#1326" id="1326">1326</a>
+<a href="#1327" id="1327">1327</a>
+<a href="#1328" id="1328">1328</a>
+<a href="#1329" id="1329">1329</a>
+<a href="#1330" id="1330">1330</a>
+<a href="#1331" id="1331">1331</a>
+<a href="#1332" id="1332">1332</a>
+<a href="#1333" id="1333">1333</a>
+<a href="#1334" id="1334">1334</a>
+<a href="#1335" id="1335">1335</a>
+<a href="#1336" id="1336">1336</a>
+<a href="#1337" id="1337">1337</a>
+<a href="#1338" id="1338">1338</a>
+<a href="#1339" id="1339">1339</a>
+<a href="#1340" id="1340">1340</a>
+<a href="#1341" id="1341">1341</a>
+<a href="#1342" id="1342">1342</a>
+<a href="#1343" id="1343">1343</a>
+<a href="#1344" id="1344">1344</a>
+<a href="#1345" id="1345">1345</a>
+<a href="#1346" id="1346">1346</a>
+<a href="#1347" id="1347">1347</a>
+<a href="#1348" id="1348">1348</a>
+<a href="#1349" id="1349">1349</a>
+<a href="#1350" id="1350">1350</a>
+<a href="#1351" id="1351">1351</a>
+<a href="#1352" id="1352">1352</a>
+<a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
+<a href="#1356" id="1356">1356</a>
+<a href="#1357" id="1357">1357</a>
+<a href="#1358" id="1358">1358</a>
+<a href="#1359" id="1359">1359</a>
+<a href="#1360" id="1360">1360</a>
+<a href="#1361" id="1361">1361</a>
+<a href="#1362" id="1362">1362</a>
+<a href="#1363" id="1363">1363</a>
+<a href="#1364" id="1364">1364</a>
+<a href="#1365" id="1365">1365</a>
+<a href="#1366" id="1366">1366</a>
+<a href="#1367" id="1367">1367</a>
+<a href="#1368" id="1368">1368</a>
+<a href="#1369" id="1369">1369</a>
+<a href="#1370" id="1370">1370</a>
+<a href="#1371" id="1371">1371</a>
+<a href="#1372" id="1372">1372</a>
+<a href="#1373" id="1373">1373</a>
+<a href="#1374" id="1374">1374</a>
+<a href="#1375" id="1375">1375</a>
+<a href="#1376" id="1376">1376</a>
+<a href="#1377" id="1377">1377</a>
+<a href="#1378" id="1378">1378</a>
+<a href="#1379" id="1379">1379</a>
+<a href="#1380" id="1380">1380</a>
+<a href="#1381" id="1381">1381</a>
+<a href="#1382" id="1382">1382</a>
+<a href="#1383" id="1383">1383</a>
+<a href="#1384" id="1384">1384</a>
+<a href="#1385" id="1385">1385</a>
+<a href="#1386" id="1386">1386</a>
+<a href="#1387" id="1387">1387</a>
+<a href="#1388" id="1388">1388</a>
+<a href="#1389" id="1389">1389</a>
+<a href="#1390" id="1390">1390</a>
+<a href="#1391" id="1391">1391</a>
+<a href="#1392" id="1392">1392</a>
+<a href="#1393" id="1393">1393</a>
+<a href="#1394" id="1394">1394</a>
+<a href="#1395" id="1395">1395</a>
+<a href="#1396" id="1396">1396</a>
+<a href="#1397" id="1397">1397</a>
+<a href="#1398" id="1398">1398</a>
+<a href="#1399" id="1399">1399</a>
+<a href="#1400" id="1400">1400</a>
+<a href="#1401" id="1401">1401</a>
+<a href="#1402" id="1402">1402</a>
+<a href="#1403" id="1403">1403</a>
+<a href="#1404" id="1404">1404</a>
+<a href="#1405" id="1405">1405</a>
+<a href="#1406" id="1406">1406</a>
+<a href="#1407" id="1407">1407</a>
+<a href="#1408" id="1408">1408</a>
+<a href="#1409" id="1409">1409</a>
+<a href="#1410" id="1410">1410</a>
+<a href="#1411" id="1411">1411</a>
+<a href="#1412" id="1412">1412</a>
+<a href="#1413" id="1413">1413</a>
+<a href="#1414" id="1414">1414</a>
+<a href="#1415" id="1415">1415</a>
+<a href="#1416" id="1416">1416</a>
+<a href="#1417" id="1417">1417</a>
+<a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
+<a href="#1420" id="1420">1420</a>
+<a href="#1421" id="1421">1421</a>
+<a href="#1422" id="1422">1422</a>
+<a href="#1423" id="1423">1423</a>
+<a href="#1424" id="1424">1424</a>
+<a href="#1425" id="1425">1425</a>
+<a href="#1426" id="1426">1426</a>
+<a href="#1427" id="1427">1427</a>
+<a href="#1428" id="1428">1428</a>
+<a href="#1429" id="1429">1429</a>
+<a href="#1430" id="1430">1430</a>
+<a href="#1431" id="1431">1431</a>
+<a href="#1432" id="1432">1432</a>
+<a href="#1433" id="1433">1433</a>
+<a href="#1434" id="1434">1434</a>
+<a href="#1435" id="1435">1435</a>
+<a href="#1436" id="1436">1436</a>
+<a href="#1437" id="1437">1437</a>
+<a href="#1438" id="1438">1438</a>
+<a href="#1439" id="1439">1439</a>
+<a href="#1440" id="1440">1440</a>
+<a href="#1441" id="1441">1441</a>
+<a href="#1442" id="1442">1442</a>
+<a href="#1443" id="1443">1443</a>
+<a href="#1444" id="1444">1444</a>
+<a href="#1445" id="1445">1445</a>
+<a href="#1446" id="1446">1446</a>
+<a href="#1447" id="1447">1447</a>
+<a href="#1448" id="1448">1448</a>
+<a href="#1449" id="1449">1449</a>
+<a href="#1450" id="1450">1450</a>
+<a href="#1451" id="1451">1451</a>
+<a href="#1452" id="1452">1452</a>
+<a href="#1453" id="1453">1453</a>
+<a href="#1454" id="1454">1454</a>
+<a href="#1455" id="1455">1455</a>
+<a href="#1456" id="1456">1456</a>
+<a href="#1457" id="1457">1457</a>
+<a href="#1458" id="1458">1458</a>
+<a href="#1459" id="1459">1459</a>
+<a href="#1460" id="1460">1460</a>
+<a href="#1461" id="1461">1461</a>
+<a href="#1462" id="1462">1462</a>
+<a href="#1463" id="1463">1463</a>
+<a href="#1464" id="1464">1464</a>
+<a href="#1465" id="1465">1465</a>
+<a href="#1466" id="1466">1466</a>
+<a href="#1467" id="1467">1467</a>
+<a href="#1468" id="1468">1468</a>
+<a href="#1469" id="1469">1469</a>
+<a href="#1470" id="1470">1470</a>
+<a href="#1471" id="1471">1471</a>
+<a href="#1472" id="1472">1472</a>
+<a href="#1473" id="1473">1473</a>
+<a href="#1474" id="1474">1474</a>
+<a href="#1475" id="1475">1475</a>
+<a href="#1476" id="1476">1476</a>
+<a href="#1477" id="1477">1477</a>
+<a href="#1478" id="1478">1478</a>
+<a href="#1479" id="1479">1479</a>
+<a href="#1480" id="1480">1480</a>
+<a href="#1481" id="1481">1481</a>
+<a href="#1482" id="1482">1482</a>
+<a href="#1483" id="1483">1483</a>
+<a href="#1484" id="1484">1484</a>
+<a href="#1485" id="1485">1485</a>
+<a href="#1486" id="1486">1486</a>
+<a href="#1487" id="1487">1487</a>
+<a href="#1488" id="1488">1488</a>
+<a href="#1489" id="1489">1489</a>
+<a href="#1490" id="1490">1490</a>
+<a href="#1491" id="1491">1491</a>
+<a href="#1492" id="1492">1492</a>
+<a href="#1493" id="1493">1493</a>
+<a href="#1494" id="1494">1494</a>
+<a href="#1495" id="1495">1495</a>
+<a href="#1496" id="1496">1496</a>
+<a href="#1497" id="1497">1497</a>
+<a href="#1498" id="1498">1498</a>
+<a href="#1499" id="1499">1499</a>
+<a href="#1500" id="1500">1500</a>
+<a href="#1501" id="1501">1501</a>
+<a href="#1502" id="1502">1502</a>
+<a href="#1503" id="1503">1503</a>
+<a href="#1504" id="1504">1504</a>
+<a href="#1505" id="1505">1505</a>
+<a href="#1506" id="1506">1506</a>
+<a href="#1507" id="1507">1507</a>
+<a href="#1508" id="1508">1508</a>
+<a href="#1509" id="1509">1509</a>
+<a href="#1510" id="1510">1510</a>
+<a href="#1511" id="1511">1511</a>
+<a href="#1512" id="1512">1512</a>
+<a href="#1513" id="1513">1513</a>
+<a href="#1514" id="1514">1514</a>
+<a href="#1515" id="1515">1515</a>
+<a href="#1516" id="1516">1516</a>
+<a href="#1517" id="1517">1517</a>
+<a href="#1518" id="1518">1518</a>
+<a href="#1519" id="1519">1519</a>
+<a href="#1520" id="1520">1520</a>
+<a href="#1521" id="1521">1521</a>
+<a href="#1522" id="1522">1522</a>
+<a href="#1523" id="1523">1523</a>
+<a href="#1524" id="1524">1524</a>
+<a href="#1525" id="1525">1525</a>
+<a href="#1526" id="1526">1526</a>
+<a href="#1527" id="1527">1527</a>
+<a href="#1528" id="1528">1528</a>
+<a href="#1529" id="1529">1529</a>
+<a href="#1530" id="1530">1530</a>
+<a href="#1531" id="1531">1531</a>
+<a href="#1532" id="1532">1532</a>
+<a href="#1533" id="1533">1533</a>
+<a href="#1534" id="1534">1534</a>
+<a href="#1535" id="1535">1535</a>
+<a href="#1536" id="1536">1536</a>
+<a href="#1537" id="1537">1537</a>
+<a href="#1538" id="1538">1538</a>
+<a href="#1539" id="1539">1539</a>
+<a href="#1540" id="1540">1540</a>
+<a href="#1541" id="1541">1541</a>
+<a href="#1542" id="1542">1542</a>
+<a href="#1543" id="1543">1543</a>
+<a href="#1544" id="1544">1544</a>
+<a href="#1545" id="1545">1545</a>
+<a href="#1546" id="1546">1546</a>
+<a href="#1547" id="1547">1547</a>
+<a href="#1548" id="1548">1548</a>
+<a href="#1549" id="1549">1549</a>
+<a href="#1550" id="1550">1550</a>
+<a href="#1551" id="1551">1551</a>
+<a href="#1552" id="1552">1552</a>
+<a href="#1553" id="1553">1553</a>
+<a href="#1554" id="1554">1554</a>
+<a href="#1555" id="1555">1555</a>
+<a href="#1556" id="1556">1556</a>
+<a href="#1557" id="1557">1557</a>
+<a href="#1558" id="1558">1558</a>
+<a href="#1559" id="1559">1559</a>
+<a href="#1560" id="1560">1560</a>
+<a href="#1561" id="1561">1561</a>
+<a href="#1562" id="1562">1562</a>
+<a href="#1563" id="1563">1563</a>
+<a href="#1564" id="1564">1564</a>
+<a href="#1565" id="1565">1565</a>
+<a href="#1566" id="1566">1566</a>
+<a href="#1567" id="1567">1567</a>
+<a href="#1568" id="1568">1568</a>
+<a href="#1569" id="1569">1569</a>
+<a href="#1570" id="1570">1570</a>
+<a href="#1571" id="1571">1571</a>
+<a href="#1572" id="1572">1572</a>
+<a href="#1573" id="1573">1573</a>
+<a href="#1574" id="1574">1574</a>
+<a href="#1575" id="1575">1575</a>
+<a href="#1576" id="1576">1576</a>
+<a href="#1577" id="1577">1577</a>
+<a href="#1578" id="1578">1578</a>
+<a href="#1579" id="1579">1579</a>
+<a href="#1580" id="1580">1580</a>
+<a href="#1581" id="1581">1581</a>
+<a href="#1582" id="1582">1582</a>
+<a href="#1583" id="1583">1583</a>
+<a href="#1584" id="1584">1584</a>
+<a href="#1585" id="1585">1585</a>
+<a href="#1586" id="1586">1586</a>
+<a href="#1587" id="1587">1587</a>
+<a href="#1588" id="1588">1588</a>
+<a href="#1589" id="1589">1589</a>
+<a href="#1590" id="1590">1590</a>
+<a href="#1591" id="1591">1591</a>
+<a href="#1592" id="1592">1592</a>
+<a href="#1593" id="1593">1593</a>
+<a href="#1594" id="1594">1594</a>
+<a href="#1595" id="1595">1595</a>
+<a href="#1596" id="1596">1596</a>
+<a href="#1597" id="1597">1597</a>
+<a href="#1598" id="1598">1598</a>
+<a href="#1599" id="1599">1599</a>
+<a href="#1600" id="1600">1600</a>
+<a href="#1601" id="1601">1601</a>
+<a href="#1602" id="1602">1602</a>
+<a href="#1603" id="1603">1603</a>
+<a href="#1604" id="1604">1604</a>
+<a href="#1605" id="1605">1605</a>
+<a href="#1606" id="1606">1606</a>
+<a href="#1607" id="1607">1607</a>
+<a href="#1608" id="1608">1608</a>
+<a href="#1609" id="1609">1609</a>
+<a href="#1610" id="1610">1610</a>
+<a href="#1611" id="1611">1611</a>
+<a href="#1612" id="1612">1612</a>
+<a href="#1613" id="1613">1613</a>
+<a href="#1614" id="1614">1614</a>
+<a href="#1615" id="1615">1615</a>
+<a href="#1616" id="1616">1616</a>
+<a href="#1617" id="1617">1617</a>
+<a href="#1618" id="1618">1618</a>
+<a href="#1619" id="1619">1619</a>
+<a href="#1620" id="1620">1620</a>
+<a href="#1621" id="1621">1621</a>
+<a href="#1622" id="1622">1622</a>
+<a href="#1623" id="1623">1623</a>
+<a href="#1624" id="1624">1624</a>
+<a href="#1625" id="1625">1625</a>
+<a href="#1626" id="1626">1626</a>
+<a href="#1627" id="1627">1627</a>
+<a href="#1628" id="1628">1628</a>
+<a href="#1629" id="1629">1629</a>
+<a href="#1630" id="1630">1630</a>
+<a href="#1631" id="1631">1631</a>
+<a href="#1632" id="1632">1632</a>
+<a href="#1633" id="1633">1633</a>
+<a href="#1634" id="1634">1634</a>
+<a href="#1635" id="1635">1635</a>
+<a href="#1636" id="1636">1636</a>
+<a href="#1637" id="1637">1637</a>
+<a href="#1638" id="1638">1638</a>
+<a href="#1639" id="1639">1639</a>
+<a href="#1640" id="1640">1640</a>
+<a href="#1641" id="1641">1641</a>
+<a href="#1642" id="1642">1642</a>
+<a href="#1643" id="1643">1643</a>
+<a href="#1644" id="1644">1644</a>
+<a href="#1645" id="1645">1645</a>
+<a href="#1646" id="1646">1646</a>
+<a href="#1647" id="1647">1647</a>
+<a href="#1648" id="1648">1648</a>
+<a href="#1649" id="1649">1649</a>
+<a href="#1650" id="1650">1650</a>
+<a href="#1651" id="1651">1651</a>
+<a href="#1652" id="1652">1652</a>
+<a href="#1653" id="1653">1653</a>
+<a href="#1654" id="1654">1654</a>
+<a href="#1655" id="1655">1655</a>
+<a href="#1656" id="1656">1656</a>
+<a href="#1657" id="1657">1657</a>
+<a href="#1658" id="1658">1658</a>
+<a href="#1659" id="1659">1659</a>
+<a href="#1660" id="1660">1660</a>
+<a href="#1661" id="1661">1661</a>
+<a href="#1662" id="1662">1662</a>
+<a href="#1663" id="1663">1663</a>
+<a href="#1664" id="1664">1664</a>
+<a href="#1665" id="1665">1665</a>
+<a href="#1666" id="1666">1666</a>
+<a href="#1667" id="1667">1667</a>
+<a href="#1668" id="1668">1668</a>
+<a href="#1669" id="1669">1669</a>
+<a href="#1670" id="1670">1670</a>
+<a href="#1671" id="1671">1671</a>
+<a href="#1672" id="1672">1672</a>
+<a href="#1673" id="1673">1673</a>
+<a href="#1674" id="1674">1674</a>
+<a href="#1675" id="1675">1675</a>
+<a href="#1676" id="1676">1676</a>
+<a href="#1677" id="1677">1677</a>
+<a href="#1678" id="1678">1678</a>
+<a href="#1679" id="1679">1679</a>
+<a href="#1680" id="1680">1680</a>
+<a href="#1681" id="1681">1681</a>
+<a href="#1682" id="1682">1682</a>
+<a href="#1683" id="1683">1683</a>
+<a href="#1684" id="1684">1684</a>
+<a href="#1685" id="1685">1685</a>
+<a href="#1686" id="1686">1686</a>
+<a href="#1687" id="1687">1687</a>
+<a href="#1688" id="1688">1688</a>
+<a href="#1689" id="1689">1689</a>
+<a href="#1690" id="1690">1690</a>
+<a href="#1691" id="1691">1691</a>
+<a href="#1692" id="1692">1692</a>
+<a href="#1693" id="1693">1693</a>
+<a href="#1694" id="1694">1694</a>
+<a href="#1695" id="1695">1695</a>
+<a href="#1696" id="1696">1696</a>
+<a href="#1697" id="1697">1697</a>
+<a href="#1698" id="1698">1698</a>
+<a href="#1699" id="1699">1699</a>
+<a href="#1700" id="1700">1700</a>
+<a href="#1701" id="1701">1701</a>
+<a href="#1702" id="1702">1702</a>
+<a href="#1703" id="1703">1703</a>
+<a href="#1704" id="1704">1704</a>
+<a href="#1705" id="1705">1705</a>
+<a href="#1706" id="1706">1706</a>
+<a href="#1707" id="1707">1707</a>
+<a href="#1708" id="1708">1708</a>
+<a href="#1709" id="1709">1709</a>
+<a href="#1710" id="1710">1710</a>
+<a href="#1711" id="1711">1711</a>
+<a href="#1712" id="1712">1712</a>
+<a href="#1713" id="1713">1713</a>
+<a href="#1714" id="1714">1714</a>
+<a href="#1715" id="1715">1715</a>
+<a href="#1716" id="1716">1716</a>
+<a href="#1717" id="1717">1717</a>
+<a href="#1718" id="1718">1718</a>
+<a href="#1719" id="1719">1719</a>
+<a href="#1720" id="1720">1720</a>
+<a href="#1721" id="1721">1721</a>
+<a href="#1722" id="1722">1722</a>
+<a href="#1723" id="1723">1723</a>
+<a href="#1724" id="1724">1724</a>
+<a href="#1725" id="1725">1725</a>
+<a href="#1726" id="1726">1726</a>
+<a href="#1727" id="1727">1727</a>
+<a href="#1728" id="1728">1728</a>
+<a href="#1729" id="1729">1729</a>
+<a href="#1730" id="1730">1730</a>
+<a href="#1731" id="1731">1731</a>
+<a href="#1732" id="1732">1732</a>
+<a href="#1733" id="1733">1733</a>
+<a href="#1734" id="1734">1734</a>
+<a href="#1735" id="1735">1735</a>
+<a href="#1736" id="1736">1736</a>
+<a href="#1737" id="1737">1737</a>
+<a href="#1738" id="1738">1738</a>
+<a href="#1739" id="1739">1739</a>
+<a href="#1740" id="1740">1740</a>
+<a href="#1741" id="1741">1741</a>
+<a href="#1742" id="1742">1742</a>
+<a href="#1743" id="1743">1743</a>
+<a href="#1744" id="1744">1744</a>
+<a href="#1745" id="1745">1745</a>
+<a href="#1746" id="1746">1746</a>
+<a href="#1747" id="1747">1747</a>
+<a href="#1748" id="1748">1748</a>
+<a href="#1749" id="1749">1749</a>
+<a href="#1750" id="1750">1750</a>
+<a href="#1751" id="1751">1751</a>
+<a href="#1752" id="1752">1752</a>
+<a href="#1753" id="1753">1753</a>
+<a href="#1754" id="1754">1754</a>
+<a href="#1755" id="1755">1755</a>
+<a href="#1756" id="1756">1756</a>
+<a href="#1757" id="1757">1757</a>
+<a href="#1758" id="1758">1758</a>
+<a href="#1759" id="1759">1759</a>
+<a href="#1760" id="1760">1760</a>
+<a href="#1761" id="1761">1761</a>
+<a href="#1762" id="1762">1762</a>
+<a href="#1763" id="1763">1763</a>
+<a href="#1764" id="1764">1764</a>
+<a href="#1765" id="1765">1765</a>
+<a href="#1766" id="1766">1766</a>
+<a href="#1767" id="1767">1767</a>
+<a href="#1768" id="1768">1768</a>
+<a href="#1769" id="1769">1769</a>
+<a href="#1770" id="1770">1770</a>
+<a href="#1771" id="1771">1771</a>
+<a href="#1772" id="1772">1772</a>
+<a href="#1773" id="1773">1773</a>
+<a href="#1774" id="1774">1774</a>
+<a href="#1775" id="1775">1775</a>
+<a href="#1776" id="1776">1776</a>
+<a href="#1777" id="1777">1777</a>
+<a href="#1778" id="1778">1778</a>
+<a href="#1779" id="1779">1779</a>
+<a href="#1780" id="1780">1780</a>
+<a href="#1781" id="1781">1781</a>
+<a href="#1782" id="1782">1782</a>
+<a href="#1783" id="1783">1783</a>
+<a href="#1784" id="1784">1784</a>
+<a href="#1785" id="1785">1785</a>
+<a href="#1786" id="1786">1786</a>
+<a href="#1787" id="1787">1787</a>
+<a href="#1788" id="1788">1788</a>
+<a href="#1789" id="1789">1789</a>
+<a href="#1790" id="1790">1790</a>
+<a href="#1791" id="1791">1791</a>
+<a href="#1792" id="1792">1792</a>
+<a href="#1793" id="1793">1793</a>
+<a href="#1794" id="1794">1794</a>
+<a href="#1795" id="1795">1795</a>
+<a href="#1796" id="1796">1796</a>
+<a href="#1797" id="1797">1797</a>
+<a href="#1798" id="1798">1798</a>
+<a href="#1799" id="1799">1799</a>
+<a href="#1800" id="1800">1800</a>
+<a href="#1801" id="1801">1801</a>
+<a href="#1802" id="1802">1802</a>
+<a href="#1803" id="1803">1803</a>
+<a href="#1804" id="1804">1804</a>
+<a href="#1805" id="1805">1805</a>
+<a href="#1806" id="1806">1806</a>
+<a href="#1807" id="1807">1807</a>
+<a href="#1808" id="1808">1808</a>
+<a href="#1809" id="1809">1809</a>
+<a href="#1810" id="1810">1810</a>
+<a href="#1811" id="1811">1811</a>
+<a href="#1812" id="1812">1812</a>
+<a href="#1813" id="1813">1813</a>
+<a href="#1814" id="1814">1814</a>
+<a href="#1815" id="1815">1815</a>
+<a href="#1816" id="1816">1816</a>
+<a href="#1817" id="1817">1817</a>
+<a href="#1818" id="1818">1818</a>
+<a href="#1819" id="1819">1819</a>
+<a href="#1820" id="1820">1820</a>
+<a href="#1821" id="1821">1821</a>
+<a href="#1822" id="1822">1822</a>
+<a href="#1823" id="1823">1823</a>
+<a href="#1824" id="1824">1824</a>
+<a href="#1825" id="1825">1825</a>
+<a href="#1826" id="1826">1826</a>
+<a href="#1827" id="1827">1827</a>
+<a href="#1828" id="1828">1828</a>
+<a href="#1829" id="1829">1829</a>
+<a href="#1830" id="1830">1830</a>
+<a href="#1831" id="1831">1831</a>
+<a href="#1832" id="1832">1832</a>
+<a href="#1833" id="1833">1833</a>
+<a href="#1834" id="1834">1834</a>
+<a href="#1835" id="1835">1835</a>
+<a href="#1836" id="1836">1836</a>
+<a href="#1837" id="1837">1837</a>
+<a href="#1838" id="1838">1838</a>
+<a href="#1839" id="1839">1839</a>
+<a href="#1840" id="1840">1840</a>
+<a href="#1841" id="1841">1841</a>
+<a href="#1842" id="1842">1842</a>
+<a href="#1843" id="1843">1843</a>
+<a href="#1844" id="1844">1844</a>
+<a href="#1845" id="1845">1845</a>
+<a href="#1846" id="1846">1846</a>
+<a href="#1847" id="1847">1847</a>
+<a href="#1848" id="1848">1848</a>
+<a href="#1849" id="1849">1849</a>
+<a href="#1850" id="1850">1850</a>
+<a href="#1851" id="1851">1851</a>
+<a href="#1852" id="1852">1852</a>
+<a href="#1853" id="1853">1853</a>
+<a href="#1854" id="1854">1854</a>
+<a href="#1855" id="1855">1855</a>
+<a href="#1856" id="1856">1856</a>
+<a href="#1857" id="1857">1857</a>
+<a href="#1858" id="1858">1858</a>
+<a href="#1859" id="1859">1859</a>
+<a href="#1860" id="1860">1860</a>
+<a href="#1861" id="1861">1861</a>
+<a href="#1862" id="1862">1862</a>
+<a href="#1863" id="1863">1863</a>
+<a href="#1864" id="1864">1864</a>
+<a href="#1865" id="1865">1865</a>
+<a href="#1866" id="1866">1866</a>
+<a href="#1867" id="1867">1867</a>
+<a href="#1868" id="1868">1868</a>
+<a href="#1869" id="1869">1869</a>
+<a href="#1870" id="1870">1870</a>
+<a href="#1871" id="1871">1871</a>
+<a href="#1872" id="1872">1872</a>
+<a href="#1873" id="1873">1873</a>
+<a href="#1874" id="1874">1874</a>
+<a href="#1875" id="1875">1875</a>
+<a href="#1876" id="1876">1876</a>
+<a href="#1877" id="1877">1877</a>
+<a href="#1878" id="1878">1878</a>
+<a href="#1879" id="1879">1879</a>
+<a href="#1880" id="1880">1880</a>
+<a href="#1881" id="1881">1881</a>
+<a href="#1882" id="1882">1882</a>
+<a href="#1883" id="1883">1883</a>
+<a href="#1884" id="1884">1884</a>
+<a href="#1885" id="1885">1885</a>
+<a href="#1886" id="1886">1886</a>
+<a href="#1887" id="1887">1887</a>
+<a href="#1888" id="1888">1888</a>
+<a href="#1889" id="1889">1889</a>
+<a href="#1890" id="1890">1890</a>
+<a href="#1891" id="1891">1891</a>
+<a href="#1892" id="1892">1892</a>
+<a href="#1893" id="1893">1893</a>
+<a href="#1894" id="1894">1894</a>
+<a href="#1895" id="1895">1895</a>
+<a href="#1896" id="1896">1896</a>
+<a href="#1897" id="1897">1897</a>
+<a href="#1898" id="1898">1898</a>
+<a href="#1899" id="1899">1899</a>
+<a href="#1900" id="1900">1900</a>
+<a href="#1901" id="1901">1901</a>
+<a href="#1902" id="1902">1902</a>
+<a href="#1903" id="1903">1903</a>
+<a href="#1904" id="1904">1904</a>
+<a href="#1905" id="1905">1905</a>
+<a href="#1906" id="1906">1906</a>
+<a href="#1907" id="1907">1907</a>
+<a href="#1908" id="1908">1908</a>
+<a href="#1909" id="1909">1909</a>
+<a href="#1910" id="1910">1910</a>
+<a href="#1911" id="1911">1911</a>
+<a href="#1912" id="1912">1912</a>
+<a href="#1913" id="1913">1913</a>
+<a href="#1914" id="1914">1914</a>
+<a href="#1915" id="1915">1915</a>
+</pre></div><pre class="rust"><code><span class="comment">// This file is part of Substrate.
+
+// Copyright (C) Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+</span><span class="doccomment">//! The unsigned phase, and its miner.
+
+</span><span class="kw">use crate</span>::{
+	helpers, Call, Config, ElectionCompute, Error, FeasibilityError, Pallet, RawSolution,
+	ReadySolution, RoundSnapshot, SolutionAccuracyOf, SolutionOf, SolutionOrSnapshotSize, Weight,
+};
+<span class="kw">use </span>codec::Encode;
+<span class="kw">use </span>frame_election_provider_support::{NposSolution, NposSolver, PerThing128, VoteWeight};
+<span class="kw">use </span>frame_support::{
+	dispatch::DispatchResult,
+	ensure,
+	traits::{DefensiveResult, Get},
+	BoundedVec,
+};
+<span class="kw">use </span>frame_system::{offchain::SubmitTransaction, pallet_prelude::BlockNumberFor};
+<span class="kw">use </span>scale_info::TypeInfo;
+<span class="kw">use </span>sp_npos_elections::{
+	assignment_ratio_to_staked_normalized, assignment_staked_to_ratio_normalized, ElectionResult,
+	ElectionScore, EvaluateSupport,
+};
+<span class="kw">use </span>sp_runtime::{
+	offchain::storage::{MutateStorageError, StorageValueRef},
+	DispatchError, SaturatedConversion,
+};
+<span class="kw">use </span>sp_std::prelude::<span class="kw-2">*</span>;
+
+<span class="doccomment">/// Storage key used to store the last block number at which offchain worker ran.
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>OFFCHAIN_LAST_BLOCK: <span class="kw-2">&amp;</span>[u8] = <span class="string">b&quot;parity/multi-phase-unsigned-election&quot;</span>;
+<span class="doccomment">/// Storage key used to store the offchain worker running status.
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>OFFCHAIN_LOCK: <span class="kw-2">&amp;</span>[u8] = <span class="string">b&quot;parity/multi-phase-unsigned-election/lock&quot;</span>;
+
+<span class="doccomment">/// Storage key used to cache the solution `call`.
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>OFFCHAIN_CACHED_CALL: <span class="kw-2">&amp;</span>[u8] = <span class="string">b&quot;parity/multi-phase-unsigned-election/call&quot;</span>;
+
+<span class="doccomment">/// A voter&#39;s fundamental data: their ID, their stake, and the list of candidates for whom they
+/// voted.
+</span><span class="kw">pub type </span>VoterOf&lt;T&gt; = frame_election_provider_support::VoterOf&lt;&lt;T <span class="kw">as </span>Config&gt;::DataProvider&gt;;
+
+<span class="doccomment">/// Same as [`VoterOf`], but parameterized by the `MinerConfig`.
+</span><span class="kw">pub type </span>MinerVoterOf&lt;T&gt; = frame_election_provider_support::Voter&lt;
+	&lt;T <span class="kw">as </span>MinerConfig&gt;::AccountId,
+	&lt;T <span class="kw">as </span>MinerConfig&gt;::MaxVotesPerVoter,
+&gt;;
+
+<span class="doccomment">/// The relative distribution of a voter&#39;s stake among the winning targets.
+</span><span class="kw">pub type </span>Assignment&lt;T&gt; =
+	sp_npos_elections::Assignment&lt;&lt;T <span class="kw">as </span>frame_system::Config&gt;::AccountId, SolutionAccuracyOf&lt;T&gt;&gt;;
+
+<span class="doccomment">/// The [`IndexAssignment`][frame_election_provider_support::IndexAssignment] type specialized for a
+/// particular runtime `T`.
+</span><span class="kw">pub type </span>IndexAssignmentOf&lt;T&gt; = frame_election_provider_support::IndexAssignmentOf&lt;SolutionOf&lt;T&gt;&gt;;
+
+<span class="doccomment">/// Error type of the pallet&#39;s [`crate::Config::Solver`].
+</span><span class="kw">pub type </span>SolverErrorOf&lt;T&gt; = &lt;&lt;T <span class="kw">as </span>Config&gt;::Solver <span class="kw">as </span>NposSolver&gt;::Error;
+<span class="doccomment">/// Error type for operations related to the OCW npos solution miner.
+</span><span class="attr">#[derive(frame_support::DebugNoBound, frame_support::PartialEqNoBound)]
+</span><span class="kw">pub enum </span>MinerError {
+	<span class="doccomment">/// An internal error in the NPoS elections crate.
+	</span>NposElections(sp_npos_elections::Error),
+	<span class="doccomment">/// Snapshot data was unavailable unexpectedly.
+	</span>SnapshotUnAvailable,
+	<span class="doccomment">/// Submitting a transaction to the pool failed.
+	</span>PoolSubmissionFailed,
+	<span class="doccomment">/// The pre-dispatch checks failed for the mined solution.
+	</span>PreDispatchChecksFailed(DispatchError),
+	<span class="doccomment">/// The solution generated from the miner is not feasible.
+	</span>Feasibility(FeasibilityError),
+	<span class="doccomment">/// Something went wrong fetching the lock.
+	</span>Lock(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str),
+	<span class="doccomment">/// Cannot restore a solution that was not stored.
+	</span>NoStoredSolution,
+	<span class="doccomment">/// Cached solution is not a `submit_unsigned` call.
+	</span>SolutionCallInvalid,
+	<span class="doccomment">/// Failed to store a solution.
+	</span>FailedToStoreSolution,
+	<span class="doccomment">/// There are no more voters to remove to trim the solution.
+	</span>NoMoreVoters,
+	<span class="doccomment">/// An error from the solver.
+	</span>Solver,
+}
+
+<span class="kw">impl </span>From&lt;sp_npos_elections::Error&gt; <span class="kw">for </span>MinerError {
+	<span class="kw">fn </span>from(e: sp_npos_elections::Error) -&gt; <span class="self">Self </span>{
+		MinerError::NposElections(e)
+	}
+}
+
+<span class="kw">impl </span>From&lt;FeasibilityError&gt; <span class="kw">for </span>MinerError {
+	<span class="kw">fn </span>from(e: FeasibilityError) -&gt; <span class="self">Self </span>{
+		MinerError::Feasibility(e)
+	}
+}
+
+<span class="doccomment">/// Save a given call into OCW storage.
+</span><span class="kw">fn </span>save_solution&lt;T: Config&gt;(call: <span class="kw-2">&amp;</span>Call&lt;T&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), MinerError&gt; {
+	<span class="macro">log!</span>(debug, <span class="string">&quot;saving a call to the offchain storage.&quot;</span>);
+	<span class="kw">let </span>storage = StorageValueRef::persistent(OFFCHAIN_CACHED_CALL);
+	<span class="kw">match </span>storage.mutate::&lt;<span class="kw">_</span>, (), <span class="kw">_</span>&gt;(|<span class="kw">_</span>| <span class="prelude-val">Ok</span>(call.clone())) {
+		<span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(()),
+		<span class="prelude-val">Err</span>(MutateStorageError::ConcurrentModification(<span class="kw">_</span>)) =&gt;
+			<span class="prelude-val">Err</span>(MinerError::FailedToStoreSolution),
+		<span class="prelude-val">Err</span>(MutateStorageError::ValueFunctionFailed(<span class="kw">_</span>)) =&gt; {
+			<span class="comment">// this branch should be unreachable according to the definition of
+			// `StorageValueRef::mutate`: that function should only ever `Err` if the closure we
+			// pass it returns an error. however, for safety in case the definition changes, we do
+			// not optimize the branch away or panic.
+			</span><span class="prelude-val">Err</span>(MinerError::FailedToStoreSolution)
+		},
+	}
+}
+
+<span class="doccomment">/// Get a saved solution from OCW storage if it exists.
+</span><span class="kw">fn </span>restore_solution&lt;T: Config&gt;() -&gt; <span class="prelude-ty">Result</span>&lt;Call&lt;T&gt;, MinerError&gt; {
+	StorageValueRef::persistent(OFFCHAIN_CACHED_CALL)
+		.get()
+		.ok()
+		.flatten()
+		.ok_or(MinerError::NoStoredSolution)
+}
+
+<span class="doccomment">/// Clear a saved solution from OCW storage.
+</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>kill_ocw_solution&lt;T: Config&gt;() {
+	<span class="macro">log!</span>(debug, <span class="string">&quot;clearing offchain call cache storage.&quot;</span>);
+	<span class="kw">let </span><span class="kw-2">mut </span>storage = StorageValueRef::persistent(OFFCHAIN_CACHED_CALL);
+	storage.clear();
+}
+
+<span class="doccomment">/// Clear the offchain repeat storage.
+///
+/// After calling this, the next offchain worker is guaranteed to work, with respect to the
+/// frequency repeat.
+</span><span class="kw">fn </span>clear_offchain_repeat_frequency() {
+	<span class="kw">let </span><span class="kw-2">mut </span>last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
+	last_block.clear();
+}
+
+<span class="doccomment">/// `true` when OCW storage contains a solution
+</span><span class="attr">#[cfg(test)]
+</span><span class="kw">fn </span>ocw_solution_exists&lt;T: Config&gt;() -&gt; bool {
+	<span class="macro">matches!</span>(StorageValueRef::persistent(OFFCHAIN_CACHED_CALL).get::&lt;Call&lt;T&gt;&gt;(), <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="kw">_</span>)))
+}
+
+<span class="kw">impl</span>&lt;T: Config&gt; Pallet&lt;T&gt; {
+	<span class="doccomment">/// Mine a new npos solution.
+	///
+	/// The Npos Solver type, `S`, must have the same AccountId and Error type as the
+	/// [`crate::Config::Solver`] in order to create a unified return type.
+	</span><span class="kw">pub fn </span>mine_solution(
+	) -&gt; <span class="prelude-ty">Result</span>&lt;(RawSolution&lt;SolutionOf&lt;T::MinerConfig&gt;&gt;, SolutionOrSnapshotSize), MinerError&gt; {
+		<span class="kw">let </span>RoundSnapshot { voters, targets } =
+			<span class="self">Self</span>::snapshot().ok_or(MinerError::SnapshotUnAvailable)<span class="question-mark">?</span>;
+		<span class="kw">let </span>desired_targets = <span class="self">Self</span>::desired_targets().ok_or(MinerError::SnapshotUnAvailable)<span class="question-mark">?</span>;
+		<span class="kw">let </span>(solution, score, size) = Miner::&lt;T::MinerConfig&gt;::mine_solution_with_snapshot::&lt;
+			T::Solver,
+		&gt;(voters, targets, desired_targets)<span class="question-mark">?</span>;
+		<span class="kw">let </span>round = <span class="self">Self</span>::round();
+		<span class="prelude-val">Ok</span>((RawSolution { solution, score, round }, size))
+	}
+
+	<span class="doccomment">/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way, submit
+	/// if our call&#39;s score is greater than that of the cached solution.
+	</span><span class="kw">pub fn </span>restore_or_compute_then_maybe_submit() -&gt; <span class="prelude-ty">Result</span>&lt;(), MinerError&gt; {
+		<span class="macro">log!</span>(debug, <span class="string">&quot;miner attempting to restore or compute an unsigned solution.&quot;</span>);
+
+		<span class="kw">let </span>call = restore_solution::&lt;T&gt;()
+			.and_then(|call| {
+				<span class="comment">// ensure the cached call is still current before submitting
+				</span><span class="kw">if let </span>Call::submit_unsigned { raw_solution, .. } = <span class="kw-2">&amp;</span>call {
+					<span class="comment">// prevent errors arising from state changes in a forkful chain
+					</span><span class="self">Self</span>::basic_checks(raw_solution, <span class="string">&quot;restored&quot;</span>)<span class="question-mark">?</span>;
+					<span class="prelude-val">Ok</span>(call)
+				} <span class="kw">else </span>{
+					<span class="prelude-val">Err</span>(MinerError::SolutionCallInvalid)
+				}
+			})
+			.or_else::&lt;MinerError, <span class="kw">_</span>&gt;(|error| {
+				<span class="macro">log!</span>(debug, <span class="string">&quot;restoring solution failed due to {:?}&quot;</span>, error);
+				<span class="kw">match </span>error {
+					MinerError::NoStoredSolution =&gt; {
+						<span class="macro">log!</span>(trace, <span class="string">&quot;mining a new solution.&quot;</span>);
+						<span class="comment">// if not present or cache invalidated due to feasibility, regenerate.
+						// note that failing `Feasibility` can only mean that the solution was
+						// computed over a snapshot that has changed due to a fork.
+						</span><span class="kw">let </span>call = <span class="self">Self</span>::mine_checked_call()<span class="question-mark">?</span>;
+						save_solution(<span class="kw-2">&amp;</span>call)<span class="question-mark">?</span>;
+						<span class="prelude-val">Ok</span>(call)
+					},
+					MinerError::Feasibility(<span class="kw">_</span>) =&gt; {
+						<span class="macro">log!</span>(trace, <span class="string">&quot;wiping infeasible solution.&quot;</span>);
+						<span class="comment">// kill the infeasible solution, hopefully in the next runs (whenever they
+						// may be) we mine a new one.
+						</span>kill_ocw_solution::&lt;T&gt;();
+						clear_offchain_repeat_frequency();
+						<span class="prelude-val">Err</span>(error)
+					},
+					<span class="kw">_ </span>=&gt; {
+						<span class="comment">// nothing to do. Return the error as-is.
+						</span><span class="prelude-val">Err</span>(error)
+					},
+				}
+			})<span class="question-mark">?</span>;
+
+		<span class="self">Self</span>::submit_call(call)
+	}
+
+	<span class="doccomment">/// Mine a new solution, cache it, and submit it back to the chain as an unsigned transaction.
+	</span><span class="kw">pub fn </span>mine_check_save_submit() -&gt; <span class="prelude-ty">Result</span>&lt;(), MinerError&gt; {
+		<span class="macro">log!</span>(debug, <span class="string">&quot;miner attempting to compute an unsigned solution.&quot;</span>);
+
+		<span class="kw">let </span>call = <span class="self">Self</span>::mine_checked_call()<span class="question-mark">?</span>;
+		save_solution(<span class="kw-2">&amp;</span>call)<span class="question-mark">?</span>;
+		<span class="self">Self</span>::submit_call(call)
+	}
+
+	<span class="doccomment">/// Mine a new solution as a call. Performs all checks.
+	</span><span class="kw">pub fn </span>mine_checked_call() -&gt; <span class="prelude-ty">Result</span>&lt;Call&lt;T&gt;, MinerError&gt; {
+		<span class="comment">// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
+		</span><span class="kw">let </span>(raw_solution, witness) = <span class="self">Self</span>::mine_and_check()<span class="question-mark">?</span>;
+
+		<span class="kw">let </span>score = raw_solution.score;
+		<span class="kw">let </span>call: Call&lt;T&gt; = Call::submit_unsigned { raw_solution: Box::new(raw_solution), witness };
+
+		<span class="macro">log!</span>(
+			debug,
+			<span class="string">&quot;mined a solution with score {:?} and size {}&quot;</span>,
+			score,
+			call.using_encoded(|b| b.len())
+		);
+
+		<span class="prelude-val">Ok</span>(call)
+	}
+
+	<span class="kw">fn </span>submit_call(call: Call&lt;T&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), MinerError&gt; {
+		<span class="macro">log!</span>(debug, <span class="string">&quot;miner submitting a solution as an unsigned transaction&quot;</span>);
+
+		SubmitTransaction::&lt;T, Call&lt;T&gt;&gt;::submit_unsigned_transaction(call.into())
+			.map_err(|<span class="kw">_</span>| MinerError::PoolSubmissionFailed)
+	}
+
+	<span class="comment">// perform basic checks of a solution&#39;s validity
+	//
+	// Performance: note that it internally clones the provided solution.
+	</span><span class="kw">pub fn </span>basic_checks(
+		raw_solution: <span class="kw-2">&amp;</span>RawSolution&lt;SolutionOf&lt;T::MinerConfig&gt;&gt;,
+		solution_type: <span class="kw-2">&amp;</span>str,
+	) -&gt; <span class="prelude-ty">Result</span>&lt;(), MinerError&gt; {
+		<span class="self">Self</span>::unsigned_pre_dispatch_checks(raw_solution).map_err(|err| {
+			<span class="macro">log!</span>(debug, <span class="string">&quot;pre-dispatch checks failed for {} solution: {:?}&quot;</span>, solution_type, err);
+			MinerError::PreDispatchChecksFailed(err)
+		})<span class="question-mark">?</span>;
+
+		<span class="self">Self</span>::feasibility_check(raw_solution.clone(), ElectionCompute::Unsigned).map_err(
+			|err| {
+				<span class="macro">log!</span>(debug, <span class="string">&quot;feasibility check failed for {} solution: {:?}&quot;</span>, solution_type, err);
+				err
+			},
+		)<span class="question-mark">?</span>;
+
+		<span class="prelude-val">Ok</span>(())
+	}
+
+	<span class="doccomment">/// Mine a new npos solution, with all the relevant checks to make sure that it will be accepted
+	/// to the chain.
+	///
+	/// If you want an unchecked solution, use [`Pallet::mine_solution`].
+	/// If you want a checked solution and submit it at the same time, use
+	/// [`Pallet::mine_check_save_submit`].
+	</span><span class="kw">pub fn </span>mine_and_check(
+	) -&gt; <span class="prelude-ty">Result</span>&lt;(RawSolution&lt;SolutionOf&lt;T::MinerConfig&gt;&gt;, SolutionOrSnapshotSize), MinerError&gt; {
+		<span class="kw">let </span>(raw_solution, witness) = <span class="self">Self</span>::mine_solution()<span class="question-mark">?</span>;
+		<span class="self">Self</span>::basic_checks(<span class="kw-2">&amp;</span>raw_solution, <span class="string">&quot;mined&quot;</span>)<span class="question-mark">?</span>;
+		<span class="prelude-val">Ok</span>((raw_solution, witness))
+	}
+
+	<span class="doccomment">/// Checks if an execution of the offchain worker is permitted at the given block number, or
+	/// not.
+	///
+	/// This makes sure that
+	/// 1. we don&#39;t run on previous blocks in case of a re-org
+	/// 2. we don&#39;t run twice within a window of length `T::OffchainRepeat`.
+	///
+	/// Returns `Ok(())` if offchain worker limit is respected, `Err(reason)` otherwise. If `Ok()`
+	/// is returned, `now` is written in storage and will be used in further calls as the baseline.
+	</span><span class="kw">pub fn </span>ensure_offchain_repeat_frequency(now: BlockNumberFor&lt;T&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), MinerError&gt; {
+		<span class="kw">let </span>threshold = T::OffchainRepeat::get();
+		<span class="kw">let </span>last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
+
+		<span class="kw">let </span>mutate_stat = last_block.mutate::&lt;<span class="kw">_</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, <span class="kw">_</span>&gt;(
+			|maybe_head: <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;BlockNumberFor&lt;T&gt;&gt;, <span class="kw">_</span>&gt;| {
+				<span class="kw">match </span>maybe_head {
+					<span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(head)) <span class="kw">if </span>now &lt; head =&gt; <span class="prelude-val">Err</span>(<span class="string">&quot;fork.&quot;</span>),
+					<span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(head)) <span class="kw">if </span>now &gt;= head &amp;&amp; now &lt;= head + threshold =&gt;
+						<span class="prelude-val">Err</span>(<span class="string">&quot;recently executed.&quot;</span>),
+					<span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(head)) <span class="kw">if </span>now &gt; head + threshold =&gt; {
+						<span class="comment">// we can run again now. Write the new head.
+						</span><span class="prelude-val">Ok</span>(now)
+					},
+					<span class="kw">_ </span>=&gt; {
+						<span class="comment">// value doesn&#39;t exists. Probably this node just booted up. Write, and run
+						</span><span class="prelude-val">Ok</span>(now)
+					},
+				}
+			},
+		);
+
+		<span class="kw">match </span>mutate_stat {
+			<span class="comment">// all good
+			</span><span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(()),
+			<span class="comment">// failed to write.
+			</span><span class="prelude-val">Err</span>(MutateStorageError::ConcurrentModification(<span class="kw">_</span>)) =&gt;
+				<span class="prelude-val">Err</span>(MinerError::Lock(<span class="string">&quot;failed to write to offchain db (concurrent modification).&quot;</span>)),
+			<span class="comment">// fork etc.
+			</span><span class="prelude-val">Err</span>(MutateStorageError::ValueFunctionFailed(why)) =&gt; <span class="prelude-val">Err</span>(MinerError::Lock(why)),
+		}
+	}
+
+	<span class="doccomment">/// Do the basics checks that MUST happen during the validation and pre-dispatch of an unsigned
+	/// transaction.
+	///
+	/// Can optionally also be called during dispatch, if needed.
+	///
+	/// NOTE: Ideally, these tests should move more and more outside of this and more to the miner&#39;s
+	/// code, so that we do less and less storage reads here.
+	</span><span class="kw">pub fn </span>unsigned_pre_dispatch_checks(
+		raw_solution: <span class="kw-2">&amp;</span>RawSolution&lt;SolutionOf&lt;T::MinerConfig&gt;&gt;,
+	) -&gt; DispatchResult {
+		<span class="comment">// ensure solution is timely. Don&#39;t panic yet. This is a cheap check.
+		</span><span class="macro">ensure!</span>(<span class="self">Self</span>::current_phase().is_unsigned_open(), Error::&lt;T&gt;::PreDispatchEarlySubmission);
+
+		<span class="comment">// ensure round is current
+		</span><span class="macro">ensure!</span>(<span class="self">Self</span>::round() == raw_solution.round, Error::&lt;T&gt;::OcwCallWrongEra);
+
+		<span class="comment">// ensure correct number of winners.
+		</span><span class="macro">ensure!</span>(
+			<span class="self">Self</span>::desired_targets().unwrap_or_default() ==
+				raw_solution.solution.unique_targets().len() <span class="kw">as </span>u32,
+			Error::&lt;T&gt;::PreDispatchWrongWinnerCount,
+		);
+
+		<span class="comment">// ensure score is being improved. Panic henceforth.
+		</span><span class="macro">ensure!</span>(
+			<span class="self">Self</span>::queued_solution().map_or(<span class="bool-val">true</span>, |q: ReadySolution&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;| raw_solution
+				.score
+				.strict_threshold_better(q.score, T::BetterUnsignedThreshold::get())),
+			Error::&lt;T&gt;::PreDispatchWeakSubmission,
+		);
+
+		<span class="prelude-val">Ok</span>(())
+	}
+}
+
+<span class="doccomment">/// Configurations for a miner that comes with this pallet.
+</span><span class="kw">pub trait </span>MinerConfig {
+	<span class="doccomment">/// The account id type.
+	</span><span class="kw">type </span>AccountId: Ord + Clone + codec::Codec + sp_std::fmt::Debug;
+	<span class="doccomment">/// The solution that the miner is mining.
+	</span><span class="kw">type </span>Solution: codec::Codec
+		+ Default
+		+ PartialEq
+		+ Eq
+		+ Clone
+		+ sp_std::fmt::Debug
+		+ Ord
+		+ NposSolution
+		+ TypeInfo;
+	<span class="doccomment">/// Maximum number of votes per voter in the snapshots.
+	</span><span class="kw">type </span>MaxVotesPerVoter;
+	<span class="doccomment">/// Maximum length of the solution that the miner is allowed to generate.
+	///
+	/// Solutions are trimmed to respect this.
+	</span><span class="kw">type </span>MaxLength: Get&lt;u32&gt;;
+	<span class="doccomment">/// Maximum weight of the solution that the miner is allowed to generate.
+	///
+	/// Solutions are trimmed to respect this.
+	///
+	/// The weight is computed using `solution_weight`.
+	</span><span class="kw">type </span>MaxWeight: Get&lt;Weight&gt;;
+	<span class="doccomment">/// The maximum number of winners that can be elected.
+	</span><span class="kw">type </span>MaxWinners: Get&lt;u32&gt;;
+	<span class="doccomment">/// Something that can compute the weight of a solution.
+	///
+	/// This weight estimate is then used to trim the solution, based on [`MinerConfig::MaxWeight`].
+	</span><span class="kw">fn </span>solution_weight(voters: u32, targets: u32, active_voters: u32, degree: u32) -&gt; Weight;
+}
+
+<span class="doccomment">/// A base miner, suitable to be used for both signed and unsigned submissions.
+</span><span class="kw">pub struct </span>Miner&lt;T: MinerConfig&gt;(sp_std::marker::PhantomData&lt;T&gt;);
+<span class="kw">impl</span>&lt;T: MinerConfig&gt; Miner&lt;T&gt; {
+	<span class="doccomment">/// Same as [`Pallet::mine_solution`], but the input snapshot data must be given.
+	</span><span class="kw">pub fn </span>mine_solution_with_snapshot&lt;S&gt;(
+		voters: Vec&lt;(T::AccountId, VoteWeight, BoundedVec&lt;T::AccountId, T::MaxVotesPerVoter&gt;)&gt;,
+		targets: Vec&lt;T::AccountId&gt;,
+		desired_targets: u32,
+	) -&gt; <span class="prelude-ty">Result</span>&lt;(SolutionOf&lt;T&gt;, ElectionScore, SolutionOrSnapshotSize), MinerError&gt;
+	<span class="kw">where
+		</span>S: NposSolver&lt;AccountId = T::AccountId&gt;,
+	{
+		S::solve(desired_targets <span class="kw">as </span>usize, targets.clone(), voters.clone())
+			.map_err(|e| {
+				<span class="macro">log_no_system!</span>(error, <span class="string">&quot;solver error: {:?}&quot;</span>, e);
+				MinerError::Solver
+			})
+			.and_then(|e| {
+				<span class="self">Self</span>::prepare_election_result_with_snapshot::&lt;S::Accuracy&gt;(
+					e,
+					voters,
+					targets,
+					desired_targets,
+				)
+			})
+	}
+
+	<span class="doccomment">/// Convert a raw solution from [`sp_npos_elections::ElectionResult`] to [`RawSolution`], which
+	/// is ready to be submitted to the chain.
+	///
+	/// Will always reduce the solution as well.
+	</span><span class="kw">pub fn </span>prepare_election_result_with_snapshot&lt;Accuracy: PerThing128&gt;(
+		election_result: ElectionResult&lt;T::AccountId, Accuracy&gt;,
+		voters: Vec&lt;(T::AccountId, VoteWeight, BoundedVec&lt;T::AccountId, T::MaxVotesPerVoter&gt;)&gt;,
+		targets: Vec&lt;T::AccountId&gt;,
+		desired_targets: u32,
+	) -&gt; <span class="prelude-ty">Result</span>&lt;(SolutionOf&lt;T&gt;, ElectionScore, SolutionOrSnapshotSize), MinerError&gt; {
+		<span class="comment">// now make some helper closures.
+		</span><span class="kw">let </span>cache = helpers::generate_voter_cache::&lt;T&gt;(<span class="kw-2">&amp;</span>voters);
+		<span class="kw">let </span>voter_index = helpers::voter_index_fn::&lt;T&gt;(<span class="kw-2">&amp;</span>cache);
+		<span class="kw">let </span>target_index = helpers::target_index_fn::&lt;T&gt;(<span class="kw-2">&amp;</span>targets);
+		<span class="kw">let </span>voter_at = helpers::voter_at_fn::&lt;T&gt;(<span class="kw-2">&amp;</span>voters);
+		<span class="kw">let </span>target_at = helpers::target_at_fn::&lt;T&gt;(<span class="kw-2">&amp;</span>targets);
+		<span class="kw">let </span>stake_of = helpers::stake_of_fn::&lt;T&gt;(<span class="kw-2">&amp;</span>voters, <span class="kw-2">&amp;</span>cache);
+
+		<span class="comment">// Compute the size of a solution comprised of the selected arguments.
+		//
+		// This function completes in `O(edges)`; it&#39;s expensive, but linear.
+		</span><span class="kw">let </span>encoded_size_of = |assignments: <span class="kw-2">&amp;</span>[IndexAssignmentOf&lt;T&gt;]| {
+			SolutionOf::&lt;T&gt;::try_from(assignments).map(|s| s.encoded_size())
+		};
+
+		<span class="kw">let </span>ElectionResult { assignments, winners: <span class="kw">_ </span>} = election_result;
+
+		<span class="comment">// Reduce (requires round-trip to staked form)
+		</span><span class="kw">let </span>sorted_assignments = {
+			<span class="comment">// convert to staked and reduce.
+			</span><span class="kw">let </span><span class="kw-2">mut </span>staked = assignment_ratio_to_staked_normalized(assignments, <span class="kw-2">&amp;</span>stake_of)<span class="question-mark">?</span>;
+
+			<span class="comment">// we reduce before sorting in order to ensure that the reduction process doesn&#39;t
+			// accidentally change the sort order
+			</span>sp_npos_elections::reduce(<span class="kw-2">&amp;mut </span>staked);
+
+			<span class="comment">// Sort the assignments by reversed voter stake. This ensures that we can efficiently
+			// truncate the list.
+			</span>staked.sort_by_key(
+				|sp_npos_elections::StakedAssignment::&lt;T::AccountId&gt; { who, .. }| {
+					<span class="comment">// though staked assignments are expressed in terms of absolute stake, we&#39;d
+					// still need to iterate over all votes in order to actually compute the total
+					// stake. it should be faster to look it up from the cache.
+					</span><span class="kw">let </span>stake = cache
+						.get(who)
+						.map(|idx| {
+							<span class="kw">let </span>(<span class="kw">_</span>, stake, <span class="kw">_</span>) = voters[<span class="kw-2">*</span>idx];
+							stake
+						})
+						.unwrap_or_default();
+					sp_std::cmp::Reverse(stake)
+				},
+			);
+
+			<span class="comment">// convert back.
+			</span>assignment_staked_to_ratio_normalized(staked)<span class="question-mark">?
+		</span>};
+
+		<span class="comment">// convert to `IndexAssignment`. This improves the runtime complexity of repeatedly
+		// converting to `Solution`.
+		</span><span class="kw">let </span><span class="kw-2">mut </span>index_assignments = sorted_assignments
+			.into_iter()
+			.map(|assignment| IndexAssignmentOf::&lt;T&gt;::new(<span class="kw-2">&amp;</span>assignment, <span class="kw-2">&amp;</span>voter_index, <span class="kw-2">&amp;</span>target_index))
+			.collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
+
+		<span class="comment">// trim assignments list for weight and length.
+		</span><span class="kw">let </span>size =
+			SolutionOrSnapshotSize { voters: voters.len() <span class="kw">as </span>u32, targets: targets.len() <span class="kw">as </span>u32 };
+		<span class="self">Self</span>::trim_assignments_weight(
+			desired_targets,
+			size,
+			T::MaxWeight::get(),
+			<span class="kw-2">&amp;mut </span>index_assignments,
+		);
+		<span class="self">Self</span>::trim_assignments_length(
+			T::MaxLength::get(),
+			<span class="kw-2">&amp;mut </span>index_assignments,
+			<span class="kw-2">&amp;</span>encoded_size_of,
+		)<span class="question-mark">?</span>;
+
+		<span class="comment">// now make solution.
+		</span><span class="kw">let </span>solution = SolutionOf::&lt;T&gt;::try_from(<span class="kw-2">&amp;</span>index_assignments)<span class="question-mark">?</span>;
+
+		<span class="comment">// re-calc score.
+		</span><span class="kw">let </span>score = solution.clone().score(stake_of, voter_at, target_at)<span class="question-mark">?</span>;
+
+		<span class="prelude-val">Ok</span>((solution, score, size))
+	}
+
+	<span class="doccomment">/// Greedily reduce the size of the solution to fit into the block w.r.t length.
+	///
+	/// The length of the solution is largely a function of the number of voters. The number of
+	/// winners cannot be changed. Thus, to reduce the solution size, we need to strip voters.
+	///
+	/// Note that this solution is already computed, and winners are elected based on the merit of
+	/// the total stake in the system. Nevertheless, some of the voters may be removed here.
+	///
+	/// Sometimes, removing a voter can cause a validator to also be implicitly removed, if
+	/// that voter was the only backer of that winner. In such cases, this solution is invalid,
+	/// which will be caught prior to submission.
+	///
+	/// The score must be computed **after** this step. If this step reduces the score too much,
+	/// then the solution must be discarded.
+	</span><span class="kw">pub fn </span>trim_assignments_length(
+		max_allowed_length: u32,
+		assignments: <span class="kw-2">&amp;mut </span>Vec&lt;IndexAssignmentOf&lt;T&gt;&gt;,
+		encoded_size_of: <span class="kw">impl </span>Fn(<span class="kw-2">&amp;</span>[IndexAssignmentOf&lt;T&gt;]) -&gt; <span class="prelude-ty">Result</span>&lt;usize, sp_npos_elections::Error&gt;,
+	) -&gt; <span class="prelude-ty">Result</span>&lt;(), MinerError&gt; {
+		<span class="comment">// Perform a binary search for the max subset of which can fit into the allowed
+		// length. Having discovered that, we can truncate efficiently.
+		</span><span class="kw">let </span>max_allowed_length: usize = max_allowed_length.saturated_into();
+		<span class="kw">let </span><span class="kw-2">mut </span>high = assignments.len();
+		<span class="kw">let </span><span class="kw-2">mut </span>low = <span class="number">0</span>;
+
+		<span class="comment">// not much we can do if assignments are already empty.
+		</span><span class="kw">if </span>high == low {
+			<span class="kw">return </span><span class="prelude-val">Ok</span>(())
+		}
+
+		<span class="kw">while </span>high - low &gt; <span class="number">1 </span>{
+			<span class="kw">let </span>test = (high + low) / <span class="number">2</span>;
+			<span class="kw">if </span>encoded_size_of(<span class="kw-2">&amp;</span>assignments[..test])<span class="question-mark">? </span>&lt;= max_allowed_length {
+				low = test;
+			} <span class="kw">else </span>{
+				high = test;
+			}
+		}
+		<span class="kw">let </span>maximum_allowed_voters = <span class="kw">if </span>low &lt; assignments.len() &amp;&amp;
+			encoded_size_of(<span class="kw-2">&amp;</span>assignments[..low + <span class="number">1</span>])<span class="question-mark">? </span>&lt;= max_allowed_length
+		{
+			low + <span class="number">1
+		</span>} <span class="kw">else </span>{
+			low
+		};
+
+		<span class="comment">// ensure our post-conditions are correct
+		</span><span class="macro">debug_assert!</span>(
+			encoded_size_of(<span class="kw-2">&amp;</span>assignments[..maximum_allowed_voters]).unwrap() &lt;= max_allowed_length
+		);
+		<span class="macro">debug_assert!</span>(<span class="kw">if </span>maximum_allowed_voters &lt; assignments.len() {
+			encoded_size_of(<span class="kw-2">&amp;</span>assignments[..maximum_allowed_voters + <span class="number">1</span>]).unwrap() &gt;
+				max_allowed_length
+		} <span class="kw">else </span>{
+			<span class="bool-val">true
+		</span>});
+
+		<span class="comment">// NOTE: before this point, every access was immutable.
+		// after this point, we never error.
+		// check before edit.
+
+		</span><span class="macro">log_no_system!</span>(
+			debug,
+			<span class="string">&quot;from {} assignments, truncating to {} for length, removing {}&quot;</span>,
+			assignments.len(),
+			maximum_allowed_voters,
+			assignments.len().saturating_sub(maximum_allowed_voters),
+		);
+		assignments.truncate(maximum_allowed_voters);
+
+		<span class="prelude-val">Ok</span>(())
+	}
+
+	<span class="doccomment">/// Greedily reduce the size of the solution to fit into the block w.r.t. weight.
+	///
+	/// The weight of the solution is foremost a function of the number of voters (i.e.
+	/// `assignments.len()`). Aside from this, the other components of the weight are invariant. The
+	/// number of winners shall not be changed (otherwise the solution is invalid) and the
+	/// `ElectionSize` is merely a representation of the total number of stakers.
+	///
+	/// Thus, we reside to stripping away some voters from the `assignments`.
+	///
+	/// Note that the solution is already computed, and the winners are elected based on the merit
+	/// of the entire stake in the system. Nonetheless, some of the voters will be removed further
+	/// down the line.
+	///
+	/// Indeed, the score must be computed **after** this step. If this step reduces the score too
+	/// much or remove a winner, then the solution must be discarded **after** this step.
+	</span><span class="kw">pub fn </span>trim_assignments_weight(
+		desired_targets: u32,
+		size: SolutionOrSnapshotSize,
+		max_weight: Weight,
+		assignments: <span class="kw-2">&amp;mut </span>Vec&lt;IndexAssignmentOf&lt;T&gt;&gt;,
+	) {
+		<span class="kw">let </span>maximum_allowed_voters =
+			<span class="self">Self</span>::maximum_voter_for_weight(desired_targets, size, max_weight);
+		<span class="kw">let </span>removing: usize =
+			assignments.len().saturating_sub(maximum_allowed_voters.saturated_into());
+		<span class="macro">log_no_system!</span>(
+			debug,
+			<span class="string">&quot;from {} assignments, truncating to {} for weight, removing {}&quot;</span>,
+			assignments.len(),
+			maximum_allowed_voters,
+			removing,
+		);
+		assignments.truncate(maximum_allowed_voters <span class="kw">as </span>usize);
+	}
+
+	<span class="doccomment">/// Find the maximum `len` that a solution can have in order to fit into the block weight.
+	///
+	/// This only returns a value between zero and `size.nominators`.
+	</span><span class="kw">pub fn </span>maximum_voter_for_weight(
+		desired_winners: u32,
+		size: SolutionOrSnapshotSize,
+		max_weight: Weight,
+	) -&gt; u32 {
+		<span class="kw">if </span>size.voters &lt; <span class="number">1 </span>{
+			<span class="kw">return </span>size.voters
+		}
+
+		<span class="kw">let </span>max_voters = size.voters.max(<span class="number">1</span>);
+		<span class="kw">let </span><span class="kw-2">mut </span>voters = max_voters;
+
+		<span class="comment">// helper closures.
+		</span><span class="kw">let </span>weight_with = |active_voters: u32| -&gt; Weight {
+			T::solution_weight(size.voters, size.targets, active_voters, desired_winners)
+		};
+
+		<span class="kw">let </span>next_voters = |current_weight: Weight, voters: u32, step: u32| -&gt; <span class="prelude-ty">Result</span>&lt;u32, ()&gt; {
+			<span class="kw">if </span>current_weight.all_lt(max_weight) {
+				<span class="kw">let </span>next_voters = voters.checked_add(step);
+				<span class="kw">match </span>next_voters {
+					<span class="prelude-val">Some</span>(voters) <span class="kw">if </span>voters &lt; max_voters =&gt; <span class="prelude-val">Ok</span>(voters),
+					<span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(()),
+				}
+			} <span class="kw">else if </span>current_weight.any_gt(max_weight) {
+				voters.checked_sub(step).ok_or(())
+			} <span class="kw">else </span>{
+				<span class="comment">// If any of the constituent weights is equal to the max weight, we&#39;re at max
+				</span><span class="prelude-val">Ok</span>(voters)
+			}
+		};
+
+		<span class="comment">// First binary-search the right amount of voters
+		</span><span class="kw">let </span><span class="kw-2">mut </span>step = voters / <span class="number">2</span>;
+		<span class="kw">let </span><span class="kw-2">mut </span>current_weight = weight_with(voters);
+
+		<span class="kw">while </span>step &gt; <span class="number">0 </span>{
+			<span class="kw">match </span>next_voters(current_weight, voters, step) {
+				<span class="comment">// proceed with the binary search
+				</span><span class="prelude-val">Ok</span>(next) <span class="kw">if </span>next != voters =&gt; {
+					voters = next;
+				},
+				<span class="comment">// we are out of bounds, break out of the loop.
+				</span><span class="prelude-val">Err</span>(()) =&gt; <span class="kw">break</span>,
+				<span class="comment">// we found the right value - early exit the function.
+				</span><span class="prelude-val">Ok</span>(next) =&gt; <span class="kw">return </span>next,
+			}
+			step /= <span class="number">2</span>;
+			current_weight = weight_with(voters);
+		}
+
+		<span class="comment">// Time to finish. We might have reduced less than expected due to rounding error. Increase
+		// one last time if we have any room left, the reduce until we are sure we are below limit.
+		</span><span class="kw">while </span>voters &lt; max_voters &amp;&amp; weight_with(voters + <span class="number">1</span>).all_lt(max_weight) {
+			voters += <span class="number">1</span>;
+		}
+		<span class="kw">while </span>voters.checked_sub(<span class="number">1</span>).is_some() &amp;&amp; weight_with(voters).any_gt(max_weight) {
+			voters -= <span class="number">1</span>;
+		}
+
+		<span class="kw">let </span>final_decision = voters.min(size.voters);
+		<span class="macro">debug_assert!</span>(
+			weight_with(final_decision).all_lte(max_weight),
+			<span class="string">&quot;weight_with({}) &lt;= {}&quot;</span>,
+			final_decision,
+			max_weight,
+		);
+		final_decision
+	}
+
+	<span class="doccomment">/// Checks the feasibility of a solution.
+	</span><span class="kw">pub fn </span>feasibility_check(
+		raw_solution: RawSolution&lt;SolutionOf&lt;T&gt;&gt;,
+		compute: ElectionCompute,
+		desired_targets: u32,
+		snapshot: RoundSnapshot&lt;T::AccountId, MinerVoterOf&lt;T&gt;&gt;,
+		current_round: u32,
+		minimum_untrusted_score: <span class="prelude-ty">Option</span>&lt;ElectionScore&gt;,
+	) -&gt; <span class="prelude-ty">Result</span>&lt;ReadySolution&lt;T::AccountId, T::MaxWinners&gt;, FeasibilityError&gt; {
+		<span class="kw">let </span>RawSolution { solution, score, round } = raw_solution;
+		<span class="kw">let </span>RoundSnapshot { voters: snapshot_voters, targets: snapshot_targets } = snapshot;
+
+		<span class="comment">// First, check round.
+		</span><span class="macro">ensure!</span>(current_round == round, FeasibilityError::InvalidRound);
+
+		<span class="comment">// Winners are not directly encoded in the solution.
+		</span><span class="kw">let </span>winners = solution.unique_targets();
+
+		<span class="macro">ensure!</span>(winners.len() <span class="kw">as </span>u32 == desired_targets, FeasibilityError::WrongWinnerCount);
+		<span class="comment">// Fail early if targets requested by data provider exceed maximum winners supported.
+		</span><span class="macro">ensure!</span>(desired_targets &lt;= T::MaxWinners::get(), FeasibilityError::TooManyDesiredTargets);
+
+		<span class="comment">// Ensure that the solution&#39;s score can pass absolute min-score.
+		</span><span class="kw">let </span>submitted_score = raw_solution.score;
+		<span class="macro">ensure!</span>(
+			minimum_untrusted_score.map_or(<span class="bool-val">true</span>, |min_score| {
+				submitted_score.strict_threshold_better(min_score, sp_runtime::Perbill::zero())
+			}),
+			FeasibilityError::UntrustedScoreTooLow
+		);
+
+		<span class="comment">// ----- Start building. First, we need some closures.
+		</span><span class="kw">let </span>cache = helpers::generate_voter_cache::&lt;T&gt;(<span class="kw-2">&amp;</span>snapshot_voters);
+		<span class="kw">let </span>voter_at = helpers::voter_at_fn::&lt;T&gt;(<span class="kw-2">&amp;</span>snapshot_voters);
+		<span class="kw">let </span>target_at = helpers::target_at_fn::&lt;T&gt;(<span class="kw-2">&amp;</span>snapshot_targets);
+		<span class="kw">let </span>voter_index = helpers::voter_index_fn_usize::&lt;T&gt;(<span class="kw-2">&amp;</span>cache);
+
+		<span class="comment">// Then convert solution -&gt; assignment. This will fail if any of the indices are gibberish,
+		// namely any of the voters or targets.
+		</span><span class="kw">let </span>assignments = solution
+			.into_assignment(voter_at, target_at)
+			.map_err::&lt;FeasibilityError, <span class="kw">_</span>&gt;(Into::into)<span class="question-mark">?</span>;
+
+		<span class="comment">// Ensure that assignments is correct.
+		</span><span class="kw">let _ </span>= assignments.iter().try_for_each(|assignment| {
+			<span class="comment">// Check that assignment.who is actually a voter (defensive-only).
+			// NOTE: while using the index map from `voter_index` is better than a blind linear
+			// search, this *still* has room for optimization. Note that we had the index when
+			// we did `solution -&gt; assignment` and we lost it. Ideal is to keep the index
+			// around.
+
+			// Defensive-only: must exist in the snapshot.
+			</span><span class="kw">let </span>snapshot_index =
+				voter_index(<span class="kw-2">&amp;</span>assignment.who).ok_or(FeasibilityError::InvalidVoter)<span class="question-mark">?</span>;
+			<span class="comment">// Defensive-only: index comes from the snapshot, must exist.
+			</span><span class="kw">let </span>(_voter, _stake, targets) =
+				snapshot_voters.get(snapshot_index).ok_or(FeasibilityError::InvalidVoter)<span class="question-mark">?</span>;
+
+			<span class="comment">// Check that all of the targets are valid based on the snapshot.
+			</span><span class="kw">if </span>assignment.distribution.iter().any(|(d, <span class="kw">_</span>)| !targets.contains(d)) {
+				<span class="kw">return </span><span class="prelude-val">Err</span>(FeasibilityError::InvalidVote)
+			}
+			<span class="prelude-val">Ok</span>(())
+		})<span class="question-mark">?</span>;
+
+		<span class="comment">// ----- Start building support. First, we need one more closure.
+		</span><span class="kw">let </span>stake_of = helpers::stake_of_fn::&lt;T&gt;(<span class="kw-2">&amp;</span>snapshot_voters, <span class="kw-2">&amp;</span>cache);
+
+		<span class="comment">// This might fail if the normalization fails. Very unlikely. See `integrity_test`.
+		</span><span class="kw">let </span>staked_assignments = assignment_ratio_to_staked_normalized(assignments, stake_of)
+			.map_err::&lt;FeasibilityError, <span class="kw">_</span>&gt;(Into::into)<span class="question-mark">?</span>;
+		<span class="kw">let </span>supports = sp_npos_elections::to_supports(<span class="kw-2">&amp;</span>staked_assignments);
+
+		<span class="comment">// Finally, check that the claimed score was indeed correct.
+		</span><span class="kw">let </span>known_score = supports.evaluate();
+		<span class="macro">ensure!</span>(known_score == score, FeasibilityError::InvalidScore);
+
+		<span class="comment">// Size of winners in miner solution is equal to `desired_targets` &lt;= `MaxWinners`.
+		</span><span class="kw">let </span>supports = supports
+			.try_into()
+			.defensive_map_err(|<span class="kw">_</span>| FeasibilityError::BoundedConversionFailed)<span class="question-mark">?</span>;
+
+		<span class="prelude-val">Ok</span>(ReadySolution { supports, compute, score })
+	}
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>max_weight {
+	<span class="attr">#![allow(unused_variables)]
+	</span><span class="kw">use super</span>::<span class="kw-2">*</span>;
+	<span class="kw">use </span><span class="kw">crate</span>::mock::{MockWeightInfo, Runtime};
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>find_max_voter_binary_search_works() {
+		<span class="kw">let </span>w = SolutionOrSnapshotSize { voters: <span class="number">10</span>, targets: <span class="number">0 </span>};
+		MockWeightInfo::set(<span class="kw">crate</span>::mock::MockedWeightInfo::Complex);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">0</span>, u64::MAX)),
+			<span class="number">0
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">1</span>, u64::MAX)),
+			<span class="number">0
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">999</span>, u64::MAX)),
+			<span class="number">0
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">1000</span>, u64::MAX)),
+			<span class="number">1
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">1001</span>, u64::MAX)),
+			<span class="number">1
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">1990</span>, u64::MAX)),
+			<span class="number">1
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">1999</span>, u64::MAX)),
+			<span class="number">1
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">2000</span>, u64::MAX)),
+			<span class="number">2
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">2001</span>, u64::MAX)),
+			<span class="number">2
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">2010</span>, u64::MAX)),
+			<span class="number">2
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">2990</span>, u64::MAX)),
+			<span class="number">2
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">2999</span>, u64::MAX)),
+			<span class="number">2
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">3000</span>, u64::MAX)),
+			<span class="number">3
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">3333</span>, u64::MAX)),
+			<span class="number">3
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">5500</span>, u64::MAX)),
+			<span class="number">5
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">7777</span>, u64::MAX)),
+			<span class="number">7
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">9999</span>, u64::MAX)),
+			<span class="number">9
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">10_000</span>, u64::MAX)),
+			<span class="number">10
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">10_999</span>, u64::MAX)),
+			<span class="number">10
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">11_000</span>, u64::MAX)),
+			<span class="number">10
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">22_000</span>, u64::MAX)),
+			<span class="number">10
+		</span>);
+
+		<span class="kw">let </span>w = SolutionOrSnapshotSize { voters: <span class="number">1</span>, targets: <span class="number">0 </span>};
+
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">0</span>, u64::MAX)),
+			<span class="number">0
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">1</span>, u64::MAX)),
+			<span class="number">0
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">999</span>, u64::MAX)),
+			<span class="number">0
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">1000</span>, u64::MAX)),
+			<span class="number">1
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">1001</span>, u64::MAX)),
+			<span class="number">1
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">1990</span>, u64::MAX)),
+			<span class="number">1
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">1999</span>, u64::MAX)),
+			<span class="number">1
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">2000</span>, u64::MAX)),
+			<span class="number">1
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">2001</span>, u64::MAX)),
+			<span class="number">1
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">2010</span>, u64::MAX)),
+			<span class="number">1
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">3333</span>, u64::MAX)),
+			<span class="number">1
+		</span>);
+
+		<span class="kw">let </span>w = SolutionOrSnapshotSize { voters: <span class="number">2</span>, targets: <span class="number">0 </span>};
+
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">0</span>, u64::MAX)),
+			<span class="number">0
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">1</span>, u64::MAX)),
+			<span class="number">0
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">999</span>, u64::MAX)),
+			<span class="number">0
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">1000</span>, u64::MAX)),
+			<span class="number">1
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">1001</span>, u64::MAX)),
+			<span class="number">1
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">1999</span>, u64::MAX)),
+			<span class="number">1
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">2000</span>, u64::MAX)),
+			<span class="number">2
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">2001</span>, u64::MAX)),
+			<span class="number">2
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">2010</span>, u64::MAX)),
+			<span class="number">2
+		</span>);
+		<span class="macro">assert_eq!</span>(
+			Miner::&lt;Runtime&gt;::maximum_voter_for_weight(<span class="number">0</span>, w, Weight::from_parts(<span class="number">3333</span>, u64::MAX)),
+			<span class="number">2
+		</span>);
+	}
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+	<span class="kw">use super</span>::<span class="kw-2">*</span>;
+	<span class="kw">use crate</span>::{
+		mock::{
+			multi_phase_events, roll_to, roll_to_signed, roll_to_unsigned, roll_to_with_ocw,
+			trim_helpers, witness, BlockNumber, ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase,
+			Runtime, RuntimeCall, RuntimeOrigin, System, TestNposSolution, TrimHelpers,
+			UnsignedPhase,
+		},
+		Event, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
+		TransactionValidityError,
+	};
+	<span class="kw">use </span>codec::Decode;
+	<span class="kw">use </span>frame_election_provider_support::IndexAssignment;
+	<span class="kw">use </span>frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};
+	<span class="kw">use </span>sp_npos_elections::ElectionScore;
+	<span class="kw">use </span>sp_runtime::{
+		bounded_vec,
+		offchain::storage_lock::{BlockAndTime, StorageLock},
+		traits::{ValidateUnsigned, Zero},
+		ModuleError, PerU16, Perbill,
+	};
+
+	<span class="kw">type </span>Assignment = <span class="kw">crate</span>::unsigned::Assignment&lt;Runtime&gt;;
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>validate_unsigned_retracts_wrong_phase() {
+		ExtBuilder::default().desired_targets(<span class="number">0</span>).build_and_execute(|| {
+			<span class="kw">let </span>solution = RawSolution::&lt;TestNposSolution&gt; {
+				score: ElectionScore { minimal_stake: <span class="number">5</span>, ..Default::default() },
+				..Default::default()
+			};
+			<span class="kw">let </span>call = Call::submit_unsigned {
+				raw_solution: Box::new(solution.clone()),
+				witness: witness(),
+			};
+
+			<span class="comment">// initial
+			</span><span class="macro">assert_eq!</span>(MultiPhase::current_phase(), Phase::Off);
+			<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+				&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::validate_unsigned(
+					TransactionSource::Local,
+					<span class="kw-2">&amp;</span>call
+				)
+				.unwrap_err(),
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(<span class="number">0</span>))
+			));
+			<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+				&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::pre_dispatch(<span class="kw-2">&amp;</span>call).unwrap_err(),
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(<span class="number">0</span>))
+			));
+
+			<span class="comment">// signed
+			</span>roll_to_signed();
+			<span class="macro">assert_eq!</span>(MultiPhase::current_phase(), Phase::Signed);
+			<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+				&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::validate_unsigned(
+					TransactionSource::Local,
+					<span class="kw-2">&amp;</span>call
+				)
+				.unwrap_err(),
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(<span class="number">0</span>))
+			));
+			<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+				&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::pre_dispatch(<span class="kw-2">&amp;</span>call).unwrap_err(),
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(<span class="number">0</span>))
+			));
+
+			<span class="comment">// unsigned
+			</span>roll_to_unsigned();
+			<span class="macro">assert!</span>(MultiPhase::current_phase().is_unsigned());
+
+			<span class="macro">assert!</span>(&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::validate_unsigned(
+				TransactionSource::Local,
+				<span class="kw-2">&amp;</span>call
+			)
+			.is_ok());
+			<span class="macro">assert!</span>(&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::pre_dispatch(<span class="kw-2">&amp;</span>call).is_ok());
+
+			<span class="comment">// unsigned -- but not enabled.
+			</span>MultiPhase::phase_transition(Phase::Unsigned((<span class="bool-val">false</span>, <span class="number">25</span>)));
+			<span class="macro">assert!</span>(MultiPhase::current_phase().is_unsigned());
+			<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+				&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::validate_unsigned(
+					TransactionSource::Local,
+					<span class="kw-2">&amp;</span>call
+				)
+				.unwrap_err(),
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(<span class="number">0</span>))
+			));
+			<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+				&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::pre_dispatch(<span class="kw-2">&amp;</span>call).unwrap_err(),
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(<span class="number">0</span>))
+			));
+		})
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>validate_unsigned_retracts_low_score() {
+		ExtBuilder::default().desired_targets(<span class="number">0</span>).build_and_execute(|| {
+			roll_to_unsigned();
+			<span class="macro">assert!</span>(MultiPhase::current_phase().is_unsigned());
+
+			<span class="kw">let </span>solution = RawSolution::&lt;TestNposSolution&gt; {
+				score: ElectionScore { minimal_stake: <span class="number">5</span>, ..Default::default() },
+				..Default::default()
+			};
+			<span class="kw">let </span>call = Call::submit_unsigned {
+				raw_solution: Box::new(solution.clone()),
+				witness: witness(),
+			};
+
+			<span class="comment">// initial
+			</span><span class="macro">assert!</span>(&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::validate_unsigned(
+				TransactionSource::Local,
+				<span class="kw-2">&amp;</span>call
+			)
+			.is_ok());
+			<span class="macro">assert!</span>(&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::pre_dispatch(<span class="kw-2">&amp;</span>call).is_ok());
+
+			<span class="comment">// set a better score
+			</span><span class="kw">let </span>ready = ReadySolution {
+				score: ElectionScore { minimal_stake: <span class="number">10</span>, ..Default::default() },
+				..Default::default()
+			};
+			&lt;QueuedSolution&lt;Runtime&gt;&gt;::put(ready);
+
+			<span class="comment">// won&#39;t work anymore.
+			</span><span class="macro">assert!</span>(<span class="macro">matches!</span>(
+				&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::validate_unsigned(
+					TransactionSource::Local,
+					<span class="kw-2">&amp;</span>call
+				)
+				.unwrap_err(),
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(<span class="number">2</span>))
+			));
+			<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+				&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::pre_dispatch(<span class="kw-2">&amp;</span>call).unwrap_err(),
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(<span class="number">2</span>))
+			));
+		})
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>validate_unsigned_retracts_incorrect_winner_count() {
+		ExtBuilder::default().desired_targets(<span class="number">1</span>).build_and_execute(|| {
+			roll_to_unsigned();
+			<span class="macro">assert!</span>(MultiPhase::current_phase().is_unsigned());
+
+			<span class="kw">let </span>raw = RawSolution::&lt;TestNposSolution&gt; {
+				score: ElectionScore { minimal_stake: <span class="number">5</span>, ..Default::default() },
+				..Default::default()
+			};
+			<span class="kw">let </span>call =
+				Call::submit_unsigned { raw_solution: Box::new(raw.clone()), witness: witness() };
+			<span class="macro">assert_eq!</span>(raw.solution.unique_targets().len(), <span class="number">0</span>);
+
+			<span class="comment">// won&#39;t work anymore.
+			</span><span class="macro">assert!</span>(<span class="macro">matches!</span>(
+				&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::validate_unsigned(
+					TransactionSource::Local,
+					<span class="kw-2">&amp;</span>call
+				)
+				.unwrap_err(),
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(<span class="number">1</span>))
+			));
+		})
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>priority_is_set() {
+		ExtBuilder::default()
+			.miner_tx_priority(<span class="number">20</span>)
+			.desired_targets(<span class="number">0</span>)
+			.build_and_execute(|| {
+				roll_to_unsigned();
+				<span class="macro">assert!</span>(MultiPhase::current_phase().is_unsigned());
+
+				<span class="kw">let </span>solution = RawSolution::&lt;TestNposSolution&gt; {
+					score: ElectionScore { minimal_stake: <span class="number">5</span>, ..Default::default() },
+					..Default::default()
+				};
+				<span class="kw">let </span>call = Call::submit_unsigned {
+					raw_solution: Box::new(solution.clone()),
+					witness: witness(),
+				};
+
+				<span class="macro">assert_eq!</span>(
+					&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::validate_unsigned(
+						TransactionSource::Local,
+						<span class="kw-2">&amp;</span>call
+					)
+					.unwrap()
+					.priority,
+					<span class="number">25
+				</span>);
+			})
+	}
+
+	<span class="attr">#[test]
+	#[should_panic(expected = <span class="string">&quot;Invalid unsigned submission must produce invalid block and \
+	                           deprive validator from their authoring reward.: \
+	                           Module(ModuleError { index: 2, error: [1, 0, 0, 0], message: \
+	                           Some(\&quot;PreDispatchWrongWinnerCount\&quot;) })&quot;</span>)]
+	</span><span class="kw">fn </span>unfeasible_solution_panics() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to_unsigned();
+			<span class="macro">assert!</span>(MultiPhase::current_phase().is_unsigned());
+
+			<span class="comment">// This is in itself an invalid BS solution.
+			</span><span class="kw">let </span>solution = RawSolution::&lt;TestNposSolution&gt; {
+				score: ElectionScore { minimal_stake: <span class="number">5</span>, ..Default::default() },
+				..Default::default()
+			};
+			<span class="kw">let </span>call = Call::submit_unsigned {
+				raw_solution: Box::new(solution.clone()),
+				witness: witness(),
+			};
+			<span class="kw">let </span>runtime_call: RuntimeCall = call.into();
+			<span class="kw">let _ </span>= runtime_call.dispatch(RuntimeOrigin::none());
+		})
+	}
+
+	<span class="attr">#[test]
+	#[should_panic(expected = <span class="string">&quot;Invalid unsigned submission must produce invalid block and \
+	                           deprive validator from their authoring reward.&quot;</span>)]
+	</span><span class="kw">fn </span>wrong_witness_panics() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to_unsigned();
+			<span class="macro">assert!</span>(MultiPhase::current_phase().is_unsigned());
+
+			<span class="comment">// This solution is unfeasible as well, but we won&#39;t even get there.
+			</span><span class="kw">let </span>solution = RawSolution::&lt;TestNposSolution&gt; {
+				score: ElectionScore { minimal_stake: <span class="number">5</span>, ..Default::default() },
+				..Default::default()
+			};
+
+			<span class="kw">let </span><span class="kw-2">mut </span>correct_witness = witness();
+			correct_witness.voters += <span class="number">1</span>;
+			correct_witness.targets -= <span class="number">1</span>;
+			<span class="kw">let </span>call = Call::submit_unsigned {
+				raw_solution: Box::new(solution.clone()),
+				witness: correct_witness,
+			};
+			<span class="kw">let </span>runtime_call: RuntimeCall = call.into();
+			<span class="kw">let _ </span>= runtime_call.dispatch(RuntimeOrigin::none());
+		})
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>miner_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to_unsigned();
+			<span class="macro">assert!</span>(MultiPhase::current_phase().is_unsigned());
+
+			<span class="comment">// ensure we have snapshots in place.
+			</span><span class="macro">assert!</span>(MultiPhase::snapshot().is_some());
+			<span class="macro">assert_eq!</span>(MultiPhase::desired_targets().unwrap(), <span class="number">2</span>);
+
+			<span class="comment">// mine seq_phragmen solution with 2 iters.
+			</span><span class="kw">let </span>(solution, witness) = MultiPhase::mine_solution().unwrap();
+
+			<span class="comment">// ensure this solution is valid.
+			</span><span class="macro">assert!</span>(MultiPhase::queued_solution().is_none());
+			<span class="macro">assert_ok!</span>(MultiPhase::submit_unsigned(
+				RuntimeOrigin::none(),
+				Box::new(solution),
+				witness
+			));
+			<span class="macro">assert!</span>(MultiPhase::queued_solution().is_some());
+			<span class="macro">assert_eq!</span>(
+				multi_phase_events(),
+				<span class="macro">vec!</span>[
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: <span class="number">1 </span>},
+					Event::PhaseTransitioned {
+						from: Phase::Signed,
+						to: Phase::Unsigned((<span class="bool-val">true</span>, <span class="number">25</span>)),
+						round: <span class="number">1
+					</span>},
+					Event::SolutionStored {
+						compute: ElectionCompute::Unsigned,
+						origin: <span class="prelude-val">None</span>,
+						prev_ejected: <span class="bool-val">false
+					</span>}
+				]
+			);
+		})
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>miner_trims_weight() {
+		ExtBuilder::default()
+			.miner_weight(Weight::from_parts(<span class="number">100</span>, u64::MAX))
+			.mock_weight_info(<span class="kw">crate</span>::mock::MockedWeightInfo::Basic)
+			.build_and_execute(|| {
+				roll_to_unsigned();
+				<span class="macro">assert!</span>(MultiPhase::current_phase().is_unsigned());
+
+				<span class="kw">let </span>(raw, witness) = MultiPhase::mine_solution().unwrap();
+				<span class="kw">let </span>solution_weight = &lt;Runtime <span class="kw">as </span>MinerConfig&gt;::solution_weight(
+					witness.voters,
+					witness.targets,
+					raw.solution.voter_count() <span class="kw">as </span>u32,
+					raw.solution.unique_targets().len() <span class="kw">as </span>u32,
+				);
+				<span class="comment">// default solution will have 5 edges (5 * 5 + 10)
+				</span><span class="macro">assert_eq!</span>(solution_weight, Weight::from_parts(<span class="number">35</span>, <span class="number">0</span>));
+				<span class="macro">assert_eq!</span>(raw.solution.voter_count(), <span class="number">5</span>);
+
+				<span class="comment">// now reduce the max weight
+				</span>&lt;MinerMaxWeight&gt;::set(Weight::from_parts(<span class="number">25</span>, u64::MAX));
+
+				<span class="kw">let </span>(raw, witness) = MultiPhase::mine_solution().unwrap();
+				<span class="kw">let </span>solution_weight = &lt;Runtime <span class="kw">as </span>MinerConfig&gt;::solution_weight(
+					witness.voters,
+					witness.targets,
+					raw.solution.voter_count() <span class="kw">as </span>u32,
+					raw.solution.unique_targets().len() <span class="kw">as </span>u32,
+				);
+				<span class="comment">// default solution will have 5 edges (5 * 5 + 10)
+				</span><span class="macro">assert_eq!</span>(solution_weight, Weight::from_parts(<span class="number">25</span>, <span class="number">0</span>));
+				<span class="macro">assert_eq!</span>(raw.solution.voter_count(), <span class="number">3</span>);
+			})
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>miner_will_not_submit_if_not_enough_winners() {
+		<span class="kw">let </span>(<span class="kw-2">mut </span>ext, <span class="kw">_</span>) = ExtBuilder::default().desired_targets(<span class="number">8</span>).build_offchainify(<span class="number">0</span>);
+		ext.execute_with(|| {
+			roll_to_unsigned();
+			<span class="macro">assert!</span>(MultiPhase::current_phase().is_unsigned());
+
+			<span class="comment">// Force the number of winners to be bigger to fail
+			</span><span class="kw">let </span>(<span class="kw-2">mut </span>solution, <span class="kw">_</span>) = MultiPhase::mine_solution().unwrap();
+			solution.solution.votes1[<span class="number">0</span>].<span class="number">1 </span>= <span class="number">4</span>;
+
+			<span class="macro">assert_eq!</span>(
+				MultiPhase::basic_checks(<span class="kw-2">&amp;</span>solution, <span class="string">&quot;mined&quot;</span>).unwrap_err(),
+				MinerError::PreDispatchChecksFailed(DispatchError::Module(ModuleError {
+					index: <span class="number">2</span>,
+					error: [<span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>],
+					message: <span class="prelude-val">Some</span>(<span class="string">&quot;PreDispatchWrongWinnerCount&quot;</span>),
+				})),
+			);
+		})
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>unsigned_per_dispatch_checks_can_only_submit_threshold_better() {
+		ExtBuilder::default()
+			.desired_targets(<span class="number">1</span>)
+			.add_voter(<span class="number">7</span>, <span class="number">2</span>, <span class="macro">bounded_vec!</span>[<span class="number">10</span>])
+			.add_voter(<span class="number">8</span>, <span class="number">5</span>, <span class="macro">bounded_vec!</span>[<span class="number">10</span>])
+			.better_unsigned_threshold(Perbill::from_percent(<span class="number">50</span>))
+			.build_and_execute(|| {
+				roll_to_unsigned();
+				<span class="macro">assert!</span>(MultiPhase::current_phase().is_unsigned());
+				<span class="macro">assert_eq!</span>(MultiPhase::desired_targets().unwrap(), <span class="number">1</span>);
+
+				<span class="comment">// an initial solution
+				</span><span class="kw">let </span>result = ElectionResult {
+					<span class="comment">// note: This second element of backing stake is not important here.
+					</span>winners: <span class="macro">vec!</span>[(<span class="number">10</span>, <span class="number">10</span>)],
+					assignments: <span class="macro">vec!</span>[Assignment {
+						who: <span class="number">10</span>,
+						distribution: <span class="macro">vec!</span>[(<span class="number">10</span>, PerU16::one())],
+					}],
+				};
+
+				<span class="kw">let </span>RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
+				<span class="kw">let </span>desired_targets = MultiPhase::desired_targets().unwrap();
+
+				<span class="kw">let </span>(raw, score, witness) =
+					Miner::&lt;Runtime&gt;::prepare_election_result_with_snapshot(
+						result,
+						voters.clone(),
+						targets.clone(),
+						desired_targets,
+					)
+					.unwrap();
+				<span class="kw">let </span>solution = RawSolution { solution: raw, score, round: MultiPhase::round() };
+				<span class="macro">assert_ok!</span>(MultiPhase::unsigned_pre_dispatch_checks(<span class="kw-2">&amp;</span>solution));
+				<span class="macro">assert_ok!</span>(MultiPhase::submit_unsigned(
+					RuntimeOrigin::none(),
+					Box::new(solution),
+					witness
+				));
+				<span class="macro">assert_eq!</span>(MultiPhase::queued_solution().unwrap().score.minimal_stake, <span class="number">10</span>);
+
+				<span class="comment">// trial 1: a solution who&#39;s score is only 2, i.e. 20% better in the first element.
+				</span><span class="kw">let </span>result = ElectionResult {
+					winners: <span class="macro">vec!</span>[(<span class="number">10</span>, <span class="number">12</span>)],
+					assignments: <span class="macro">vec!</span>[
+						Assignment { who: <span class="number">10</span>, distribution: <span class="macro">vec!</span>[(<span class="number">10</span>, PerU16::one())] },
+						Assignment {
+							who: <span class="number">7</span>,
+							<span class="comment">// note: this percent doesn&#39;t even matter, in solution it is 100%.
+							</span>distribution: <span class="macro">vec!</span>[(<span class="number">10</span>, PerU16::one())],
+						},
+					],
+				};
+				<span class="kw">let </span>(raw, score, <span class="kw">_</span>) = Miner::&lt;Runtime&gt;::prepare_election_result_with_snapshot(
+					result,
+					voters.clone(),
+					targets.clone(),
+					desired_targets,
+				)
+				.unwrap();
+				<span class="kw">let </span>solution = RawSolution { solution: raw, score, round: MultiPhase::round() };
+				<span class="comment">// 12 is not 50% more than 10
+				</span><span class="macro">assert_eq!</span>(solution.score.minimal_stake, <span class="number">12</span>);
+				<span class="macro">assert_noop!</span>(
+					MultiPhase::unsigned_pre_dispatch_checks(<span class="kw-2">&amp;</span>solution),
+					Error::&lt;Runtime&gt;::PreDispatchWeakSubmission,
+				);
+				<span class="comment">// submitting this will actually panic.
+
+				// trial 2: a solution who&#39;s score is only 7, i.e. 70% better in the first element.
+				</span><span class="kw">let </span>result = ElectionResult {
+					winners: <span class="macro">vec!</span>[(<span class="number">10</span>, <span class="number">12</span>)],
+					assignments: <span class="macro">vec!</span>[
+						Assignment { who: <span class="number">10</span>, distribution: <span class="macro">vec!</span>[(<span class="number">10</span>, PerU16::one())] },
+						Assignment { who: <span class="number">7</span>, distribution: <span class="macro">vec!</span>[(<span class="number">10</span>, PerU16::one())] },
+						Assignment {
+							who: <span class="number">8</span>,
+							<span class="comment">// note: this percent doesn&#39;t even matter, in solution it is 100%.
+							</span>distribution: <span class="macro">vec!</span>[(<span class="number">10</span>, PerU16::one())],
+						},
+					],
+				};
+				<span class="kw">let </span>(raw, score, witness) =
+					Miner::&lt;Runtime&gt;::prepare_election_result_with_snapshot(
+						result,
+						voters.clone(),
+						targets.clone(),
+						desired_targets,
+					)
+					.unwrap();
+				<span class="kw">let </span>solution = RawSolution { solution: raw, score, round: MultiPhase::round() };
+				<span class="macro">assert_eq!</span>(solution.score.minimal_stake, <span class="number">17</span>);
+
+				<span class="comment">// and it is fine
+				</span><span class="macro">assert_ok!</span>(MultiPhase::unsigned_pre_dispatch_checks(<span class="kw-2">&amp;</span>solution));
+				<span class="macro">assert_ok!</span>(MultiPhase::submit_unsigned(
+					RuntimeOrigin::none(),
+					Box::new(solution),
+					witness
+				));
+			})
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>ocw_lock_prevents_frequent_execution() {
+		<span class="kw">let </span>(<span class="kw-2">mut </span>ext, <span class="kw">_</span>) = ExtBuilder::default().build_offchainify(<span class="number">0</span>);
+		ext.execute_with(|| {
+			<span class="kw">let </span>offchain_repeat = &lt;Runtime <span class="kw">as </span>Config&gt;::OffchainRepeat::get();
+
+			roll_to_unsigned();
+			<span class="macro">assert!</span>(MultiPhase::current_phase().is_unsigned());
+
+			<span class="comment">// first execution -- okay.
+			</span><span class="macro">assert!</span>(MultiPhase::ensure_offchain_repeat_frequency(<span class="number">25</span>).is_ok());
+
+			<span class="comment">// next block: rejected.
+			</span><span class="macro">assert_noop!</span>(
+				MultiPhase::ensure_offchain_repeat_frequency(<span class="number">26</span>),
+				MinerError::Lock(<span class="string">&quot;recently executed.&quot;</span>)
+			);
+
+			<span class="comment">// allowed after `OFFCHAIN_REPEAT`
+			</span><span class="macro">assert!</span>(
+				MultiPhase::ensure_offchain_repeat_frequency((<span class="number">26 </span>+ offchain_repeat).into()).is_ok()
+			);
+
+			<span class="comment">// a fork like situation: re-execute last 3.
+			</span><span class="macro">assert!</span>(MultiPhase::ensure_offchain_repeat_frequency(
+				(<span class="number">26 </span>+ offchain_repeat - <span class="number">3</span>).into()
+			)
+			.is_err());
+			<span class="macro">assert!</span>(MultiPhase::ensure_offchain_repeat_frequency(
+				(<span class="number">26 </span>+ offchain_repeat - <span class="number">2</span>).into()
+			)
+			.is_err());
+			<span class="macro">assert!</span>(MultiPhase::ensure_offchain_repeat_frequency(
+				(<span class="number">26 </span>+ offchain_repeat - <span class="number">1</span>).into()
+			)
+			.is_err());
+		})
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>ocw_lock_released_after_successful_execution() {
+		<span class="comment">// first, ensure that a successful execution releases the lock
+		</span><span class="kw">let </span>(<span class="kw-2">mut </span>ext, pool) = ExtBuilder::default().build_offchainify(<span class="number">0</span>);
+		ext.execute_with(|| {
+			<span class="kw">let </span>guard = StorageValueRef::persistent(<span class="kw-2">&amp;</span>OFFCHAIN_LOCK);
+			<span class="kw">let </span>last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
+
+			roll_to_unsigned();
+			<span class="macro">assert!</span>(MultiPhase::current_phase().is_unsigned());
+
+			<span class="comment">// initially, the lock is not set.
+			</span><span class="macro">assert!</span>(guard.get::&lt;bool&gt;().unwrap().is_none());
+
+			<span class="comment">// a successful a-z execution.
+			</span>MultiPhase::offchain_worker(<span class="number">25</span>);
+			<span class="macro">assert_eq!</span>(pool.read().transactions.len(), <span class="number">1</span>);
+
+			<span class="comment">// afterwards, the lock is not set either..
+			</span><span class="macro">assert!</span>(guard.get::&lt;bool&gt;().unwrap().is_none());
+			<span class="macro">assert_eq!</span>(last_block.get::&lt;BlockNumber&gt;().unwrap(), <span class="prelude-val">Some</span>(<span class="number">25</span>));
+		});
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>ocw_lock_prevents_overlapping_execution() {
+		<span class="comment">// ensure that if the guard is in hold, a new execution is not allowed.
+		</span><span class="kw">let </span>(<span class="kw-2">mut </span>ext, pool) = ExtBuilder::default().build_offchainify(<span class="number">0</span>);
+		ext.execute_with(|| {
+			roll_to_unsigned();
+			<span class="macro">assert!</span>(MultiPhase::current_phase().is_unsigned());
+
+			<span class="comment">// artificially set the value, as if another thread is mid-way.
+			</span><span class="kw">let </span><span class="kw-2">mut </span>lock = StorageLock::&lt;BlockAndTime&lt;System&gt;&gt;::with_block_deadline(
+				OFFCHAIN_LOCK,
+				UnsignedPhase::get().saturated_into(),
+			);
+			<span class="kw">let </span>guard = lock.lock();
+
+			<span class="comment">// nothing submitted.
+			</span>MultiPhase::offchain_worker(<span class="number">25</span>);
+			<span class="macro">assert_eq!</span>(pool.read().transactions.len(), <span class="number">0</span>);
+			MultiPhase::offchain_worker(<span class="number">26</span>);
+			<span class="macro">assert_eq!</span>(pool.read().transactions.len(), <span class="number">0</span>);
+
+			drop(guard);
+
+			<span class="comment">// 🎉 !
+			</span>MultiPhase::offchain_worker(<span class="number">25</span>);
+			<span class="macro">assert_eq!</span>(pool.read().transactions.len(), <span class="number">1</span>);
+		});
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>ocw_only_runs_when_unsigned_open_now() {
+		<span class="kw">let </span>(<span class="kw-2">mut </span>ext, pool) = ExtBuilder::default().build_offchainify(<span class="number">0</span>);
+		ext.execute_with(|| {
+			roll_to_unsigned();
+			<span class="macro">assert_eq!</span>(MultiPhase::current_phase(), Phase::Unsigned((<span class="bool-val">true</span>, <span class="number">25</span>)));
+
+			<span class="comment">// we must clear the offchain storage to ensure the offchain execution check doesn&#39;t get
+			// in the way.
+			</span><span class="kw">let </span><span class="kw-2">mut </span>storage = StorageValueRef::persistent(<span class="kw-2">&amp;</span>OFFCHAIN_LAST_BLOCK);
+
+			MultiPhase::offchain_worker(<span class="number">24</span>);
+			<span class="macro">assert!</span>(pool.read().transactions.len().is_zero());
+			storage.clear();
+
+			<span class="comment">// creates, caches, submits without expecting previous cache value
+			</span>MultiPhase::offchain_worker(<span class="number">25</span>);
+			<span class="macro">assert_eq!</span>(pool.read().transactions.len(), <span class="number">1</span>);
+			<span class="comment">// assume that the tx has been processed
+			</span>pool.try_write().unwrap().transactions.clear();
+
+			<span class="comment">// locked, but also, has previously cached.
+			</span>MultiPhase::offchain_worker(<span class="number">26</span>);
+			<span class="macro">assert!</span>(pool.read().transactions.len().is_zero());
+		})
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>ocw_clears_cache_on_unsigned_phase_open() {
+		<span class="kw">let </span>(<span class="kw-2">mut </span>ext, pool) = ExtBuilder::default().build_offchainify(<span class="number">0</span>);
+		ext.execute_with(|| {
+			<span class="kw">const </span>BLOCK: u64 = <span class="number">25</span>;
+			<span class="kw">let </span>block_plus = |delta: u64| BLOCK + delta;
+			<span class="kw">let </span>offchain_repeat = &lt;Runtime <span class="kw">as </span>Config&gt;::OffchainRepeat::get();
+
+			roll_to(BLOCK);
+			<span class="comment">// we are on the first block of the unsigned phase
+			</span><span class="macro">assert_eq!</span>(MultiPhase::current_phase(), Phase::Unsigned((<span class="bool-val">true</span>, BLOCK)));
+
+			<span class="macro">assert!</span>(
+				!ocw_solution_exists::&lt;Runtime&gt;(),
+				<span class="string">&quot;no solution should be present before we mine one&quot;</span>,
+			);
+
+			<span class="comment">// create and cache a solution on the first block of the unsigned phase
+			</span>MultiPhase::offchain_worker(BLOCK);
+			<span class="macro">assert!</span>(
+				ocw_solution_exists::&lt;Runtime&gt;(),
+				<span class="string">&quot;a solution must be cached after running the worker&quot;</span>,
+			);
+
+			<span class="comment">// record the submitted tx,
+			</span><span class="kw">let </span>tx_cache_1 = pool.read().transactions[<span class="number">0</span>].clone();
+			<span class="comment">// and assume it has been processed.
+			</span>pool.try_write().unwrap().transactions.clear();
+
+			<span class="comment">// after an election, the solution is not cleared
+			// we don&#39;t actually care about the result of the election
+			</span><span class="kw">let _ </span>= MultiPhase::do_elect();
+			MultiPhase::offchain_worker(block_plus(<span class="number">1</span>));
+			<span class="macro">assert!</span>(ocw_solution_exists::&lt;Runtime&gt;(), <span class="string">&quot;elections does not clear the ocw cache&quot;</span>);
+
+			<span class="comment">// submit a solution with the offchain worker after the repeat interval
+			</span>MultiPhase::offchain_worker(block_plus(offchain_repeat + <span class="number">1</span>));
+
+			<span class="comment">// record the submitted tx,
+			</span><span class="kw">let </span>tx_cache_2 = pool.read().transactions[<span class="number">0</span>].clone();
+			<span class="comment">// and assume it has been processed.
+			</span>pool.try_write().unwrap().transactions.clear();
+
+			<span class="comment">// the OCW submitted the same solution twice since the cache was not cleared.
+			</span><span class="macro">assert_eq!</span>(tx_cache_1, tx_cache_2);
+
+			<span class="kw">let </span>current_block = block_plus(offchain_repeat * <span class="number">2 </span>+ <span class="number">2</span>);
+			<span class="comment">// force the unsigned phase to start on the current block.
+			</span>MultiPhase::phase_transition(Phase::Unsigned((<span class="bool-val">true</span>, current_block)));
+
+			<span class="comment">// clear the cache and create a solution since we are on the first block of the unsigned
+			// phase.
+			</span>MultiPhase::offchain_worker(current_block);
+			<span class="kw">let </span>tx_cache_3 = pool.read().transactions[<span class="number">0</span>].clone();
+
+			<span class="comment">// the submitted solution changes because the cache was cleared.
+			</span><span class="macro">assert_eq!</span>(tx_cache_1, tx_cache_3);
+			<span class="macro">assert_eq!</span>(
+				multi_phase_events(),
+				<span class="macro">vec!</span>[
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: <span class="number">1 </span>},
+					Event::PhaseTransitioned {
+						from: Phase::Signed,
+						to: Phase::Unsigned((<span class="bool-val">true</span>, <span class="number">25</span>)),
+						round: <span class="number">1
+					</span>},
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: <span class="number">0</span>,
+							sum_stake: <span class="number">0</span>,
+							sum_stake_squared: <span class="number">0
+						</span>}
+					},
+					Event::PhaseTransitioned {
+						from: Phase::Unsigned((<span class="bool-val">true</span>, <span class="number">25</span>)),
+						to: Phase::Unsigned((<span class="bool-val">true</span>, <span class="number">37</span>)),
+						round: <span class="number">1
+					</span>},
+				]
+			);
+		})
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>ocw_resubmits_after_offchain_repeat() {
+		<span class="kw">let </span>(<span class="kw-2">mut </span>ext, pool) = ExtBuilder::default().build_offchainify(<span class="number">0</span>);
+		ext.execute_with(|| {
+			<span class="kw">const </span>BLOCK: u64 = <span class="number">25</span>;
+			<span class="kw">let </span>block_plus = |delta: i32| ((BLOCK <span class="kw">as </span>i32) + delta) <span class="kw">as </span>u64;
+			<span class="kw">let </span>offchain_repeat = &lt;Runtime <span class="kw">as </span>Config&gt;::OffchainRepeat::get();
+
+			roll_to(BLOCK);
+			<span class="macro">assert_eq!</span>(MultiPhase::current_phase(), Phase::Unsigned((<span class="bool-val">true</span>, BLOCK)));
+
+			<span class="comment">// we must clear the offchain storage to ensure the offchain execution check doesn&#39;t get
+			// in the way.
+			</span><span class="kw">let </span><span class="kw-2">mut </span>storage = StorageValueRef::persistent(<span class="kw-2">&amp;</span>OFFCHAIN_LAST_BLOCK);
+
+			MultiPhase::offchain_worker(block_plus(-<span class="number">1</span>));
+			<span class="macro">assert!</span>(pool.read().transactions.len().is_zero());
+			storage.clear();
+
+			<span class="comment">// creates, caches, submits without expecting previous cache value
+			</span>MultiPhase::offchain_worker(BLOCK);
+			<span class="macro">assert_eq!</span>(pool.read().transactions.len(), <span class="number">1</span>);
+			<span class="kw">let </span>tx_cache = pool.read().transactions[<span class="number">0</span>].clone();
+			<span class="comment">// assume that the tx has been processed
+			</span>pool.try_write().unwrap().transactions.clear();
+
+			<span class="comment">// attempts to resubmit the tx after the threshold has expired
+			// note that we have to add 1: the semantics forbid resubmission at
+			// BLOCK + offchain_repeat
+			</span>MultiPhase::offchain_worker(block_plus(<span class="number">1 </span>+ offchain_repeat <span class="kw">as </span>i32));
+			<span class="macro">assert_eq!</span>(pool.read().transactions.len(), <span class="number">1</span>);
+
+			<span class="comment">// resubmitted tx is identical to first submission
+			</span><span class="kw">let </span>tx = <span class="kw-2">&amp;</span>pool.read().transactions[<span class="number">0</span>];
+			<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>tx_cache, tx);
+		})
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>ocw_regenerates_and_resubmits_after_offchain_repeat() {
+		<span class="kw">let </span>(<span class="kw-2">mut </span>ext, pool) = ExtBuilder::default().build_offchainify(<span class="number">0</span>);
+		ext.execute_with(|| {
+			<span class="kw">const </span>BLOCK: u64 = <span class="number">25</span>;
+			<span class="kw">let </span>block_plus = |delta: i32| ((BLOCK <span class="kw">as </span>i32) + delta) <span class="kw">as </span>u64;
+			<span class="kw">let </span>offchain_repeat = &lt;Runtime <span class="kw">as </span>Config&gt;::OffchainRepeat::get();
+
+			roll_to(BLOCK);
+			<span class="macro">assert_eq!</span>(MultiPhase::current_phase(), Phase::Unsigned((<span class="bool-val">true</span>, BLOCK)));
+
+			<span class="comment">// we must clear the offchain storage to ensure the offchain execution check doesn&#39;t get
+			// in the way.
+			</span><span class="kw">let </span><span class="kw-2">mut </span>storage = StorageValueRef::persistent(<span class="kw-2">&amp;</span>OFFCHAIN_LAST_BLOCK);
+
+			MultiPhase::offchain_worker(block_plus(-<span class="number">1</span>));
+			<span class="macro">assert!</span>(pool.read().transactions.len().is_zero());
+			storage.clear();
+
+			<span class="comment">// creates, caches, submits without expecting previous cache value
+			</span>MultiPhase::offchain_worker(BLOCK);
+			<span class="macro">assert_eq!</span>(pool.read().transactions.len(), <span class="number">1</span>);
+			<span class="kw">let </span>tx_cache = pool.read().transactions[<span class="number">0</span>].clone();
+			<span class="comment">// assume that the tx has been processed
+			</span>pool.try_write().unwrap().transactions.clear();
+
+			<span class="comment">// remove the cached submitted tx
+			// this ensures that when the resubmit window rolls around, we&#39;re ready to regenerate
+			// from scratch if necessary
+			</span><span class="kw">let </span><span class="kw-2">mut </span>call_cache = StorageValueRef::persistent(<span class="kw-2">&amp;</span>OFFCHAIN_CACHED_CALL);
+			<span class="macro">assert!</span>(<span class="macro">matches!</span>(call_cache.get::&lt;Call&lt;Runtime&gt;&gt;(), <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(_call))));
+			call_cache.clear();
+
+			<span class="comment">// attempts to resubmit the tx after the threshold has expired
+			// note that we have to add 1: the semantics forbid resubmission at
+			// BLOCK + offchain_repeat
+			</span>MultiPhase::offchain_worker(block_plus(<span class="number">1 </span>+ offchain_repeat <span class="kw">as </span>i32));
+			<span class="macro">assert_eq!</span>(pool.read().transactions.len(), <span class="number">1</span>);
+
+			<span class="comment">// resubmitted tx is identical to first submission
+			</span><span class="kw">let </span>tx = <span class="kw-2">&amp;</span>pool.read().transactions[<span class="number">0</span>];
+			<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>tx_cache, tx);
+		})
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>ocw_can_submit_to_pool() {
+		<span class="kw">let </span>(<span class="kw-2">mut </span>ext, pool) = ExtBuilder::default().build_offchainify(<span class="number">0</span>);
+		ext.execute_with(|| {
+			roll_to_with_ocw(<span class="number">25</span>);
+			<span class="macro">assert_eq!</span>(MultiPhase::current_phase(), Phase::Unsigned((<span class="bool-val">true</span>, <span class="number">25</span>)));
+			<span class="comment">// OCW must have submitted now
+
+			</span><span class="kw">let </span>encoded = pool.read().transactions[<span class="number">0</span>].clone();
+			<span class="kw">let </span>extrinsic: Extrinsic = codec::Decode::decode(<span class="kw-2">&amp;mut &amp;*</span>encoded).unwrap();
+			<span class="kw">let </span>call = extrinsic.call;
+			<span class="macro">assert!</span>(<span class="macro">matches!</span>(call, RuntimeCall::MultiPhase(Call::submit_unsigned { .. })));
+		})
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>ocw_solution_must_have_correct_round() {
+		<span class="kw">let </span>(<span class="kw-2">mut </span>ext, pool) = ExtBuilder::default().build_offchainify(<span class="number">0</span>);
+		ext.execute_with(|| {
+			roll_to_with_ocw(<span class="number">25</span>);
+			<span class="macro">assert_eq!</span>(MultiPhase::current_phase(), Phase::Unsigned((<span class="bool-val">true</span>, <span class="number">25</span>)));
+			<span class="comment">// OCW must have submitted now
+			// now, before we check the call, update the round
+			</span>&lt;<span class="kw">crate</span>::Round&lt;Runtime&gt;&gt;::mutate(|round| <span class="kw-2">*</span>round += <span class="number">1</span>);
+
+			<span class="kw">let </span>encoded = pool.read().transactions[<span class="number">0</span>].clone();
+			<span class="kw">let </span>extrinsic = Extrinsic::decode(<span class="kw-2">&amp;mut &amp;*</span>encoded).unwrap();
+			<span class="kw">let </span>call = <span class="kw">match </span>extrinsic.call {
+				RuntimeCall::MultiPhase(call @ Call::submit_unsigned { .. }) =&gt; call,
+				<span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">&quot;bad call: unexpected submission&quot;</span>),
+			};
+
+			<span class="comment">// Custom(7) maps to PreDispatchChecksFailed
+			</span><span class="kw">let </span>pre_dispatch_check_error =
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(<span class="number">7</span>));
+			<span class="macro">assert_eq!</span>(
+				&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::validate_unsigned(
+					TransactionSource::Local,
+					<span class="kw-2">&amp;</span>call,
+				)
+				.unwrap_err(),
+				pre_dispatch_check_error,
+			);
+			<span class="macro">assert_eq!</span>(
+				&lt;MultiPhase <span class="kw">as </span>ValidateUnsigned&gt;::pre_dispatch(<span class="kw-2">&amp;</span>call).unwrap_err(),
+				pre_dispatch_check_error,
+			);
+		})
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>trim_assignments_length_does_not_modify_when_short_enough() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to_unsigned();
+
+			<span class="comment">// given
+			</span><span class="kw">let </span>TrimHelpers { <span class="kw-2">mut </span>assignments, encoded_size_of, .. } = trim_helpers();
+			<span class="kw">let </span>solution = SolutionOf::&lt;Runtime&gt;::try_from(assignments.as_slice()).unwrap();
+			<span class="kw">let </span>encoded_len = solution.encoded_size() <span class="kw">as </span>u32;
+			<span class="kw">let </span>solution_clone = solution.clone();
+
+			<span class="comment">// when
+			</span>Miner::&lt;Runtime&gt;::trim_assignments_length(
+				encoded_len,
+				<span class="kw-2">&amp;mut </span>assignments,
+				encoded_size_of,
+			)
+			.unwrap();
+
+			<span class="comment">// then
+			</span><span class="kw">let </span>solution = SolutionOf::&lt;Runtime&gt;::try_from(assignments.as_slice()).unwrap();
+			<span class="macro">assert_eq!</span>(solution, solution_clone);
+		});
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>trim_assignments_length_modifies_when_too_long() {
+		ExtBuilder::default().build().execute_with(|| {
+			roll_to_unsigned();
+
+			<span class="comment">// given
+			</span><span class="kw">let </span>TrimHelpers { <span class="kw-2">mut </span>assignments, encoded_size_of, .. } = trim_helpers();
+			<span class="kw">let </span>solution = SolutionOf::&lt;Runtime&gt;::try_from(assignments.as_slice()).unwrap();
+			<span class="kw">let </span>encoded_len = solution.encoded_size();
+			<span class="kw">let </span>solution_clone = solution.clone();
+
+			<span class="comment">// when
+			</span>Miner::&lt;Runtime&gt;::trim_assignments_length(
+				encoded_len <span class="kw">as </span>u32 - <span class="number">1</span>,
+				<span class="kw-2">&amp;mut </span>assignments,
+				encoded_size_of,
+			)
+			.unwrap();
+
+			<span class="comment">// then
+			</span><span class="kw">let </span>solution = SolutionOf::&lt;Runtime&gt;::try_from(assignments.as_slice()).unwrap();
+			<span class="macro">assert_ne!</span>(solution, solution_clone);
+			<span class="macro">assert!</span>(solution.encoded_size() &lt; encoded_len);
+		});
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>trim_assignments_length_trims_lowest_stake() {
+		ExtBuilder::default().build().execute_with(|| {
+			roll_to_unsigned();
+
+			<span class="comment">// given
+			</span><span class="kw">let </span>TrimHelpers { voters, <span class="kw-2">mut </span>assignments, encoded_size_of, voter_index } =
+				trim_helpers();
+			<span class="kw">let </span>solution = SolutionOf::&lt;Runtime&gt;::try_from(assignments.as_slice()).unwrap();
+			<span class="kw">let </span>encoded_len = solution.encoded_size() <span class="kw">as </span>u32;
+			<span class="kw">let </span>count = assignments.len();
+			<span class="kw">let </span>min_stake_voter = voters
+				.iter()
+				.map(|(id, weight, <span class="kw">_</span>)| (weight, id))
+				.min()
+				.and_then(|(<span class="kw">_</span>, id)| voter_index(id))
+				.unwrap();
+
+			<span class="comment">// when
+			</span>Miner::&lt;Runtime&gt;::trim_assignments_length(
+				encoded_len - <span class="number">1</span>,
+				<span class="kw-2">&amp;mut </span>assignments,
+				encoded_size_of,
+			)
+			.unwrap();
+
+			<span class="comment">// then
+			</span><span class="macro">assert_eq!</span>(assignments.len(), count - <span class="number">1</span>, <span class="string">&quot;we must have removed exactly one assignment&quot;</span>);
+			<span class="macro">assert!</span>(
+				assignments.iter().all(|IndexAssignment { who, .. }| <span class="kw-2">*</span>who != min_stake_voter),
+				<span class="string">&quot;min_stake_voter must no longer be in the set of voters&quot;</span>,
+			);
+		});
+	}
+
+	<span class="attr">#[test]
+	</span><span class="kw">fn </span>trim_assignments_length_wont_panic() {
+		<span class="comment">// we shan&#39;t panic if assignments are initially empty.
+		</span>ExtBuilder::default().build_and_execute(|| {
+			<span class="kw">let </span>encoded_size_of = Box::new(|assignments: <span class="kw-2">&amp;</span>[IndexAssignmentOf&lt;Runtime&gt;]| {
+				SolutionOf::&lt;Runtime&gt;::try_from(assignments).map(|solution| solution.encoded_size())
+			});
+
+			<span class="kw">let </span><span class="kw-2">mut </span>assignments = <span class="macro">vec!</span>[];
+
+			<span class="comment">// since we have 16 fields, we need to store the length fields of 16 vecs, thus 16 bytes
+			// minimum.
+			</span><span class="kw">let </span>min_solution_size = encoded_size_of(<span class="kw-2">&amp;</span>assignments).unwrap();
+			<span class="macro">assert_eq!</span>(min_solution_size, SolutionOf::&lt;Runtime&gt;::LIMIT);
+
+			<span class="comment">// all of this should not panic.
+			</span>Miner::&lt;Runtime&gt;::trim_assignments_length(<span class="number">0</span>, <span class="kw-2">&amp;mut </span>assignments, encoded_size_of.clone())
+				.unwrap();
+			Miner::&lt;Runtime&gt;::trim_assignments_length(<span class="number">1</span>, <span class="kw-2">&amp;mut </span>assignments, encoded_size_of.clone())
+				.unwrap();
+			Miner::&lt;Runtime&gt;::trim_assignments_length(
+				min_solution_size <span class="kw">as </span>u32,
+				<span class="kw-2">&amp;mut </span>assignments,
+				encoded_size_of,
+			)
+			.unwrap();
+		});
+
+		<span class="comment">// or when we trim it to zero.
+		</span>ExtBuilder::default().build_and_execute(|| {
+			<span class="comment">// we need snapshot for `trim_helpers` to work.
+			</span>roll_to_unsigned();
+			<span class="kw">let </span>TrimHelpers { <span class="kw-2">mut </span>assignments, encoded_size_of, .. } = trim_helpers();
+			<span class="macro">assert!</span>(assignments.len() &gt; <span class="number">0</span>);
+
+			<span class="comment">// trim to min solution size.
+			</span><span class="kw">let </span>min_solution_size = SolutionOf::&lt;Runtime&gt;::LIMIT <span class="kw">as </span>u32;
+			Miner::&lt;Runtime&gt;::trim_assignments_length(
+				min_solution_size,
+				<span class="kw-2">&amp;mut </span>assignments,
+				encoded_size_of,
+			)
+			.unwrap();
+			<span class="macro">assert_eq!</span>(assignments.len(), <span class="number">0</span>);
+		});
+	}
+
+	<span class="comment">// all the other solution-generation functions end up delegating to `mine_solution`, so if we
+	// demonstrate that `mine_solution` solutions are all trimmed to an acceptable length, then
+	// we know that higher-level functions will all also have short-enough solutions.
+	</span><span class="attr">#[test]
+	</span><span class="kw">fn </span>mine_solution_solutions_always_within_acceptable_length() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to_unsigned();
+
+			<span class="comment">// how long would the default solution be?
+			</span><span class="kw">let </span>solution = MultiPhase::mine_solution().unwrap();
+			<span class="kw">let </span>max_length = &lt;Runtime <span class="kw">as </span>MinerConfig&gt;::MaxLength::get();
+			<span class="kw">let </span>solution_size = solution.<span class="number">0</span>.solution.encoded_size();
+			<span class="macro">assert!</span>(solution_size &lt;= max_length <span class="kw">as </span>usize);
+
+			<span class="comment">// now set the max size to less than the actual size and regenerate
+			</span>&lt;Runtime <span class="kw">as </span>MinerConfig&gt;::MaxLength::set(solution_size <span class="kw">as </span>u32 - <span class="number">1</span>);
+			<span class="kw">let </span>solution = MultiPhase::mine_solution().unwrap();
+			<span class="kw">let </span>max_length = &lt;Runtime <span class="kw">as </span>MinerConfig&gt;::MaxLength::get();
+			<span class="kw">let </span>solution_size = solution.<span class="number">0</span>.solution.encoded_size();
+			<span class="macro">assert!</span>(solution_size &lt;= max_length <span class="kw">as </span>usize);
+		});
+	}
+}
+</code></pre></div></section></main></body></html>

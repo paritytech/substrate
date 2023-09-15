@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["kill_prefix","kill_storage","remark","remark_with_event","set_code","set_code_without_checks","set_heap_pages","set_storage"]};

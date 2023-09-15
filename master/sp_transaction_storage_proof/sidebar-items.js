@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CHUNK_SIZE","DEFAULT_STORAGE_PERIOD","INHERENT_IDENTIFIER"],"enum":["Error","InherentError"],"fn":["encode_index","random_chunk"],"mod":["registration"],"struct":["InherentDataProvider","TransactionStorageProof"],"trait":["IndexedBody","TransactionStorageProofInherentData"]};

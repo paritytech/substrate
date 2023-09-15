@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_registrar","add_sub","cancel_request","clear_identity","kill_identity","provide_judgement","quit_sub","remove_sub","rename_sub","request_judgement","set_account_id","set_fee","set_fields","set_identity","set_subs"]};

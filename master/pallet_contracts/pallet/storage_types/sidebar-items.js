@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CodeInfoOf","ContractInfoOf","DeletionQueue","DeletionQueueCounter","MigrationInProgress","Nonce","PristineCode"]};

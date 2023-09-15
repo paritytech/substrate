@@ -1,0 +1,154 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/sc_chain_spec/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/sc_chain_spec/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Substrate chain configurations."><title>sc_chain_spec - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="sc_chain_spec" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../sc_chain_spec/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../sc_chain_spec/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate sc_chain_spec</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 4.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Definitions</a></li><li><a href="#derives">Derive Macros</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">sc_chain_spec</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/sc_chain_spec/lib.rs.html#19-283">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Substrate chain configurations.</p>
+<p>This crate contains structs and utilities to declare
+a runtime-specific configuration file (a.k.a chain spec).</p>
+<p>Basic chain spec type containing all required parameters is
+<a href="struct.GenericChainSpec.html" title="struct sc_chain_spec::GenericChainSpec"><code>GenericChainSpec</code></a>. It can be extended with
+additional options that contain configuration specific to your chain.
+Usually the extension is going to be an amalgamate of types exposed
+by Substrate core modules. To allow the core modules to retrieve
+their configuration from your extension you should use <code>ChainSpecExtension</code>
+macro exposed by this crate.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>sc_chain_spec::{GenericChainSpec, ChainSpecExtension};
+
+<span class="attr">#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecExtension)]
+</span><span class="kw">pub struct </span>MyExtension {
+		<span class="kw">pub </span>known_blocks: HashMap&lt;u64, String&gt;,
+}
+
+<span class="kw">pub type </span>MyChainSpec&lt;G&gt; = GenericChainSpec&lt;G, MyExtension&gt;;</code></pre></div>
+<p>Some parameters may require different values depending on the
+current blockchain height (a.k.a. forks). You can use <code>ChainSpecGroup</code>
+macro and provided <a href="./struct.Forks.html"><code>Forks</code></a> structure to put
+such parameters to your chain spec.
+This will allow to override a single parameter starting at specific
+block number.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sc_chain_spec::{Forks, ChainSpecGroup, ChainSpecExtension, GenericChainSpec};
+
+<span class="attr">#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup)]
+</span><span class="kw">pub struct </span>ClientParams {
+	max_block_size: usize,
+	max_extrinsic_size: usize,
+}
+
+<span class="attr">#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup)]
+</span><span class="kw">pub struct </span>PoolParams {
+	max_transaction_size: usize,
+}
+
+<span class="attr">#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup, ChainSpecExtension)]
+</span><span class="kw">pub struct </span>Extension {
+	<span class="kw">pub </span>client: ClientParams,
+	<span class="kw">pub </span>pool: PoolParams,
+}
+
+<span class="kw">pub type </span>BlockNumber = u64;
+
+<span class="doccomment">/// A chain spec supporting forkable `ClientParams`.
+</span><span class="kw">pub type </span>MyChainSpec1&lt;G&gt; = GenericChainSpec&lt;G, Forks&lt;BlockNumber, ClientParams&gt;&gt;;
+
+<span class="doccomment">/// A chain spec supporting forkable `Extension`.
+</span><span class="kw">pub type </span>MyChainSpec2&lt;G&gt; = GenericChainSpec&lt;G, Forks&lt;BlockNumber, Extension&gt;&gt;;</code></pre></div>
+<p>It’s also possible to have a set of parameters that is allowed to change
+with block numbers (i.e. is forkable), and another set that is not subject to changes.
+This is also possible by declaring an extension that contains <code>Forks</code> within it.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::{Serialize, Deserialize};
+<span class="kw">use </span>sc_chain_spec::{Forks, GenericChainSpec, ChainSpecGroup, ChainSpecExtension};
+
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
+</span><span class="kw">pub struct </span>ClientParams {
+	max_block_size: usize,
+	max_extrinsic_size: usize,
+}
+
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
+</span><span class="kw">pub struct </span>PoolParams {
+	max_transaction_size: usize,
+}
+
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, ChainSpecExtension)]
+</span><span class="kw">pub struct </span>Extension {
+	<span class="kw">pub </span>client: ClientParams,
+	<span class="attr">#[forks]
+	</span><span class="kw">pub </span>pool: Forks&lt;u64, PoolParams&gt;,
+}
+
+<span class="kw">pub type </span>MyChainSpec&lt;G&gt; = GenericChainSpec&lt;G, Extension&gt;;</code></pre></div>
+<h2 id="substrate-chain-specification-format"><a href="#substrate-chain-specification-format">Substrate chain specification format</a></h2>
+<p>The Substrate chain specification is a <code>json</code> file that describes the basics of a chain. Most
+importantly it lays out the genesis storage which leads to the genesis hash. The default
+Substrate chain specification format is the following:</p>
+<div class="example-wrap"><pre class="language-json"><code>// The human readable name of the chain.
+&quot;name&quot;: &quot;Flaming Fir&quot;,
+
+// The id of the chain.
+&quot;id&quot;: &quot;flamingfir9&quot;,
+
+// The chain type of this chain.
+// Possible values are `Live`, `Development`, `Local`.
+&quot;chainType&quot;: &quot;Live&quot;,
+
+// A list of multi addresses that belong to boot nodes of the chain.
+&quot;bootNodes&quot;: [
+  &quot;/dns/0.flamingfir.paritytech.net/tcp/30333/p2p/12D3KooWLK2gMLhWsYJzjW3q35zAs9FDDVqfqVfVuskiGZGRSMvR&quot;,
+],
+
+// Optional list of &quot;multi address, verbosity&quot; of telemetry endpoints.
+// The verbosity goes from `0` to `9`. With `0` being the mode with the lowest verbosity.
+&quot;telemetryEndpoints&quot;: [
+  [
+    &quot;/dns/telemetry.polkadot.io/tcp/443/x-parity-wss/%2Fsubmit%2F&quot;,
+    0
+  ]
+],
+
+// Optional networking protocol id that identifies the chain.
+&quot;protocolId&quot;: &quot;fir9&quot;,
+
+// Optional fork id. Should most likely be left empty.
+// Can be used to signal a fork on the network level when two chains have the
+// same genesis hash.
+&quot;forkId&quot;: &quot;random_fork&quot;,
+
+// Custom properties.
+&quot;properties&quot;: {
+  &quot;tokenDecimals&quot;: 15,
+  &quot;tokenSymbol&quot;: &quot;FIR&quot;
+},
+
+// Deprecated field. Should be ignored.
+&quot;consensusEngine&quot;: null,
+
+// The genesis declaration of the chain.
+//
+// `runtime`, `raw`, `stateRootHash` denote the type of the genesis declaration.
+//
+// These declarations are in the following formats:
+// - `runtime` is a `json` object that can be parsed by a compatible `GenesisConfig`. This
+//  `GenesisConfig` is declared by a runtime and opaque to the node.
+// - `raw` is a `json` object with two fields `top` and `children_default`. Each of these
+//   fields is a map of `key =&gt; value`. These key/value pairs represent the genesis storage.
+// - `stateRootHash` is a single hex encoded hash that represents the genesis hash. The hash
+//   type depends on the hash used by the chain.
+//
+&quot;genesis&quot;: { &quot;runtime&quot;: {} },
+
+/// Optional map of `block_number` to `wasm_code`.
+///
+/// The given `wasm_code` will be used to substitute the on-chain wasm code starting with the
+/// given block number until the `spec_version` on-chain changes. The given `wasm_code` should
+/// be as close as possible to the on-chain wasm code. A substitute should be used to fix a bug
+/// that can not be fixed with a runtime upgrade, if for example the runtime is constantly
+/// panicking. Introducing new runtime apis isn&#39;t supported, because the node
+/// will read the runtime version from the on-chain wasm code. Use this functionality only when
+/// there is no other way around it and only patch the problematic bug, the rest should be done
+/// with a on-chain runtime upgrade.
+&quot;codeSubstitutes&quot;: [],
+</code></pre></div>
+<p>See <a href="trait.ChainSpec.html" title="trait sc_chain_spec::ChainSpec"><code>ChainSpec</code></a> for a trait representation of the above.</p>
+<p>The chain spec can be extended with other fields that are opaque to the default chain spec.
+Specific node implementations will need to be able to deserialize these extensions.</p>
+</div></details><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Forks.html" title="struct sc_chain_spec::Forks">Forks</a></div></li><li><div class="item-name"><a class="struct" href="struct.GenericChainSpec.html" title="struct sc_chain_spec::GenericChainSpec">GenericChainSpec</a></div><div class="desc docblock-short">A configuration of a chain. Can be used to build a genesis block.</div></li><li><div class="item-name"><a class="struct" href="struct.GenesisBlockBuilder.html" title="struct sc_chain_spec::GenesisBlockBuilder">GenesisBlockBuilder</a></div><div class="desc docblock-short">Default genesis block builder in Substrate.</div></li></ul><h2 id="enums" class="small-section-header"><a href="#enums">Enums</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.ChainType.html" title="enum sc_chain_spec::ChainType">ChainType</a></div><div class="desc docblock-short">The type of a chain.</div></li></ul><h2 id="traits" class="small-section-header"><a href="#traits">Traits</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.BuildGenesisBlock.html" title="trait sc_chain_spec::BuildGenesisBlock">BuildGenesisBlock</a></div><div class="desc docblock-short">Trait for building the genesis block.</div></li><li><div class="item-name"><a class="trait" href="trait.ChainSpec.html" title="trait sc_chain_spec::ChainSpec">ChainSpec</a></div><div class="desc docblock-short">Common interface of a chain specification.</div></li><li><div class="item-name"><a class="trait" href="trait.Extension.html" title="trait sc_chain_spec::Extension">Extension</a></div><div class="desc docblock-short">A collection of <code>ChainSpec</code> extensions.</div></li><li><div class="item-name"><a class="trait" href="trait.Fork.html" title="trait sc_chain_spec::Fork">Fork</a></div><div class="desc docblock-short">A <code>ChainSpec</code> extension fork definition.</div></li><li><div class="item-name"><a class="trait" href="trait.GetExtension.html" title="trait sc_chain_spec::GetExtension">GetExtension</a></div><div class="desc docblock-short">A subset if the <code>Extension</code> trait that only allows for quering extensions.</div></li><li><div class="item-name"><a class="trait" href="trait.Group.html" title="trait sc_chain_spec::Group">Group</a></div><div class="desc docblock-short">A <code>ChainSpec</code> extension.</div></li><li><div class="item-name"><a class="trait" href="trait.RuntimeGenesis.html" title="trait sc_chain_spec::RuntimeGenesis">RuntimeGenesis</a></div><div class="desc docblock-short">A set of traits for the runtime genesis config.</div></li></ul><h2 id="functions" class="small-section-header"><a href="#functions">Functions</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.construct_genesis_block.html" title="fn sc_chain_spec::construct_genesis_block">construct_genesis_block</a></div><div class="desc docblock-short">Create a genesis block, given the initial storage.</div></li><li><div class="item-name"><a class="fn" href="fn.get_extension.html" title="fn sc_chain_spec::get_extension">get_extension</a></div><div class="desc docblock-short">Helper function that queries an extension by type from <code>GetExtension</code> trait object.</div></li><li><div class="item-name"><a class="fn" href="fn.get_extension_mut.html" title="fn sc_chain_spec::get_extension_mut">get_extension_mut</a></div><div class="desc docblock-short">Helper function that queries an extension by type from <code>GetExtension</code> trait object.</div></li><li><div class="item-name"><a class="fn" href="fn.resolve_state_version_from_wasm.html" title="fn sc_chain_spec::resolve_state_version_from_wasm">resolve_state_version_from_wasm</a></div><div class="desc docblock-short">Return the state version given the genesis storage and executor.</div></li></ul><h2 id="types" class="small-section-header"><a href="#types">Type Definitions</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.NoExtension.html" title="type sc_chain_spec::NoExtension">NoExtension</a></div><div class="desc docblock-short">A type denoting empty extensions.</div></li><li><div class="item-name"><a class="type" href="type.Properties.html" title="type sc_chain_spec::Properties">Properties</a></div><div class="desc docblock-short">Arbitrary properties defined in chain spec as a JSON object</div></li></ul><h2 id="derives" class="small-section-header"><a href="#derives">Derive Macros</a></h2><ul class="item-table"><li><div class="item-name"><a class="derive" href="derive.ChainSpecExtension.html" title="derive sc_chain_spec::ChainSpecExtension">ChainSpecExtension</a></div></li><li><div class="item-name"><a class="derive" href="derive.ChainSpecGroup.html" title="derive sc_chain_spec::ChainSpecGroup">ChainSpecGroup</a></div></li></ul></section></div></main></body></html>

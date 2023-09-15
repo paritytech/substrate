@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BIT_PER_NIBBLE","CONTENT_HEADER_SIZE","NIBBLE_LENGTH","NIBBLE_PER_BYTE","PADDING_BITMASK","SPLIT_SHIFTS"],"fn":["at","at_left","biggest_depth","left_common","left_nibble_at","number_padding","pad_left","pad_right","push_at_left","shift_key"]};

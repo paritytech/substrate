@@ -1,0 +1,123 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_scheduler/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_scheduler/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Made with Substrate, for Polkadot."><title>pallet_scheduler - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pallet_scheduler" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../pallet_scheduler/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../pallet_scheduler/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate pallet_scheduler</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 4.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#types">Type Definitions</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pallet_scheduler</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/pallet_scheduler/lib.rs.html#18-1349">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><blockquote>
+<p>Made with <em>Substrate</em>, for <em>Polkadot</em>.</p>
+</blockquote>
+<p><a href="https://github.com/paritytech/substrate/frame/fast-unstake"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> -
+<a href="https://polkadot.network"><img src="https://img.shields.io/badge/polkadot-E6007A?style=for-the-badge&amp;logo=polkadot&amp;logoColor=white" alt="polkadot" /></a></p>
+<h2 id="scheduler-pallet"><a href="#scheduler-pallet">Scheduler Pallet</a></h2>
+<p>A Pallet for scheduling runtime calls.</p>
+<h3 id="overview"><a href="#overview">Overview</a></h3>
+<p>This Pallet exposes capabilities for scheduling runtime calls to occur at a specified block
+number or at a specified period. These scheduled runtime calls may be named or anonymous and may
+be canceled.</p>
+<p><strong>NOTE:</strong> Instead of using the filter contained in the origin to call <code>fn schedule</code>, scheduled
+runtime calls will be dispatched with the default filter for the origin: namely
+<code>frame_system::Config::BaseCallFilter</code> for all origin types (except root which will get no
+filter).</p>
+<p>If a call is scheduled using proxy or whatever mechanism which adds filter, then those filter
+will not be used when dispatching the schedule runtime call.</p>
+<h4 id="examples"><a href="#examples">Examples</a></h4>
+<ol>
+<li>Scheduling a runtime call at a specific block.</li>
+</ol>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[test]
+
+
+</span><span class="kw">fn </span>basic_scheduling_works() {
+	new_test_ext().execute_with(|| {
+		<span class="comment">// Call to schedule
+		</span><span class="kw">let </span>call =
+			RuntimeCall::Logger(LoggerCall::log { i: <span class="number">42</span>, weight: Weight::from_parts(<span class="number">10</span>, <span class="number">0</span>) });
+
+		<span class="comment">// BaseCallFilter should be implemented to accept `Logger::log` runtime call which is
+		// implemented for `BaseFilter` in the mock runtime
+		</span><span class="macro">assert!</span>(!&lt;Test <span class="kw">as </span>frame_system::Config&gt;::BaseCallFilter::contains(<span class="kw-2">&amp;</span>call));
+
+		<span class="comment">// Schedule call to be executed at the 4th block
+		</span><span class="macro">assert_ok!</span>(Scheduler::do_schedule(
+			DispatchTime::At(<span class="number">4</span>),
+			<span class="prelude-val">None</span>,
+			<span class="number">127</span>,
+			root(),
+			Preimage::bound(call).unwrap()
+		));
+
+		<span class="comment">// `log` runtime call should not have executed yet
+		</span>run_to_block(<span class="number">3</span>);
+		<span class="macro">assert!</span>(logger::log().is_empty());
+
+		run_to_block(<span class="number">4</span>);
+		<span class="comment">// `log` runtime call should have executed at block 4
+		</span><span class="macro">assert_eq!</span>(logger::log(), <span class="macro">vec!</span>[(root(), <span class="number">42u32</span>)]);
+
+		run_to_block(<span class="number">100</span>);
+		<span class="macro">assert_eq!</span>(logger::log(), <span class="macro">vec!</span>[(root(), <span class="number">42u32</span>)]);
+	});
+}</code></pre></div>
+<ol start="2">
+<li>Scheduling a preimage hash of a runtime call at a specifc block</li>
+</ol>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[test]
+
+
+</span><span class="kw">fn </span>scheduling_with_preimages_works() {
+	new_test_ext().execute_with(|| {
+		<span class="comment">// Call to schedule
+		</span><span class="kw">let </span>call =
+			RuntimeCall::Logger(LoggerCall::log { i: <span class="number">42</span>, weight: Weight::from_parts(<span class="number">10</span>, <span class="number">0</span>) });
+
+		<span class="kw">let </span>hash = &lt;Test <span class="kw">as </span>frame_system::Config&gt;::Hashing::hash_of(<span class="kw-2">&amp;</span>call);
+		<span class="kw">let </span>len = call.using_encoded(|x| x.len()) <span class="kw">as </span>u32;
+
+		<span class="comment">// Important to use here `Bounded::Lookup` to ensure that that the Scheduler can request the
+		// hash from PreImage to dispatch the call
+		</span><span class="kw">let </span>hashed = Bounded::Lookup { hash, len };
+
+		<span class="comment">// Schedule call to be executed at block 4 with the PreImage hash
+		</span><span class="macro">assert_ok!</span>(Scheduler::do_schedule(DispatchTime::At(<span class="number">4</span>), <span class="prelude-val">None</span>, <span class="number">127</span>, root(), hashed));
+
+		<span class="comment">// Register preimage on chain
+		</span><span class="macro">assert_ok!</span>(Preimage::note_preimage(RuntimeOrigin::signed(<span class="number">0</span>), call.encode()));
+		<span class="macro">assert!</span>(Preimage::is_requested(<span class="kw-2">&amp;</span>hash));
+
+		<span class="comment">// `log` runtime call should not have executed yet
+		</span>run_to_block(<span class="number">3</span>);
+		<span class="macro">assert!</span>(logger::log().is_empty());
+
+		run_to_block(<span class="number">4</span>);
+		<span class="comment">// preimage should not have been removed when executed by the scheduler
+		</span><span class="macro">assert!</span>(!Preimage::len(<span class="kw-2">&amp;</span>hash).is_some());
+		<span class="macro">assert!</span>(!Preimage::is_requested(<span class="kw-2">&amp;</span>hash));
+		<span class="comment">// `log` runtime call should have executed at block 4
+		</span><span class="macro">assert_eq!</span>(logger::log(), <span class="macro">vec!</span>[(root(), <span class="number">42u32</span>)]);
+
+		run_to_block(<span class="number">100</span>);
+		<span class="macro">assert_eq!</span>(logger::log(), <span class="macro">vec!</span>[(root(), <span class="number">42u32</span>)]);
+	});
+}</code></pre></div>
+<h3 id="pallet-api"><a href="#pallet-api">Pallet API</a></h3>
+<p>See the <a href="pallet/index.html" title="mod pallet_scheduler::pallet"><code>pallet</code></a> module for more information about the interfaces this pallet exposes,
+including its configuration trait, dispatchables, storage items, events and errors.</p>
+<h3 id="warning"><a href="#warning">Warning</a></h3>
+<p>This Pallet executes all scheduled runtime calls in the <a href="../frame_support/traits/hooks/trait.Hooks.html#method.on_initialize" title="associated function frame_support::traits::hooks::Hooks::on_initialize"><code>on_initialize</code></a> hook. Do not execute
+any runtime calls which should not be considered mandatory.</p>
+<p>Please be aware that any scheduled runtime calls executed in a future block may <strong>fail</strong> or may
+result in <strong>undefined behavior</strong> since the runtime could have upgraded between the time of
+scheduling and execution. For example, the runtime upgrade could have:</p>
+<ul>
+<li>Modified the implementation of the runtime call (runtime specification upgrade).
+<ul>
+<li>Could lead to undefined behavior.</li>
+</ul>
+</li>
+<li>Removed or changed the ordering/index of the runtime call.
+<ul>
+<li>Could fail due to the runtime call index not being part of the <code>Call</code>.</li>
+<li>Could lead to undefined behavior, such as executing another runtime call with the same
+index.</li>
+</ul>
+</li>
+</ul>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.WeightInfo"><code>pub use weights::<a class="trait" href="weights/trait.WeightInfo.html" title="trait pallet_scheduler::weights::WeightInfo">WeightInfo</a>;</code></div></li><li><div class="item-name"><code>pub use <a class="mod" href="pallet/index.html" title="mod pallet_scheduler::pallet">pallet</a>::*;</code></div></li></ul><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="migration/index.html" title="mod pallet_scheduler::migration">migration</a></div><div class="desc docblock-short">Migrations for the scheduler pallet.</div></li><li><div class="item-name"><a class="mod" href="pallet/index.html" title="mod pallet_scheduler::pallet">pallet</a></div><div class="desc docblock-short">The <code>pallet</code> module in each FRAME pallet hosts the most important items needed
+to construct this pallet.</div></li><li><div class="item-name"><a class="mod" href="weights/index.html" title="mod pallet_scheduler::weights">weights</a></div><div class="desc docblock-short">Autogenerated weights for pallet_scheduler</div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Scheduled.html" title="struct pallet_scheduler::Scheduled">Scheduled</a></div><div class="desc docblock-short">Information regarding an item to be executed in the future.</div></li></ul><h2 id="types" class="small-section-header"><a href="#types">Type Definitions</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.CallOrHashOf.html" title="type pallet_scheduler::CallOrHashOf">CallOrHashOf</a></div></li><li><div class="item-name"><a class="type" href="type.PeriodicIndex.html" title="type pallet_scheduler::PeriodicIndex">PeriodicIndex</a></div><div class="desc docblock-short">Just a simple index for naming period tasks.</div></li><li><div class="item-name"><a class="type" href="type.ScheduledOf.html" title="type pallet_scheduler::ScheduledOf">ScheduledOf</a></div></li><li><div class="item-name"><a class="type" href="type.ScheduledV2Of.html" title="type pallet_scheduler::ScheduledV2Of">ScheduledV2Of</a></div></li><li><div class="item-name"><a class="type" href="type.ScheduledV3Of.html" title="type pallet_scheduler::ScheduledV3Of">ScheduledV3Of</a></div></li><li><div class="item-name"><a class="type" href="type.TaskAddress.html" title="type pallet_scheduler::TaskAddress">TaskAddress</a></div><div class="desc docblock-short">The location of a scheduled task that can be used to remove it.</div></li></ul></section></div></main></body></html>

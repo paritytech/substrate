@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Call","Error","Event","MigrationCompute","Progress"],"mod":["dispatchables","storage_types"],"struct":["MigrationLimits","MigrationTask","Pallet"],"trait":["Config"],"type":["AutoLimits","MigrationProcess","Module","ProgressOf","SignedMigrationMaxLimits"]};

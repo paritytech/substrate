@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["InsertResult"],"struct":["SignedSubmission","SignedSubmissions"],"type":["BalanceOf","NegativeImbalanceOf","PositiveImbalanceOf","SignedSubmissionOf","SubmissionIndicesOf"]};

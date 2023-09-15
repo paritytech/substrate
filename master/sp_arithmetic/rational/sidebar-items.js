@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Rational128","RationalInfinite"],"trait":["MultiplyRational"]};

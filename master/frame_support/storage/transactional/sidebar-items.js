@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["TRANSACTIONAL_LIMIT","TRANSACTION_LEVEL_KEY"],"fn":["in_storage_layer","is_transactional","with_storage_layer","with_transaction","with_transaction_unchecked"],"type":["Layer"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["INHERENT_IDENTIFIER"],"struct":["InherentDataProvider"],"trait":["BabeInherentData"],"type":["InherentType"]};

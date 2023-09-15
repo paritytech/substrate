@@ -1,0 +1,58 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/frame_support/dispatch_context/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/frame_support/dispatch_context/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Provides functions to interact with the dispatch context."><title>frame_support::dispatch_context - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="frame_support" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../../frame_support/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../../frame_support/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Module dispatch_context</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">frame_support</a>::<wbr><a class="mod" href="#">dispatch_context</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../../src/frame_support/dispatch_context.rs.html#18-232">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Provides functions to interact with the dispatch context.</p>
+<p>A Dispatch context is created by calling <a href="fn.run_in_context.html" title="fn frame_support::dispatch_context::run_in_context"><code>run_in_context</code></a> and then the given closure will be
+executed in this dispatch context. Everyting run in this <code>closure</code> will have access to the same
+dispatch context. This also applies to nested calls of <a href="fn.run_in_context.html" title="fn frame_support::dispatch_context::run_in_context"><code>run_in_context</code></a>. The dispatch context
+can be used to store and retrieve information locally in this context. The dispatch context can
+be accessed by using <a href="fn.with_context.html" title="fn frame_support::dispatch_context::with_context"><code>with_context</code></a>. This function will execute the given closure and give it
+access to the value stored in the dispatch context.</p>
+<h2 id="frame-integration"><a href="#frame-integration">FRAME integration</a></h2>
+<p>The FRAME macros implement <a href="../traits/trait.UnfilteredDispatchable.html" title="trait frame_support::traits::UnfilteredDispatchable"><code>UnfilteredDispatchable</code></a> for
+each pallet <code>Call</code> enum. Part of this implementation is the call to <a href="fn.run_in_context.html" title="fn frame_support::dispatch_context::run_in_context"><code>run_in_context</code></a>, so that
+each call to
+<a href="../traits/trait.UnfilteredDispatchable.html#tymethod.dispatch_bypass_filter" title="method frame_support::traits::UnfilteredDispatchable::dispatch_bypass_filter"><code>UnfilteredDispatchable::dispatch_bypass_filter</code></a>
+or <a href="../dispatch/trait.Dispatchable.html#tymethod.dispatch" title="method frame_support::dispatch::Dispatchable::dispatch"><code>Dispatchable::dispatch</code></a> will run in a dispatch
+context.</p>
+<h2 id="example"><a href="#example">Example</a></h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>frame_support::dispatch_context::{with_context, run_in_context};
+
+<span class="comment">// Not executed in a dispatch context, so it should return `None`.
+</span><span class="macro">assert!</span>(with_context::&lt;(), <span class="kw">_</span>&gt;(|<span class="kw">_</span>| <span class="macro">println!</span>(<span class="string">&quot;Hello&quot;</span>)).is_none());
+
+<span class="comment">// Run it in a dispatch context and `with_context` returns `Some(_)`.
+</span>run_in_context(|| {
+    <span class="macro">assert!</span>(with_context::&lt;(), <span class="kw">_</span>&gt;(|<span class="kw">_</span>| <span class="macro">println!</span>(<span class="string">&quot;Hello&quot;</span>)).is_some());
+});
+
+<span class="attr">#[derive(Default)]
+</span><span class="kw">struct </span>CustomContext(i32);
+
+run_in_context(|| {
+    with_context::&lt;CustomContext, <span class="kw">_</span>&gt;(|v| {
+        <span class="comment">// Intitialize the value to the default value.
+        </span><span class="macro">assert_eq!</span>(<span class="number">0</span>, v.or_default().<span class="number">0</span>);
+        v.or_default().<span class="number">0 </span>= <span class="number">10</span>;
+    });
+
+    with_context::&lt;CustomContext, <span class="kw">_</span>&gt;(|v| {
+        <span class="comment">// We are still in the same context and can still access the set value.
+        </span><span class="macro">assert_eq!</span>(<span class="number">10</span>, v.or_default().<span class="number">0</span>);
+    });
+
+    run_in_context(|| {
+        with_context::&lt;CustomContext, <span class="kw">_</span>&gt;(|v| {
+            <span class="comment">// A nested call of `run_in_context` stays in the same dispatch context
+            </span><span class="macro">assert_eq!</span>(<span class="number">10</span>, v.or_default().<span class="number">0</span>);
+        })
+    })
+});
+
+run_in_context(|| {
+    with_context::&lt;CustomContext, <span class="kw">_</span>&gt;(|v| {
+        <span class="comment">// We left the other context and created a new one, so we should be back
+        // to our default value.
+        </span><span class="macro">assert_eq!</span>(<span class="number">0</span>, v.or_default().<span class="number">0</span>);
+    });
+});</code></pre></div>
+<p>In your pallet you will only have to use <a href="fn.with_context.html" title="fn frame_support::dispatch_context::with_context"><code>with_context</code></a>, because as described above
+<a href="fn.run_in_context.html" title="fn frame_support::dispatch_context::run_in_context"><code>run_in_context</code></a> will be handled by FRAME for you.</p>
+</div></details><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Value.html" title="struct frame_support::dispatch_context::Value">Value</a></div><div class="desc docblock-short">Abstraction over some optional value <code>T</code> that is stored in the dispatch context.</div></li></ul><h2 id="functions" class="small-section-header"><a href="#functions">Functions</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.run_in_context.html" title="fn frame_support::dispatch_context::run_in_context">run_in_context</a></div><div class="desc docblock-short">Run the given closure <code>run</code> in a dispatch context.</div></li><li><div class="item-name"><a class="fn" href="fn.with_context.html" title="fn frame_support::dispatch_context::with_context">with_context</a></div><div class="desc docblock-short">Runs the given <code>callback</code> in the dispatch context and gives access to some user defined value.</div></li></ul></section></div></main></body></html>

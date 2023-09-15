@@ -1,0 +1,229 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/sp_runtime_interface/attr.runtime_interface.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/sp_runtime_interface/attr.runtime_interface.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Attribute macro for transforming a trait declaration into a runtime interface."><title>runtime_interface in sp_runtime_interface - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="sp_runtime_interface" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../sp_runtime_interface/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../sp_runtime_interface/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><div class="sidebar-elems"><h2><a href="index.html">In sp_runtime_interface</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="index.html">sp_runtime_interface</a>::<wbr><a class="attr" href="#">runtime_interface</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/sp_runtime_interface_proc_macro/lib.rs.html#77-80">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[runtime_interface]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Attribute macro for transforming a trait declaration into a runtime interface.</p>
+<p>A runtime interface is a fixed interface between a Substrate compatible runtime and the
+native node. This interface is callable from a native and a wasm runtime. The macro will
+generate the corresponding code for the native implementation and the code for calling from
+the wasm side to the native implementation.</p>
+<p>The macro expects the runtime interface declaration as trait declaration:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="attr">#[runtime_interface]
+</span><span class="kw">trait </span>Interface {
+    <span class="doccomment">/// A function that can be called from native/wasm.
+    ///
+    /// The implementation given to this function is only compiled on native.
+    </span><span class="kw">fn </span>call(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+        <span class="comment">// Here you could call some rather complex code that only compiles on native or
+        // is way faster in native than executing it in wasm.
+        </span>Vec::new()
+    }
+    <span class="doccomment">/// Call function, but different version.
+    ///
+    /// For new runtimes, only function with latest version is reachable.
+    /// But old version (above) is still accessible for old runtimes.
+    /// Default version is 1.
+    </span><span class="attr">#[version(<span class="number">2</span>)]
+    </span><span class="kw">fn </span>call(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+        <span class="comment">// Here you could call some rather complex code that only compiles on native or
+        // is way faster in native than executing it in wasm.
+        </span>[<span class="number">17</span>].to_vec()
+    }
+
+    <span class="doccomment">/// Call function, different version and only being registered.
+    ///
+    /// This `register_only` version is only being registered, aka exposed to the runtime,
+    /// but the runtime will still use the version 2 of this function. This is useful for when
+    /// new host functions should be introduced. Adding new host functions requires that all
+    /// nodes have the host functions available, because otherwise they fail at instantiation
+    /// of the runtime. With `register_only` the function will not be used when compiling the
+    /// runtime, but it will already be there for a future version of the runtime that will
+    /// switch to using these host function.
+    </span><span class="attr">#[version(<span class="number">3</span>, register_only)]
+    </span><span class="kw">fn </span>call(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+        <span class="comment">// Here you could call some rather complex code that only compiles on native or
+        // is way faster in native than executing it in wasm.
+        </span>[<span class="number">18</span>].to_vec()
+    }
+
+    <span class="doccomment">/// A function can take a `&amp;self` or `&amp;mut self` argument to get access to the
+    /// `Externalities`. (The generated method does not require
+    /// this argument, so the function can be called just with the `optional` argument)
+    </span><span class="kw">fn </span>set_or_clear(<span class="kw-2">&amp;mut </span><span class="self">self</span>, optional: <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;) {
+        <span class="kw">match </span>optional {
+            <span class="prelude-val">Some</span>(value) =&gt; <span class="self">self</span>.set_storage([<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>].to_vec(), value),
+            <span class="prelude-val">None </span>=&gt; <span class="self">self</span>.clear_storage(<span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>]),
+        }
+    }
+
+    <span class="doccomment">/// A function can be gated behind a configuration (`cfg`) attribute.
+    /// To prevent ambiguity and confusion about what will be the final exposed host
+    /// functions list, conditionally compiled functions can&#39;t be versioned.
+    /// That is, conditionally compiled functions with `version`s greater than 1
+    /// are not allowed.
+    </span><span class="attr">#[cfg(feature = <span class="string">&quot;experimental-function&quot;</span>)]
+    </span><span class="kw">fn </span>gated_call(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+        [<span class="number">42</span>].to_vec()
+    }
+}</code></pre></div>
+<p>The given example will generate roughly the following code for native:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// The name of the trait is converted to snake case and used as mod name.
+//
+// Be aware that this module is not `public`, the visibility of the module is determined based
+// on the visibility of the trait declaration.
+</span><span class="kw">mod </span>interface {
+    <span class="kw">trait </span>Interface {
+        <span class="kw">fn </span>call_version_1(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt;;
+        <span class="kw">fn </span>call_version_2(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt;;
+        <span class="kw">fn </span>call_version_3(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt;;
+        <span class="kw">fn </span>set_or_clear_version_1(<span class="kw-2">&amp;mut </span><span class="self">self</span>, optional: <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;);
+        <span class="attr">#[cfg(feature = <span class="string">&quot;experimental-function&quot;</span>)]
+        </span><span class="kw">fn </span>gated_call_version_1(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt;;
+    }
+
+    <span class="kw">impl </span>Interface <span class="kw">for </span><span class="kw-2">&amp;mut </span><span class="kw">dyn </span>sp_externalities::Externalities {
+        <span class="kw">fn </span>call_version_1(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; { Vec::new() }
+        <span class="kw">fn </span>call_version_2(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; { [<span class="number">17</span>].to_vec() }
+        <span class="kw">fn </span>call_version_3(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; { [<span class="number">18</span>].to_vec() }
+        <span class="kw">fn </span>set_or_clear_version_1(<span class="kw-2">&amp;mut </span><span class="self">self</span>, optional: <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;) {
+            <span class="kw">match </span>optional {
+                <span class="prelude-val">Some</span>(value) =&gt; <span class="self">self</span>.set_storage([<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>].to_vec(), value),
+                <span class="prelude-val">None </span>=&gt; <span class="self">self</span>.clear_storage(<span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>]),
+            }
+        }
+        <span class="attr">#[cfg(feature = <span class="string">&quot;experimental-function&quot;</span>)]
+        </span><span class="kw">fn </span>gated_call_version_1(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; { [<span class="number">42</span>].to_vec() }
+    }
+
+    <span class="kw">pub fn </span>call(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+        <span class="comment">// only latest version is exposed
+        </span>call_version_2(data)
+    }
+
+    <span class="kw">fn </span>call_version_1(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+        &lt;<span class="kw-2">&amp;mut </span><span class="kw">dyn </span>sp_externalities::Externalities <span class="kw">as </span>Interface&gt;::call_version_1(data)
+    }
+
+    <span class="kw">fn </span>call_version_2(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+        &lt;<span class="kw-2">&amp;mut </span><span class="kw">dyn </span>sp_externalities::Externalities <span class="kw">as </span>Interface&gt;::call_version_2(data)
+    }
+
+    <span class="kw">fn </span>call_version_3(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+        &lt;<span class="kw-2">&amp;mut </span><span class="kw">dyn </span>sp_externalities::Externalities <span class="kw">as </span>Interface&gt;::call_version_3(data)
+    }
+
+    <span class="kw">pub fn </span>set_or_clear(optional: <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;) {
+        set_or_clear_version_1(optional)
+    }
+
+    <span class="kw">fn </span>set_or_clear_version_1(optional: <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;) {
+        sp_externalities::with_externalities(|<span class="kw-2">mut </span>ext| Interface::set_or_clear_version_1(<span class="kw-2">&amp;mut </span>ext, optional))
+            .expect(<span class="string">&quot;`set_or_clear` called outside of an Externalities-provided environment.&quot;</span>)
+    }
+
+    <span class="attr">#[cfg(feature = <span class="string">&quot;experimental-function&quot;</span>)]
+    </span><span class="kw">pub fn </span>gated_call(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+        gated_call_version_1(data)
+    }
+
+    <span class="attr">#[cfg(feature = <span class="string">&quot;experimental-function&quot;</span>)]
+    </span><span class="kw">fn </span>gated_call_version_1(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+        &lt;<span class="kw-2">&amp;mut </span><span class="kw">dyn </span>sp_externalities::Externalities <span class="kw">as </span>Interface&gt;::gated_call_version_1(data)
+    }
+
+    <span class="doccomment">/// This type implements the `HostFunctions` trait (from `sp-wasm-interface`) and
+    /// provides the host implementation for the wasm side. The host implementation converts the
+    /// arguments from wasm to native and calls the corresponding native function.
+    ///
+    /// This type needs to be passed to the wasm executor, so that the host functions will be
+    /// registered in the executor.
+    </span><span class="kw">pub struct </span>HostFunctions;
+}</code></pre></div>
+<p>The given example will generate roughly the following code for wasm:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">mod </span>interface {
+    <span class="kw">mod </span>extern_host_functions_impls {
+        <span class="doccomment">/// Every function is exported by the native code as `ext_FUNCTION_NAME_version_VERSION`.
+        ///
+        /// The type for each argument of the exported function depends on
+        /// `&lt;ARGUMENT_TYPE as RIType&gt;::FFIType`.
+        ///
+        /// `key` holds the pointer and the length to the `data` slice.
+        </span><span class="kw">pub fn </span>call(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+            <span class="kw">extern </span><span class="string">&quot;C&quot; </span>{ <span class="kw">pub fn </span>ext_call_version_2(key: u64); }
+            <span class="comment">// Should call into extenal `ext_call_version_2(&lt;[u8] as IntoFFIValue&gt;::into_ffi_value(key))`
+            // But this is too much to replicate in a doc test so here we just return a dummy vector.
+            // Note that we jump into the latest version not marked as `register_only` (i.e. version 2).
+            </span>Vec::new()
+        }
+
+        <span class="doccomment">/// `key` holds the pointer and the length of the `option` value.
+        </span><span class="kw">pub fn </span>set_or_clear(option: <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;) {
+            <span class="kw">extern </span><span class="string">&quot;C&quot; </span>{ <span class="kw">pub fn </span>ext_set_or_clear_version_1(key: u64); }
+            <span class="comment">// Same as above
+        </span>}
+
+        <span class="doccomment">/// `key` holds the pointer and the length to the `data` slice.
+        </span><span class="attr">#[cfg(feature = <span class="string">&quot;experimental-function&quot;</span>)]
+        </span><span class="kw">pub fn </span>gated_call(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+            <span class="kw">extern </span><span class="string">&quot;C&quot; </span>{ <span class="kw">pub fn </span>ext_gated_call_version_1(key: u64); }
+            <span class="doccomment">/// Same as above
+            </span>Vec::new()
+        }
+    }
+
+    <span class="doccomment">/// The type is actually `ExchangeableFunction` (from `sp-runtime-interface`) and
+    /// by default this is initialized to jump into the corresponding function in
+    /// `extern_host_functions_impls`.
+    ///
+    /// This can be used to replace the implementation of the `call` function.
+    /// Instead of calling into the host, the callee will automatically call the other
+    /// implementation.
+    ///
+    /// To replace the implementation:
+    ///
+    /// `host_call.replace_implementation(some_other_impl)`
+    </span><span class="kw">pub static </span>host_call: () = ();
+    <span class="kw">pub static </span>host_set_or_clear: () = ();
+    <span class="attr">#[cfg(feature = <span class="string">&quot;experimental-feature&quot;</span>)]
+    </span><span class="kw">pub static </span>gated_call: () = ();
+
+    <span class="kw">pub fn </span>call(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+        <span class="comment">// This is the actual call: `host_call.get()(data)`
+        //
+        // But that does not work for several reasons in this example, so we just return an
+        // empty vector.
+        </span>Vec::new()
+    }
+
+    <span class="kw">pub fn </span>set_or_clear(optional: <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;) {
+        <span class="comment">// Same as above
+    </span>}
+
+    <span class="attr">#[cfg(feature = <span class="string">&quot;experimental-feature&quot;</span>)]
+    </span><span class="kw">pub fn </span>gated_call(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+        <span class="comment">// Same as above
+        </span>Vec::new()
+    }
+}</code></pre></div>
+<h2 id="argument-types"><a href="#argument-types">Argument types</a></h2>
+<p>The macro supports any kind of argument type, as long as it implements <a href="trait.RIType.html" title="trait sp_runtime_interface::RIType"><code>RIType</code></a> and the
+required <code>FromFFIValue</code>/<code>IntoFFIValue</code>. The macro will convert each
+argument to the corresponding FFI representation and will call into the host using this FFI
+representation. On the host each argument is converted back to the native representation
+and the native implementation is called. Any return value is handled in the same way.</p>
+<h2 id="wasm-only-interfaces"><a href="#wasm-only-interfaces">Wasm only interfaces</a></h2>
+<p>Some interfaces are only required from within the wasm runtime e.g. the allocator
+interface. To support this, the macro can be called like <code>#[runtime_interface(wasm_only)]</code>.
+This instructs the macro to make two significant changes to the generated code:</p>
+<ol>
+<li>The generated functions are not callable from the native side.</li>
+<li>The trait as shown above is not implemented for <a href="../sp_externalities/trait.Externalities.html" title="trait sp_externalities::Externalities"><code>Externalities</code></a> and is instead
+implemented for <code>FunctionContext</code> (from <code>sp-wasm-interface</code>).</li>
+</ol>
+<h2 id="disable-tracing"><a href="#disable-tracing">Disable tracing</a></h2>
+<p>By adding <code>no_tracing</code> to the list of options you can prevent the wasm-side interface from
+generating the default <code>sp-tracing</code>-calls. Note that this is rarely needed but only meant
+for the case when that would create a circular dependency. You usually <em>do not</em> want to add
+this flag, as tracing doesn’t cost you anything by default anyways (it is added as a no-op)
+but is super useful for debugging later.</p>
+</div></details></section></div></main></body></html>

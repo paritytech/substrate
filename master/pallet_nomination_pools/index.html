@@ -1,0 +1,270 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_nomination_pools/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_nomination_pools/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Nomination Pools for Staking Delegation"><title>pallet_nomination_pools - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pallet_nomination_pools" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../pallet_nomination_pools/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../pallet_nomination_pools/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate pallet_nomination_pools</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 1.0.0</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#constants">Constants</a></li><li><a href="#types">Type Definitions</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pallet_nomination_pools</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/pallet_nomination_pools/lib.rs.html#18-3293">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="nomination-pools-for-staking-delegation"><a href="#nomination-pools-for-staking-delegation">Nomination Pools for Staking Delegation</a></h2>
+<p>A pallet that allows members to delegate their stake to nominating pools. A nomination pool acts
+as nominator and nominates validators on the members behalf.</p>
+<h2 id="index"><a href="#index">Index</a></h2>
+<ul>
+<li><a href="#key-terms">Key terms</a></li>
+<li><a href="#usage">Usage</a></li>
+<li><a href="#implementors-guide">Implementor’s Guide</a></li>
+<li><a href="#design">Design</a></li>
+</ul>
+<h3 id="key-terms"><a href="#key-terms">Key Terms</a></h3>
+<ul>
+<li>pool id: A unique identifier of each pool. Set to u32.</li>
+<li>bonded pool: Tracks the distribution of actively staked funds. See <a href="struct.BondedPool.html" title="struct pallet_nomination_pools::BondedPool"><code>BondedPool</code></a> and
+<a href="struct.BondedPoolInner.html" title="struct pallet_nomination_pools::BondedPoolInner"><code>BondedPoolInner</code></a>.</li>
+<li>reward pool: Tracks rewards earned by actively staked funds. See <a href="struct.RewardPool.html" title="struct pallet_nomination_pools::RewardPool"><code>RewardPool</code></a> and
+<a href="pallet/type.RewardPools.html" title="type pallet_nomination_pools::pallet::RewardPools"><code>RewardPools</code></a>.</li>
+<li>unbonding sub pools: Collection of pools at different phases of the unbonding lifecycle. See
+<a href="struct.SubPools.html" title="struct pallet_nomination_pools::SubPools"><code>SubPools</code></a> and <a href="pallet/type.SubPoolsStorage.html" title="type pallet_nomination_pools::pallet::SubPoolsStorage"><code>SubPoolsStorage</code></a>.</li>
+<li>members: Accounts that are members of pools. See <a href="struct.PoolMember.html" title="struct pallet_nomination_pools::PoolMember"><code>PoolMember</code></a> and <a href="pallet/type.PoolMembers.html" title="type pallet_nomination_pools::pallet::PoolMembers"><code>PoolMembers</code></a>.</li>
+<li>roles: Administrative roles of each pool, capable of controlling nomination, and the state of
+the pool.</li>
+<li>point: A unit of measure for a members portion of a pool’s funds. Points initially have a
+ratio of 1 (as set by <code>POINTS_TO_BALANCE_INIT_RATIO</code>) to balance, but as slashing happens,
+this can change.</li>
+<li>kick: The act of a pool administrator forcibly ejecting a member.</li>
+<li>bonded account: A key-less account id derived from the pool id that acts as the bonded
+account. This account registers itself as a nominator in the staking system, and follows
+exactly the same rules and conditions as a normal staker. Its bond increases or decreases as
+members join, it can <code>nominate</code> or <code>chill</code>, and might not even earn staking rewards if it is
+not nominating proper validators.</li>
+<li>reward account: A similar key-less account, that is set as the <code>Payee</code> account for the bonded
+account for all staking rewards.</li>
+<li>change rate: The rate at which pool commission can be changed. A change rate consists of a
+<code>max_increase</code> and <code>min_delay</code>, dictating the maximum percentage increase that can be applied
+to the commission per number of blocks.</li>
+<li>throttle: An attempted commission increase is throttled if the attempted change falls outside
+the change rate bounds.</li>
+</ul>
+<h3 id="usage"><a href="#usage">Usage</a></h3><h4 id="join"><a href="#join">Join</a></h4>
+<p>An account can stake funds with a nomination pool by calling <a href="pallet/enum.Call.html#variant.join" title="variant pallet_nomination_pools::pallet::Call::join"><code>Call::join</code></a>.</p>
+<h4 id="claim-rewards"><a href="#claim-rewards">Claim rewards</a></h4>
+<p>After joining a pool, a member can claim rewards by calling <a href="pallet/enum.Call.html#variant.claim_payout" title="variant pallet_nomination_pools::pallet::Call::claim_payout"><code>Call::claim_payout</code></a>.</p>
+<p>A pool member can also set a <code>ClaimPermission</code> with <a href="pallet/enum.Call.html#variant.set_claim_permission" title="variant pallet_nomination_pools::pallet::Call::set_claim_permission"><code>Call::set_claim_permission</code></a>, to allow
+other members to permissionlessly bond or withdraw their rewards by calling
+<a href="pallet/enum.Call.html#variant.bond_extra_other" title="variant pallet_nomination_pools::pallet::Call::bond_extra_other"><code>Call::bond_extra_other</code></a> or <a href="pallet/enum.Call.html#variant.claim_payout_other" title="variant pallet_nomination_pools::pallet::Call::claim_payout_other"><code>Call::claim_payout_other</code></a> respectively.</p>
+<p>For design docs see the <a href="#reward-pool">reward pool</a> section.</p>
+<h4 id="leave"><a href="#leave">Leave</a></h4>
+<p>In order to leave, a member must take two steps.</p>
+<p>First, they must call <a href="pallet/enum.Call.html#variant.unbond" title="variant pallet_nomination_pools::pallet::Call::unbond"><code>Call::unbond</code></a>. The unbond extrinsic will start the unbonding process by
+unbonding all or a portion of the members funds.</p>
+<blockquote>
+<p>A member can have up to <a href="pallet/trait.Config.html#associatedtype.MaxUnbonding" title="associated type pallet_nomination_pools::pallet::Config::MaxUnbonding"><code>Config::MaxUnbonding</code></a> distinct active unbonding requests.</p>
+</blockquote>
+<p>Second, once <a href="../sp_staking/trait.StakingInterface.html#tymethod.bonding_duration" title="associated function sp_staking::StakingInterface::bonding_duration"><code>sp_staking::StakingInterface::bonding_duration</code></a> eras have passed, the member can
+call <a href="pallet/enum.Call.html#variant.withdraw_unbonded" title="variant pallet_nomination_pools::pallet::Call::withdraw_unbonded"><code>Call::withdraw_unbonded</code></a> to withdraw any funds that are free.</p>
+<p>For design docs see the <a href="#bonded-pool">bonded pool</a> and <a href="#unbonding-sub-pools">unbonding sub
+pools</a> sections.</p>
+<h4 id="slashes"><a href="#slashes">Slashes</a></h4>
+<p>Slashes are distributed evenly across the bonded pool and the unbonding pools from slash era+1
+through the slash apply era. Thus, any member who either</p>
+<ol>
+<li>unbonded, or</li>
+<li>was actively bonded
+in the aforementioned range of eras will be affected by the slash. A member is slashed pro-rata
+based on its stake relative to the total slash amount.</li>
+</ol>
+<p>Slashing does not change any single member’s balance. Instead, the slash will only reduce the
+balance associated with a particular pool. But, we never change the total <em>points</em> of a pool
+because of slashing. Therefore, when a slash happens, the ratio of points to balance changes in
+a pool. In other words, the value of one point, which is initially 1-to-1 against a unit of
+balance, is now less than one balance because of the slash.</p>
+<h4 id="administration"><a href="#administration">Administration</a></h4>
+<p>A pool can be created with the <a href="pallet/enum.Call.html#variant.create" title="variant pallet_nomination_pools::pallet::Call::create"><code>Call::create</code></a> call. Once created, the pools nominator or root
+user must call <a href="pallet/enum.Call.html#variant.nominate" title="variant pallet_nomination_pools::pallet::Call::nominate"><code>Call::nominate</code></a> to start nominating. <a href="pallet/enum.Call.html#variant.nominate" title="variant pallet_nomination_pools::pallet::Call::nominate"><code>Call::nominate</code></a> can be called at
+anytime to update validator selection.</p>
+<p>Similar to <a href="pallet/enum.Call.html#variant.nominate" title="variant pallet_nomination_pools::pallet::Call::nominate"><code>Call::nominate</code></a>, <a href="pallet/enum.Call.html#variant.chill" title="variant pallet_nomination_pools::pallet::Call::chill"><code>Call::chill</code></a> will chill to pool in the staking system, and
+<a href="pallet/enum.Call.html#variant.pool_withdraw_unbonded" title="variant pallet_nomination_pools::pallet::Call::pool_withdraw_unbonded"><code>Call::pool_withdraw_unbonded</code></a> will withdraw any unbonding chunks of the pool bonded account.
+The latter call is permissionless and can be called by anyone at any time.</p>
+<p>To help facilitate pool administration the pool has one of three states (see <a href="enum.PoolState.html" title="enum pallet_nomination_pools::PoolState"><code>PoolState</code></a>):</p>
+<ul>
+<li>Open: Anyone can join the pool and no members can be permissionlessly removed.</li>
+<li>Blocked: No members can join and some admin roles can kick members. Kicking is not instant,
+and follows the same process of <code>unbond</code> and then <code>withdraw_unbonded</code>. In other words,
+administrators can permissionlessly unbond other members.</li>
+<li>Destroying: No members can join and all members can be permissionlessly removed with
+<a href="pallet/enum.Call.html#variant.unbond" title="variant pallet_nomination_pools::pallet::Call::unbond"><code>Call::unbond</code></a> and <a href="pallet/enum.Call.html#variant.withdraw_unbonded" title="variant pallet_nomination_pools::pallet::Call::withdraw_unbonded"><code>Call::withdraw_unbonded</code></a>. Once a pool is in destroying state, it
+cannot be reverted to another state.</li>
+</ul>
+<p>A pool has 4 administrative roles (see <a href="struct.PoolRoles.html" title="struct pallet_nomination_pools::PoolRoles"><code>PoolRoles</code></a>):</p>
+<ul>
+<li>Depositor: creates the pool and is the initial member. They can only leave the pool once all
+other members have left. Once they fully withdraw their funds, the pool is destroyed.</li>
+<li>Nominator: can select which validators the pool nominates.</li>
+<li>Bouncer: can change the pools state and kick members if the pool is blocked.</li>
+<li>Root: can change the nominator, bouncer, or itself, manage and claim commission, and can
+perform any of the actions the nominator or bouncer can.</li>
+</ul>
+<p>### Commission</p>
+<p>A pool can optionally have a commission configuration, via the <code>root</code> role, set with
+<a href="pallet/enum.Call.html#variant.set_commission" title="variant pallet_nomination_pools::pallet::Call::set_commission"><code>Call::set_commission</code></a> and claimed with <a href="pallet/enum.Call.html#variant.claim_commission" title="variant pallet_nomination_pools::pallet::Call::claim_commission"><code>Call::claim_commission</code></a>. A payee account must be
+supplied with the desired commission percentage. Beyond the commission itself, a pool can have a
+maximum commission and a change rate.</p>
+<p>Importantly, both max commission  <a href="pallet/enum.Call.html#variant.set_commission_max" title="variant pallet_nomination_pools::pallet::Call::set_commission_max"><code>Call::set_commission_max</code></a> and change rate
+<a href="pallet/enum.Call.html#variant.set_commission_change_rate" title="variant pallet_nomination_pools::pallet::Call::set_commission_change_rate"><code>Call::set_commission_change_rate</code></a> can not be removed once set, and can only be set to more
+restrictive values (i.e. a lower max commission or a slower change rate) in subsequent updates.</p>
+<p>If set, a pool’s commission is bound to <a href="pallet/type.GlobalMaxCommission.html" title="type pallet_nomination_pools::pallet::GlobalMaxCommission"><code>GlobalMaxCommission</code></a> at the time it is applied to
+pending rewards. <a href="pallet/type.GlobalMaxCommission.html" title="type pallet_nomination_pools::pallet::GlobalMaxCommission"><code>GlobalMaxCommission</code></a> is intended to be updated only via governance.</p>
+<p>When a pool is dissolved, any outstanding pending commission that has not been claimed will be
+transferred to the depositor.</p>
+<p>Implementation note: Commission is analogous to a separate member account of the pool, with its
+own reward counter in the form of <code>current_pending_commission</code>.</p>
+<p>Crucially, commission is applied to rewards based on the current commission in effect at the
+time rewards are transferred into the reward pool. This is to prevent the malicious behaviour of
+changing the commission rate to a very high value after rewards are accumulated, and thus claim
+an unexpectedly high chunk of the reward.</p>
+<h4 id="dismantling"><a href="#dismantling">Dismantling</a></h4>
+<p>As noted, a pool is destroyed once</p>
+<ol>
+<li>First, all members need to fully unbond and withdraw. If the pool state is set to
+<code>Destroying</code>, this can happen permissionlessly.</li>
+<li>The depositor itself fully unbonds and withdraws.</li>
+</ol>
+<blockquote>
+<p>Note that at this point, based on the requirements of the staking system, the pool’s bonded
+account’s stake might not be able to ge below a certain threshold as a nominator. At this
+point, the pool should <code>chill</code> itself to allow the depositor to leave. See <a href="pallet/enum.Call.html#variant.chill" title="variant pallet_nomination_pools::pallet::Call::chill"><code>Call::chill</code></a>.</p>
+</blockquote>
+<h3 id="implementors-guide"><a href="#implementors-guide">Implementor’s Guide</a></h3>
+<p>Some notes and common mistakes that wallets/apps wishing to implement this pallet should be
+aware of:</p>
+<h4 id="pool-members"><a href="#pool-members">Pool Members</a></h4>
+<ul>
+<li>In general, whenever a pool member changes their total point, the chain will automatically
+claim all their pending rewards for them. This is not optional, and MUST happen for the reward
+calculation to remain correct (see the documentation of <code>bond</code> as an example). So, make sure
+you are warning your users about it. They might be surprised if they see that they bonded an
+extra 100 DOTs, and now suddenly their 5.23 DOTs in pending reward is gone. It is not gone, it
+has been paid out to you!</li>
+<li>Joining a pool implies transferring funds to the pool account. So it might be (based on which
+wallet that you are using) that you no longer see the funds that are moved to the pool in your
+“free balance” section. Make sure the user is aware of this, and not surprised by seeing this.
+Also, the transfer that happens here is configured to to never accidentally destroy the sender
+account. So to join a Pool, your sender account must remain alive with 1 DOT left in it. This
+means, with 1 DOT as existential deposit, and 1 DOT as minimum to join a pool, you need at
+least 2 DOT to join a pool. Consequently, if you are suggesting members to join a pool with
+“Maximum possible value”, you must subtract 1 DOT to remain in the sender account to not
+accidentally kill it.</li>
+<li>Points and balance are not the same! Any pool member, at any point in time, can have points in
+either the bonded pool or any of the unbonding pools. The crucial fact is that in any of these
+pools, the ratio of point to balance is different and might not be 1. Each pool starts with a
+ratio of 1, but as time goes on, for reasons such as slashing, the ratio gets broken. Over
+time, 100 points in a bonded pool can be worth 90 DOTs. Make sure you are either representing
+points as points (not as DOTs), or even better, always display both: “You have x points in
+pool y which is worth z DOTs”. See here and here for examples of how to calculate point to
+balance ratio of each pool (it is almost trivial ;))</li>
+</ul>
+<h4 id="pool-management"><a href="#pool-management">Pool Management</a></h4>
+<ul>
+<li>The pool will be seen from the perspective of the rest of the system as a single nominator.
+Ergo, This nominator must always respect the <code>staking.minNominatorBond</code> limit. Similar to a
+normal nominator, who has to first <code>chill</code> before fully unbonding, the pool must also do the
+same. The pool’s bonded account will be fully unbonded only when the depositor wants to leave
+and dismantle the pool. All that said, the message is: the depositor can only leave the chain
+when they chill the pool first.</li>
+</ul>
+<h3 id="design"><a href="#design">Design</a></h3>
+<p><em>Notes</em>: this section uses pseudo code to explain general design and does not necessarily
+reflect the exact implementation. Additionally, a working knowledge of <code>pallet-staking</code>’s api is
+assumed.</p>
+<h4 id="goals"><a href="#goals">Goals</a></h4>
+<ul>
+<li>Maintain network security by upholding integrity of slashing events, sufficiently penalizing
+members that where in the pool while it was backing a validator that got slashed.</li>
+<li>Maximize scalability in terms of member count.</li>
+</ul>
+<p>In order to maintain scalability, all operations are independent of the number of members. To do
+this, delegation specific information is stored local to the member while the pool data
+structures have bounded datum.</p>
+<h4 id="bonded-pool"><a href="#bonded-pool">Bonded pool</a></h4>
+<p>A bonded pool nominates with its total balance, excluding that which has been withdrawn for
+unbonding. The total points of a bonded pool are always equal to the sum of points of the
+delegation members. A bonded pool tracks its points and reads its bonded balance.</p>
+<p>When a member joins a pool, <code>amount_transferred</code> is transferred from the members account to the
+bonded pools account. Then the pool calls <code>staking::bond_extra(amount_transferred)</code> and issues
+new points which are tracked by the member and added to the bonded pool’s points.</p>
+<p>When the pool already has some balance, we want the value of a point before the transfer to
+equal the value of a point after the transfer. So, when a member joins a bonded pool with a
+given <code>amount_transferred</code>, we maintain the ratio of bonded balance to points such that:</p>
+<div class="example-wrap"><pre class="language-text"><code>balance_after_transfer / points_after_transfer == balance_before_transfer / points_before_transfer;
+</code></pre></div>
+<p>To achieve this, we issue points based on the following:</p>
+<div class="example-wrap"><pre class="language-text"><code>points_issued = (points_before_transfer / balance_before_transfer) * amount_transferred;
+</code></pre></div>
+<p>For new bonded pools we can set the points issued per balance arbitrarily. In this
+implementation we use a 1 points to 1 balance ratio for pool creation (see
+<a href="constant.POINTS_TO_BALANCE_INIT_RATIO.html" title="constant pallet_nomination_pools::POINTS_TO_BALANCE_INIT_RATIO"><code>POINTS_TO_BALANCE_INIT_RATIO</code></a>).</p>
+<p><strong>Relevant extrinsics:</strong></p>
+<ul>
+<li><a href="pallet/enum.Call.html#variant.create" title="variant pallet_nomination_pools::pallet::Call::create"><code>Call::create</code></a></li>
+<li><a href="pallet/enum.Call.html#variant.join" title="variant pallet_nomination_pools::pallet::Call::join"><code>Call::join</code></a></li>
+</ul>
+<h4 id="reward-pool"><a href="#reward-pool">Reward pool</a></h4>
+<p>When a pool is first bonded it sets up a deterministic, inaccessible account as its reward
+destination. This reward account combined with <code>RewardPool</code> compose a reward pool.</p>
+<p>Reward pools are completely separate entities to bonded pools. Along with its account, a reward
+pool also tracks its outstanding and claimed rewards as counters, in addition to pending and
+claimed commission. These counters are updated with <code>RewardPool::update_records</code>. The current
+reward counter of the pool (the total outstanding rewards, in points) is also callable with the
+<code>RewardPool::current_reward_counter</code> method.</p>
+<p>See <a href="https://hackmd.io/PFGn6wI5TbCmBYoEA_f2Uw">this link</a> for an in-depth explanation of the
+reward pool mechanism.</p>
+<p><strong>Relevant extrinsics:</strong></p>
+<ul>
+<li><a href="pallet/enum.Call.html#variant.claim_payout" title="variant pallet_nomination_pools::pallet::Call::claim_payout"><code>Call::claim_payout</code></a></li>
+</ul>
+<h4 id="unbonding-sub-pools"><a href="#unbonding-sub-pools">Unbonding sub pools</a></h4>
+<p>When a member unbonds, it’s balance is unbonded in the bonded pool’s account and tracked in an
+unbonding pool associated with the active era. If no such pool exists, one is created. To track
+which unbonding sub pool a member belongs too, a member tracks it’s <code>unbonding_era</code>.</p>
+<p>When a member initiates unbonding it’s claim on the bonded pool (<code>balance_to_unbond</code>) is
+computed as:</p>
+<div class="example-wrap"><pre class="language-text"><code>balance_to_unbond = (bonded_pool.balance / bonded_pool.points) * member.points;
+</code></pre></div>
+<p>If this is the first transfer into an unbonding pool arbitrary amount of points can be issued
+per balance. In this implementation unbonding pools are initialized with a 1 point to 1 balance
+ratio (see <a href="constant.POINTS_TO_BALANCE_INIT_RATIO.html" title="constant pallet_nomination_pools::POINTS_TO_BALANCE_INIT_RATIO"><code>POINTS_TO_BALANCE_INIT_RATIO</code></a>). Otherwise, the unbonding pools hold the same
+points to balance ratio properties as the bonded pool, so member points in the unbonding pool
+are issued based on</p>
+<div class="example-wrap"><pre class="language-text"><code>new_points_issued = (points_before_transfer / balance_before_transfer) * balance_to_unbond;
+</code></pre></div>
+<p>For scalability, a bound is maintained on the number of unbonding sub pools (see
+<a href="struct.TotalUnbondingPools.html" title="struct pallet_nomination_pools::TotalUnbondingPools"><code>TotalUnbondingPools</code></a>). An unbonding pool is removed once its older than <code>current_era - TotalUnbondingPools</code>. An unbonding pool is merged into the unbonded pool with</p>
+<div class="example-wrap"><pre class="language-text"><code>unbounded_pool.balance = unbounded_pool.balance + unbonding_pool.balance;
+unbounded_pool.points = unbounded_pool.points + unbonding_pool.points;
+</code></pre></div>
+<p>This scheme “averages” out the points value in the unbonded pool.</p>
+<p>Once a members <code>unbonding_era</code> is older than <code>current_era - [sp_staking::StakingInterface::bonding_duration]</code>, it can can cash it’s points out of the
+corresponding unbonding pool. If it’s <code>unbonding_era</code> is older than <code>current_era - TotalUnbondingPools</code>, it can cash it’s points from the unbonded pool.</p>
+<p><strong>Relevant extrinsics:</strong></p>
+<ul>
+<li><a href="pallet/enum.Call.html#variant.unbond" title="variant pallet_nomination_pools::pallet::Call::unbond"><code>Call::unbond</code></a></li>
+<li><a href="pallet/enum.Call.html#variant.withdraw_unbonded" title="variant pallet_nomination_pools::pallet::Call::withdraw_unbonded"><code>Call::withdraw_unbonded</code></a></li>
+</ul>
+<h4 id="slashing"><a href="#slashing">Slashing</a></h4>
+<p>This section assumes that the slash computation is executed by
+<code>pallet_staking::StakingLedger::slash</code>, which passes the information to this pallet via
+<a href="../sp_staking/trait.OnStakingUpdate.html#method.on_slash" title="associated function sp_staking::OnStakingUpdate::on_slash"><code>sp_staking::OnStakingUpdate::on_slash</code></a>.</p>
+<p>Unbonding pools need to be slashed to ensure all nominators whom where in the bonded pool while
+it was backing a validator that equivocated are punished. Without these measures a member could
+unbond right after a validator equivocated with no consequences.</p>
+<p>This strategy is unfair to members who joined after the slash, because they get slashed as well,
+but spares members who unbond. The latter is much more important for security: if a pool’s
+validators are attacking the network, their members need to unbond fast! Avoiding slashes gives
+them an incentive to do that if validators get repeatedly slashed.</p>
+<p>To be fair to joiners, this implementation also need joining pools, which are actively staking,
+in addition to the unbonding pools. For maintenance simplicity these are not implemented.
+Related: <a href="https://github.com/paritytech/substrate/issues/10860">https://github.com/paritytech/substrate/issues/10860</a></p>
+<h4 id="limitations"><a href="#limitations">Limitations</a></h4>
+<ul>
+<li>PoolMembers cannot vote with their staked funds because they are transferred into the pools
+account. In the future this can be overcome by allowing the members to vote with their bonded
+funds via vote splitting.</li>
+<li>PoolMembers cannot quickly transfer to another pool if they do no like nominations, instead
+they must wait for the unbonding duration.</li>
+</ul>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.WeightInfo"><code>pub use weights::<a class="trait" href="weights/trait.WeightInfo.html" title="trait pallet_nomination_pools::weights::WeightInfo">WeightInfo</a>;</code></div></li><li><div class="item-name"><code>pub use <a class="mod" href="pallet/index.html" title="mod pallet_nomination_pools::pallet">pallet</a>::*;</code></div></li></ul><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="migration/index.html" title="mod pallet_nomination_pools::migration">migration</a></div></li><li><div class="item-name"><a class="mod" href="mock/index.html" title="mod pallet_nomination_pools::mock">mock</a></div></li><li><div class="item-name"><a class="mod" href="pallet/index.html" title="mod pallet_nomination_pools::pallet">pallet</a></div><div class="desc docblock-short">The <code>pallet</code> module in each FRAME pallet hosts the most important items needed
+to construct this pallet.</div></li><li><div class="item-name"><a class="mod" href="weights/index.html" title="mod pallet_nomination_pools::weights">weights</a></div><div class="desc docblock-short">Autogenerated weights for pallet_nomination_pools</div></li></ul><h2 id="macros" class="small-section-header"><a href="#macros">Macros</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.log.html" title="macro pallet_nomination_pools::log">log</a></div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.BondedPool.html" title="struct pallet_nomination_pools::BondedPool">BondedPool</a></div><div class="desc docblock-short">A wrapper for bonded pools, with utility functions.</div></li><li><div class="item-name"><a class="struct" href="struct.BondedPoolInner.html" title="struct pallet_nomination_pools::BondedPoolInner">BondedPoolInner</a></div><div class="desc docblock-short">Pool permissions and state</div></li><li><div class="item-name"><a class="struct" href="struct.Commission.html" title="struct pallet_nomination_pools::Commission">Commission</a></div><div class="desc docblock-short">Pool commission.</div></li><li><div class="item-name"><a class="struct" href="struct.CommissionChangeRate.html" title="struct pallet_nomination_pools::CommissionChangeRate">CommissionChangeRate</a></div><div class="desc docblock-short">Pool commission change rate preferences.</div></li><li><div class="item-name"><a class="struct" href="struct.PoolMember.html" title="struct pallet_nomination_pools::PoolMember">PoolMember</a></div><div class="desc docblock-short">A member in a pool.</div></li><li><div class="item-name"><a class="struct" href="struct.PoolRoles.html" title="struct pallet_nomination_pools::PoolRoles">PoolRoles</a></div><div class="desc docblock-short">Pool administration roles.</div></li><li><div class="item-name"><a class="struct" href="struct.RewardPool.html" title="struct pallet_nomination_pools::RewardPool">RewardPool</a></div><div class="desc docblock-short">A reward pool.</div></li><li><div class="item-name"><a class="struct" href="struct.SubPools.html" title="struct pallet_nomination_pools::SubPools">SubPools</a></div></li><li><div class="item-name"><a class="struct" href="struct.TotalUnbondingPools.html" title="struct pallet_nomination_pools::TotalUnbondingPools">TotalUnbondingPools</a></div><div class="desc docblock-short">The maximum amount of eras an unbonding pool can exist prior to being merged with the
+<code>no_era</code> pool. This is guaranteed to at least be equal to the staking <code>UnbondingDuration</code>. For
+improved UX <a href="pallet/trait.Config.html#associatedtype.PostUnbondingPoolsWindow" title="associated type pallet_nomination_pools::pallet::Config::PostUnbondingPoolsWindow"><code>Config::PostUnbondingPoolsWindow</code></a> should be configured to a non-zero value.</div></li><li><div class="item-name"><a class="struct" href="struct.UnbondPool.html" title="struct pallet_nomination_pools::UnbondPool">UnbondPool</a></div><div class="desc docblock-short">An unbonding pool. This is always mapped with an era.</div></li></ul><h2 id="enums" class="small-section-header"><a href="#enums">Enums</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.BondExtra.html" title="enum pallet_nomination_pools::BondExtra">BondExtra</a></div><div class="desc docblock-short">How to increase the bond of a member.</div></li><li><div class="item-name"><a class="enum" href="enum.ClaimPermission.html" title="enum pallet_nomination_pools::ClaimPermission">ClaimPermission</a></div><div class="desc docblock-short">The permission a pool member can set for other accounts to claim rewards on their behalf.</div></li><li><div class="item-name"><a class="enum" href="enum.ConfigOp.html" title="enum pallet_nomination_pools::ConfigOp">ConfigOp</a></div><div class="desc docblock-short">Possible operations on the configuration values of this pallet.</div></li><li><div class="item-name"><a class="enum" href="enum.PoolState.html" title="enum pallet_nomination_pools::PoolState">PoolState</a></div><div class="desc docblock-short">A pool’s possible states.</div></li></ul><h2 id="constants" class="small-section-header"><a href="#constants">Constants</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.LOG_TARGET.html" title="constant pallet_nomination_pools::LOG_TARGET">LOG_TARGET</a></div><div class="desc docblock-short">The log target of this pallet.</div></li><li><div class="item-name"><a class="constant" href="constant.POINTS_TO_BALANCE_INIT_RATIO.html" title="constant pallet_nomination_pools::POINTS_TO_BALANCE_INIT_RATIO">POINTS_TO_BALANCE_INIT_RATIO</a></div></li></ul><h2 id="types" class="small-section-header"><a href="#types">Type Definitions</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.BalanceOf.html" title="type pallet_nomination_pools::BalanceOf">BalanceOf</a></div><div class="desc docblock-short">The balance type used by the currency system.</div></li><li><div class="item-name"><a class="type" href="type.PoolId.html" title="type pallet_nomination_pools::PoolId">PoolId</a></div><div class="desc docblock-short">Type used for unique identifier of each pool.</div></li></ul></section></div></main></body></html>

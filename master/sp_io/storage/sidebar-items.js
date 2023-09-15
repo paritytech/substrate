@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["append","changes_root","clear","clear_prefix","commit_transaction","exists","get","next_key","read","rollback_transaction","root","set","start_transaction"],"struct":["HostFunctions"]};

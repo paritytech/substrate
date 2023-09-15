@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["pallet"],"struct":["ChargeTransactionPayment","ConstFeeMultiplier","CurrencyAdapter","FeeDetails","InclusionFee","RuntimeDispatchInfo","TargetedFeeAdjustment"],"trait":["MultiplierUpdate","OnChargeTransaction"],"type":["Multiplier"]};

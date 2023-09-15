@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["IdToIndex","IndexToId","MemberCount","Members","Voting","VotingCleanup"]};

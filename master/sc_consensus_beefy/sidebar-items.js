@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["beefy_block_import_and_links","gossip_protocol_name","justifs_protocol_name","start_beefy_gadget"],"macro":["metric_get","metric_inc","metric_set"],"mod":["communication","import","justification"],"struct":["BeefyNetworkParams","BeefyParams","BeefyRPCLinks","BeefyVoterLinks"],"trait":["Client"]};

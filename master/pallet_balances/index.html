@@ -1,0 +1,126 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/pallet_balances/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/pallet_balances/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Balances Pallet"><title>pallet_balances - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pallet_balances" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../pallet_balances/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../pallet_balances/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate pallet_balances</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 4.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pallet_balances</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/pallet_balances/lib.rs.html#18-1203">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="balances-pallet"><a href="#balances-pallet">Balances Pallet</a></h2>
+<p>The Balances pallet provides functionality for handling accounts and balances.</p>
+<ul>
+<li><a href="pallet/trait.Config.html" title="trait pallet_balances::pallet::Config"><code>Config</code></a></li>
+<li><a href="pallet/enum.Call.html" title="enum pallet_balances::pallet::Call"><code>Call</code></a></li>
+<li><a href="pallet/struct.Pallet.html" title="struct pallet_balances::pallet::Pallet"><code>Pallet</code></a></li>
+</ul>
+<h3 id="overview"><a href="#overview">Overview</a></h3>
+<p>The Balances pallet provides functions for:</p>
+<ul>
+<li>Getting and setting free balances.</li>
+<li>Retrieving total, reserved and unreserved balances.</li>
+<li>Repatriating a reserved balance to a beneficiary account that exists.</li>
+<li>Transferring a balance between accounts (when not reserved).</li>
+<li>Slashing an account balance.</li>
+<li>Account creation and removal.</li>
+<li>Managing total issuance.</li>
+<li>Setting and managing locks.</li>
+</ul>
+<h4 id="terminology"><a href="#terminology">Terminology</a></h4>
+<ul>
+<li>
+<p><strong>Existential Deposit:</strong> The minimum balance required to create or keep an account open. This
+prevents “dust accounts” from filling storage. When the free plus the reserved balance (i.e.
+the total balance) fall below this, then the account is said to be dead; and it loses its
+functionality as well as any prior history and all information on it is removed from the
+chain’s state. No account should ever have a total balance that is strictly between 0 and the
+existential deposit (exclusive). If this ever happens, it indicates either a bug in this
+pallet or an erroneous raw mutation of storage.</p>
+</li>
+<li>
+<p><strong>Total Issuance:</strong> The total number of units in existence in a system.</p>
+</li>
+<li>
+<p><strong>Reaping an account:</strong> The act of removing an account by resetting its nonce. Happens after
+its
+total balance has become zero (or, strictly speaking, less than the Existential Deposit).</p>
+</li>
+<li>
+<p><strong>Free Balance:</strong> The portion of a balance that is not reserved. The free balance is the only
+balance that matters for most operations.</p>
+</li>
+<li>
+<p><strong>Reserved Balance:</strong> Reserved balance still belongs to the account holder, but is suspended.
+Reserved balance can still be slashed, but only after all the free balance has been slashed.</p>
+</li>
+<li>
+<p><strong>Imbalance:</strong> A condition when some funds were credited or debited without equal and opposite
+accounting
+(i.e. a difference between total issuance and account balances). Functions that result in an
+imbalance will return an object of the <code>Imbalance</code> trait that can be managed within your runtime
+logic. (If an imbalance is simply dropped, it should automatically maintain any book-keeping
+such as total issuance.)</p>
+</li>
+<li>
+<p><strong>Lock:</strong> A freeze on a specified amount of an account’s free balance until a specified block
+number. Multiple
+locks always operate over the same funds, so they “overlay” rather than “stack”.</p>
+</li>
+</ul>
+<h4 id="implementations-1"><a href="#implementations-1">Implementations</a></h4>
+<p>The Balances pallet provides implementations for the following traits. If these traits provide
+the functionality that you need, then you can avoid coupling with the Balances pallet.</p>
+<ul>
+<li><a href="../frame_support/traits/tokens/currency/trait.Currency.html" title="trait frame_support::traits::tokens::currency::Currency"><code>Currency</code></a>: Functions for dealing with a
+fungible assets system.</li>
+<li><a href="../frame_support/traits/tokens/currency/reservable/trait.ReservableCurrency.html" title="trait frame_support::traits::tokens::currency::reservable::ReservableCurrency"><code>ReservableCurrency</code></a>:</li>
+<li><a href="../frame_support/traits/tokens/currency/reservable/trait.NamedReservableCurrency.html" title="trait frame_support::traits::tokens::currency::reservable::NamedReservableCurrency"><code>NamedReservableCurrency</code></a>:
+Functions for dealing with assets that can be reserved from an account.</li>
+<li><a href="../frame_support/traits/tokens/currency/lockable/trait.LockableCurrency.html" title="trait frame_support::traits::tokens::currency::lockable::LockableCurrency"><code>LockableCurrency</code></a>: Functions for
+dealing with accounts that allow liquidity restrictions.</li>
+<li><a href="../frame_support/traits/tokens/imbalance/trait.Imbalance.html" title="trait frame_support::traits::tokens::imbalance::Imbalance"><code>Imbalance</code></a>: Functions for handling
+imbalances between total issuance in the system and account balances. Must be used when a
+function creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).</li>
+</ul>
+<h3 id="interface"><a href="#interface">Interface</a></h3><h4 id="dispatchable-functions"><a href="#dispatchable-functions">Dispatchable Functions</a></h4>
+<ul>
+<li><code>transfer_allow_death</code> - Transfer some liquid free balance to another account.</li>
+<li><code>force_set_balance</code> - Set the balances of a given account. The origin of this call must be
+root.</li>
+</ul>
+<h3 id="usage"><a href="#usage">Usage</a></h3>
+<p>The following examples show how to use the Balances pallet in your custom pallet.</p>
+<h4 id="examples-from-the-frame"><a href="#examples-from-the-frame">Examples from the FRAME</a></h4>
+<p>The Contract pallet uses the <code>Currency</code> trait to handle gas payment, and its types inherit from
+<code>Currency</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>frame_support::traits::Currency;
+
+<span class="kw">pub type </span>BalanceOf&lt;T&gt; = &lt;&lt;T <span class="kw">as </span>Config&gt;::Currency <span class="kw">as </span>Currency&lt;&lt;T <span class="kw">as </span>frame_system::Config&gt;::AccountId&gt;&gt;::Balance;
+<span class="kw">pub type </span>NegativeImbalanceOf&lt;T&gt; = &lt;&lt;T <span class="kw">as </span>Config&gt;::Currency <span class="kw">as </span>Currency&lt;&lt;T <span class="kw">as </span>frame_system::Config&gt;::AccountId&gt;&gt;::NegativeImbalance;
+</code></pre></div>
+<p>The Staking pallet uses the <code>LockableCurrency</code> trait to lock a stash account’s funds:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>frame_support::traits::{WithdrawReasons, LockableCurrency};
+<span class="kw">use </span>sp_runtime::traits::Bounded;
+<span class="kw">pub trait </span>Config: frame_system::Config {
+	<span class="kw">type </span>Currency: LockableCurrency&lt;<span class="self">Self</span>::AccountId, Moment=frame_system::pallet_prelude::BlockNumberFor&lt;<span class="self">Self</span>&gt;&gt;;
+}
+
+<span class="kw">fn </span>update_ledger&lt;T: Config&gt;(
+	controller: <span class="kw-2">&amp;</span>T::AccountId,
+	ledger: <span class="kw-2">&amp;</span>StakingLedger&lt;T&gt;
+) {
+	T::Currency::set_lock(
+		STAKING_ID,
+		<span class="kw-2">&amp;</span>ledger.stash,
+		ledger.total,
+		WithdrawReasons::all()
+	);
+	<span class="comment">// &lt;Ledger&lt;T&gt;&gt;::insert(controller, ledger); // Commented out as we don&#39;t have access to Staking&#39;s storage here.
+</span>}</code></pre></div>
+<h3 id="genesis-config"><a href="#genesis-config">Genesis config</a></h3>
+<p>The Balances pallet depends on the <a href="pallet/struct.GenesisConfig.html" title="struct pallet_balances::pallet::GenesisConfig"><code>GenesisConfig</code></a>.</p>
+<h3 id="assumptions"><a href="#assumptions">Assumptions</a></h3>
+<ul>
+<li>Total issued balanced of all accounts should be less than <code>Config::Balance::max_value()</code>.</li>
+<li>Existential Deposit is set to a value greater than zero.</li>
+</ul>
+<p>Note, you may find the Balances pallet still functions with an ED of zero in some circumstances,
+however this is not a configuration which is generally supported, nor will it be.</p>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.WeightInfo"><code>pub use weights::<a class="trait" href="weights/trait.WeightInfo.html" title="trait pallet_balances::weights::WeightInfo">WeightInfo</a>;</code></div></li><li><div class="item-name"><code>pub use <a class="mod" href="pallet/index.html" title="mod pallet_balances::pallet">pallet</a>::*;</code></div></li></ul><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="migration/index.html" title="mod pallet_balances::migration">migration</a></div></li><li><div class="item-name"><a class="mod" href="pallet/index.html" title="mod pallet_balances::pallet">pallet</a></div><div class="desc docblock-short">The <code>pallet</code> module in each FRAME pallet hosts the most important items needed
+to construct this pallet.</div></li><li><div class="item-name"><a class="mod" href="weights/index.html" title="mod pallet_balances::weights">weights</a></div><div class="desc docblock-short">Autogenerated weights for pallet_balances</div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.AccountData.html" title="struct pallet_balances::AccountData">AccountData</a></div><div class="desc docblock-short">All balance information for an account.</div></li><li><div class="item-name"><a class="struct" href="struct.BalanceLock.html" title="struct pallet_balances::BalanceLock">BalanceLock</a></div><div class="desc docblock-short">A single lock on a balance. There can be many of these on an account and they “overlap”, so the
+same balance is frozen by multiple locks.</div></li><li><div class="item-name"><a class="struct" href="struct.DustCleaner.html" title="struct pallet_balances::DustCleaner">DustCleaner</a></div></li><li><div class="item-name"><a class="struct" href="struct.ExtraFlags.html" title="struct pallet_balances::ExtraFlags">ExtraFlags</a></div></li><li><div class="item-name"><a class="struct" href="struct.IdAmount.html" title="struct pallet_balances::IdAmount">IdAmount</a></div><div class="desc docblock-short">An identifier and balance.</div></li><li><div class="item-name"><a class="struct" href="struct.NegativeImbalance.html" title="struct pallet_balances::NegativeImbalance">NegativeImbalance</a></div><div class="desc docblock-short">Opaque, move-only struct with private fields that serves as a token denoting that
+funds have been destroyed without any equal and opposite accounting.</div></li><li><div class="item-name"><a class="struct" href="struct.PositiveImbalance.html" title="struct pallet_balances::PositiveImbalance">PositiveImbalance</a></div><div class="desc docblock-short">Opaque, move-only struct with private fields that serves as a token denoting that
+funds have been created without any equal and opposite accounting.</div></li><li><div class="item-name"><a class="struct" href="struct.ReserveData.html" title="struct pallet_balances::ReserveData">ReserveData</a></div><div class="desc docblock-short">Store named reserved balance.</div></li></ul><h2 id="enums" class="small-section-header"><a href="#enums">Enums</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Reasons.html" title="enum pallet_balances::Reasons">Reasons</a></div><div class="desc docblock-short">Simplified reasons for withdrawing balance.</div></li></ul></section></div></main></body></html>

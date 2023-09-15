@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"fn":["set_and_run_with_externalities","with_externalities"],"macro":["decl_extension"],"struct":["Extensions","MultiRemovalResults"],"trait":["Extension","ExtensionStore","Externalities","ExternalitiesExt"]};

@@ -1,0 +1,213 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/frame_support/traits/trait.Hooks.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/frame_support/traits/trait.Hooks.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The pallet hooks trait. This is merely an umbrella trait for:"><title>Hooks in frame_support::traits - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="frame_support" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../../static.files/storage-62ce34ea385b278a.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../../frame_support/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../../frame_support/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Hooks</a></h2><div class="sidebar-elems"><section><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.integrity_test">integrity_test</a></li><li><a href="#method.offchain_worker">offchain_worker</a></li><li><a href="#method.on_finalize">on_finalize</a></li><li><a href="#method.on_idle">on_idle</a></li><li><a href="#method.on_initialize">on_initialize</a></li><li><a href="#method.on_runtime_upgrade">on_runtime_upgrade</a></li><li><a href="#method.post_upgrade">post_upgrade</a></li><li><a href="#method.pre_upgrade">pre_upgrade</a></li><li><a href="#method.try_state">try_state</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In frame_support::traits</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">frame_support</a>::<wbr><a href="index.html">traits</a>::<wbr><a class="trait" href="#">Hooks</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../../src/frame_support/traits/hooks.rs.html#295-440">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Hooks&lt;BlockNumber&gt; {
+    // Provided methods
+    fn <a href="#method.on_initialize" class="fn">on_initialize</a>(_n: BlockNumber) -&gt; <a class="struct" href="../pallet_prelude/struct.Weight.html" title="struct frame_support::pallet_prelude::Weight">Weight</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.on_finalize" class="fn">on_finalize</a>(_n: BlockNumber) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.on_idle" class="fn">on_idle</a>(_n: BlockNumber, _remaining_weight: <a class="struct" href="../pallet_prelude/struct.Weight.html" title="struct frame_support::pallet_prelude::Weight">Weight</a>) -&gt; <a class="struct" href="../pallet_prelude/struct.Weight.html" title="struct frame_support::pallet_prelude::Weight">Weight</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.on_runtime_upgrade" class="fn">on_runtime_upgrade</a>() -&gt; <a class="struct" href="../pallet_prelude/struct.Weight.html" title="struct frame_support::pallet_prelude::Weight">Weight</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.try_state" class="fn">try_state</a>(_n: BlockNumber) -&gt; <a class="enum" href="../dispatch/result/enum.Result.html" title="enum frame_support::dispatch::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, <a class="type" href="../../sp_runtime/type.TryRuntimeError.html" title="type sp_runtime::TryRuntimeError">TryRuntimeError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.pre_upgrade" class="fn">pre_upgrade</a>() -&gt; <a class="enum" href="../dispatch/result/enum.Result.html" title="enum frame_support::dispatch::result::Result">Result</a>&lt;<a class="struct" href="../dispatch/struct.Vec.html" title="struct frame_support::dispatch::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u8.html">u8</a>&gt;, <a class="type" href="../../sp_runtime/type.TryRuntimeError.html" title="type sp_runtime::TryRuntimeError">TryRuntimeError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.post_upgrade" class="fn">post_upgrade</a>(_state: <a class="struct" href="../dispatch/struct.Vec.html" title="struct frame_support::dispatch::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u8.html">u8</a>&gt;) -&gt; <a class="enum" href="../dispatch/result/enum.Result.html" title="enum frame_support::dispatch::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, <a class="type" href="../../sp_runtime/type.TryRuntimeError.html" title="type sp_runtime::TryRuntimeError">TryRuntimeError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.offchain_worker" class="fn">offchain_worker</a>(_n: BlockNumber) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.integrity_test" class="fn">integrity_test</a>() { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The pallet hooks trait. This is merely an umbrella trait for:</p>
+<ul>
+<li><a href="trait.OnInitialize.html" title="trait frame_support::traits::OnInitialize"><code>OnInitialize</code></a></li>
+<li><a href="trait.OnFinalize.html" title="trait frame_support::traits::OnFinalize"><code>OnFinalize</code></a></li>
+<li><a href="trait.OnRuntimeUpgrade.html" title="trait frame_support::traits::OnRuntimeUpgrade"><code>OnRuntimeUpgrade</code></a></li>
+<li><a href="trait.OffchainWorker.html" title="trait frame_support::traits::OffchainWorker"><code>crate::traits::misc::OffchainWorker</code></a></li>
+<li><a href="trait.OnIdle.html" title="trait frame_support::traits::OnIdle"><code>OnIdle</code></a></li>
+<li><a href="trait.IntegrityTest.html" title="trait frame_support::traits::IntegrityTest"><code>IntegrityTest</code></a></li>
+</ul>
+<h3 id="ordering"><a href="#ordering">Ordering</a></h3>
+<p>For all hooks, except <a href="trait.OnIdle.html" title="trait frame_support::traits::OnIdle"><code>OnIdle</code></a> the order of execution is derived from how the pallets are
+ordered in <a href="../macro.construct_runtime.html" title="macro frame_support::construct_runtime"><code>crate::construct_runtime</code></a>.</p>
+<h3 id="summary"><a href="#summary">Summary</a></h3>
+<p>In short, the following diagram shows the flow of hooks in a pallet</p>
+<script type="module">
+    const mermaidModuleFile = "static.files.mermaid/mermaid.esm.min.mjs";
+    const fallbackRemoteUrl = "https://unpkg.com/mermaid@10/dist/mermaid.esm.min.mjs";
+    const rustdocVarsId= "rustdoc-vars";
+    const dataRootPathAttr = "data-root-path";
+
+
+    function initializeMermaid(mermaid) {
+     var amrn_mermaid_theme =
+         window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+         ? 'dark'
+         : 'default';
+
+      mermaid.initialize({
+        'startOnLoad':'true',
+        'theme': amrn_mermaid_theme,
+        'logLevel': 3 });
+      mermaid.run();
+    }
+
+	function failedToLoadWarnings() {
+		for(var elem of document.getElementsByClassName("mermaid")) {
+			 elem.innerHTML =
+			 `<div> <mark>
+			  &#9888; Cannot render diagram! Failed to import module from local
+			  file and remote location also!
+			  Either access the rustdocs via HTTP/S using a
+			  <a href="https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Tools_and_setup/set_up_a_local_testing_server">
+			   local web server
+			  </a>, for example:
+			   python3 -m http.server --directory target/doc/, <br> or enable local file access in your
+			   Safari/Firefox/Chrome browser, for example
+			  starting Chrome with flag '--allow-file-access-from-files'.
+			  </mark></div> `;
+		}
+	}
+
+
+    // If rustdoc is read from file directly, the import of mermaid module
+    // from file will fail. In this case falling back to remote location.
+    // If neither succeeds, the mermaid markdown is replaced by notice to
+    // enable file acecss in browser.
+    try {
+       var rootPath = document
+         .getElementById(rustdocVarsId)
+         .attributes[dataRootPathAttr]
+         .value;
+       const {
+         default: mermaid,
+       } = await import(rootPath + mermaidModuleFile);
+	   initializeMermaid(mermaid);
+    } catch (e) {
+       try {
+         const {
+            default: mermaid,
+         } = await import(fallbackRemoteUrl);
+	     initializeMermaid(mermaid);
+       } catch (e) {
+		 failedToLoadWarnings();
+	   }
+    }
+</script>
+<div class="mermaid">
+ graph LR
+ 	Optional --> BeforeExtrinsics
+ 	BeforeExtrinsics --> Extrinsics
+ 	Extrinsics --> AfterExtrinsics
+ 	subgraph Optional
+ 	OnRuntimeUpgrade
+ end
+ subgraph BeforeExtrinsics
+ 	OnInitialize
+ end
+ subgraph Extrinsics
+ 	direction TB
+ 	Inherent1
+ 	Inherent2
+ 	Extrinsic1
+ 	Extrinsic2
+ 	Inherent1 --> Inherent2
+ 	Inherent2 --> Extrinsic1
+ 	Extrinsic1 --> Extrinsic2
+ end
+ subgraph AfterExtrinsics
+ 	OnIdle
+ 	OnFinalize
+ 	OnIdle --> OnFinalize
+ end
+</div>
+<ul>
+<li><code>OnRuntimeUpgrade</code> is only executed before everything else if a code</li>
+<li><code>OnRuntimeUpgrade</code> is mandatorily at the beginning of the block body (extrinsics) being
+processed. change is detected.</li>
+<li>Extrinsics start with inherents, and continue with other signed or unsigned extrinsics.</li>
+<li><code>OnIdle</code> optionally comes after extrinsics.
+<code>OnFinalize</code> mandatorily comes after <code>OnIdle</code>.</li>
+</ul>
+<blockquote>
+<p><code>OffchainWorker</code> is not part of this flow, as it is not really part of the consensus/main
+block import path, and is called optionally, and in other circumstances. See
+<a href="trait.OffchainWorker.html" title="trait frame_support::traits::OffchainWorker"><code>crate::traits::misc::OffchainWorker</code></a> for more information.</p>
+</blockquote>
+<p>To learn more about the execution of hooks see <code>frame-executive</code> as this component is is charge
+of dispatching extrinsics and placing the hooks in the correct order.</p>
+</div></details><h2 id="provided-methods" class="small-section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.on_initialize" class="method"><a class="srclink rightside" href="../../src/frame_support/traits/hooks.rs.html#312-314">source</a><h4 class="code-header">fn <a href="#method.on_initialize" class="fn">on_initialize</a>(_n: BlockNumber) -&gt; <a class="struct" href="../pallet_prelude/struct.Weight.html" title="struct frame_support::pallet_prelude::Weight">Weight</a></h4></section></summary><div class="docblock"><p>Block initialization hook. This is called at the very beginning of block execution.</p>
+<p>Must return the non-negotiable weight of both itself and whatever <a href="trait.Hooks.html#method.on_finalize" title="associated function frame_support::traits::Hooks::on_finalize"><code>Hooks::on_finalize</code></a>
+wishes to consume.</p>
+<h6 id="warning"><a href="#warning">Warning</a></h6>
+<p>The weight returned by this is treated as <code>DispatchClass::Mandatory</code>, meaning that
+it MUST BE EXECUTED. If this is not the case, consider using <a href="trait.Hooks.html#method.on_idle" title="associated function frame_support::traits::Hooks::on_idle"><code>Hooks::on_idle</code></a> instead.</p>
+<p>Try to keep any arbitrary execution <strong>deterministic</strong> and within <strong>minimal</strong> time
+complexity. For example, do not execute any unbounded iterations.</p>
+<p>NOTE: This function is called BEFORE ANY extrinsic in a block is applied, including inherent
+extrinsics. Hence for instance, if you runtime includes <code>pallet-timestamp</code>, the <code>timestamp</code>
+is not yet up to date at this point.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.on_finalize" class="method"><a class="srclink rightside" href="../../src/frame_support/traits/hooks.rs.html#325">source</a><h4 class="code-header">fn <a href="#method.on_finalize" class="fn">on_finalize</a>(_n: BlockNumber)</h4></section></summary><div class="docblock"><p>Block finalization hook. This is called at the very end of block execution.</p>
+<p>Note that this has nothing to do with finality in the “consensus” sense.</p>
+<p>Note that the non-negotiable weight for this has must have already been returned by
+<a href="trait.Hooks.html#method.on_initialize" title="associated function frame_support::traits::Hooks::on_initialize"><code>Hooks::on_initialize</code></a>. It usage alone is not permitted.</p>
+<p>Similar to <a href="trait.Hooks.html#method.on_initialize" title="associated function frame_support::traits::Hooks::on_initialize"><code>Hooks::on_initialize</code></a> it should only be used when execution is absolutely
+necessary. In other cases, consider using <a href="trait.Hooks.html#method.on_idle" title="associated function frame_support::traits::Hooks::on_idle"><code>Hooks::on_idle</code></a> instead.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.on_idle" class="method"><a class="srclink rightside" href="../../src/frame_support/traits/hooks.rs.html#342-344">source</a><h4 class="code-header">fn <a href="#method.on_idle" class="fn">on_idle</a>(_n: BlockNumber, _remaining_weight: <a class="struct" href="../pallet_prelude/struct.Weight.html" title="struct frame_support::pallet_prelude::Weight">Weight</a>) -&gt; <a class="struct" href="../pallet_prelude/struct.Weight.html" title="struct frame_support::pallet_prelude::Weight">Weight</a></h4></section></summary><div class="docblock"><p>Hook to consume a block’s idle time. This will run when the block is being finalized (before
+<a href="trait.Hooks.html#method.on_finalize" title="associated function frame_support::traits::Hooks::on_finalize"><code>Hooks::on_finalize</code></a>).</p>
+<p>Given that all dispatchables are already executed and noted (and the weight for
+<a href="trait.Hooks.html#method.on_finalize" title="associated function frame_support::traits::Hooks::on_finalize"><code>Hooks::on_finalize</code></a>, which comes next, is also already accounted for via
+<code>on_initialize</code>), this hook consumes anything that is leftover.</p>
+<p>Each pallet’s <code>on_idle</code> is chosen to be the first to execute in a round-robin fashion
+indexed by the block number.</p>
+<p>Return the weight used, the caller will use this to calculate the remaining weight and then
+call the next pallet <code>on_idle</code> hook if there is still weight left.</p>
+<p>Any implementation should always respect <code>_remaining_weight</code> and never consume (and
+therefore return) more than this amount.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.on_runtime_upgrade" class="method"><a class="srclink rightside" href="../../src/frame_support/traits/hooks.rs.html#370-372">source</a><h4 class="code-header">fn <a href="#method.on_runtime_upgrade" class="fn">on_runtime_upgrade</a>() -&gt; <a class="struct" href="../pallet_prelude/struct.Weight.html" title="struct frame_support::pallet_prelude::Weight">Weight</a></h4></section></summary><div class="docblock"><p>Hook executed when a code change (aka. a “runtime upgrade”) is detected by FRAME.</p>
+<p>Be aware that this is called before <a href="trait.Hooks.html#method.on_initialize" title="associated function frame_support::traits::Hooks::on_initialize"><code>Hooks::on_initialize</code></a> of any pallet; therefore, a lot
+of the critical storage items such as <code>block_number</code> in system pallet might have not been
+set.</p>
+<p>Vert similar to <a href="trait.Hooks.html#method.on_initialize" title="associated function frame_support::traits::Hooks::on_initialize"><code>Hooks::on_initialize</code></a>, any code in this block is mandatory and MUST
+execute. Use with care.</p>
+<h6 id="implementation-note-versioning"><a href="#implementation-note-versioning">Implementation Note: Versioning</a></h6>
+<ol>
+<li>An implementation of this should typically follow a pattern where the version of the
+pallet is checked against the onchain version, and a decision is made about what needs to be
+done. This is helpful to prevent accidental repetitive execution of this hook, which can be
+catastrophic.</li>
+</ol>
+<p>Alternatively, <code>migrations::VersionedRuntimeUpgrade</code> can be used to assist with
+this.</p>
+<h6 id="implementation-note-runtime-level-migration"><a href="#implementation-note-runtime-level-migration">Implementation Note: Runtime Level Migration</a></h6>
+<p>Additional “upgrade hooks” can be created by pallets by a manual implementation of
+<a href="trait.Hooks.html#method.on_runtime_upgrade" title="associated function frame_support::traits::Hooks::on_runtime_upgrade"><code>Hooks::on_runtime_upgrade</code></a> which can be passed on to <code>Executive</code> at the top level
+runtime.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_state" class="method"><a class="srclink rightside" href="../../src/frame_support/traits/hooks.rs.html#381-383">source</a><h4 class="code-header">fn <a href="#method.try_state" class="fn">try_state</a>(_n: BlockNumber) -&gt; <a class="enum" href="../dispatch/result/enum.Result.html" title="enum frame_support::dispatch::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, <a class="type" href="../../sp_runtime/type.TryRuntimeError.html" title="type sp_runtime::TryRuntimeError">TryRuntimeError</a>&gt;</h4></section></summary><div class="docblock"><p>Execute the sanity checks of this pallet, per block.</p>
+<p>It should focus on certain checks to ensure that the state is sensible. This is never
+executed in a consensus code-path, therefore it can consume as much weight as it needs.</p>
+<p>This hook should not alter any storage.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pre_upgrade" class="method"><a class="srclink rightside" href="../../src/frame_support/traits/hooks.rs.html#393-395">source</a><h4 class="code-header">fn <a href="#method.pre_upgrade" class="fn">pre_upgrade</a>() -&gt; <a class="enum" href="../dispatch/result/enum.Result.html" title="enum frame_support::dispatch::result::Result">Result</a>&lt;<a class="struct" href="../dispatch/struct.Vec.html" title="struct frame_support::dispatch::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u8.html">u8</a>&gt;, <a class="type" href="../../sp_runtime/type.TryRuntimeError.html" title="type sp_runtime::TryRuntimeError">TryRuntimeError</a>&gt;</h4></section></summary><div class="docblock"><p>Execute some pre-checks prior to a runtime upgrade.</p>
+<p>Return a <code>Vec&lt;u8&gt;</code> that can contain arbitrary encoded data (usually some pre-upgrade state),
+which will be passed to <code>post_upgrade</code> after upgrading for post-check. An empty vector
+should be returned if there is no such need.</p>
+<p>This hook is never meant to be executed on-chain but is meant to be used by testing tools.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.post_upgrade" class="method"><a class="srclink rightside" href="../../src/frame_support/traits/hooks.rs.html#405-407">source</a><h4 class="code-header">fn <a href="#method.post_upgrade" class="fn">post_upgrade</a>(_state: <a class="struct" href="../dispatch/struct.Vec.html" title="struct frame_support::dispatch::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.u8.html">u8</a>&gt;) -&gt; <a class="enum" href="../dispatch/result/enum.Result.html" title="enum frame_support::dispatch::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.70.0/std/primitive.unit.html">()</a>, <a class="type" href="../../sp_runtime/type.TryRuntimeError.html" title="type sp_runtime::TryRuntimeError">TryRuntimeError</a>&gt;</h4></section></summary><div class="docblock"><p>Execute some post-checks after a runtime upgrade.</p>
+<p>The <code>state</code> parameter is the <code>Vec&lt;u8&gt;</code> returned by <code>pre_upgrade</code> before upgrading, which
+can be used for post-check. NOTE: if <code>pre_upgrade</code> is not implemented an empty vector will
+be passed in, in such case <code>post_upgrade</code> should ignore it.</p>
+<p>This hook is never meant to be executed on-chain but is meant to be used by testing tools.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.offchain_worker" class="method"><a class="srclink rightside" href="../../src/frame_support/traits/hooks.rs.html#424">source</a><h4 class="code-header">fn <a href="#method.offchain_worker" class="fn">offchain_worker</a>(_n: BlockNumber)</h4></section></summary><div class="docblock"><p>Implementing this function on a pallet allows you to perform long-running tasks that are
+dispatched as separate threads, and entirely independent of the main wasm runtime.</p>
+<p>This function can freely read from the state, but any change it makes to the state is
+meaningless. Writes can be pushed back to the chain by submitting extrinsics from the
+offchain worker to the transaction pool. See <code>pallet-example-offchain-worker</code> for more
+details on this.</p>
+<p>Moreover, the code in this function has access to a wider range of host functions in
+[<code>sp-io</code>], namely <a href="../../sp_io/offchain/index.html" title="mod sp_io::offchain"><code>sp_io::offchain</code></a>. This includes exotic operations such as HTTP calls
+that are not really possible in the rest of the runtime code.</p>
+<p>The execution of this hook is entirely optional and is left at the discretion of the
+node-side software and its configuration. In a normal substrate-cli, look for the CLI
+flags related to offchain-workers to learn more.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.integrity_test" class="method"><a class="srclink rightside" href="../../src/frame_support/traits/hooks.rs.html#439">source</a><h4 class="code-header">fn <a href="#method.integrity_test" class="fn">integrity_test</a>()</h4></section></summary><div class="docblock"><p>Check the integrity of this pallet’s configuration.</p>
+<p>Any code located in this hook is placed in an auto-generated test, and generated as a part
+of <a href="../macro.construct_runtime.html" title="macro frame_support::construct_runtime"><code>crate::construct_runtime</code></a>’s expansion. Look for a test case with a name along the
+lines of: <code>__construct_runtime_integrity_test</code>.</p>
+<p>This hook is the location where the values/types provided to the <code>Config</code> trait
+of the pallet can be tested for correctness. For example, if two <code>type Foo: Get&lt;u32&gt;</code> and
+<code>type Bar: Get&lt;u32&gt;</code> where <code>Foo::get()</code> must always be greater than <code>Bar::get()</code>, such
+checks can be asserted upon here.</p>
+<p>Note that this hook is executed in an externality environment, provided by
+<code>sp_io::TestExternalities</code>. This makes it possible to access the storage.</p>
+</div></details></div><h2 id="implementors" class="small-section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../implementors/frame_support/traits/hooks/trait.Hooks.js" async></script></section></div></main></body></html>

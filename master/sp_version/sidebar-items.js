@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["runtime_version"],"enum":["StateVersion"],"fn":["core_version_from_apis"],"macro":["create_apis_vec","create_runtime_str"],"mod":["embed"],"struct":["NativeVersion","RuntimeVersion"],"trait":["GetNativeVersion","GetRuntimeVersionAt"],"type":["ApiId","ApisVec"]};

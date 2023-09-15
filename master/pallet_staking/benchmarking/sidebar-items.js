@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["account","add_slashing_spans","create_validator_with_nominators","whitelisted_caller"],"macro":["benchmarks","impl_benchmark_test_suite","whitelist_account"]};

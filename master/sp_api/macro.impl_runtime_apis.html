@@ -1,0 +1,103 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/sp_api/macro.impl_runtime_apis.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/sp_api/macro.impl_runtime_apis.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Tags given trait implementations as runtime apis."><title>impl_runtime_apis in sp_api - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="sp_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../sp_api/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../sp_api/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><div class="sidebar-elems"><h2><a href="index.html">In sp_api</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">sp_api</a>::<wbr><a class="macro" href="#">impl_runtime_apis</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/sp_api_proc_macro/lib.rs.html#33">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>impl_runtime_apis!() { /* proc-macro */ }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Tags given trait implementations as runtime apis.</p>
+<p>All traits given to this macro, need to be declared with the
+<a href="macro.decl_runtime_apis.html"><code>decl_runtime_apis!</code></a> macro. The implementation of the trait
+should follow the declaration given to the
+<a href="macro.decl_runtime_apis.html"><code>decl_runtime_apis!</code></a> macro, besides the <code>Block</code> type that
+is required as first generic parameter for each runtime api trait. When implementing a
+runtime api trait, it is required that the trait is referenced by a path, e.g. <code>impl my_trait::MyTrait for Runtime</code>. The macro will use this path to access the declaration of
+the trait for the runtime side.</p>
+<p>The macro also generates the api implementations for the client side and provides it
+through the <code>RuntimeApi</code> type. The <code>RuntimeApi</code> is hidden behind a <code>feature</code> called <code>std</code>.</p>
+<p>To expose version information about all implemented api traits, the constant
+<code>RUNTIME_API_VERSIONS</code> is generated. This constant should be used to instantiate the <code>apis</code>
+field of <code>RuntimeVersion</code>.</p>
+<h2 id="example"><a href="#example">Example</a></h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sp_version::create_runtime_str;
+
+<span class="doccomment">/// All runtime api implementations need to be done in one call of the macro!
+</span><span class="macro">sp_api::impl_runtime_apis! </span>{
+
+    <span class="kw">impl </span><span class="self">self</span>::Balance&lt;Block&gt; <span class="kw">for </span>Runtime {
+        <span class="kw">fn </span>get_balance() -&gt; u64 {
+            <span class="number">1
+        </span>}
+        <span class="kw">fn </span>set_balance(_bal: u64) {
+            <span class="comment">// Store the balance
+        </span>}
+    }
+
+    <span class="kw">impl </span><span class="self">self</span>::BlockBuilder&lt;Block&gt; <span class="kw">for </span>Runtime {
+        <span class="kw">fn </span>build_block() -&gt; Block {
+             <span class="macro">unimplemented!</span>(<span class="string">&quot;Please implement me!&quot;</span>)
+        }
+    }
+}
+
+<span class="doccomment">/// Runtime version. This needs to be declared for each runtime.
+</span><span class="kw">pub const </span>VERSION: sp_version::RuntimeVersion = sp_version::RuntimeVersion {
+    spec_name: <span class="macro">create_runtime_str!</span>(<span class="string">&quot;node&quot;</span>),
+    impl_name: <span class="macro">create_runtime_str!</span>(<span class="string">&quot;test-node&quot;</span>),
+    authoring_version: <span class="number">1</span>,
+    spec_version: <span class="number">1</span>,
+    impl_version: <span class="number">0</span>,
+    <span class="comment">// Here we are exposing the runtime api versions.
+    </span>apis: RUNTIME_API_VERSIONS,
+    transaction_version: <span class="number">1</span>,
+    state_version: <span class="number">1</span>,
+};
+</code></pre></div>
+<h2 id="implementing-specific-api-version"><a href="#implementing-specific-api-version">Implementing specific api version</a></h2>
+<p>If <code>decl_runtime_apis!</code> declares multiple versions for an api <code>impl_runtime_apis!</code>
+should specify which version it implements by adding <code>api_version</code> attribute to the
+<code>impl</code> block. If omitted - the base/default version is implemented. Here is an example:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">sp_api::impl_runtime_apis! </span>{
+    <span class="attr">#[api_version(<span class="number">3</span>)]
+    </span><span class="kw">impl </span><span class="self">self</span>::Balance&lt;Block&gt; <span class="kw">for </span>Runtime {
+         <span class="comment">// implementation
+    </span>}
+}</code></pre></div>
+<p>In this case <code>Balance</code> api version 3 is being implemented for <code>Runtime</code>. The <code>impl</code> block
+must contain all methods declared in version 3 and below.</p>
+<h2 id="conditional-version-implementation"><a href="#conditional-version-implementation">Conditional version implementation</a></h2>
+<p><code>impl_runtime_apis!</code> supports <code>cfg_attr</code> attribute for conditional compilation. For example
+let’s say you want to implement a staging version of the runtime api and put it behind a
+feature flag. You can do it this way:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">pub struct </span>Runtime {}
+<span class="macro">sp_api::decl_runtime_apis! </span>{
+    <span class="kw">pub trait </span>ApiWithStagingMethod {
+        <span class="kw">fn </span>stable_one(data: u64);
+
+        <span class="attr">#[api_version(<span class="number">99</span>)]
+        </span><span class="kw">fn </span>staging_one();
+    }
+}
+
+<span class="macro">sp_api::impl_runtime_apis! </span>{
+    <span class="attr">#[cfg_attr(feature = <span class="string">&quot;enable-staging-api&quot;</span>, api_version(<span class="number">99</span>))]
+    </span><span class="kw">impl </span><span class="self">self</span>::ApiWithStagingMethod&lt;Block&gt; <span class="kw">for </span>Runtime {
+        <span class="kw">fn </span>stable_one(<span class="kw">_</span>: u64) {}
+
+        <span class="attr">#[cfg(feature = <span class="string">&quot;enable-staging-api&quot;</span>)]
+        </span><span class="kw">fn </span>staging_one() {}
+    }
+}</code></pre></div>
+<p><a href="macro.decl_runtime_apis.html" title="macro sp_api::decl_runtime_apis"><code>decl_runtime_apis!</code></a> declares two version of the api - 1 (the default one, which is
+considered stable in our example) and 99 (which is considered staging). In
+<code>impl_runtime_apis!</code> a <code>cfg_attr</code> attribute is attached to the <code>ApiWithStagingMethod</code>
+implementation. If the code is compiled with  <code>enable-staging-api</code> feature a version 99 of
+the runtime api will be built which will include <code>staging_one</code>. Note that <code>staging_one</code>
+implementation is feature gated by <code>#[cfg(feature = ... )]</code> attribute.</p>
+<p>If the code is compiled without <code>enable-staging-api</code> version 1 (the default one) will be
+built which doesn’t include <code>staging_one</code>.</p>
+<p><code>cfg_attr</code> can also be used together with <code>api_version</code>. For the next snippet will build
+version 99 if <code>enable-staging-api</code> is enabled and version 2 otherwise because both
+<code>cfg_attr</code> and <code>api_version</code> are attached to the impl block:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[cfg_attr(feature = <span class="string">&quot;enable-staging-api&quot;</span>, api_version(<span class="number">99</span>))]
+#[api_version(<span class="number">2</span>)]
+</span><span class="kw">impl </span><span class="self">self</span>::ApiWithStagingAndVersionedMethods&lt;Block&gt; <span class="kw">for </span>Runtime {
+ <span class="comment">// impl skipped
+</span>}</code></pre></div>
+</div></details></section></div></main></body></html>

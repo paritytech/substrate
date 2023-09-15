@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["store_old_dummy_code"],"struct":["CodeInfo","CodeInfoOf_Storage_Instance","Migration","PristineCode_Storage_Instance"],"type":["CodeInfoOf","PristineCode"]};

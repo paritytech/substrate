@@ -1,0 +1,62 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/sc_tracing/logging/attr.prefix_logs_with.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/sc_tracing/logging/attr.prefix_logs_with.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Add a log prefix to the function."><title>prefix_logs_with in sc_tracing::logging - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sc_tracing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../../static.files/storage-62ce34ea385b278a.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../../sc_tracing/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../../sc_tracing/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><div class="sidebar-elems"><h2><a href="index.html">In sc_tracing::logging</a></h2></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Attribute Macro <a href="../index.html">sc_tracing</a>::<wbr><a href="index.html">logging</a>::<wbr><a class="attr" href="#">prefix_logs_with</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../../src/sc_tracing_proc_macro/lib.rs.html#107">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[prefix_logs_with]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Add a log prefix to the function.</p>
+<p>This prefixes all the log lines with <code>[&lt;name&gt;]</code> (after the timestamp). It works by making a
+tracing’s span that is propagated to all the child calls and child tasks (futures) if they are
+spawned properly with the <code>SpawnHandle</code> (see <code>TaskManager</code> in sc-cli) or if the futures use
+<code>.in_current_span()</code> (see tracing-futures).</p>
+<p>See Tokio’s <a href="https://docs.rs/tracing-core/">tracing documentation</a> and
+<a href="https://docs.rs/tracing-futures/">tracing-futures documentation</a> for more details.</p>
+<h2 id="implementation-notes"><a href="#implementation-notes">Implementation notes</a></h2>
+<p>If there are multiple spans with a log prefix, only the latest will be shown.</p>
+<h2 id="example-with-a-literal"><a href="#example-with-a-literal">Example with a literal</a></h2>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>Builds a new service <span class="kw">for </span>a light client.
+<span class="attr">#[sc_cli::prefix_logs_with(<span class="string">&quot;light&quot;</span>)]
+</span><span class="kw">pub fn </span>new_light(config: Configuration) -&gt; <span class="prelude-ty">Result</span>&lt;TaskManager, ServiceError&gt; {
+    <span class="kw">let </span>(client, backend, keystore, <span class="kw-2">mut </span>task_manager, on_demand) =
+        sc_service::new_light_parts::&lt;Block, RuntimeApi, Executor&gt;(<span class="kw-2">&amp;</span>config)<span class="question-mark">?</span>;
+
+       ...
+}</code></pre></div>
+<p>Will produce logs that look like this:</p>
+<div class="example-wrap"><pre class="language-text"><code>2020-10-16 08:03:14  Substrate Node
+2020-10-16 08:03:14  ✌️  version 2.0.0-47f7d3f2e-x86_64-linux-gnu
+2020-10-16 08:03:14  ❤️  by Anonymous, 2017-2020
+2020-10-16 08:03:14  📋 Chain specification: Local Testnet
+2020-10-16 08:03:14  🏷  Node name: nice-glove-1401
+2020-10-16 08:03:14  👤 Role: LIGHT
+2020-10-16 08:03:14  💾 Database: RocksDb at /tmp/substrate95w2Dk/chains/local_testnet/db
+2020-10-16 08:03:14  ⛓  Native runtime: node-template-1 (node-template-1.tx1.au1)
+2020-10-16 08:03:14  [light] 🔨 Initializing Genesis block/state (state: 0x121d…8e36, header-hash: 0x24ef…8ff6)
+2020-10-16 08:03:14  [light] Loading GRANDPA authorities from genesis on what appears to be first startup.
+2020-10-16 08:03:15  [light] ⏱  Loaded block-time = 6000 milliseconds from genesis on first-launch
+2020-10-16 08:03:15  [light] Using default protocol ID &quot;sup&quot; because none is configured in the chain specs
+2020-10-16 08:03:15  [light] 🏷  Local node identity is: 12D3KooWHX4rkWT6a6N55Km7ZnvenGdShSKPkzJ3yj9DU5nqDtWR
+2020-10-16 08:03:15  [light] 📦 Highest known block at #0
+2020-10-16 08:03:15  [light] 〽️ Prometheus server started at 127.0.0.1:9615
+2020-10-16 08:03:15  [light] Listening for new connections on 127.0.0.1:9944.
+</code></pre></div><h2 id="example-using-the-actual-node-name"><a href="#example-using-the-actual-node-name">Example using the actual node name</a></h2>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>Builds a new service <span class="kw">for </span>a light client.
+<span class="attr">#[sc_cli::prefix_logs_with(config.network.node_name.as_str())]
+</span><span class="kw">pub fn </span>new_light(config: Configuration) -&gt; <span class="prelude-ty">Result</span>&lt;TaskManager, ServiceError&gt; {
+    <span class="kw">let </span>(client, backend, keystore, <span class="kw-2">mut </span>task_manager, on_demand) =
+        sc_service::new_light_parts::&lt;Block, RuntimeApi, Executor&gt;(<span class="kw-2">&amp;</span>config)<span class="question-mark">?</span>;
+
+       ...
+}</code></pre></div>
+<p>Will produce logs that look like this:</p>
+<div class="example-wrap"><pre class="language-text"><code>2020-10-16 08:12:57  Substrate Node
+2020-10-16 08:12:57  ✌️  version 2.0.0-efb9b822a-x86_64-linux-gnu
+2020-10-16 08:12:57  ❤️  by Anonymous, 2017-2020
+2020-10-16 08:12:57  📋 Chain specification: Local Testnet
+2020-10-16 08:12:57  🏷  Node name: open-harbor-1619
+2020-10-16 08:12:57  👤 Role: LIGHT
+2020-10-16 08:12:57  💾 Database: RocksDb at /tmp/substrate9T9Mtb/chains/local_testnet/db
+2020-10-16 08:12:57  ⛓  Native runtime: node-template-1 (node-template-1.tx1.au1)
+2020-10-16 08:12:58  [open-harbor-1619] 🔨 Initializing Genesis block/state (state: 0x121d…8e36, header-hash: 0x24ef…8ff6)
+2020-10-16 08:12:58  [open-harbor-1619] Loading GRANDPA authorities from genesis on what appears to be first startup.
+2020-10-16 08:12:58  [open-harbor-1619] ⏱  Loaded block-time = 6000 milliseconds from genesis on first-launch
+2020-10-16 08:12:58  [open-harbor-1619] Using default protocol ID &quot;sup&quot; because none is configured in the chain specs
+2020-10-16 08:12:58  [open-harbor-1619] 🏷  Local node identity is: 12D3KooWRzmYC8QTK1Pm8Cfvid3skTS4Hn54jc4AUtje8Rqbfgtp
+2020-10-16 08:12:58  [open-harbor-1619] 📦 Highest known block at #0
+2020-10-16 08:12:58  [open-harbor-1619] 〽️ Prometheus server started at 127.0.0.1:9615
+2020-10-16 08:12:58  [open-harbor-1619] Listening for new connections on 127.0.0.1:9944.
+</code></pre></div></div></details></section></div></main></body></html>

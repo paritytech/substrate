@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error","PrometheusError"],"fn":["exponential_buckets","init_prometheus","register"],"struct":["Counter","F64","Gauge","Histogram","HistogramOpts","I64","Opts","Registry","SourcedMetric","U64"],"trait":["MetricSource"],"type":["CounterVec","GaugeVec","HistogramVec","SourcedCounter","SourcedGauge"]};

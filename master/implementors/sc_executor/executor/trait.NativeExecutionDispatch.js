@@ -1,0 +1,6 @@
+(function() {var implementors = {
+"node_executor":[["impl <a class=\"trait\" href=\"sc_executor/executor/trait.NativeExecutionDispatch.html\" title=\"trait sc_executor::executor::NativeExecutionDispatch\">NativeExecutionDispatch</a> for <a class=\"struct\" href=\"node_executor/struct.ExecutorDispatch.html\" title=\"struct node_executor::ExecutorDispatch\">ExecutorDispatch</a>"]],
+"node_template":[["impl <a class=\"trait\" href=\"sc_executor/executor/trait.NativeExecutionDispatch.html\" title=\"trait sc_executor::executor::NativeExecutionDispatch\">NativeExecutionDispatch</a> for <a class=\"struct\" href=\"node_template/service/struct.ExecutorDispatch.html\" title=\"struct node_template::service::ExecutorDispatch\">ExecutorDispatch</a>"]],
+"node_testing":[],
+"substrate_test_runtime_client":[["impl <a class=\"trait\" href=\"substrate_test_runtime_client/sc_executor/trait.NativeExecutionDispatch.html\" title=\"trait substrate_test_runtime_client::sc_executor::NativeExecutionDispatch\">NativeExecutionDispatch</a> for <a class=\"struct\" href=\"substrate_test_runtime_client/struct.LocalExecutorDispatch.html\" title=\"struct substrate_test_runtime_client::LocalExecutorDispatch\">LocalExecutorDispatch</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["buy_ticket","set_calls","start_lottery","stop_repeat"]};

@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/substrate_wasm_builder/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/substrate_wasm_builder/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Wasm builder is a utility for building a project as a Wasm binary"><title>substrate_wasm_builder - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="substrate_wasm_builder" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../substrate_wasm_builder/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../substrate_wasm_builder/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate substrate_wasm_builder</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 5.0.0-dev</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">substrate_wasm_builder</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/substrate_wasm_builder/lib.rs.html#18-334">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="wasm-builder-is-a-utility-for-building-a-project-as-a-wasm-binary"><a href="#wasm-builder-is-a-utility-for-building-a-project-as-a-wasm-binary">Wasm builder is a utility for building a project as a Wasm binary</a></h2>
+<p>The Wasm builder is a tool that integrates the process of building the WASM binary of your
+project into the main <code>cargo</code> build process.</p>
+<h3 id="project-setup"><a href="#project-setup">Project setup</a></h3>
+<p>A project that should be compiled as a Wasm binary needs to:</p>
+<ol>
+<li>Add a <code>build.rs</code> file.</li>
+<li>Add <code>wasm-builder</code> as dependency into <code>build-dependencies</code>.</li>
+</ol>
+<p>The <code>build.rs</code> file needs to contain the following code:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>substrate_wasm_builder::WasmBuilder;
+
+<span class="kw">fn </span>main() {
+    WasmBuilder::new()
+        <span class="comment">// Tell the builder to build the project (crate) this `build.rs` is part of.
+        </span>.with_current_project()
+        <span class="comment">// Make sure to export the `heap_base` global, this is required by Substrate
+        </span>.export_heap_base()
+        <span class="comment">// Build the Wasm file so that it imports the memory (need to be provided by at instantiation)
+        </span>.import_memory()
+        <span class="comment">// Build it.
+        </span>.build()
+}</code></pre></div>
+<p>As the final step, you need to add the following to your project:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">include!</span>(<span class="macro">concat!</span>(<span class="macro">env!</span>(<span class="string">&quot;OUT_DIR&quot;</span>), <span class="string">&quot;/wasm_binary.rs&quot;</span>));</code></pre></div>
+<p>This will include the generated Wasm binary as two constants <code>WASM_BINARY</code> and
+<code>WASM_BINARY_BLOATY</code>. The former is a compact Wasm binary and the latter is the Wasm binary as
+being generated by the compiler. Both variables have <code>Option&lt;&amp;'static [u8]&gt;</code> as type.</p>
+<h4 id="feature"><a href="#feature">Feature</a></h4>
+<p>Wasm builder supports to enable cargo features while building the Wasm binary. By default it
+will enable all features in the wasm build that are enabled for the native build except the
+<code>default</code> and <code>std</code> features. Besides that, wasm builder supports the special <code>runtime-wasm</code>
+feature. This <code>runtime-wasm</code> feature will be enabled by the wasm builder when it compiles the
+Wasm binary. If this feature is not present, it will not be enabled.</p>
+<h3 id="environment-variables"><a href="#environment-variables">Environment variables</a></h3>
+<p>By using environment variables, you can configure which Wasm binaries are built and how:</p>
+<ul>
+<li><code>SKIP_WASM_BUILD</code> - Skips building any Wasm binary. This is useful when only native should be
+recompiled. If this is the first run and there doesn’t exist a Wasm binary, this will set both
+variables to <code>None</code>.</li>
+<li><code>WASM_BUILD_TYPE</code> - Sets the build type for building Wasm binaries. Supported values are
+<code>release</code> or <code>debug</code>. By default the build type is equal to the build type used by the main
+build.</li>
+<li><code>FORCE_WASM_BUILD</code> - Can be set to force a Wasm build. On subsequent calls the value of the
+variable needs to change. As wasm-builder instructs <code>cargo</code> to watch for file changes this
+environment variable should only be required in certain circumstances.</li>
+<li><code>WASM_BUILD_RUSTFLAGS</code> - Extend <code>RUSTFLAGS</code> given to <code>cargo build</code> while building the wasm
+binary.</li>
+<li><code>WASM_BUILD_NO_COLOR</code> - Disable color output of the wasm build.</li>
+<li><code>WASM_TARGET_DIRECTORY</code> - Will copy any build Wasm binary to the given directory. The path
+needs to be absolute.</li>
+<li><code>WASM_BUILD_TOOLCHAIN</code> - The toolchain that should be used to build the Wasm binaries. The
+format needs to be the same as used by cargo, e.g. <code>nightly-2020-02-20</code>.</li>
+<li><code>WASM_BUILD_WORKSPACE_HINT</code> - Hint the workspace that is being built. This is normally not
+required as we walk up from the target directory until we find a <code>Cargo.toml</code>. If the target
+directory is changed for the build, this environment variable can be used to point to the
+actual workspace.</li>
+<li><code>CARGO_NET_OFFLINE</code> - If <code>true</code>, <code>--offline</code> will be passed to all processes launched to
+prevent network access. Useful in offline environments.</li>
+</ul>
+<p>Each project can be skipped individually by using the environment variable
+<code>SKIP_PROJECT_NAME_WASM_BUILD</code>. Where <code>PROJECT_NAME</code> needs to be replaced by the name of the
+cargo project, e.g. <code>kitchensink-runtime</code> will be <code>NODE_RUNTIME</code>.</p>
+<h3 id="prerequisites"><a href="#prerequisites">Prerequisites:</a></h3>
+<p>Wasm builder requires the following prerequisites for building the Wasm binary:</p>
+<ul>
+<li>rust nightly + <code>wasm32-unknown-unknown</code> toolchain</li>
+</ul>
+<p>or</p>
+<ul>
+<li>rust stable and version at least 1.68.0 + <code>wasm32-unknown-unknown</code> toolchain</li>
+</ul>
+<p>If a specific rust is installed with <code>rustup</code>, it is important that the wasm target is
+installed as well. For example if installing the rust from 20.02.2020 using <code>rustup install nightly-2020-02-20</code>, the wasm target needs to be installed as well <code>rustup target add wasm32-unknown-unknown --toolchain nightly-2020-02-20</code>.</p>
+</div></details><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.WasmBuilder.html" title="struct substrate_wasm_builder::WasmBuilder">WasmBuilder</a></div><div class="desc docblock-short">The builder for building a wasm binary.</div></li><li><div class="item-name"><a class="struct" href="struct.WasmBuilderSelectProject.html" title="struct substrate_wasm_builder::WasmBuilderSelectProject">WasmBuilderSelectProject</a></div><div class="desc docblock-short">First step of the <a href="struct.WasmBuilder.html" title="struct substrate_wasm_builder::WasmBuilder"><code>WasmBuilder</code></a> to select the project to build.</div></li></ul></section></div></main></body></html>

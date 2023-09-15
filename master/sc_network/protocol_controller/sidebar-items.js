@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["LOG_TARGET"],"enum":["Message"],"struct":["IncomingIndex","ProtoSetConfig","ProtocolController","ProtocolHandle","SetId"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["authority_keys_from_seed","development_config","get_account_id_from_seed","get_from_seed","local_testnet_config","testnet_genesis"],"type":["AccountPublic","ChainSpec"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["sr25519"],"struct":["Block","ExtrinsicWrapper","H256","TestSignature","TestXt","UintAuthorityId"],"type":["Digest","DigestItem","Header"]};

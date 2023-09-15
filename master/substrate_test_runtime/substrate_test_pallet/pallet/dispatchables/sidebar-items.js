@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["bench_call","call_do_not_propagate","call_with_priority","deposit_log_digest_item","fill_block","include_data","indexed_call","offchain_index_clear","offchain_index_set","read","read_and_panic","storage_change"]};

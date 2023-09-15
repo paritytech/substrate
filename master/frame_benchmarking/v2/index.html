@@ -1,0 +1,226 @@
+<!DOCTYPE html><html lang="en"><head><link rel="canonical" href="https://paritytech.github.io/polkadot-sdk/master/frame_benchmarking/v2/index.html"><meta http-equiv="refresh" content="0;URL='https://paritytech.github.io/polkadot-sdk/master/frame_benchmarking/v2/index.html'"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Contains macros, structs, and traits associated with v2 of the pallet benchmarking syntax."><title>frame_benchmarking::v2 - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-ba5701c5741a7b69.css" id="mainThemeStyle"><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="frame_benchmarking" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0 (90c541806 2023-05-31)" data-search-js="search-e077946657036a58.js" data-settings-js="settings-298e1ea74db45b39.js" data-settings-css="settings-7bfb4c59cc6bc502.css" data-theme-light-css="light-0f8c037637f9eb3e.css" data-theme-dark-css="dark-1097f8e92a01e3cf.css" data-theme-ayu-css="ayu-614652228113ac93.css" ></div><script src="../../static.files/storage-62ce34ea385b278a.js"></script><script defer src="../../static.files/main-f61008743c98d196.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-0f8c037637f9eb3e.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1097f8e92a01e3cf.css"><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../../frame_benchmarking/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../../frame_benchmarking/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Module v2</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#attributes">Attribute Macros</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">frame_benchmarking</a>::<wbr><a class="mod" href="#">v2</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../../src/frame_benchmarking/lib.rs.html#312">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Contains macros, structs, and traits associated with v2 of the pallet benchmarking syntax.</p>
+<p>The <a href="attr.benchmarks.html" title="attr frame_benchmarking::v2::benchmarks"><code>v2::benchmarks</code></a> and <a href="attr.instance_benchmarks.html" title="attr frame_benchmarking::v2::instance_benchmarks"><code>v2::instance_benchmarks</code></a> macros can be used to designate a
+module as a benchmarking module that can contain benchmarks and benchmark tests. The
+<code>#[benchmarks]</code> variant will set up a regular, non-instance benchmarking module, and the
+<code>#[instance_benchmarks]</code> variant will set up the module in instance benchmarking mode.</p>
+<p>Benchmarking modules should be gated behind a <code>#[cfg(feature = &quot;runtime-benchmarks&quot;)]</code>
+feature gate to ensure benchmarking code that is only compiled when the
+<code>runtime-benchmarks</code> feature is enabled is not referenced.</p>
+<p>The following is the general syntax for a benchmarks (or instance benchmarks) module:</p>
+<h3 id="general-syntax"><a href="#general-syntax">General Syntax</a></h3>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#![cfg(feature = <span class="string">&quot;runtime-benchmarks&quot;</span>)]
+
+</span><span class="kw">use super</span>::{mock_helpers::<span class="kw-2">*</span>, Pallet <span class="kw">as </span>MyPallet};
+<span class="kw">use </span>frame_benchmarking::v2::<span class="kw-2">*</span>;
+
+<span class="attr">#[benchmarks]
+</span><span class="kw">mod </span>benchmarks {
+	<span class="kw">use super</span>::<span class="kw-2">*</span>;
+
+	<span class="attr">#[benchmark]
+	</span><span class="kw">fn </span>bench_name_1(x: Linear&lt;<span class="number">7</span>, <span class="number">1_000</span>&gt;, y: Linear&lt;<span class="number">1_000</span>, <span class="number">100_0000</span>&gt;) {
+		<span class="comment">// setup code
+		</span><span class="kw">let </span>z = x + y;
+		<span class="kw">let </span>caller = whitelisted_caller();
+
+		<span class="attr">#[extrinsic_call]
+		</span>extrinsic_name(SystemOrigin::Signed(caller), other, arguments);
+
+		<span class="comment">// verification code
+		</span><span class="macro">assert_eq!</span>(MyPallet::&lt;T&gt;::my_var(), z);
+	}
+
+	<span class="attr">#[benchmark]
+	</span><span class="kw">fn </span>bench_name_2() {
+		<span class="comment">// setup code
+		</span><span class="kw">let </span>caller = whitelisted_caller();
+
+		<span class="attr">#[block]
+		</span>{
+			something(some, thing);
+			my_extrinsic(RawOrigin::Signed(caller), some, argument);
+			something_else(foo, bar);
+		}
+
+		<span class="comment">// verification code
+		</span><span class="macro">assert_eq!</span>(MyPallet::&lt;T&gt;::something(), <span class="number">37</span>);
+	}
+}</code></pre></div>
+<h3 id="benchmark-definitions"><a href="#benchmark-definitions">Benchmark Definitions</a></h3>
+<p>Within a <code>#[benchmarks]</code> or <code>#[instance_benchmarks]</code> module, you can define individual
+benchmarks using the <code>#[benchmark]</code> attribute, as shown in the example above.</p>
+<p>The <code>#[benchmark]</code> attribute expects a function definition with a blank return type (or a
+return type compatible with <code>Result&lt;(), BenchmarkError&gt;</code>, as discussed below) and zero or
+more arguments whose names are valid <a href="../enum.BenchmarkParameter.html" title="enum frame_benchmarking::BenchmarkParameter">BenchmarkParameter</a>
+parameters, such as <code>x</code>, <code>y</code>, <code>a</code>, <code>b</code>, etc., and whose param types must implement
+<a href="trait.ParamRange.html" title="trait frame_benchmarking::v2::ParamRange">ParamRange</a>. At the moment the only valid type that implements
+<a href="trait.ParamRange.html" title="trait frame_benchmarking::v2::ParamRange">ParamRange</a> is <a href="struct.Linear.html" title="struct frame_benchmarking::v2::Linear">Linear</a>.</p>
+<p>The valid syntax for defining a <a href="struct.Linear.html" title="struct frame_benchmarking::v2::Linear">Linear</a> is <code>Linear&lt;A, B&gt;</code> where <code>A</code>, and <code>B</code>
+are valid integer literals (that fit in a <code>u32</code>), such that <code>B</code> &gt;= <code>A</code>.</p>
+<p>Anywhere within a benchmark function you may use the generic <code>T: Config</code> parameter as well
+as <code>I</code> in the case of an <code>#[instance_benchmarks]</code> module. You should not add these to the
+function signature as this will be handled automatically for you based on whether this is a
+<code>#[benchmarks]</code> or <code>#[instance_benchmarks]</code> module and whatever <a href="#where-clause">where clause</a>
+you have defined for the module. You should not manually add any generics to the
+signature of your benchmark function.</p>
+<p>Also note that the <code>// setup code</code> and <code>// verification code</code> comments shown above are not
+required and are included simply for demonstration purposes.</p>
+<h4 id="extrinsic_call-and-block"><a href="#extrinsic_call-and-block"><code>#[extrinsic_call]</code> and <code>#[block]</code></a></h4>
+<p>Within the benchmark function body, either an <code>#[extrinsic_call]</code> or a <code>#[block]</code>
+annotation is required. These attributes should be attached to a block (shown in
+<code>bench_name_2</code> above) or a one-line function call (shown in <code>bench_name_1</code> above, in <code>syn</code>
+parlance this should be an <code>ExprCall</code>), respectively.</p>
+<p>The <code>#[block]</code> syntax is broad and will benchmark any code contained within the block the
+attribute is attached to. If <code>#[block]</code> is attached to something other than a block, a
+compiler error will be emitted.</p>
+<p>The one-line <code>#[extrinsic_call]</code> syntax must consist of a function call to an extrinsic,
+where the first argument is the origin. If <code>#[extrinsic_call]</code> is attached to an item that
+doesn’t meet these requirements, a compiler error will be emitted.</p>
+<p>As a short-hand, you may substitute the name of the extrinsic call with <code>_</code>, such as the
+following:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[extrinsic_call]
+</span><span class="kw">_</span>(RawOrigin::Signed(whitelisted_caller()), <span class="number">0u32</span>.into(), <span class="number">0</span>);</code></pre></div>
+<p>The underscore will be substituted with the name of the benchmark  (i.e. the name of the
+function in the benchmark function definition).</p>
+<p>In case of a <code>force_origin</code> where you want to elevate the privileges of the provided origin,
+this is the general syntax:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[extrinsic_call]
+</span><span class="kw">_</span>(force_origin <span class="kw">as </span>T::RuntimeOrigin, <span class="number">0u32</span>.into(), <span class="number">0</span>);</code></pre></div>
+<p>Regardless of whether <code>#[extrinsic_call]</code> or <code>#[block]</code> is used, this attribute also serves
+the purpose of designating the boundary between the setup code portion of the benchmark
+(everything before the <code>#[extrinsic_call]</code> or <code>#[block]</code> attribute) and the verification
+stage (everything after the item that the <code>#[extrinsic_call]</code> or <code>#[block]</code> attribute is
+attached to). The setup code section should contain any code that needs to execute before
+the measured portion of the benchmark executes. The verification section is where you can
+perform assertions to verify that the extrinsic call (or whatever is happening in your
+block, if you used the <code>#[block]</code> syntax) executed successfully.</p>
+<p>Note that neither <code>#[extrinsic_call]</code> nor <code>#[block]</code> are real attribute macros and are
+instead consumed by the outer macro pattern as part of the enclosing benchmark function
+definition. This is why we are able to use <code>#[extrinsic_call]</code> and <code>#[block]</code> within a
+function definition even though this behavior has not been stabilized
+yet—<code>#[extrinsic_call]</code> and <code>#[block]</code> are parsed and consumed as part of the benchmark
+definition parsing code, so they never expand as their own attribute macros.</p>
+<h4 id="optional-attributes"><a href="#optional-attributes">Optional Attributes</a></h4>
+<p>The keywords <code>extra</code> and <code>skip_meta</code> can be provided as optional arguments to the
+<code>#[benchmark]</code> attribute, i.e. <code>#[benchmark(extra, skip_meta)]</code>. Including either of these
+will enable the <code>extra</code> or <code>skip_meta</code> option, respectively. These options enable the same
+behavior they did in the old benchmarking syntax in <code>frame_benchmarking</code>, namely:</p>
+<h5 id="extra"><a href="#extra"><code>extra</code></a></h5>
+<p>Specifies that this benchmark should not normally run. To run benchmarks marked with
+<code>extra</code>, you will need to invoke the <code>frame-benchmarking-cli</code> with <code>--extra</code>.</p>
+<h5 id="skip_meta"><a href="#skip_meta"><code>skip_meta</code></a></h5>
+<p>Specifies that the benchmarking framework should not analyze the storage keys that the
+benchmarked code read or wrote. This useful to suppress the prints in the form of unknown
+0x… in case a storage key that does not have metadata. Note that this skips the analysis of
+all accesses, not just ones without metadata.</p>
+<h3 id="where-clause"><a href="#where-clause">Where Clause</a></h3>
+<p>Some pallets require a where clause specifying constraints on their generics to make
+writing benchmarks feasible. To accomodate this situation, you can provide such a where
+clause as the (only) argument to the <code>#[benchmarks]</code> or <code>#[instance_benchmarks]</code> attribute
+macros. Below is an example of this taken from the <code>message-queue</code> pallet.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[benchmarks(
+	<span class="kw">where
+		</span>&lt;&lt;T <span class="kw">as </span>Config&gt;::MessageProcessor <span class="kw">as </span>ProcessMessage&gt;::Origin: From&lt;u32&gt; + PartialEq,
+		&lt;T <span class="kw">as </span>Config&gt;::Size: From&lt;u32&gt;,
+)]
+</span><span class="kw">mod </span>benchmarks {
+	<span class="kw">use super</span>::<span class="kw-2">*</span>;
+	<span class="comment">// ...
+</span>}</code></pre></div>
+<h3 id="benchmark-tests"><a href="#benchmark-tests">Benchmark Tests</a></h3>
+<p>Benchmark tests can be generated using the old syntax in <code>frame_benchmarking</code>,
+including the <code>frame_benchmarking::impl_benchmark_test_suite</code> macro.</p>
+<p>An example is shown below (taken from the <code>message-queue</code> pallet’s <code>benchmarking</code> module):</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[benchmarks]
+</span><span class="kw">mod </span>benchmarks {
+	<span class="kw">use super</span>::<span class="kw-2">*</span>;
+	<span class="comment">// ...
+	</span><span class="macro">impl_benchmark_test_suite!</span>(
+		MessageQueue,
+		<span class="kw">crate</span>::mock::new_test_ext::&lt;<span class="kw">crate</span>::integration_test::Test&gt;(),
+		<span class="kw">crate</span>::integration_test::Test
+	);
+}</code></pre></div>
+<h3 id="benchmark-function-generation"><a href="#benchmark-function-generation">Benchmark Function Generation</a></h3>
+<p>The benchmark function definition that you provide is used to automatically create a number
+of impls and structs required by the benchmarking engine. Additionally, a benchmark
+function is also generated that resembles the function definition you provide, with a few
+modifications:</p>
+<ol>
+<li>The function name is transformed from i.e. <code>original_name</code> to <code>_original_name</code> so as not to
+collide with the struct <code>original_name</code> that is created for some of the benchmarking engine
+impls.</li>
+<li>Appropriate <code>T: Config</code> and <code>I</code> (if this is an instance benchmark) generics are added to the
+function automatically during expansion, so you should not add these manually on your
+function definition (but you may make use of <code>T</code> and <code>I</code> anywhere within your benchmark
+function, in any of the three sections (setup, call, verification).</li>
+<li>Arguments such as <code>u: Linear&lt;10, 100&gt;</code> are converted to <code>u: u32</code> to make the function
+directly callable.</li>
+<li>A <code>verify: bool</code> param is added as the last argument. Specifying <code>true</code> will result in the
+verification section of your function executing, while a value of <code>false</code> will skip
+verification.</li>
+<li>If you specify a return type on the function definition, it must conform to the <a href="#support-for-result-benchmarkerror-and-the--operator">rules
+below</a>, and the last statement of the
+function definition must resolve to something compatible with <code>Result&lt;(), BenchmarkError&gt;</code>.</li>
+</ol>
+<p>The reason we generate an actual function as part of the expansion is to allow the compiler
+to enforce several constraints that would otherwise be difficult to enforce and to reduce
+developer confusion (especially regarding the use of the <code>?</code> operator, as covered below).</p>
+<p>Note that any attributes, comments, and doc comments attached to your benchmark function
+definition are also carried over onto the resulting benchmark function and the struct for
+that benchmark. As a result you should be careful about what attributes you attach here as
+they will be replicated in multiple places.</p>
+<h4 id="support-for-result-benchmarkerror-and-the--operator"><a href="#support-for-result-benchmarkerror-and-the--operator">Support for <code>Result&lt;(), BenchmarkError&gt;</code> and the <code>?</code> operator</a></h4>
+<p>You may optionally specify <code>Result&lt;(), BenchmarkError&gt;</code> as the return type of your
+benchmark function definition. If you do so, you must return a compatible <code>Result&lt;(), BenchmarkError&gt;</code> as the <em>last statement</em> of your benchmark function definition. You may
+also use the <code>?</code> operator throughout your benchmark function definition if you choose to
+follow this route. See the example below:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#![cfg(feature = <span class="string">&quot;runtime-benchmarks&quot;</span>)]
+
+</span><span class="kw">use super</span>::{mock_helpers::<span class="kw-2">*</span>, Pallet <span class="kw">as </span>MyPallet};
+<span class="kw">use </span>frame_benchmarking::v2::<span class="kw-2">*</span>;
+
+<span class="attr">#[benchmarks]
+</span><span class="kw">mod </span>benchmarks {
+	<span class="kw">use super</span>::<span class="kw-2">*</span>;
+
+	<span class="attr">#[benchmark]
+	</span><span class="kw">fn </span>bench_name(x: Linear&lt;<span class="number">5</span>, <span class="number">25</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), BenchmarkError&gt; {
+		<span class="comment">// setup code
+		</span><span class="kw">let </span>z = x + <span class="number">4</span>;
+		<span class="kw">let </span>caller = whitelisted_caller();
+
+		<span class="comment">// note we can make use of the ? operator here because of the return type
+		</span>something(z)<span class="question-mark">?</span>;
+
+		<span class="attr">#[extrinsic_call]
+		</span>extrinsic_name(SystemOrigin::Signed(caller), other, arguments);
+
+		<span class="comment">// verification code
+		</span><span class="macro">assert_eq!</span>(MyPallet::&lt;T&gt;::my_var(), z);
+
+		<span class="comment">// we must return a valid `Result&lt;(), BenchmarkError&gt;` as the last line of our benchmark
+		// function definition. This line is not included as part of the verification code that
+		// appears above it.
+		</span><span class="prelude-val">Ok</span>(())
+	}
+}</code></pre></div>
+</div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2><ul class="item-table"><li><div class="item-name"><code>pub use <a class="mod" href="../index.html" title="mod frame_benchmarking">super</a>::*;</code></div></li></ul><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Linear.html" title="struct frame_benchmarking::v2::Linear">Linear</a></div><div class="desc docblock-short">Used by the new benchmarking code to specify that a benchmarking variable is linear
+over some specified range, i.e. <code>Linear&lt;0, 1_000&gt;</code> means that the corresponding variable
+is allowed to range from <code>0</code> to <code>1000</code>, inclusive.</div></li></ul><h2 id="traits" class="small-section-header"><a href="#traits">Traits</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.ParamRange.html" title="trait frame_benchmarking::v2::ParamRange">ParamRange</a></div><div class="desc docblock-short">Trait that must be implemented by all structs that can be used as parameter range types
+in the new benchmarking code (i.e. <code>Linear&lt;0, 1_000&gt;</code>). Right now there is just
+<a href="struct.Linear.html" title="struct frame_benchmarking::v2::Linear"><code>Linear</code></a> but this could later be extended to support additional non-linear parameter
+ranges.</div></li></ul><h2 id="attributes" class="small-section-header"><a href="#attributes">Attribute Macros</a></h2><ul class="item-table"><li><div class="item-name"><a class="attr" href="attr.benchmark.html" title="attr frame_benchmarking::v2::benchmark">benchmark</a></div><div class="desc docblock-short">An attribute macro used to declare a benchmark within a benchmarking module. Must be
+attached to a function definition containing an <code>#[extrinsic_call]</code> or <code>#[block]</code>
+attribute.</div></li><li><div class="item-name"><a class="attr" href="attr.benchmarks.html" title="attr frame_benchmarking::v2::benchmarks">benchmarks</a></div><div class="desc docblock-short">An attribute macro that can be attached to a (non-empty) module declaration. Doing so will
+designate that module as a benchmarking module.</div></li><li><div class="item-name"><a class="attr" href="attr.block.html" title="attr frame_benchmarking::v2::block">block</a></div><div class="desc docblock-short">An attribute macro used to specify that a block should be the measured portion of the
+enclosing benchmark function, This attribute is also used as a boundary designating where
+the benchmark setup code ends, and the benchmark verification code begins.</div></li><li><div class="item-name"><a class="attr" href="attr.extrinsic_call.html" title="attr frame_benchmarking::v2::extrinsic_call">extrinsic_call</a></div><div class="desc docblock-short">An attribute macro used to specify the extrinsic call inside a benchmark function, and also
+used as a boundary designating where the benchmark setup code ends, and the benchmark
+verification code begins.</div></li><li><div class="item-name"><a class="attr" href="attr.instance_benchmarks.html" title="attr frame_benchmarking::v2::instance_benchmarks">instance_benchmarks</a></div><div class="desc docblock-short">An attribute macro that can be attached to a (non-empty) module declaration. Doing so will
+designate that module as an instance benchmarking module.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"node_bench":[["impl <a class=\"trait\" href=\"sp_state_machine/trie_backend_essence/trait.Storage.html\" title=\"trait sp_state_machine::trie_backend_essence::Storage\">Storage</a>&lt;<a class=\"struct\" href=\"sp_core/hasher/blake2/struct.Blake2Hasher.html\" title=\"struct sp_core::hasher::blake2::Blake2Hasher\">Blake2Hasher</a>&gt; for <a class=\"struct\" href=\"node_bench/trie/struct.Storage.html\" title=\"struct node_bench::trie::Storage\">Storage</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

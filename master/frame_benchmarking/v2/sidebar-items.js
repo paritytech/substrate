@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["benchmark","benchmarks","block","extrinsic_call","instance_benchmarks"],"struct":["Linear"],"trait":["ParamRange"]};

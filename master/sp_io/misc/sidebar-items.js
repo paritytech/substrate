@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["print_hex","print_num","print_utf8","runtime_version"],"struct":["HostFunctions"]};

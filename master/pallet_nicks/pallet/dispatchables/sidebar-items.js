@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["clear_name","force_name","kill_name","set_name"]};

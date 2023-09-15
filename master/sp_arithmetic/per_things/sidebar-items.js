@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Rounding","SignedRounding"],"struct":["PerU16","Perbill","Percent","Permill","Perquintill"],"trait":["MultiplyArg","PerThing","RationalArg","ReciprocalArg"],"type":["InnerOf","UpperOf"]};
