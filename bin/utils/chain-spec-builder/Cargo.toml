@@ -22,7 +22,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 ansi_term = "0.12.1"
-clap = { version = "4.2.5", features = ["derive"] }
+clap = { version = "4.4.3", features = ["derive"] }
 rand = "0.8"
 node-cli = { version = "3.0.0-dev", path = "../../node/cli" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../../../client/chain-spec" }
