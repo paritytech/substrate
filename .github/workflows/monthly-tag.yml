@@ -16,7 +16,7 @@ jobs:
           echo "new=$(date +'monthly-%Y-%m')" >> $GITHUB_OUTPUT
           echo "old=$(date -d'1 month ago' +'monthly-%Y-%m')" >> $GITHUB_OUTPUT
       - name: Checkout branch "master"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: 'master'
           fetch-depth: 0
