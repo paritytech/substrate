@@ -181,9 +181,8 @@ For Unix-based operating systems, you should run the following commands:
 ----
 curl https://sh.rustup.rs -sSf | sh
 
-rustup update nightly
-rustup target add wasm32-unknown-unknown --toolchain nightly
 rustup update stable
+rustup target add wasm32-unknown-unknown
 ----
 
 You will also need to install the following packages:
@@ -226,9 +225,8 @@ If you are trying to set up Substrate on Windows, you should do the following:
 
 3. Then, you will need to run some commands in CMD to set up your Wasm Build Environment:
 
-	rustup update nightly
 	rustup update stable
-	rustup target add wasm32-unknown-unknown --toolchain nightly
+	rustup target add wasm32-unknown-unknown
 
 4. Then, you need to install LLVM: https://releases.llvm.org/download.html
 
