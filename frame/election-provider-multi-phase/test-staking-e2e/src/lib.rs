@@ -20,8 +20,10 @@ mod mock;
 
 pub(crate) const LOG_TARGET: &str = "tests::e2e-epm";
 
+use frame_election_provider_support::ElectionProvider;
 use frame_support::{assert_err, assert_noop, assert_ok};
 use mock::*;
+use pallet_election_provider_multi_phase::Phase;
 use sp_core::Get;
 use sp_npos_elections::{to_supports, StakedAssignment};
 use sp_runtime::Perbill;
@@ -253,6 +255,75 @@ fn continous_slashes_below_offending_threshold() {
 }
 
 #[test]
+/// During an ongoing incident we may want to alter the phase in EPM.
+///
+/// This test will simulate a case where for some reason we want to start an
+/// election earlier while we are still in an off phase. To achieve this we will
+/// use the `force_start_phase` extrinsic to start a signed phase at the start
+/// of the next block.
+fn transition_to_signed_phase_from_off_phase() {
+	ExtBuilder::default().build_and_execute(|| {
+		assert_eq!(active_era(), 0);
+		assert_eq!(Session::current_index(), 0);
+		assert!(ElectionProviderMultiPhase::current_phase().is_off());
+
+		assert!(ElectionProviderMultiPhase::force_start_phase(
+			RuntimeOrigin::root(),
+			Phase::Signed
+		)
+		.is_ok());
+
+		roll_to(System::block_number() + 1, false);
+
+		assert!(ElectionProviderMultiPhase::current_phase().is_signed());
+		// We are still in the same era, only the phase changed.
+		assert_eq!(active_era(), 0);
+	});
+}
+
+#[test]
+/// During an ongoing incident we may want to alter the phase in EPM.
+///
+/// This test will simulate a case where we are in an unsigned phase but no
+/// signed or unsigned solution was submitted. Since we don't want to get into
+/// the fallback strategy which can result in transitioning to an emergency
+/// phase if fallback is not set, we will force transition to a signed phase so
+/// that election happens one more time in hope of getting a solution.
+fn transition_to_signed_phase_from_unsigned() {
+	let staking_builder = StakingExtBuilder::default().validator_count(10);
+	let epm_builder = EpmExtBuilder::default().disable_emergency_throttling();
+	ExtBuilder::default()
+		.staking(staking_builder)
+		.epm(epm_builder)
+		.build_and_execute(|| {
+			assert_eq!(active_era(), 0);
+			assert_eq!(Session::current_index(), 0);
+			assert!(ElectionProviderMultiPhase::current_phase().is_off());
+
+			roll_to_epm_unsigned();
+			assert_eq!(Session::current_index(), 0);
+			assert!(ElectionProviderMultiPhase::current_phase().is_unsigned());
+
+			assert!(ElectionProviderMultiPhase::force_start_phase(
+				RuntimeOrigin::root(),
+				Phase::Signed
+			)
+			.is_ok());
+
+			roll_to(System::block_number() + 1, false);
+			assert!(ElectionProviderMultiPhase::current_phase().is_signed());
+
+			// New solutions can be submitted again in a hope to finding a good enought
+			// solution this time.
+
+			roll_to_epm_unsigned();
+
+			// At the end of the epoch we will run elect and if everything is fine will
+			// select a new set of validators.
+			assert!(<ElectionProviderMultiPhase as ElectionProvider>::elect().is_ok());
+		});
+}
+
 /// Slashed validator sets intentions in the same era of slashing.
 ///
 /// When validators are slashed, they are chilled and removed from the current `VoterList`. Thus,
@@ -267,6 +338,7 @@ fn continous_slashes_below_offending_threshold() {
 /// <https://github.com/paritytech/substrate/pull/12420>.
 ///
 /// Related to <https://github.com/paritytech/substrate/issues/13714>.
+#[test]
 fn set_validation_intention_after_chilled() {
 	use frame_election_provider_support::SortedListProvider;
 	use pallet_staking::{Event, Forcing, Nominators};

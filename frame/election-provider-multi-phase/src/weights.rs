@@ -61,6 +61,7 @@ pub trait WeightInfo {
 	fn elect_queued(a: u32, d: u32, ) -> Weight;
 	fn submit() -> Weight;
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32, ) -> Weight;
+	fn force_rotate_round() -> Weight;
 	fn feasibility_check(v: u32, t: u32, a: u32, d: u32, ) -> Weight;
 }
 
@@ -245,6 +246,27 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 			.saturating_add(Weight::from_parts(0, 32).saturating_mul(t.into()))
 			.saturating_add(Weight::from_parts(0, 553).saturating_mul(v.into()))
+	}
+	/// Storage: ElectionProviderMultiPhase CurrentPhase (r:1 w:1)
+	/// Proof Skipped: ElectionProviderMultiPhase CurrentPhase (max_values: Some(1), max_size: None, mode: Measured)
+	/// Storage: ElectionProviderMultiPhase Round (r:1 w:1)
+	/// Proof Skipped: ElectionProviderMultiPhase Round (max_values: Some(1), max_size: None, mode: Measured)
+	/// Storage: ElectionProviderMultiPhase SnapshotMetadata (r:0 w:1)
+	/// Proof Skipped: ElectionProviderMultiPhase SnapshotMetadata (max_values: Some(1), max_size: None, mode: Measured)
+	/// Storage: ElectionProviderMultiPhase QueuedSolution (r:0 w:1)
+	/// Proof Skipped: ElectionProviderMultiPhase QueuedSolution (max_values: Some(1), max_size: None, mode: Measured)
+	/// Storage: ElectionProviderMultiPhase DesiredTargets (r:0 w:1)
+	/// Proof Skipped: ElectionProviderMultiPhase DesiredTargets (max_values: Some(1), max_size: None, mode: Measured)
+	/// Storage: ElectionProviderMultiPhase Snapshot (r:0 w:1)
+	/// Proof Skipped: ElectionProviderMultiPhase Snapshot (max_values: Some(1), max_size: None, mode: Measured)
+	fn force_rotate_round() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `114`
+		//  Estimated: `1674`
+		// Minimum execution time: 17_000 nanoseconds.
+		Weight::from_parts(18_000_000, 1674)
+			.saturating_add(RocksDbWeight::get().reads(2_u64))
+			.saturating_add(RocksDbWeight::get().writes(6_u64))
 	}
 	/// Storage: ElectionProviderMultiPhase DesiredTargets (r:1 w:0)
 	/// Proof Skipped: ElectionProviderMultiPhase DesiredTargets (max_values: Some(1), max_size: None, mode: Measured)
@@ -454,6 +476,27 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 			.saturating_add(Weight::from_parts(0, 32).saturating_mul(t.into()))
 			.saturating_add(Weight::from_parts(0, 553).saturating_mul(v.into()))
+	}
+	/// Storage: ElectionProviderMultiPhase CurrentPhase (r:1 w:1)
+	/// Proof Skipped: ElectionProviderMultiPhase CurrentPhase (max_values: Some(1), max_size: None, mode: Measured)
+	/// Storage: ElectionProviderMultiPhase Round (r:1 w:1)
+	/// Proof Skipped: ElectionProviderMultiPhase Round (max_values: Some(1), max_size: None, mode: Measured)
+	/// Storage: ElectionProviderMultiPhase SnapshotMetadata (r:0 w:1)
+	/// Proof Skipped: ElectionProviderMultiPhase SnapshotMetadata (max_values: Some(1), max_size: None, mode: Measured)
+	/// Storage: ElectionProviderMultiPhase QueuedSolution (r:0 w:1)
+	/// Proof Skipped: ElectionProviderMultiPhase QueuedSolution (max_values: Some(1), max_size: None, mode: Measured)
+	/// Storage: ElectionProviderMultiPhase DesiredTargets (r:0 w:1)
+	/// Proof Skipped: ElectionProviderMultiPhase DesiredTargets (max_values: Some(1), max_size: None, mode: Measured)
+	/// Storage: ElectionProviderMultiPhase Snapshot (r:0 w:1)
+	/// Proof Skipped: ElectionProviderMultiPhase Snapshot (max_values: Some(1), max_size: None, mode: Measured)
+	fn force_rotate_round() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `114`
+		//  Estimated: `1674`
+		// Minimum execution time: 17_000 nanoseconds.
+		Weight::from_parts(18_000_000, 1674)
+			.saturating_add(RocksDbWeight::get().reads(2_u64))
+			.saturating_add(RocksDbWeight::get().writes(6_u64))
 	}
 	/// Storage: ElectionProviderMultiPhase DesiredTargets (r:1 w:0)
 	/// Proof Skipped: ElectionProviderMultiPhase DesiredTargets (max_values: Some(1), max_size: None, mode: Measured)

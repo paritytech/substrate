@@ -386,6 +386,13 @@ frame_benchmarking::benchmarks! {
 		assert!(<MultiPhase<T>>::queued_solution().is_some());
 	}
 
+	force_rotate_round {
+
+	}: _(RawOrigin::Root)
+	verify {
+		assert_eq!(<MultiPhase<T>>::round(), 2);
+	}
+
 	// This is checking a valid solution. The worse case is indeed a valid solution.
 	feasibility_check {
 		// number of votes in snapshot.
