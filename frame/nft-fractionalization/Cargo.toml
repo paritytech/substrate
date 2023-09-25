@@ -31,7 +31,7 @@ sp-io = { version = "23.0.0", path = "../../primitives/io" }
 sp-std = { version = "8.0.0", path = "../../primitives/std" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"frame-benchmarking/std",
@@ -39,14 +39,28 @@ std = [
 	"frame-system/std",
 	"log/std",
 	"pallet-assets/std",
+	"pallet-balances/std",
 	"pallet-nfts/std",
 	"scale-info/std",
+	"sp-core/std",
+	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"pallet-assets/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
+	"pallet-nfts/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-assets/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-nfts/try-runtime",
+	"sp-runtime/try-runtime",
+]

@@ -18,7 +18,7 @@
 
 use codec::DecodeAll;
 use futures::{channel::oneshot, StreamExt};
-use log::{debug, error, trace};
+use log::{debug, trace};
 use sc_client_api::BlockBackend;
 use sc_network::{
 	config as netconfig, config::RequestResponseConfig, types::ProtocolName, PeerId,
@@ -182,7 +182,9 @@ where
 	}
 
 	/// Run [`BeefyJustifsRequestHandler`].
-	pub async fn run(mut self) {
+	///
+	/// Should never end, returns `Error` otherwise.
+	pub async fn run(&mut self) -> Error {
 		trace!(target: BEEFY_SYNC_LOG_TARGET, "🥩 Running BeefyJustifsRequestHandler");
 
 		while let Ok(request) = self
@@ -215,9 +217,6 @@ where
 				},
 			}
 		}
-		error!(
-			target: crate::LOG_TARGET,
-			"🥩 On-demand requests receiver stream terminated, closing worker."
-		);
+		Error::RequestsReceiverStreamClosed
 	}
 }

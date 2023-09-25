@@ -1,0 +1,10 @@
+error[E0412]: cannot find type `RuntimeCall` in this scope
+  --> tests/derive_impl_ui/inject_runtime_type_fails_when_type_not_in_scope.rs:13:10
+   |
+13 |     type RuntimeCall = ();
+   |          ^^^^^^^^^^^ help: you might have meant to use the associated type: `Self::RuntimeCall`
+...
+18 | #[derive_impl(Pallet)] // Injects type RuntimeCall = RuntimeCall;
+   | ---------------------- in this macro invocation
+   |
+   = note: this error originates in the macro `__export_tokens_tt_pallet` which comes from the expansion of the macro `frame_support::macro_magic::forward_tokens` (in Nightly builds, run with -Z macro-backtrace for more info)

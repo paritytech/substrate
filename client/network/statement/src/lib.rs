@@ -286,8 +286,8 @@ where
 	fn handle_sync_event(&mut self, event: SyncEvent) {
 		match event {
 			SyncEvent::PeerConnected(remote) => {
-				let addr =
-					iter::once(multiaddr::Protocol::P2p(remote)).collect::<multiaddr::Multiaddr>();
+				let addr = iter::once(multiaddr::Protocol::P2p(remote.into()))
+					.collect::<multiaddr::Multiaddr>();
 				let result = self.network.add_peers_to_reserved_set(
 					self.protocol_name.clone(),
 					iter::once(addr).collect(),
@@ -297,10 +297,13 @@ where
 				}
 			},
 			SyncEvent::PeerDisconnected(remote) => {
-				self.network.remove_peers_from_reserved_set(
+				let result = self.network.remove_peers_from_reserved_set(
 					self.protocol_name.clone(),
 					iter::once(remote).collect(),
 				);
+				if let Err(err) = result {
+					log::error!(target: LOG_TARGET, "Failed to remove reserved peer: {err}");
+				}
 			},
 		}
 	}

@@ -26,13 +26,14 @@ sp-io = { version = "23.0.0", default-features = false, path = "../../primitives
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
+sp-state-machine = { version = "0.28.0", default-features = false, path = "../../primitives/state-machine" }
 
 [dev-dependencies]
 array-bytes = "6.1"
 sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"array-bytes",
 	"binary-merkle-tree/std",
@@ -45,11 +46,20 @@ std = [
 	"pallet-session/std",
 	"scale-info/std",
 	"serde",
+	"sp-api/std",
 	"sp-consensus-beefy/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
+	"sp-staking/std",
+	"sp-state-machine/std",
 	"sp-std/std",
-	"sp-api/std",
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-beefy/try-runtime",
+	"pallet-mmr/try-runtime",
+	"pallet-session/try-runtime",
+	"sp-runtime/try-runtime",
+]

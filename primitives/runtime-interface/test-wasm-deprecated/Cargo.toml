@@ -23,8 +23,8 @@ substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-bu
 [features]
 default = [ "std" ]
 std = [
-    "sp-core/std",
-    "sp-io/std",
-    "sp-runtime-interface/std",
-    "substrate-wasm-builder",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime-interface/std",
+	"substrate-wasm-builder",
 ]

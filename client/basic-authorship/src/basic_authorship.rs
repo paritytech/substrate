@@ -187,8 +187,7 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	C::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
+	C::Api: ApiExt<Block> + BlockBuilderApi<Block>,
 {
 	fn init_with_now(
 		&mut self,
@@ -229,8 +228,7 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	C::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
+	C::Api: ApiExt<Block> + BlockBuilderApi<Block>,
 	PR: ProofRecording,
 {
 	type CreateProposer = future::Ready<Result<Self::Proposer, Self::Error>>;
@@ -269,17 +267,11 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	C::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
+	C::Api: ApiExt<Block> + BlockBuilderApi<Block>,
 	PR: ProofRecording,
 {
-	type Transaction = backend::TransactionFor<B, Block>;
-	type Proposal = Pin<
-		Box<
-			dyn Future<Output = Result<Proposal<Block, Self::Transaction, PR::Proof>, Self::Error>>
-				+ Send,
-		>,
-	>;
+	type Proposal =
+		Pin<Box<dyn Future<Output = Result<Proposal<Block, PR::Proof>, Self::Error>> + Send>>;
 	type Error = sp_blockchain::Error;
 	type ProofRecording = PR;
 	type Proof = PR::Proof;
@@ -304,7 +296,10 @@ where
 					.propose_with(inherent_data, inherent_digests, deadline, block_size_limit)
 					.await;
 				if tx.send(res).is_err() {
-					trace!(target: LOG_TARGET, "Could not send block production result to proposer!");
+					trace!(
+						target: LOG_TARGET,
+						"Could not send block production result to proposer!"
+					);
 				}
 			}),
 		);
@@ -329,8 +324,7 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	C::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
+	C::Api: ApiExt<Block> + BlockBuilderApi<Block>,
 	PR: ProofRecording,
 {
 	async fn propose_with(
@@ -339,8 +333,7 @@ where
 		inherent_digests: Digest,
 		deadline: time::Instant,
 		block_size_limit: Option<usize>,
-	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
-	{
+	) -> Result<Proposal<Block, PR::Proof>, sp_blockchain::Error> {
 		let propose_with_timer = time::Instant::now();
 		let mut block_builder =
 			self.client.new_block_at(self.parent_hash, inherent_digests, PR::ENABLED)?;
@@ -384,7 +377,10 @@ where
 		for inherent in inherents {
 			match block_builder.push(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
-					warn!(target: LOG_TARGET, "⚠️  Dropping non-mandatory inherent from overweight block.")
+					warn!(
+						target: LOG_TARGET,
+						"⚠️  Dropping non-mandatory inherent from overweight block."
+					)
 				},
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.was_mandatory() => {
 					error!(
@@ -393,7 +389,10 @@ where
 					return Err(ApplyExtrinsicFailed(Validity(e)))
 				},
 				Err(e) => {
-					warn!(target: LOG_TARGET, "❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e);
+					warn!(
+						target: LOG_TARGET,
+						"❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e
+					);
 				},
 				Ok(_) => {},
 			}
@@ -449,9 +448,10 @@ where
 
 			let now = (self.now)();
 			if now > deadline {
-				debug!(target: LOG_TARGET,
+				debug!(
+					target: LOG_TARGET,
 					"Consensus deadline reached when pushing block transactions, \
-					proceeding with proposing."
+				proceeding with proposing."
 				);
 				break EndProposingReason::HitDeadline
 			}
@@ -465,21 +465,26 @@ where
 				pending_iterator.report_invalid(&pending_tx);
 				if skipped < MAX_SKIPPED_TRANSACTIONS {
 					skipped += 1;
-					debug!(target: LOG_TARGET,
+					debug!(
+						target: LOG_TARGET,
 						"Transaction would overflow the block size limit, \
-						 but will try {} more transactions before quitting.",
+					 but will try {} more transactions before quitting.",
 						MAX_SKIPPED_TRANSACTIONS - skipped,
 					);
 					continue
 				} else if now < soft_deadline {
-					debug!(target: LOG_TARGET,
+					debug!(
+						target: LOG_TARGET,
 						"Transaction would overflow the block size limit, \
-						 but we still have time before the soft deadline, so \
-						 we will try a bit more."
+					 but we still have time before the soft deadline, so \
+					 we will try a bit more."
 					);
 					continue
 				} else {
-					debug!(target: LOG_TARGET, "Reached block size limit, proceeding with proposing.");
+					debug!(
+						target: LOG_TARGET,
+						"Reached block size limit, proceeding with proposing."
+					);
 					break EndProposingReason::HitBlockSizeLimit
 				}
 			}
@@ -504,22 +509,28 @@ where
 							 so we will try a bit more before quitting."
 						);
 					} else {
-						debug!(target: LOG_TARGET, "Reached block weight limit, proceeding with proposing.");
+						debug!(
+							target: LOG_TARGET,
+							"Reached block weight limit, proceeding with proposing."
+						);
 						break EndProposingReason::HitBlockWeightLimit
 					}
 				},
 				Err(e) => {
 					pending_iterator.report_invalid(&pending_tx);
-					debug!(target: LOG_TARGET, "[{:?}] Invalid transaction: {}", pending_tx_hash, e);
+					debug!(
+						target: LOG_TARGET,
+						"[{:?}] Invalid transaction: {}", pending_tx_hash, e
+					);
 					unqueue_invalid.push(pending_tx_hash);
 				},
 			}
 		};
 
 		if matches!(end_reason, EndProposingReason::HitBlockSizeLimit) && !transaction_pushed {
-			warn!(target: LOG_TARGET,
-				"Hit block size limit of `{}` without including any transaction!",
-				block_size_limit,
+			warn!(
+				target: LOG_TARGET,
+				"Hit block size limit of `{}` without including any transaction!", block_size_limit,
 			);
 		}
 

@@ -13,7 +13,6 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-hex-literal = "0.3.4"
 log = { version = "0.4.17", default-features = false }
 rand_chacha = { version = "0.2", default-features = false }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
@@ -34,28 +33,36 @@ sp-core = { version = "21.0.0", path = "../../primitives/core" }
 sp-io = { version = "23.0.0", path = "../../primitives/io" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 # Enable `VersionedRuntimeUpgrade` for the migrations that is currently still experimental.
-experimental = [
-	"frame-support/experimental"
-]
+experimental = [ "frame-support/experimental" ]
 std = [
 	"codec/std",
 	"frame-benchmarking?/std",
+	"frame-support-test/std",
 	"frame-support/std",
 	"frame-system/std",
+	"pallet-balances/std",
 	"rand_chacha/std",
 	"scale-info/std",
+	"sp-arithmetic/std",
+	"sp-core/std",
+	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"sp-io/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
-	"sp-runtime/runtime-benchmarks",
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support-test/try-runtime",
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-balances/try-runtime",
+	"sp-runtime/try-runtime",
+]

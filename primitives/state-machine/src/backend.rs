@@ -30,6 +30,7 @@ use sp_core::storage::{ChildInfo, StateVersion, TrackedStorageKey};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
 use sp_std::vec::Vec;
+use sp_trie::PrefixedMemoryDB;
 
 /// A struct containing arguments for iterating over the storage.
 #[derive(Default)]
@@ -168,6 +169,12 @@ where
 	}
 }
 
+/// The transaction type used by [`Backend`].
+///
+/// This transaction contains all the changes that need to be applied to the backend to create the
+/// state for a new block.
+pub type BackendTransaction<H> = PrefixedMemoryDB<H>;
+
 /// A state backend is used to read state data and can have changes committed
 /// to it.
 ///
@@ -176,11 +183,8 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// An error type when fetching data is not possible.
 	type Error: super::Error;
 
-	/// Storage changes to be applied if committing
-	type Transaction: Consolidate + Default + Send;
-
 	/// Type of trie backend storage.
-	type TrieBackendStorage: TrieBackendStorage<H, Overlay = Self::Transaction>;
+	type TrieBackendStorage: TrieBackendStorage<H>;
 
 	/// Type of the raw storage iterator.
 	type RawIter: StorageIterator<H, Backend = Self, Error = Self::Error>;
@@ -236,7 +240,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (H::Out, Self::Transaction)
+	) -> (H::Out, BackendTransaction<H>)
 	where
 		H::Out: Ord;
 
@@ -248,7 +252,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (H::Out, bool, Self::Transaction)
+	) -> (H::Out, bool, BackendTransaction<H>)
 	where
 		H::Out: Ord;
 
@@ -283,11 +287,11 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 			Item = (&'a ChildInfo, impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>),
 		>,
 		state_version: StateVersion,
-	) -> (H::Out, Self::Transaction)
+	) -> (H::Out, BackendTransaction<H>)
 	where
 		H::Out: Ord + Encode,
 	{
-		let mut txs: Self::Transaction = Default::default();
+		let mut txs = BackendTransaction::default();
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
 		for (child_info, child_delta) in child_deltas {
@@ -308,6 +312,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 			state_version,
 		);
 		txs.consolidate(parent_txs);
+
 		(root, txs)
 	}
 
@@ -331,7 +336,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn commit(
 		&self,
 		_: H::Out,
-		_: Self::Transaction,
+		_: BackendTransaction<H>,
 		_: StorageCollection,
 		_: ChildStorageCollection,
 	) -> Result<(), Self::Error> {
@@ -375,34 +380,6 @@ pub trait AsTrieBackend<H: Hasher, C = sp_trie::cache::LocalTrieCache<H>> {
 
 	/// Return the type as [`TrieBackend`].
 	fn as_trie_backend(&self) -> &TrieBackend<Self::TrieBackendStorage, H, C>;
-}
-
-/// Trait that allows consolidate two transactions together.
-pub trait Consolidate {
-	/// Consolidate two transactions into one.
-	fn consolidate(&mut self, other: Self);
-}
-
-impl Consolidate for () {
-	fn consolidate(&mut self, _: Self) {
-		()
-	}
-}
-
-impl Consolidate for Vec<(Option<ChildInfo>, StorageCollection)> {
-	fn consolidate(&mut self, mut other: Self) {
-		self.append(&mut other);
-	}
-}
-
-impl<H, KF> Consolidate for sp_trie::GenericMemoryDB<H, KF>
-where
-	H: Hasher,
-	KF: sp_trie::KeyFunction<H>,
-{
-	fn consolidate(&mut self, other: Self) {
-		sp_trie::GenericMemoryDB::consolidate(self, other)
-	}
 }
 
 /// Wrapper to create a [`RuntimeCode`] from a type that implements [`Backend`].

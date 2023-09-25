@@ -32,7 +32,10 @@ node-cli = { path = "bin/node/cli" }
 # Exists here to be backwards compatible and to support `cargo run` in the workspace.
 #
 # Just uses the `node-cli` main binary. `node-cli` itself also again exposes the node as
-# `substrate-node`. Using `node-cli` directly you can also enable features.
+# `substrate-node`.
+
+# `cargo run` on its own doesn't support features. To use features you must explicitly use
+# `node-cli` in your command, e.g. `cargo run -p node-cli --features try-runtime ...`.
 [[bin]]
 name = "substrate"
 path = "bin/node/cli/bin/main.rs"
@@ -128,6 +131,7 @@ members = [
 	"frame/benchmarking",
 	"frame/benchmarking/pov",
 	"frame/bounties",
+	"frame/broker",
 	"frame/child-bounties",
 	"frame/collective",
 	"frame/contracts",
@@ -184,6 +188,8 @@ members = [
 	"frame/recovery",
 	"frame/referenda",
 	"frame/remark",
+	"frame/tx-pause",
+	"frame/safe-mode",
 	"frame/salary",
 	"frame/scheduler",
 	"frame/scored-pool",

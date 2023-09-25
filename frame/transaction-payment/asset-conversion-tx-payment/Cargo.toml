@@ -31,17 +31,28 @@ pallet-assets = { version = "4.0.0-dev", path = "../../assets" }
 pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
-	"scale-info/std",
 	"codec/std",
-	"sp-std/std",
-	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
-	"sp-io/std",
-	"sp-core/std",
 	"pallet-asset-conversion/std",
+	"pallet-assets/std",
+	"pallet-balances/std",
 	"pallet-transaction-payment/std",
+	"scale-info/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"sp-storage/std",
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-asset-conversion/try-runtime",
+	"pallet-assets/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-transaction-payment/try-runtime",
+	"sp-runtime/try-runtime",
+]

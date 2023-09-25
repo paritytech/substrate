@@ -17,15 +17,17 @@
 
 use std::vec;
 
-use frame_election_provider_support::{onchain, SequentialPhragmen};
+use frame_election_provider_support::{
+	bounds::{ElectionBounds, ElectionBoundsBuilder},
+	onchain, SequentialPhragmen,
+};
 use frame_support::{
 	construct_runtime, parameter_types,
-	sp_io::TestExternalities,
 	traits::{ConstU16, ConstU32, ConstU64, KeyOwnerProofSystem, OnFinalize, OnInitialize},
-	BasicExternalities,
 };
 use pallet_session::historical as pallet_session_historical;
 use sp_core::{crypto::KeyTypeId, ConstU128, H256};
+use sp_io::TestExternalities;
 use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	curve::PiecewiseLinear,
@@ -35,11 +37,12 @@ use sp_runtime::{
 	BuildStorage, Perbill,
 };
 use sp_staking::{EraIndex, SessionIndex};
+use sp_state_machine::BasicExternalities;
 
 use crate as pallet_beefy;
 
 pub use sp_consensus_beefy::{
-	crypto::{AuthorityId as BeefyId, AuthoritySignature as BeefySignature},
+	ecdsa_crypto::{AuthorityId as BeefyId, AuthoritySignature as BeefySignature},
 	ConsensusLog, EquivocationProof, BEEFY_ENGINE_ID,
 };
 
@@ -184,6 +187,7 @@ parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
+	pub static ElectionsBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::default().build();
 }
 
 pub struct OnChainSeqPhragmen;
@@ -193,12 +197,10 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = ConstU32<100>;
-	type VotersBound = ConstU32<{ u32::MAX }>;
-	type TargetsBound = ConstU32<{ u32::MAX }>;
+	type Bounds = ElectionsBoundsOnChain;
 }
 
 impl pallet_staking::Config for Test {
-	type MaxNominations = ConstU32<16>;
 	type RewardRemainder = ();
 	type CurrencyToVote = ();
 	type RuntimeEvent = RuntimeEvent;
@@ -220,6 +222,7 @@ impl pallet_staking::Config for Test {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
+	type NominationsQuota = pallet_staking::FixedNominationsQuota<16>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = ConstU32<84>;
 	type EventListeners = ();

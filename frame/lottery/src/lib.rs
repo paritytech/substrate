@@ -61,12 +61,12 @@ use frame_support::{
 	pallet_prelude::MaxEncodedLen,
 	storage::bounded_vec::BoundedVec,
 	traits::{Currency, ExistenceRequirement::KeepAlive, Get, Randomness, ReservableCurrency},
-	PalletId, RuntimeDebug,
+	PalletId,
 };
 pub use pallet::*;
 use sp_runtime::{
 	traits::{AccountIdConversion, Saturating, Zero},
-	ArithmeticError, DispatchError,
+	ArithmeticError, DispatchError, RuntimeDebug,
 };
 use sp_std::prelude::*;
 pub use weights::WeightInfo;

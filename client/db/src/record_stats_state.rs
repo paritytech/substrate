@@ -21,12 +21,12 @@
 use crate::stats::StateUsageStats;
 use sp_core::storage::ChildInfo;
 use sp_runtime::{
-	traits::{Block as BlockT, HashFor},
+	traits::{Block as BlockT, HashingFor},
 	StateVersion,
 };
 use sp_state_machine::{
 	backend::{AsTrieBackend, Backend as StateBackend},
-	IterArgs, StorageIterator, StorageKey, StorageValue, TrieBackend,
+	BackendTransaction, IterArgs, StorageIterator, StorageKey, StorageValue, TrieBackend,
 };
 use std::sync::Arc;
 
@@ -56,7 +56,7 @@ impl<S, B: BlockT> Drop for RecordStatsState<S, B> {
 	}
 }
 
-impl<S: StateBackend<HashFor<B>>, B: BlockT> RecordStatsState<S, B> {
+impl<S: StateBackend<HashingFor<B>>, B: BlockT> RecordStatsState<S, B> {
 	/// Create a new instance wrapping generic State and shared cache.
 	pub(crate) fn new(
 		state: S,
@@ -75,15 +75,15 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> RecordStatsState<S, B> {
 
 pub struct RawIter<S, B>
 where
-	S: StateBackend<HashFor<B>>,
+	S: StateBackend<HashingFor<B>>,
 	B: BlockT,
 {
-	inner: <S as StateBackend<HashFor<B>>>::RawIter,
+	inner: <S as StateBackend<HashingFor<B>>>::RawIter,
 }
 
-impl<S, B> StorageIterator<HashFor<B>> for RawIter<S, B>
+impl<S, B> StorageIterator<HashingFor<B>> for RawIter<S, B>
 where
-	S: StateBackend<HashFor<B>>,
+	S: StateBackend<HashingFor<B>>,
 	B: BlockT,
 {
 	type Backend = RecordStatsState<S, B>;
@@ -105,9 +105,10 @@ where
 	}
 }
 
-impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for RecordStatsState<S, B> {
+impl<S: StateBackend<HashingFor<B>>, B: BlockT> StateBackend<HashingFor<B>>
+	for RecordStatsState<S, B>
+{
 	type Error = S::Error;
-	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
 	type RawIter = RawIter<S, B>;
 
@@ -171,7 +172,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Record
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, Self::Transaction) {
+	) -> (B::Hash, BackendTransaction<HashingFor<B>>) {
 		self.state.storage_root(delta, state_version)
 	}
 
@@ -180,7 +181,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Record
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, Self::Transaction) {
+	) -> (B::Hash, bool, BackendTransaction<HashingFor<B>>) {
 		self.state.child_storage_root(child_info, delta, state_version)
 	}
 
@@ -199,12 +200,12 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Record
 	}
 }
 
-impl<S: StateBackend<HashFor<B>> + AsTrieBackend<HashFor<B>>, B: BlockT> AsTrieBackend<HashFor<B>>
-	for RecordStatsState<S, B>
+impl<S: StateBackend<HashingFor<B>> + AsTrieBackend<HashingFor<B>>, B: BlockT>
+	AsTrieBackend<HashingFor<B>> for RecordStatsState<S, B>
 {
-	type TrieBackendStorage = <S as AsTrieBackend<HashFor<B>>>::TrieBackendStorage;
+	type TrieBackendStorage = <S as AsTrieBackend<HashingFor<B>>>::TrieBackendStorage;
 
-	fn as_trie_backend(&self) -> &TrieBackend<Self::TrieBackendStorage, HashFor<B>> {
+	fn as_trie_backend(&self) -> &TrieBackend<Self::TrieBackendStorage, HashingFor<B>> {
 		self.state.as_trie_backend()
 	}
 }

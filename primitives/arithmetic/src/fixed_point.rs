@@ -45,23 +45,25 @@ pub trait FixedPointOperand:
 	+ Bounded
 	+ Zero
 	+ Saturating
-	+ PartialOrd
+	+ PartialOrd<Self>
 	+ UniqueSaturatedInto<u128>
 	+ TryFrom<u128>
 	+ CheckedNeg
 {
 }
 
-impl FixedPointOperand for i128 {}
-impl FixedPointOperand for u128 {}
-impl FixedPointOperand for i64 {}
-impl FixedPointOperand for u64 {}
-impl FixedPointOperand for i32 {}
-impl FixedPointOperand for u32 {}
-impl FixedPointOperand for i16 {}
-impl FixedPointOperand for u16 {}
-impl FixedPointOperand for i8 {}
-impl FixedPointOperand for u8 {}
+impl<T> FixedPointOperand for T where
+	T: Copy
+		+ Clone
+		+ Bounded
+		+ Zero
+		+ Saturating
+		+ PartialOrd<Self>
+		+ UniqueSaturatedInto<u128>
+		+ TryFrom<u128>
+		+ CheckedNeg
+{
+}
 
 /// Something that implements a decimal fixed point number.
 ///

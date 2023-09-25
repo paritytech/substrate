@@ -75,7 +75,7 @@ pub struct JustificationRequest<B: Block> {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum Error {
+pub enum Error {
 	#[error(transparent)]
 	Client(#[from] sp_blockchain::Error),
 
@@ -102,4 +102,7 @@ pub(crate) enum Error {
 
 	#[error("Internal error while getting response.")]
 	ResponseError,
+
+	#[error("On-demand requests receiver stream terminated.")]
+	RequestsReceiverStreamClosed,
 }

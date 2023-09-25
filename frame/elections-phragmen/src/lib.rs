@@ -107,6 +107,7 @@ use frame_support::{
 	},
 	weights::Weight,
 };
+use log;
 use scale_info::TypeInfo;
 use sp_npos_elections::{ElectionResult, ExtendedBalance};
 use sp_runtime::{
@@ -309,7 +310,7 @@ pub mod pallet {
 					frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND as f32
 			};
 
-			frame_support::log::debug!(
+			log::debug!(
 				target: LOG_TARGET,
 				"election weight {}s ({:?}) // chain's block weight {}s ({:?})",
 				to_seconds(&election_weight),

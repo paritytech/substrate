@@ -37,8 +37,34 @@ pub trait EnsureOrigin<OuterOrigin> {
 		Self::try_origin(o).map_err(|_| BadOrigin)
 	}
 
+	/// The same as `ensure_origin` except that Root origin will always pass. This can only be
+	/// used if `Success` has a sensible impl of `Default` since that will be used in the result.
+	fn ensure_origin_or_root(o: OuterOrigin) -> Result<Option<Self::Success>, BadOrigin>
+	where
+		OuterOrigin: OriginTrait,
+	{
+		if o.caller().is_root() {
+			return Ok(None)
+		} else {
+			Self::ensure_origin(o).map(Some)
+		}
+	}
+
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin>;
+
+	/// The same as `try_origin` except that Root origin will always pass. This can only be
+	/// used if `Success` has a sensible impl of `Default` since that will be used in the result.
+	fn try_origin_or_root(o: OuterOrigin) -> Result<Option<Self::Success>, OuterOrigin>
+	where
+		OuterOrigin: OriginTrait,
+	{
+		if o.caller().is_root() {
+			return Ok(None)
+		} else {
+			Self::try_origin(o).map(Some)
+		}
+	}
 
 	/// Attempt to get an outer origin capable of passing `try_origin` check. May return `Err` if it
 	/// is impossible.

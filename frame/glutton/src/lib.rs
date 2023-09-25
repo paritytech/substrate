@@ -25,6 +25,7 @@
 //! `Compute` and `Storage` parameters the pallet consumes the adequate amount
 //! of weight.
 
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -75,11 +76,20 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event {
 		/// The pallet has been (re)initialized.
-		PalletInitialized { reinit: bool },
+		PalletInitialized {
+			/// Whether the pallet has been re-initialized.
+			reinit: bool,
+		},
 		/// The computation limit has been updated.
-		ComputationLimitSet { compute: FixedU64 },
+		ComputationLimitSet {
+			/// The computation limit.
+			compute: FixedU64,
+		},
 		/// The storage limit has been updated.
-		StorageLimitSet { storage: FixedU64 },
+		StorageLimitSet {
+			/// The storage limit.
+			storage: FixedU64,
+		},
 	}
 
 	#[pallet::error]
@@ -131,10 +141,14 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
+		/// The compute limit.
 		pub compute: FixedU64,
+		/// The storage limit.
 		pub storage: FixedU64,
+		/// The amount of trash data for wasting proof size.
 		pub trash_data_count: u32,
 		#[serde(skip)]
+		/// The required configuration field.
 		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
@@ -213,7 +227,7 @@ pub mod pallet {
 			new_count: u32,
 			witness_count: Option<u32>,
 		) -> DispatchResult {
-			T::AdminOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
+			T::AdminOrigin::ensure_origin_or_root(origin)?;
 
 			let current_count = TrashDataCount::<T>::get();
 			ensure!(
@@ -238,7 +252,7 @@ pub mod pallet {
 		/// Only callable by Root or `AdminOrigin`.
 		#[pallet::call_index(1)]
 		pub fn set_compute(origin: OriginFor<T>, compute: FixedU64) -> DispatchResult {
-			T::AdminOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
+			T::AdminOrigin::ensure_origin_or_root(origin)?;
 
 			ensure!(compute <= RESOURCE_HARD_LIMIT, Error::<T>::InsaneLimit);
 			Compute::<T>::set(compute);
@@ -248,7 +262,7 @@ pub mod pallet {
 		}
 
 		/// Set how much of the remaining `proof_size` weight should be consumed by `on_idle`.
-		//
+		///
 		/// `1.0` means that all remaining `proof_size` will be consumed. The PoV benchmarking
 		/// results that are used here are likely an over-estimation. 100% intended consumption will
 		/// therefore translate to less than 100% actual consumption.
@@ -256,7 +270,7 @@ pub mod pallet {
 		/// Only callable by Root or `AdminOrigin`.
 		#[pallet::call_index(2)]
 		pub fn set_storage(origin: OriginFor<T>, storage: FixedU64) -> DispatchResult {
-			T::AdminOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
+			T::AdminOrigin::ensure_origin_or_root(origin)?;
 
 			ensure!(storage <= RESOURCE_HARD_LIMIT, Error::<T>::InsaneLimit);
 			Storage::<T>::set(storage);

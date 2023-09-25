@@ -17,15 +17,20 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use futures::channel::oneshot;
+use parking_lot::Mutex;
 use sc_client_api::Backend;
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{hash_map::Entry, HashMap},
-	sync::Arc,
+	sync::{atomic::AtomicBool, Arc},
 	time::{Duration, Instant},
 };
 
-use crate::chain_head::subscription::SubscriptionManagementError;
+use crate::chain_head::{subscription::SubscriptionManagementError, FollowEvent};
+
+/// The queue size after which the `sc_utils::mpsc::tracing_unbounded` would produce warnings.
+const QUEUE_SIZE_WARNING: usize = 512;
 
 /// The state machine of a block of a single subscription ID.
 ///
@@ -103,6 +108,234 @@ impl BlockStateMachine {
 	}
 }
 
+/// Limit the number of ongoing operations across methods.
+struct LimitOperations {
+	/// Limit the number of ongoing operations for this subscription.
+	semaphore: Arc<tokio::sync::Semaphore>,
+}
+
+impl LimitOperations {
+	/// Constructs a new [`LimitOperations`].
+	fn new(max_operations: usize) -> Self {
+		LimitOperations { semaphore: Arc::new(tokio::sync::Semaphore::new(max_operations)) }
+	}
+
+	/// Reserves capacity to execute at least one operation and at most the requested items.
+	///
+	/// Dropping [`PermitOperations`] without executing an operation will release
+	/// the reserved capacity.
+	///
+	/// Returns nothing if there's no space available, else returns a permit
+	/// that guarantees that at least one operation can be executed.
+	fn reserve_at_most(&self, to_reserve: usize) -> Option<PermitOperations> {
+		let num_ops = std::cmp::min(self.semaphore.available_permits(), to_reserve);
+
+		if num_ops == 0 {
+			return None
+		}
+
+		let permits = Arc::clone(&self.semaphore)
+			.try_acquire_many_owned(num_ops.try_into().ok()?)
+			.ok()?;
+
+		Some(PermitOperations { num_ops, _permit: permits })
+	}
+}
+
+/// Permits a number of operations to be executed.
+///
+/// [`PermitOperations`] are returned by [`LimitOperations::reserve()`] and are used
+/// to guarantee the RPC server can execute the number of operations.
+///
+/// The number of reserved items are given back to the [`LimitOperations`] on drop.
+struct PermitOperations {
+	/// The number of operations permitted (reserved).
+	num_ops: usize,
+	/// The permit for these operations.
+	_permit: tokio::sync::OwnedSemaphorePermit,
+}
+
+/// The state of one operation.
+///
+/// This is directly exposed to users via `chain_head_unstable_continue` and
+/// `chain_head_unstable_stop_operation`.
+#[derive(Clone)]
+pub struct OperationState {
+	/// The shared operation state that holds information about the
+	/// `waitingForContinue` event and cancellation.
+	shared_state: Arc<SharedOperationState>,
+	/// Send notifications when the user calls `chainHead_continue` method.
+	send_continue: tokio::sync::mpsc::Sender<()>,
+}
+
+impl OperationState {
+	/// Returns true if `chainHead_continue` is called after the
+	/// `waitingForContinue` event was emitted for the associated
+	/// operation ID.
+	pub fn submit_continue(&self) -> bool {
+		// `waitingForContinue` not generated.
+		if !self.shared_state.requested_continue.load(std::sync::atomic::Ordering::Acquire) {
+			return false
+		}
+
+		// Has enough capacity for 1 message.
+		// Can fail if the `stop_operation` propagated the stop first.
+		self.send_continue.try_send(()).is_ok()
+	}
+
+	/// Stops the operation if `waitingForContinue` event was emitted for the associated
+	/// operation ID.
+	///
+	/// Returns nothing in accordance with `chainHead_unstable_stopOperation`.
+	pub fn stop_operation(&self) {
+		// `waitingForContinue` not generated.
+		if !self.shared_state.requested_continue.load(std::sync::atomic::Ordering::Acquire) {
+			return
+		}
+
+		self.shared_state
+			.operation_stopped
+			.store(true, std::sync::atomic::Ordering::Release);
+
+		// Send might not have enough capacity if `submit_continue` was sent first.
+		// However, the `operation_stopped` boolean was set.
+		let _ = self.send_continue.try_send(());
+	}
+}
+
+/// The shared operation state between the backend [`RegisteredOperation`] and frontend
+/// [`RegisteredOperation`].
+struct SharedOperationState {
+	/// True if the `chainHead` generated `waitingForContinue` event.
+	requested_continue: AtomicBool,
+	/// True if the operation was cancelled by the user.
+	operation_stopped: AtomicBool,
+}
+
+impl SharedOperationState {
+	/// Constructs a new [`SharedOperationState`].
+	///
+	/// This is efficiently cloned under a single heap allocation.
+	fn new() -> Arc<Self> {
+		Arc::new(SharedOperationState {
+			requested_continue: AtomicBool::new(false),
+			operation_stopped: AtomicBool::new(false),
+		})
+	}
+}
+
+/// The registered operation passed to the `chainHead` methods.
+///
+/// This is used internally by the `chainHead` methods.
+pub struct RegisteredOperation {
+	/// The shared operation state that holds information about the
+	/// `waitingForContinue` event and cancellation.
+	shared_state: Arc<SharedOperationState>,
+	/// Receive notifications when the user calls `chainHead_continue` method.
+	recv_continue: tokio::sync::mpsc::Receiver<()>,
+	/// The operation ID of the request.
+	operation_id: String,
+	/// Track the operations ID of this subscription.
+	operations: Arc<Mutex<HashMap<String, OperationState>>>,
+	/// Permit a number of items to be executed by this operation.
+	permit: PermitOperations,
+}
+
+impl RegisteredOperation {
+	/// Wait until the user calls `chainHead_continue` or the operation
+	/// is cancelled via `chainHead_stopOperation`.
+	pub async fn wait_for_continue(&mut self) {
+		self.shared_state
+			.requested_continue
+			.store(true, std::sync::atomic::Ordering::Release);
+
+		// The sender part of this channel is around for as long as this object exists,
+		// because it is stored in the `OperationState` of the `operations` field.
+		// The sender part is removed from tracking when this object is dropped.
+		let _ = self.recv_continue.recv().await;
+
+		self.shared_state
+			.requested_continue
+			.store(false, std::sync::atomic::Ordering::Release);
+	}
+
+	/// Returns true if the current operation was stopped.
+	pub fn was_stopped(&self) -> bool {
+		self.shared_state.operation_stopped.load(std::sync::atomic::Ordering::Acquire)
+	}
+
+	/// Get the operation ID.
+	pub fn operation_id(&self) -> String {
+		self.operation_id.clone()
+	}
+
+	/// Returns the number of reserved elements for this permit.
+	///
+	/// This can be smaller than the number of items requested via [`LimitOperations::reserve()`].
+	pub fn num_reserved(&self) -> usize {
+		self.permit.num_ops
+	}
+}
+
+impl Drop for RegisteredOperation {
+	fn drop(&mut self) {
+		let mut operations = self.operations.lock();
+		operations.remove(&self.operation_id);
+	}
+}
+
+/// The ongoing operations of a subscription.
+struct Operations {
+	/// The next operation ID to be generated.
+	next_operation_id: usize,
+	/// Limit the number of ongoing operations.
+	limits: LimitOperations,
+	/// Track the operations ID of this subscription.
+	operations: Arc<Mutex<HashMap<String, OperationState>>>,
+}
+
+impl Operations {
+	/// Constructs a new [`Operations`].
+	fn new(max_operations: usize) -> Self {
+		Operations {
+			next_operation_id: 0,
+			limits: LimitOperations::new(max_operations),
+			operations: Default::default(),
+		}
+	}
+
+	/// Register a new operation.
+	pub fn register_operation(&mut self, to_reserve: usize) -> Option<RegisteredOperation> {
+		let permit = self.limits.reserve_at_most(to_reserve)?;
+
+		let operation_id = self.next_operation_id();
+
+		// At most one message can be sent.
+		let (send_continue, recv_continue) = tokio::sync::mpsc::channel(1);
+		let shared_state = SharedOperationState::new();
+
+		let state = OperationState { send_continue, shared_state: shared_state.clone() };
+
+		// Cloned operations for removing the current ID on drop.
+		let operations = self.operations.clone();
+		operations.lock().insert(operation_id.clone(), state);
+
+		Some(RegisteredOperation { shared_state, operation_id, recv_continue, operations, permit })
+	}
+
+	/// Get the associated operation state with the ID.
+	pub fn get_operation(&self, id: &str) -> Option<OperationState> {
+		self.operations.lock().get(id).map(|state| state.clone())
+	}
+
+	/// Generate the next operation ID for this subscription.
+	fn next_operation_id(&mut self) -> String {
+		let op_id = self.next_operation_id;
+		self.next_operation_id += 1;
+		op_id.to_string()
+	}
+}
+
 struct BlockState {
 	/// The state machine of this block.
 	state_machine: BlockStateMachine,
@@ -116,6 +349,12 @@ struct SubscriptionState<Block: BlockT> {
 	with_runtime: bool,
 	/// Signals the "Stop" event.
 	tx_stop: Option<oneshot::Sender<()>>,
+	/// The sender of message responses to the `chainHead_follow` events.
+	///
+	/// This object is cloned between methods.
+	response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
+	/// The ongoing operations of a subscription.
+	operations: Operations,
 	/// Track the block hashes available for this subscription.
 	///
 	/// This implementation assumes:
@@ -227,6 +466,18 @@ impl<Block: BlockT> SubscriptionState<Block> {
 		}
 		timestamp
 	}
+
+	/// Register a new operation.
+	///
+	/// The registered operation can execute at least one item and at most the requested items.
+	fn register_operation(&mut self, to_reserve: usize) -> Option<RegisteredOperation> {
+		self.operations.register_operation(to_reserve)
+	}
+
+	/// Get the associated operation state with the ID.
+	pub fn get_operation(&self, id: &str) -> Option<OperationState> {
+		self.operations.get_operation(id)
+	}
 }
 
 /// Keeps a specific block pinned while the handle is alive.
@@ -235,6 +486,8 @@ impl<Block: BlockT> SubscriptionState<Block> {
 pub struct BlockGuard<Block: BlockT, BE: Backend<Block>> {
 	hash: Block::Hash,
 	with_runtime: bool,
+	response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
+	operation: RegisteredOperation,
 	backend: Arc<BE>,
 }
 
@@ -251,18 +504,30 @@ impl<Block: BlockT, BE: Backend<Block>> BlockGuard<Block, BE> {
 	fn new(
 		hash: Block::Hash,
 		with_runtime: bool,
+		response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
+		operation: RegisteredOperation,
 		backend: Arc<BE>,
 	) -> Result<Self, SubscriptionManagementError> {
 		backend
 			.pin_block(hash)
 			.map_err(|err| SubscriptionManagementError::Custom(err.to_string()))?;
 
-		Ok(Self { hash, with_runtime, backend })
+		Ok(Self { hash, with_runtime, response_sender, operation, backend })
 	}
 
 	/// The `with_runtime` flag of the subscription.
 	pub fn has_runtime(&self) -> bool {
 		self.with_runtime
+	}
+
+	/// Send message responses from the `chainHead` methods to `chainHead_follow`.
+	pub fn response_sender(&self) -> TracingUnboundedSender<FollowEvent<Block::Hash>> {
+		self.response_sender.clone()
+	}
+
+	/// Get the details of the registered operation.
+	pub fn operation(&mut self) -> &mut RegisteredOperation {
+		&mut self.operation
 	}
 }
 
@@ -270,6 +535,15 @@ impl<Block: BlockT, BE: Backend<Block>> Drop for BlockGuard<Block, BE> {
 	fn drop(&mut self) {
 		self.backend.unpin_block(self.hash);
 	}
+}
+
+/// The data propagated back to the `chainHead_follow` method after
+/// the subscription is successfully inserted.
+pub struct InsertedSubscriptionData<Block: BlockT> {
+	/// Signal that the subscription must stop.
+	pub rx_stop: oneshot::Receiver<()>,
+	/// Receive message responses from the `chainHead` methods.
+	pub response_receiver: TracingUnboundedReceiver<FollowEvent<Block::Hash>>,
 }
 
 pub struct SubscriptionsInner<Block: BlockT, BE: Backend<Block>> {
@@ -282,6 +556,8 @@ pub struct SubscriptionsInner<Block: BlockT, BE: Backend<Block>> {
 	global_max_pinned_blocks: usize,
 	/// The maximum duration that a block is allowed to be pinned per subscription.
 	local_max_pin_duration: Duration,
+	/// The maximum number of ongoing operations per subscription.
+	max_ongoing_operations: usize,
 	/// Map the subscription ID to internal details of the subscription.
 	subs: HashMap<String, SubscriptionState<Block>>,
 	/// Backend pinning / unpinning blocks.
@@ -295,12 +571,14 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 	pub fn new(
 		global_max_pinned_blocks: usize,
 		local_max_pin_duration: Duration,
+		max_ongoing_operations: usize,
 		backend: Arc<BE>,
 	) -> Self {
 		SubscriptionsInner {
 			global_blocks: Default::default(),
 			global_max_pinned_blocks,
 			local_max_pin_duration,
+			max_ongoing_operations,
 			subs: Default::default(),
 			backend,
 		}
@@ -311,16 +589,21 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 		&mut self,
 		sub_id: String,
 		with_runtime: bool,
-	) -> Option<oneshot::Receiver<()>> {
+	) -> Option<InsertedSubscriptionData<Block>> {
 		if let Entry::Vacant(entry) = self.subs.entry(sub_id) {
 			let (tx_stop, rx_stop) = oneshot::channel();
+			let (response_sender, response_receiver) =
+				tracing_unbounded("chain-head-method-responses", QUEUE_SIZE_WARNING);
 			let state = SubscriptionState::<Block> {
 				with_runtime,
 				tx_stop: Some(tx_stop),
+				response_sender,
 				blocks: Default::default(),
+				operations: Operations::new(self.max_ongoing_operations),
 			};
 			entry.insert(state);
-			Some(rx_stop)
+
+			Some(InsertedSubscriptionData { rx_stop, response_receiver })
 		} else {
 			None
 		}
@@ -490,8 +773,9 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 		&mut self,
 		sub_id: &str,
 		hash: Block::Hash,
+		to_reserve: usize,
 	) -> Result<BlockGuard<Block, BE>, SubscriptionManagementError> {
-		let Some(sub) = self.subs.get(sub_id) else {
+		let Some(sub) = self.subs.get_mut(sub_id) else {
 			return Err(SubscriptionManagementError::SubscriptionAbsent)
 		};
 
@@ -499,7 +783,23 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 			return Err(SubscriptionManagementError::BlockHashAbsent)
 		}
 
-		BlockGuard::new(hash, sub.with_runtime, self.backend.clone())
+		let Some(operation) = sub.register_operation(to_reserve) else {
+			// Error when the server cannot execute at least one operation.
+			return Err(SubscriptionManagementError::ExceededLimits)
+		};
+
+		BlockGuard::new(
+			hash,
+			sub.with_runtime,
+			sub.response_sender.clone(),
+			operation,
+			self.backend.clone(),
+		)
+	}
+
+	pub fn get_operation(&mut self, sub_id: &str, id: &str) -> Option<OperationState> {
+		let state = self.subs.get(sub_id)?;
+		state.get_operation(id)
 	}
 }
 
@@ -515,6 +815,9 @@ mod tests {
 		runtime::{Block, RuntimeApi},
 		Client, ClientBlockImportExt, GenesisInit,
 	};
+
+	/// Maximum number of ongoing operations per subscription ID.
+	const MAX_OPERATIONS_PER_SUB: usize = 16;
 
 	fn init_backend() -> (
 		Arc<sc_client_api::in_mem::Backend<Block>>,
@@ -604,9 +907,13 @@ mod tests {
 
 	#[test]
 	fn sub_state_register_twice() {
+		let (response_sender, _response_receiver) =
+			tracing_unbounded("test-chain-head-method-responses", QUEUE_SIZE_WARNING);
 		let mut sub_state = SubscriptionState::<Block> {
 			with_runtime: false,
 			tx_stop: None,
+			response_sender,
+			operations: Operations::new(MAX_OPERATIONS_PER_SUB),
 			blocks: Default::default(),
 		};
 
@@ -629,10 +936,14 @@ mod tests {
 
 	#[test]
 	fn sub_state_register_unregister() {
+		let (response_sender, _response_receiver) =
+			tracing_unbounded("test-chain-head-method-responses", QUEUE_SIZE_WARNING);
 		let mut sub_state = SubscriptionState::<Block> {
 			with_runtime: false,
 			tx_stop: None,
+			response_sender,
 			blocks: Default::default(),
+			operations: Operations::new(MAX_OPERATIONS_PER_SUB),
 		};
 
 		let hash = H256::random();
@@ -664,13 +975,14 @@ mod tests {
 	fn subscription_lock_block() {
 		let builder = TestClientBuilder::new();
 		let backend = builder.backend();
-		let mut subs = SubscriptionsInner::new(10, Duration::from_secs(10), backend);
+		let mut subs =
+			SubscriptionsInner::new(10, Duration::from_secs(10), MAX_OPERATIONS_PER_SUB, backend);
 
 		let id = "abc".to_string();
 		let hash = H256::random();
 
 		// Subscription not inserted.
-		let err = subs.lock_block(&id, hash).unwrap_err();
+		let err = subs.lock_block(&id, hash, 1).unwrap_err();
 		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
 
 		let _stop = subs.insert_subscription(id.clone(), true).unwrap();
@@ -678,13 +990,13 @@ mod tests {
 		assert!(subs.insert_subscription(id.clone(), true).is_none());
 
 		// No block hash.
-		let err = subs.lock_block(&id, hash).unwrap_err();
+		let err = subs.lock_block(&id, hash, 1).unwrap_err();
 		assert_eq!(err, SubscriptionManagementError::BlockHashAbsent);
 
 		subs.remove_subscription(&id);
 
 		// No subscription.
-		let err = subs.lock_block(&id, hash).unwrap_err();
+		let err = subs.lock_block(&id, hash, 1).unwrap_err();
 		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
 	}
 
@@ -696,7 +1008,8 @@ mod tests {
 		let hash = block.header.hash();
 		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
-		let mut subs = SubscriptionsInner::new(10, Duration::from_secs(10), backend);
+		let mut subs =
+			SubscriptionsInner::new(10, Duration::from_secs(10), MAX_OPERATIONS_PER_SUB, backend);
 		let id = "abc".to_string();
 
 		let _stop = subs.insert_subscription(id.clone(), true).unwrap();
@@ -704,7 +1017,7 @@ mod tests {
 		// First time we are pinning the block.
 		assert_eq!(subs.pin_block(&id, hash).unwrap(), true);
 
-		let block = subs.lock_block(&id, hash).unwrap();
+		let block = subs.lock_block(&id, hash, 1).unwrap();
 		// Subscription started with runtime updates
 		assert_eq!(block.has_runtime(), true);
 
@@ -714,7 +1027,7 @@ mod tests {
 
 		// Unpin the block.
 		subs.unpin_block(&id, hash).unwrap();
-		let err = subs.lock_block(&id, hash).unwrap_err();
+		let err = subs.lock_block(&id, hash, 1).unwrap_err();
 		assert_eq!(err, SubscriptionManagementError::BlockHashAbsent);
 	}
 
@@ -725,7 +1038,8 @@ mod tests {
 		let hash = block.header.hash();
 		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
-		let mut subs = SubscriptionsInner::new(10, Duration::from_secs(10), backend);
+		let mut subs =
+			SubscriptionsInner::new(10, Duration::from_secs(10), MAX_OPERATIONS_PER_SUB, backend);
 		let id = "abc".to_string();
 
 		let _stop = subs.insert_subscription(id.clone(), true).unwrap();
@@ -773,7 +1087,8 @@ mod tests {
 		let hash_3 = block.header.hash();
 		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
-		let mut subs = SubscriptionsInner::new(10, Duration::from_secs(10), backend);
+		let mut subs =
+			SubscriptionsInner::new(10, Duration::from_secs(10), MAX_OPERATIONS_PER_SUB, backend);
 		let id_1 = "abc".to_string();
 		let id_2 = "abcd".to_string();
 
@@ -818,7 +1133,8 @@ mod tests {
 		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
 		// Maximum number of pinned blocks is 2.
-		let mut subs = SubscriptionsInner::new(2, Duration::from_secs(10), backend);
+		let mut subs =
+			SubscriptionsInner::new(2, Duration::from_secs(10), MAX_OPERATIONS_PER_SUB, backend);
 		let id_1 = "abc".to_string();
 		let id_2 = "abcd".to_string();
 
@@ -842,10 +1158,10 @@ mod tests {
 		assert_eq!(err, SubscriptionManagementError::ExceededLimits);
 
 		// Ensure both subscriptions are removed.
-		let err = subs.lock_block(&id_1, hash_1).unwrap_err();
+		let err = subs.lock_block(&id_1, hash_1, 1).unwrap_err();
 		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
 
-		let err = subs.lock_block(&id_2, hash_1).unwrap_err();
+		let err = subs.lock_block(&id_2, hash_1, 1).unwrap_err();
 		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
 
 		assert!(subs.global_blocks.get(&hash_1).is_none());
@@ -868,7 +1184,8 @@ mod tests {
 		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
 		// Maximum number of pinned blocks is 2 and maximum pin duration is 5 second.
-		let mut subs = SubscriptionsInner::new(2, Duration::from_secs(5), backend);
+		let mut subs =
+			SubscriptionsInner::new(2, Duration::from_secs(5), MAX_OPERATIONS_PER_SUB, backend);
 		let id_1 = "abc".to_string();
 		let id_2 = "abcd".to_string();
 
@@ -892,10 +1209,10 @@ mod tests {
 		assert_eq!(err, SubscriptionManagementError::ExceededLimits);
 
 		// Ensure both subscriptions are removed.
-		let err = subs.lock_block(&id_1, hash_1).unwrap_err();
+		let err = subs.lock_block(&id_1, hash_1, 1).unwrap_err();
 		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
 
-		let _block_guard = subs.lock_block(&id_2, hash_1).unwrap();
+		let _block_guard = subs.lock_block(&id_2, hash_1, 1).unwrap();
 
 		assert_eq!(*subs.global_blocks.get(&hash_1).unwrap(), 1);
 		assert!(subs.global_blocks.get(&hash_2).is_none());
@@ -917,21 +1234,48 @@ mod tests {
 	fn subscription_check_stop_event() {
 		let builder = TestClientBuilder::new();
 		let backend = builder.backend();
-		let mut subs = SubscriptionsInner::new(10, Duration::from_secs(10), backend);
+		let mut subs =
+			SubscriptionsInner::new(10, Duration::from_secs(10), MAX_OPERATIONS_PER_SUB, backend);
 
 		let id = "abc".to_string();
 
-		let mut rx_stop = subs.insert_subscription(id.clone(), true).unwrap();
+		let mut sub_data = subs.insert_subscription(id.clone(), true).unwrap();
 
 		// Check the stop signal was not received.
-		let res = rx_stop.try_recv().unwrap();
+		let res = sub_data.rx_stop.try_recv().unwrap();
 		assert!(res.is_none());
 
 		let sub = subs.subs.get_mut(&id).unwrap();
 		sub.stop();
 
 		// Check the signal was received.
-		let res = rx_stop.try_recv().unwrap();
+		let res = sub_data.rx_stop.try_recv().unwrap();
 		assert!(res.is_some());
+	}
+
+	#[test]
+	fn ongoing_operations() {
+		// The object can hold at most 2 operations.
+		let ops = LimitOperations::new(2);
+
+		// One operation is reserved.
+		let permit_one = ops.reserve_at_most(1).unwrap();
+		assert_eq!(permit_one.num_ops, 1);
+
+		// Request 2 operations, however there is capacity only for one.
+		let permit_two = ops.reserve_at_most(2).unwrap();
+		// Number of reserved permits is smaller than provided.
+		assert_eq!(permit_two.num_ops, 1);
+
+		// Try to reserve operations when there's no space.
+		let permit = ops.reserve_at_most(1);
+		assert!(permit.is_none());
+
+		// Release capacity.
+		drop(permit_two);
+
+		// Can reserve again
+		let permit_three = ops.reserve_at_most(1).unwrap();
+		assert_eq!(permit_three.num_ops, 1);
 	}
 }

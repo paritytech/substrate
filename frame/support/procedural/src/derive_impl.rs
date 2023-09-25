@@ -22,14 +22,46 @@ use macro_magic::mm_core::ForeignPath;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use std::collections::HashSet;
-use syn::{parse2, parse_quote, spanned::Spanned, Ident, ImplItem, ItemImpl, Path, Result, Token};
+use syn::{
+	parse2, parse_quote, spanned::Spanned, token, Ident, ImplItem, ItemImpl, Path, Result, Token,
+};
 
-#[derive(Parse)]
+mod keyword {
+	syn::custom_keyword!(inject_runtime_type);
+	syn::custom_keyword!(no_aggregated_types);
+}
+
+#[derive(derive_syn_parse::Parse, PartialEq, Eq)]
+pub enum PalletAttrType {
+	#[peek(keyword::inject_runtime_type, name = "inject_runtime_type")]
+	RuntimeType(keyword::inject_runtime_type),
+}
+
+#[derive(derive_syn_parse::Parse)]
+pub struct PalletAttr {
+	_pound: Token![#],
+	#[bracket]
+	_bracket: token::Bracket,
+	#[inside(_bracket)]
+	typ: PalletAttrType,
+}
+
+fn get_first_item_pallet_attr<Attr>(item: &syn::ImplItemType) -> syn::Result<Option<Attr>>
+where
+	Attr: syn::parse::Parse,
+{
+	item.attrs.get(0).map(|a| syn::parse2(a.into_token_stream())).transpose()
+}
+
+#[derive(Parse, Debug)]
 pub struct DeriveImplAttrArgs {
 	pub default_impl_path: Path,
 	_as: Option<Token![as]>,
 	#[parse_if(_as.is_some())]
 	pub disambiguation_path: Option<Path>,
+	_comma: Option<Token![,]>,
+	#[parse_if(_comma.is_some())]
+	pub no_aggregated_types: Option<keyword::no_aggregated_types>,
 }
 
 impl ForeignPath for DeriveImplAttrArgs {
@@ -43,6 +75,8 @@ impl ToTokens for DeriveImplAttrArgs {
 		tokens.extend(self.default_impl_path.to_token_stream());
 		tokens.extend(self._as.to_token_stream());
 		tokens.extend(self.disambiguation_path.to_token_stream());
+		tokens.extend(self._comma.to_token_stream());
+		tokens.extend(self.no_aggregated_types.to_token_stream());
 	}
 }
 
@@ -78,6 +112,7 @@ fn combine_impls(
 	foreign_impl: ItemImpl,
 	default_impl_path: Path,
 	disambiguation_path: Path,
+	inject_runtime_types: bool,
 ) -> ItemImpl {
 	let (existing_local_keys, existing_unsupported_items): (HashSet<ImplItem>, HashSet<ImplItem>) =
 		local_impl
@@ -96,7 +131,20 @@ fn combine_impls(
 				// do not copy colliding items that have an ident
 				return None
 			}
-			if matches!(item, ImplItem::Type(_)) {
+			if let ImplItem::Type(typ) = item.clone() {
+				let mut typ = typ.clone();
+				if let Ok(Some(PalletAttr { typ: PalletAttrType::RuntimeType(_), .. })) =
+					get_first_item_pallet_attr::<PalletAttr>(&mut typ)
+				{
+					let item: ImplItem = if inject_runtime_types {
+						parse_quote! {
+							type #ident = #ident;
+						}
+					} else {
+						item
+					};
+					return Some(item)
+				}
 				// modify and insert uncolliding type items
 				let modified_item: ImplItem = parse_quote! {
 					type #ident = <#default_impl_path as #disambiguation_path>::#ident;
@@ -132,6 +180,7 @@ pub fn derive_impl(
 	foreign_tokens: TokenStream2,
 	local_tokens: TokenStream2,
 	disambiguation_path: Option<Path>,
+	no_aggregated_types: Option<keyword::no_aggregated_types>,
 ) -> Result<TokenStream2> {
 	let local_impl = parse2::<ItemImpl>(local_tokens)?;
 	let foreign_impl = parse2::<ItemImpl>(foreign_tokens)?;
@@ -151,8 +200,13 @@ pub fn derive_impl(
 	};
 
 	// generate the combined impl
-	let combined_impl =
-		combine_impls(local_impl, foreign_impl, default_impl_path, disambiguation_path);
+	let combined_impl = combine_impls(
+		local_impl,
+		foreign_impl,
+		default_impl_path,
+		disambiguation_path,
+		no_aggregated_types.is_none(),
+	);
 
 	Ok(quote!(#combined_impl))
 }

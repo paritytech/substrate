@@ -52,12 +52,14 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	/// restrictions on the minimum amount of the account. Note: This cannot bring the account into
 	/// an inconsistent state with regards any required existential deposit.
 	///
-	/// Always less than `total_balance_on_hold()`.
+	/// Never more than `total_balance_on_hold()`.
 	fn reducible_total_balance_on_hold(
 		asset: Self::AssetId,
 		who: &AccountId,
-		force: Fortitude,
-	) -> Self::Balance;
+		_force: Fortitude,
+	) -> Self::Balance {
+		Self::total_balance_on_hold(asset, who)
+	}
 
 	/// Amount of funds on hold (for the given reason) of `who`.
 	fn balance_on_hold(
@@ -73,7 +75,9 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	/// NOTE: This does not take into account changes which could be made to the account of `who`
 	/// (such as removing a provider reference) after this call is made. Any usage of this should
 	/// therefore ensure the account is already in the appropriate state prior to calling it.
-	fn hold_available(asset: Self::AssetId, reason: &Self::Reason, who: &AccountId) -> bool;
+	fn hold_available(_asset: Self::AssetId, _reason: &Self::Reason, _who: &AccountId) -> bool {
+		true
+	}
 
 	/// Check to see if some `amount` of funds of `who` may be placed on hold with the given
 	/// `reason`. Reasons why this may not be true:
@@ -133,7 +137,7 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 /// **WARNING**
 /// Do not use this directly unless you want trouble, since it allows you to alter account balances
 /// without keeping the issuance up to date. It has no safeguards against accidentally creating
-/// token imbalances in your system leading to accidental imflation or deflation. It's really just
+/// token imbalances in your system leading to accidental inflation or deflation. It's really just
 /// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
 /// use.
 pub trait Unbalanced<AccountId>: Inspect<AccountId> {
@@ -146,7 +150,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// invariants such as any Existential Deposits needed or overflows/underflows.
 	/// If this cannot be done for some reason (e.g. because the account doesn't exist) then an
 	/// `Err` is returned.
-	// Implmentation note: This should increment the consumer refs if it moves total on hold from
+	// Implementation note: This should increment the consumer refs if it moves total on hold from
 	// zero to non-zero and decrement in the opposite direction.
 	//
 	// Since this was not done in the previous logic, this will need either a migration or a
@@ -332,7 +336,7 @@ pub trait Mutate<AccountId>:
 
 	/// Transfer held funds into a destination account.
 	///
-	/// If `on_hold` is `true`, then the destination account must already exist and the assets
+	/// If `mode` is `OnHold`, then the destination account must already exist and the assets
 	/// transferred will still be on hold in the destination account. If not, then the destination
 	/// account need not already exist, but must be creatable.
 	///

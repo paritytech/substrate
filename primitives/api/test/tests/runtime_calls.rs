@@ -19,7 +19,7 @@ use std::panic::UnwindSafe;
 
 use sp_api::{ApiExt, Core, ProvideRuntimeApi};
 use sp_runtime::{
-	traits::{HashFor, Header as HeaderT},
+	traits::{HashingFor, Header as HeaderT},
 	TransactionOutcome,
 };
 use sp_state_machine::{create_proof_check_backend, execution_proof_check_on_trie_backend};
@@ -111,7 +111,7 @@ fn record_proof_works() {
 	builder.push(transaction.clone()).unwrap();
 	let (block, _, proof) = builder.build().expect("Bake block").into_inner();
 
-	let backend = create_proof_check_backend::<HashFor<Block>>(
+	let backend = create_proof_check_backend::<HashingFor<Block>>(
 		storage_root,
 		proof.expect("Proof was generated"),
 	)

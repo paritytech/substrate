@@ -92,6 +92,8 @@ use sp_core::{
 #[cfg(feature = "std")]
 use sp_keystore::KeystoreExt;
 
+#[cfg(feature = "bandersnatch-experimental")]
+use sp_core::bandersnatch;
 use sp_core::{
 	crypto::KeyTypeId,
 	ecdsa, ed25519,
@@ -102,6 +104,9 @@ use sp_core::{
 	storage::StateVersion,
 	LogLevel, LogLevelFilter, OpaquePeerId, H256,
 };
+
+#[cfg(feature = "bls-experimental")]
+use sp_core::bls377;
 
 #[cfg(feature = "std")]
 use sp_trie::{LayoutV0, LayoutV1, TrieConfiguration};
@@ -820,11 +825,11 @@ pub trait Crypto {
 		{
 			use ed25519_dalek::Verifier;
 
-			let Ok(public_key) = ed25519_dalek::PublicKey::from_bytes(&pub_key.0) else {
+			let Ok(public_key) = ed25519_dalek::VerifyingKey::from_bytes(&pub_key.0) else {
 				return false
 			};
 
-			let Ok(sig) = ed25519_dalek::Signature::from_bytes(&sig.0) else { return false };
+			let sig = ed25519_dalek::Signature::from_bytes(&sig.0);
 
 			public_key.verify(msg, &sig).is_ok()
 		} else {
@@ -1185,6 +1190,40 @@ pub trait Crypto {
 			.recover_ecdsa(&msg, &sig)
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		Ok(pubkey.serialize())
+	}
+
+	/// Generate an `bls12-377` key for the given key type using an optional `seed` and
+	/// store it in the keystore.
+	///
+	/// The `seed` needs to be a valid utf8.
+	///
+	/// Returns the public key.
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> bls377::Public {
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.bls377_generate_new(id, seed)
+			.expect("`bls377_generate` failed")
+	}
+
+	/// Generate a `bandersnatch` key pair for the given key type using an optional
+	/// `seed` and store it in the keystore.
+	///
+	/// The `seed` needs to be a valid utf8.
+	///
+	/// Returns the public key.
+	#[cfg(feature = "bandersnatch-experimental")]
+	fn bandersnatch_generate(
+		&mut self,
+		id: KeyTypeId,
+		seed: Option<Vec<u8>>,
+	) -> bandersnatch::Public {
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.bandersnatch_generate_new(id, seed)
+			.expect("`bandernatch_generate` failed")
 	}
 }
 

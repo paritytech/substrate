@@ -119,7 +119,7 @@ fn should_contain_valid_leaf_data() {
 			beefy_next_authority_set: BeefyNextAuthoritySet {
 				id: 2,
 				len: 2,
-				root: array_bytes::hex_n_into_unchecked(
+				keyset_commitment: array_bytes::hex_n_into_unchecked(
 					"9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5"
 				)
 			},
@@ -144,7 +144,7 @@ fn should_contain_valid_leaf_data() {
 			beefy_next_authority_set: BeefyNextAuthoritySet {
 				id: 3,
 				len: 2,
-				root: array_bytes::hex_n_into_unchecked(
+				keyset_commitment: array_bytes::hex_n_into_unchecked(
 					"9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5"
 				)
 			},
@@ -167,12 +167,12 @@ fn should_update_authorities() {
 		let want = array_bytes::hex_n_into_unchecked::<_, H256, 32>(
 			"176e73f1bf656478b728e28dd1a7733c98621b8acf830bff585949763dca7a96",
 		);
-		assert_eq!(want, auth_set.root);
+		assert_eq!(want, auth_set.keyset_commitment);
 
 		// next authority set should have same validators but different id
 		assert_eq!(1, next_auth_set.id);
 		assert_eq!(auth_set.len, next_auth_set.len);
-		assert_eq!(auth_set.root, next_auth_set.root);
+		assert_eq!(auth_set.keyset_commitment, next_auth_set.keyset_commitment);
 
 		let announced_set = next_auth_set;
 		init_block(1);
@@ -188,7 +188,7 @@ fn should_update_authorities() {
 			"9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5",
 		);
 		assert_eq!(2, next_auth_set.len);
-		assert_eq!(want, next_auth_set.root);
+		assert_eq!(want, next_auth_set.keyset_commitment);
 
 		let announced_set = next_auth_set;
 		init_block(2);
@@ -204,6 +204,6 @@ fn should_update_authorities() {
 			"9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5",
 		);
 		assert_eq!(2, next_auth_set.len);
-		assert_eq!(want, next_auth_set.root);
+		assert_eq!(want, next_auth_set.keyset_commitment);
 	});
 }

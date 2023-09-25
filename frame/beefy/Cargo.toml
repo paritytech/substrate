@@ -10,6 +10,7 @@ homepage = "https://substrate.io"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
+log = { version = "0.4.17", default-features = false }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive", "serde"] }
 serde = { version = "1.0.163", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
@@ -32,21 +33,42 @@ pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 sp-core = { version = "21.0.0", path = "../../primitives/core" }
 sp-io = { version = "23.0.0", path = "../../primitives/io" }
 sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
+sp-state-machine = { version = "0.28.0", default-features = false, path = "../../primitives/state-machine" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
+	"frame-election-provider-support/std",
 	"frame-support/std",
 	"frame-system/std",
+	"log/std",
 	"pallet-authorship/std",
+	"pallet-balances/std",
+	"pallet-offences/std",
 	"pallet-session/std",
+	"pallet-staking/std",
+	"pallet-timestamp/std",
 	"scale-info/std",
 	"serde/std",
 	"sp-consensus-beefy/std",
+	"sp-core/std",
+	"sp-io/std",
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-staking/std",
+	"sp-state-machine/std",
 	"sp-std/std",
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-election-provider-support/try-runtime",
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-authorship/try-runtime",
+	"pallet-balances/try-runtime",
+	"pallet-offences/try-runtime",
+	"pallet-session/try-runtime",
+	"pallet-staking/try-runtime",
+	"pallet-timestamp/try-runtime",
+	"sp-runtime/try-runtime",
+]

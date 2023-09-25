@@ -61,6 +61,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{Saturating, Zero};
+use sp_runtime::RuntimeDebug;
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
@@ -69,7 +70,7 @@ use frame_support::{
 	traits::{
 		tokens::Balance as BalanceTrait, EnsureOrigin, EnsureOriginWithArg, Get, RankedMembers,
 	},
-	BoundedVec, RuntimeDebug,
+	BoundedVec,
 };
 
 #[cfg(test)]
@@ -327,7 +328,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_params())]
 		#[pallet::call_index(1)]
 		pub fn set_params(origin: OriginFor<T>, params: Box<ParamsOf<T, I>>) -> DispatchResult {
-			T::ParamsOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
+			T::ParamsOrigin::ensure_origin_or_root(origin)?;
 			Params::<T, I>::put(params.as_ref());
 			Self::deposit_event(Event::<T, I>::ParamsChanged { params: *params });
 			Ok(())

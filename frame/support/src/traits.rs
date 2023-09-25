@@ -111,9 +111,16 @@ pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, St
 
 mod messages;
 pub use messages::{
-	EnqueueMessage, ExecuteOverweightError, Footprint, NoopServiceQueues, ProcessMessage,
-	ProcessMessageError, QueuePausedQuery, ServiceQueues, TransformOrigin,
+	EnqueueMessage, EnqueueWithOrigin, ExecuteOverweightError, Footprint, HandleMessage,
+	NoopServiceQueues, ProcessMessage, ProcessMessageError, QueuePausedQuery, ServiceQueues,
+	TransformOrigin,
 };
+
+mod safe_mode;
+pub use safe_mode::{SafeMode, SafeModeError, SafeModeNotify};
+
+mod tx_pause;
+pub use tx_pause::{TransactionPause, TransactionPauseError};
 
 #[cfg(feature = "try-runtime")]
 mod try_runtime;

@@ -39,7 +39,7 @@ pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 			impl<#type_impl_gen> #frame_support::sp_runtime::BuildStorage for #gen_cfg_ident<#gen_cfg_use_gen> #where_clause
 			{
 				fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> std::result::Result<(), std::string::String> {
-					#frame_support::BasicExternalities::execute_with_storage(storage, || {
+					#frame_support::__private::BasicExternalities::execute_with_storage(storage, || {
 						self.build();
 						Ok(())
 					})

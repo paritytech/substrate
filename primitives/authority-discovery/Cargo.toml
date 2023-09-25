@@ -21,7 +21,7 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../runtime"
 sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
 std = [
 	"codec/std",
 	"scale-info/std",

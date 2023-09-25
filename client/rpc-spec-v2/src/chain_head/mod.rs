@@ -37,10 +37,10 @@ mod chain_head_storage;
 mod subscription;
 
 pub use api::ChainHeadApiServer;
-pub use chain_head::ChainHead;
+pub use chain_head::{ChainHead, ChainHeadConfig};
 pub use event::{
-	BestBlockChanged, ChainHeadEvent, ChainHeadResult, ErrorEvent, Finalized, FollowEvent,
-	Initialized, NetworkConfig, NewBlock, RuntimeEvent, RuntimeVersionEvent,
+	BestBlockChanged, ErrorEvent, Finalized, FollowEvent, Initialized, NewBlock, RuntimeEvent,
+	RuntimeVersionEvent,
 };
 
 use sp_core::hexdisplay::{AsBytesRef, HexDisplay};
