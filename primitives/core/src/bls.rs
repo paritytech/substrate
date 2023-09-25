@@ -83,16 +83,16 @@ trait BlsBound: EngineBLS + HardJunctionId + Send + Sync + 'static {}
 
 impl<T: EngineBLS + HardJunctionId + Send + Sync + 'static> BlsBound for T {}
 
-// Secret key serialized size
+/// Secret key serialized size
 #[cfg(feature = "full_crypto")]
 const SECRET_KEY_SERIALIZED_SIZE: usize =
 	<SecretKey<TinyBLS381> as SerializableToBytes>::SERIALIZED_BYTES_SIZE;
 
-// Public key serialized size
+/// Public key serialized size
 pub const PUBLIC_KEY_SERIALIZED_SIZE: usize =
 	<DoublePublicKey<TinyBLS381> as SerializableToBytes>::SERIALIZED_BYTES_SIZE;
 
-// Signature serialized size
+/// Signature serialized size
 pub const SIGNATURE_SERIALIZED_SIZE: usize =
 	<DoubleSignature<TinyBLS381> as SerializableToBytes>::SERIALIZED_BYTES_SIZE;
 
@@ -254,7 +254,7 @@ impl<T> sp_std::fmt::Debug for Public<T> {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<T: BlsBound> Serialize for Public<T> {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -264,7 +264,7 @@ impl<T: BlsBound> Serialize for Public<T> {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<'de, T: BlsBound> Deserialize<'de> for Public<T> {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
@@ -326,7 +326,7 @@ impl<T> TryFrom<&[u8]> for Signature<T> {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<T> Serialize for Signature<T> {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -336,7 +336,7 @@ impl<T> Serialize for Signature<T> {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<'de, T> Deserialize<'de> for Signature<T> {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
@@ -526,10 +526,9 @@ mod test {
 		);
 	}
 
-	// Only passes if the seed = (seed mod ScalarField)
 	#[test]
 	fn seed_and_derive_should_work() {
-		let seed = hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f00");
+		let seed = hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");
 		let pair = Pair::from_seed(&seed);
 		// we are using hash to field so this is not going to work
 		// assert_eq!(pair.seed(), seed);
@@ -537,7 +536,7 @@ mod test {
 		let derived = pair.derive(path.into_iter(), None).ok().unwrap().0;
 		assert_eq!(
 			derived.to_raw_vec(),
-			hex!("a4f2269333b3e87c577aa00c4a2cd650b3b30b2e8c286a47c251279ff3a26e0d")
+			hex!("3a0626d095148813cd1642d38254f1cfff7eb8cc1a2fc83b2a135377c3554c12")
 		);
 	}
 
