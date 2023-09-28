@@ -24,6 +24,7 @@ mod construct_runtime;
 mod crate_version;
 mod derive_impl;
 mod dummy_part_checker;
+mod interface;
 mod key_prefix;
 mod match_and_insert;
 mod no_bound;
@@ -1674,7 +1675,7 @@ pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 			"`#[import_section]` can only be applied to a valid pallet module",
 		)
 		.to_compile_error()
-		.into()
+		.into();
 	}
 
 	if let Some(ref mut content) = internal_mod.content {
@@ -1687,4 +1688,22 @@ pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 		#internal_mod
 	}
 	.into()
+}
+
+/// TODO: Docs
+#[proc_macro_attribute]
+pub fn interface(attr: TokenStream, input: TokenStream) -> TokenStream {
+	interface::interface(attr, input)
+}
+
+/// TODO: Docs
+#[proc_macro_attribute]
+pub fn call_entry(attr: TokenStream, input: TokenStream) -> TokenStream {
+	interface::call_entry(attr, input)
+}
+
+/// TODO: Docs
+#[proc_macro_attribute]
+pub fn view_entry(attr: TokenStream, input: TokenStream) -> TokenStream {
+	interface::view_entry(attr, input)
 }

@@ -233,10 +233,11 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let definition = syn::parse_macro_input!(input as RuntimeDeclaration);
 
 	let res = match definition {
-		RuntimeDeclaration::Implicit(implicit_def) =>
+		RuntimeDeclaration::Implicit(implicit_def) => {
 			check_pallet_number(input_copy.clone().into(), implicit_def.pallets.len()).and_then(
 				|_| construct_runtime_implicit_to_explicit(input_copy.into(), implicit_def),
-			),
+			)
+		},
 		RuntimeDeclaration::Explicit(explicit_decl) => check_pallet_number(
 			input_copy.clone().into(),
 			explicit_decl.pallets.len(),
@@ -244,9 +245,10 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		.and_then(|_| {
 			construct_runtime_explicit_to_explicit_expanded(input_copy.into(), explicit_decl)
 		}),
-		RuntimeDeclaration::ExplicitExpanded(explicit_decl) =>
+		RuntimeDeclaration::ExplicitExpanded(explicit_decl) => {
 			check_pallet_number(input_copy.into(), explicit_decl.pallets.len())
-				.and_then(|_| construct_runtime_final_expansion(explicit_decl)),
+				.and_then(|_| construct_runtime_final_expansion(explicit_decl))
+		},
 	};
 
 	let res = res.unwrap_or_else(|e| e.to_compile_error());
@@ -348,7 +350,7 @@ fn construct_runtime_final_expansion(
 		return Err(syn::Error::new(
 			system_pallet.name.span(),
 			"`System` pallet declaration is feature gated, please remove any `#[cfg]` attributes",
-		))
+		));
 	}
 
 	let features = pallets
@@ -823,7 +825,7 @@ fn check_pallet_number(input: TokenStream2, pallet_num: usize) -> Result<()> {
 					""
 				},
 			),
-		))
+		));
 	}
 
 	Ok(())

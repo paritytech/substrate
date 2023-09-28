@@ -64,6 +64,7 @@ pub mod dispatch_context;
 mod hash;
 pub mod inherent;
 pub mod instances;
+pub mod interface;
 pub mod migrations;
 pub mod storage;
 #[cfg(test)]
@@ -2184,6 +2185,8 @@ pub mod pallet_prelude {
 /// 	```
 /// * use the newest nightly possible.
 pub use frame_support_procedural::pallet;
+
+pub use frame_support_procedural::{call_entry, interface, view_entry};
 
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {

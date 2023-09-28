@@ -184,6 +184,7 @@ members = [
 	"frame/paged-list",
 	"frame/paged-list/fuzzer",
 	"frame/insecure-randomness-collective-flip",
+	"frame/interface",
 	"frame/ranked-collective",
 	"frame/recovery",
 	"frame/referenda",
