@@ -20,4 +20,6 @@
 pub mod clone;
 pub mod debug;
 pub mod default;
+pub mod ord;
 pub mod partial_eq;
+pub mod partial_ord;

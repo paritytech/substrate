@@ -460,7 +460,7 @@ pub fn derive_partial_eq_no_bound(input: TokenStream) -> TokenStream {
 	no_bound::partial_eq::derive_partial_eq_no_bound(input)
 }
 
-/// derive Eq but do no bound any generic. Docs are at `frame_support::EqNoBound`.
+/// Derive [`Eq`] but do no bound any generic. Docs are at `frame_support::EqNoBound`.
 #[proc_macro_derive(EqNoBound)]
 pub fn derive_eq_no_bound(input: TokenStream) -> TokenStream {
 	let input: syn::DeriveInput = match syn::parse(input) {
@@ -479,7 +479,20 @@ pub fn derive_eq_no_bound(input: TokenStream) -> TokenStream {
 	.into()
 }
 
-/// derive `Default` but do no bound any generic. Docs are at `frame_support::DefaultNoBound`.
+/// Derive [`PartialOrd`] but do not bound any generic. Docs are at
+/// `frame_support::PartialOrdNoBound`.
+#[proc_macro_derive(PartialOrdNoBound)]
+pub fn derive_partial_ord_no_bound(input: TokenStream) -> TokenStream {
+	no_bound::partial_ord::derive_partial_ord_no_bound(input)
+}
+
+/// Derive [`Ord`] but do no bound any generic. Docs are at `frame_support::OrdNoBound`.
+#[proc_macro_derive(OrdNoBound)]
+pub fn derive_ord_no_bound(input: TokenStream) -> TokenStream {
+	no_bound::ord::derive_ord_no_bound(input)
+}
+
+/// Derive [`Default`] but do no bound any generic. Docs are at `frame_support::DefaultNoBound`.
 #[proc_macro_derive(DefaultNoBound, attributes(default))]
 pub fn derive_default_no_bound(input: TokenStream) -> TokenStream {
 	no_bound::default::derive_default_no_bound(input)

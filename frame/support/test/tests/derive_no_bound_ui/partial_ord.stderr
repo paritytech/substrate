@@ -1,0 +1,15 @@
+error[E0599]: `<T as Config>::C` is not an iterator
+ --> tests/derive_no_bound_ui/partial_ord.rs:7:2
+  |
+7 |     c: T::C,
+  |     ^ `<T as Config>::C` is not an iterator
+  |
+  = note: the following trait bounds were not satisfied:
+          `<T as Config>::C: Iterator`
+          which is required by `&mut <T as Config>::C: Iterator`
+
+error[E0369]: binary operation `==` cannot be applied to type `<T as Config>::C`
+ --> tests/derive_no_bound_ui/partial_ord.rs:7:2
+  |
+7 |     c: T::C,
+  |     ^
